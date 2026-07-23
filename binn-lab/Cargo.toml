@@ -1,0 +1,40 @@
+[package]
+name = "binn-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BINN L7 experiment harness: runner, seeds, logging, plots"
+
+[features]
+default = []
+# Optional pyo3 matplotlib bridge (viz only). CI keeps this off; enable with
+# `--features plots` when a local Python+matplotlib stack is available.
+plots = ["dep:pyo3"]
+
+[dependencies]
+binn-data = { workspace = true }
+binn-learn = { workspace = true }
+binn-areas = { workspace = true }
+binn-engine = { workspace = true }
+binn-core = { workspace = true }
+pyo3 = { version = "0.22", optional = true, features = ["auto-initialize"] }
+
+[[bin]]
+name = "c1"
+path = "experiments/c1.rs"
+
+[[bin]]
+name = "c2"
+path = "experiments/c2.rs"
+
+[[bin]]
+name = "c3"
+path = "experiments/c3.rs"
+
+[[bin]]
+name = "r1"
+path = "experiments/r1.rs"
+
+[[bin]]
+name = "r2"
+path = "experiments/r2.rs"

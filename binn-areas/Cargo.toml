@@ -1,0 +1,18 @@
+[package]
+name = "binn-areas"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BINN L4 composition: Area, k-WTA, project/associate, wiring"
+
+[dependencies]
+binn-core = { workspace = true }
+binn-engine = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "kwta"
+path = "benches/kwta.rs"
+harness = false

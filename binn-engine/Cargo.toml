@@ -1,0 +1,25 @@
+[package]
+name = "binn-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BINN L3 event-driven substrate: queue, cells, synapses, loop"
+# `benches/timing_wheel.rs` is the criterion entry (U04 / GC5). Spike-train
+# determinism (U05 / G0) and GC3 live as unit tests in `src/engine.rs`.
+
+[dependencies]
+binn-core = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+proptest = { workspace = true }
+
+[[bench]]
+name = "timing_wheel"
+path = "benches/timing_wheel.rs"
+harness = false
+
+[[bench]]
+name = "engine_step"
+path = "benches/engine_step.rs"
+harness = false

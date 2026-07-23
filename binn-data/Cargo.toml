@@ -1,0 +1,9 @@
+[package]
+name = "binn-data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BINN L6 data: synthetic events, fixed encoders/decoders, metrics"
+
+[dependencies]
+binn-core = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "binn-learn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "BINN L5 learning: three-factor plasticity; labeled BPTT baseline only"
+
+[dependencies]
+binn-core = { workspace = true }
+binn-engine = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "plasticity_update"
+path = "benches/plasticity_update.rs"
+harness = false
