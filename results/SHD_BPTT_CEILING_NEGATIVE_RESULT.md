@@ -117,17 +117,27 @@ Best configuration (`published-2ms` / `adjacent-sum-5` / `h512` / `e100`):
 | SD across seeds (sample, ddof=1) | 0.0039 |
 | 95% CI (normal approx., sample SD) | 0.7107 – 0.7195 |
 | Shortfall vs registered 0.80 gate | **0.0849** |
-| Same anchor at e400 (n=3 seeds) | **0.7369 ± 0.0021**, shortfall **0.0631** |
 
 Both SD conventions are given because the original draft quoted the population
 SD without saying so; see erratum E2. Nothing turns on the choice — both
 intervals sit far below 0.80.
 
-This is a clean negative result about a budget-limited configuration, not a
-harness failure. It is the outcome the `PREREG_2026-07-25_SHD_ARCH_ABLATION`
-confound analysis anticipated, obtained from the opposite direction — but the
-intended inference ("the best possible rule does not rescue this architecture")
-is **not** licensed, because the rule was not run to convergence.
+The same anchor, carried to convergence:
+
+| Budget / width | Accuracy | Shortfall |
+|---|---:|---:|
+| e100, h512 (the matrix) | 0.7151 ± 0.0039 | 0.0849 |
+| e400, h512 | 0.7369 ± 0.0021 | 0.0631 |
+| e800, h512 | 0.7372 ± 0.0038 | 0.0628 |
+| **e400, h1024 — converged on both axes** | **0.7378 ± 0.0007** | **0.0622** |
+
+This is a clean negative result, not a harness failure. It is the outcome the
+`PREREG_2026-07-25_SHD_ARCH_ABLATION` confound analysis anticipated, obtained
+from the opposite direction. The intended inference — *"the best possible rule
+does not rescue this architecture"* — was **not** licensed by the matrix alone,
+because the matrix did not run the rule to convergence. It **is** licensed by the
+matrix plus the convergence extension, on `published-2ms / adjacent-sum-5`, and
+remains unlicensed for `channels-700`.
 
 ## 2. The threshold is registered and was not moved
 

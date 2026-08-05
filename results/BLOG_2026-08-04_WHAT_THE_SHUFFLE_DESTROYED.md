@@ -228,12 +228,16 @@ which is the check that the manipulation harness adds no artefact to its own
 control arm. The instrument's determinism gate reproduces 13/13 cells
 bit-identically across nine distinct compiled binaries, and 160 tests pass.
 
-The weak link is not the arithmetic. It is that the pre-registrations, the
-amendments, and the cells all sit in a working tree with nothing committed, so
-the ordering that makes these results honest — *the rule was fixed before the
-run* — is attested by prose and file timestamps rather than by anything
+The weak link was never the arithmetic. It was that the pre-registrations, the
+amendments, and the cells all sat in a working tree with nothing committed — so
+the ordering that makes these results honest, *the rule was fixed before the
+run*, was attested by prose and file timestamps rather than by anything
 tamper-evident. The timestamps are consistent: the seed-extension amendment
 predates the first new cell by 14 minutes, the convergence amendment predates the
-e800 cells by an hour and a half. But mtimes are not evidence, and for work whose
-entire claim to trustworthiness is "I wrote the rule down first," a commit is the
-cheapest possible fix.
+e800 cells by an hour and a half. But mtimes are not evidence.
+
+That is now fixed — the record is committed, and the working rule from here is
+**register, commit, then run**. It is worth naming as a general point rather than
+a housekeeping note: for work whose entire claim to trustworthiness is *"I wrote
+the rule down first,"* the version-control history is not incidental to the
+result. It is part of the result.
