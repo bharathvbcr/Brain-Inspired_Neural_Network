@@ -1,0 +1,51 @@
+{
+  "schema": "shd-temporal-sensitivity-v1",
+  "purpose": "positive control: does timing reach the hidden representation at all",
+  "weights": "results/shd_instrument_v4/initialization/n140-h512-s5170001.weights",
+  "trained": false,
+  "samples": 256,
+  "temporal_seed": 5170001,
+  "wall_secs": 1.018873,
+  "conditions": [
+    {
+      "condition": "intact",
+      "mean_spike_hamming": 0.000000000,
+      "mean_membrane_rel_l2": 0.000000000,
+      "mean_rate_rel_l1": 0.000000000,
+      "mean_abs_loss_delta": 0.000000000,
+      "prediction_changed_fraction": 0.000000000,
+      "counts_preserved": true,
+      "relocated_fraction": 0.000000000
+    },
+    {
+      "condition": "bin-shuffled",
+      "mean_spike_hamming": 0.145240173,
+      "mean_membrane_rel_l2": 1.191162112,
+      "mean_rate_rel_l1": 0.038347218,
+      "mean_abs_loss_delta": 0.007408003,
+      "prediction_changed_fraction": 0.125000000,
+      "counts_preserved": true,
+      "relocated_fraction": 0.988555148
+    },
+    {
+      "condition": "channel-shuffled",
+      "mean_spike_hamming": 0.228363800,
+      "mean_membrane_rel_l2": 1.204189735,
+      "mean_rate_rel_l1": 1.357487911,
+      "mean_abs_loss_delta": 0.140056442,
+      "prediction_changed_fraction": 0.445312500,
+      "counts_preserved": true,
+      "relocated_fraction": 0.989879107
+    },
+    {
+      "condition": "reversed",
+      "mean_spike_hamming": 0.186109619,
+      "mean_membrane_rel_l2": 1.411300628,
+      "mean_rate_rel_l1": 0.035615967,
+      "mean_abs_loss_delta": 0.006593668,
+      "prediction_changed_fraction": 0.089843750,
+      "counts_preserved": true,
+      "relocated_fraction": 1.000000000
+    }
+  ]
+}

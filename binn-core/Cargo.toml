@@ -8,7 +8,13 @@ description = "BINN L2 numeric core: buffers, RNG, SIMD, sparse, scan"
 # (`gc3_same_seed_identical_output_hash`). The criterion bench for the SIMD hot
 # path lives in `benches/simd_leak_integrate.rs` (GC5).
 
+[features]
+default = []
+gpu = ["dep:metal", "dep:objc"]
+
 [dependencies]
+metal = { workspace = true, optional = true }
+objc = { workspace = true, optional = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }

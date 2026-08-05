@@ -77,6 +77,29 @@ pub struct TimingWheel {
     len: usize,
     /// Cached minimum scheduled tick (append-only buckets are not sorted).
     earliest: Option<Tick>,
+    /// Occupancy bitmask: bit `s` of `occupied[level][s / 64]` is set iff
+    /// `levels[level][s]` is non-empty.
+    ///
+    /// # Why this exists
+    ///
+    /// [`Self::scan_earliest`] used to walk all `LEVELS * SLOTS = 2048`
+    /// `VecDeque` headers on every call. A `VecDeque` header is 32 bytes, so
+    /// that was ~64 KB of pointer-chased traffic *per tick*, whether the queue
+    /// held one event or a million — which contradicts the engine's premise
+    /// that work scales with events rather than with the idle population.
+    ///
+    /// With the mask, `scan_earliest` visits only non-empty buckets, found by
+    /// `trailing_zeros` over 32 `u64` words. It computes the same minimum over
+    /// the same set of entries, so results are bit-identical.
+    ///
+    /// # Invariant
+    ///
+    /// `bit(level, slot) == !levels[level][slot].is_empty()`, maintained at the
+    /// three — and only three — sites that mutate `levels` after construction:
+    /// `schedule` (push_back), `pop_earliest` (pop_front), and `cascade`
+    /// (`mem::take`). [`Self::debug_assert_occupancy`] checks it; the proptests
+    /// call it after every operation.
+    occupied: [[u64; SLOTS / 64]; LEVELS],
 }
 
 impl Default for TimingWheel {
@@ -96,6 +119,44 @@ impl TimingWheel {
             now: 0,
             len: 0,
             earliest: None,
+            occupied: [[0; SLOTS / 64]; LEVELS],
+        }
+    }
+
+    /// Set the occupancy bit for `(level, slot)`.
+    #[inline]
+    fn mark_occupied(&mut self, level: usize, slot: usize) {
+        self.occupied[level][slot >> 6] |= 1u64 << (slot & 63);
+    }
+
+    /// Clear the occupancy bit for `(level, slot)`.
+    #[inline]
+    fn mark_empty(&mut self, level: usize, slot: usize) {
+        self.occupied[level][slot >> 6] &= !(1u64 << (slot & 63));
+    }
+
+    /// Whether `levels[level][slot]` is recorded as non-empty.
+    #[inline]
+    fn slot_occupied(&self, level: usize, slot: usize) -> bool {
+        self.occupied[level][slot >> 6] & (1u64 << (slot & 63)) != 0
+    }
+
+    /// Assert the occupancy mask agrees with the actual buckets.
+    ///
+    /// Test-only and deliberately O(LEVELS * SLOTS): it is the check the mask
+    /// exists to avoid, so it must not run on the hot path. Mask drift would
+    /// make `scan_earliest` silently miss events — a wrong simulation rather
+    /// than a crash — so the proptests call this after every single operation.
+    #[cfg(test)]
+    fn assert_occupancy_invariant(&self) {
+        for level in 0..LEVELS {
+            for slot in 0..SLOTS {
+                assert_eq!(
+                    self.slot_occupied(level, slot),
+                    !self.levels[level][slot].is_empty(),
+                    "occupancy mask drifted at level {level} slot {slot}"
+                );
+            }
         }
     }
 
@@ -158,6 +219,12 @@ impl TimingWheel {
             if let Some(front) = bucket.front() {
                 if front.at == self.now {
                     let entry = bucket.pop_front().expect("front existed");
+                    // Mutation site 3 of 3. Captured while `bucket` is still
+                    // borrowed; applied below once the borrow has ended.
+                    let bucket_now_empty = bucket.is_empty();
+                    if bucket_now_empty {
+                        self.mark_empty(0, slot);
+                    }
                     self.len -= 1;
                     if self.len == 0 {
                         self.now = 0;
@@ -183,6 +250,19 @@ impl TimingWheel {
         }
     }
 
+    /// Drain every event at the current earliest tick in deterministic FIFO
+    /// order. This is the delta bucket consumed by U18 parallel stepping.
+    pub fn pop_earliest_batch(&mut self) -> Option<(Tick, Vec<Event>)> {
+        let (tick, first) = self.pop_earliest()?;
+        let mut events = vec![first];
+        while self.peek_earliest_tick() == Some(tick) {
+            let (same_tick, event) = self.pop_earliest().expect("earliest tick existed");
+            debug_assert_eq!(same_tick, tick);
+            events.push(event);
+        }
+        Some((tick, events))
+    }
+
     /// Append into the hierarchical slot for `entry.at` (O(1)).
     ///
     /// Same-tick order is FIFO via `push_back`. Absolute tick order across a
@@ -194,10 +274,41 @@ impl TimingWheel {
         let shift = (level as u32) * SLOT_BITS;
         let slot = ((entry.at >> shift) as usize) & (SLOTS - 1);
         self.levels[level][slot].push_back(entry);
+        // Mutation site 1 of 3 for the occupancy invariant.
+        self.mark_occupied(level, slot);
     }
 
-    /// Full scan for the minimum scheduled tick (used when the cached min is drained).
+    /// Minimum scheduled tick over all remaining entries (used when the cached
+    /// min is drained).
+    ///
+    /// Visits only non-empty buckets, located via the occupancy mask. The set
+    /// of entries examined — and therefore the returned minimum — is identical
+    /// to the previous implementation, which walked all 2048 bucket headers
+    /// unconditionally.
     fn scan_earliest(&self) -> Option<Tick> {
+        let mut best: Option<Tick> = None;
+        for level in 0..LEVELS {
+            for word_idx in 0..SLOTS / 64 {
+                let mut word = self.occupied[level][word_idx];
+                while word != 0 {
+                    let slot = word_idx * 64 + word.trailing_zeros() as usize;
+                    word &= word - 1; // clear lowest set bit
+                    for entry in &self.levels[level][slot] {
+                        best = Some(match best {
+                            Some(b) => b.min(entry.at),
+                            None => entry.at,
+                        });
+                    }
+                }
+            }
+        }
+        best
+    }
+
+    /// Brute-force reference for [`Self::scan_earliest`], used by tests to prove
+    /// the mask-guided version examines the same entry set.
+    #[cfg(test)]
+    fn scan_earliest_naive(&self) -> Option<Tick> {
         self.levels
             .iter()
             .flat_map(|level| level.iter())
@@ -240,6 +351,11 @@ impl TimingWheel {
     fn next_occupied_level0(&self, from_slot: usize) -> Option<usize> {
         let base_now = self.now & !SLOT_MASK;
         for slot in from_slot..SLOTS {
+            // Mask check first: skips the `VecDeque` header deref for empty
+            // slots, which is the whole cost of this loop in a sparse wheel.
+            if !self.slot_occupied(0, slot) {
+                continue;
+            }
             let at = base_now + slot as u64;
             if self.levels[0][slot].front().is_some_and(|e| e.at == at) {
                 return Some(slot);
@@ -265,7 +381,9 @@ impl TimingWheel {
             };
 
             for s in start_slot..SLOTS {
-                if !self.levels[level][s].is_empty() {
+                // Equivalent to `!self.levels[level][s].is_empty()` by the
+                // occupancy invariant, without touching the bucket header.
+                if self.slot_occupied(level, s) {
                     self.now = wheel_base.saturating_add((s as u64).saturating_mul(slot_span));
                     self.cascade(level);
                     return;
@@ -288,6 +406,9 @@ impl TimingWheel {
         let slot = ((self.now >> shift) as usize) & (SLOTS - 1);
 
         let entries = std::mem::take(&mut self.levels[level][slot]);
+        // Mutation site 2 of 3: `take` leaves the bucket empty. `schedule`
+        // re-marks each entry's new (level, slot) below.
+        self.mark_empty(level, slot);
         for entry in entries {
             self.schedule(entry);
         }
@@ -580,6 +701,94 @@ mod tests {
                 if w.is_none() {
                     break;
                 }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Occupancy-mask safety net
+    //
+    // `scan_earliest` trusts `occupied` to tell it which buckets to look in.
+    // If any future edit mutates `levels` without updating the mask, the queue
+    // starts silently dropping events instead of panicking — the worst failure
+    // mode available here. These tests pin the invariant directly, and check
+    // the mask-guided scan against the brute-force scan it replaced.
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn occupancy_mask_starts_clear() {
+        let wheel = TimingWheel::new();
+        wheel.assert_occupancy_invariant();
+        assert_eq!(wheel.scan_earliest(), None);
+        assert_eq!(wheel.scan_earliest_naive(), None);
+    }
+
+    #[test]
+    fn occupancy_mask_survives_cascade() {
+        // Far-future ticks land in coarse levels and must cascade down through
+        // `mem::take` (mutation site 2). Deltas are chosen to straddle several
+        // level boundaries (2^8, 2^16, 2^24, 2^32).
+        let mut wheel = TimingWheel::new();
+        for (i, delta) in [1u64, 300, 70_000, 20_000_000, 5_000_000_000]
+            .into_iter()
+            .enumerate()
+        {
+            wheel.insert(delta, Event::new(i as u64));
+        }
+        wheel.assert_occupancy_invariant();
+
+        let mut popped = Vec::new();
+        while let Some((at, ev)) = wheel.pop_earliest() {
+            popped.push((at, ev.id));
+            wheel.assert_occupancy_invariant();
+            assert_eq!(
+                wheel.scan_earliest(),
+                wheel.scan_earliest_naive(),
+                "masked scan diverged from naive scan after popping {at}"
+            );
+        }
+        assert_eq!(
+            popped,
+            vec![
+                (1, 0),
+                (300, 1),
+                (70_000, 2),
+                (20_000_000, 3),
+                (5_000_000_000, 4)
+            ]
+        );
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        /// After every operation: mask agrees with buckets, and the mask-guided
+        /// `scan_earliest` returns exactly what a full brute-force scan returns.
+        #[test]
+        fn occupancy_mask_and_scan_match_brute_force(
+            ops in prop::collection::vec(
+                (any::<bool>(), 0u64..2_000_000_000u64, any::<u64>()),
+                1..120,
+            )
+        ) {
+            let mut wheel = TimingWheel::new();
+            for (is_insert, delta, id) in ops {
+                if is_insert {
+                    // Anchor on the wheel's own cursor so the monotone-insert
+                    // precondition always holds.
+                    let at = wheel.now().saturating_add(delta);
+                    wheel.insert(at, Event::new(id));
+                } else {
+                    let _ = wheel.pop_earliest();
+                }
+                wheel.assert_occupancy_invariant();
+                prop_assert_eq!(wheel.scan_earliest(), wheel.scan_earliest_naive());
+                // The cached `earliest` must also stay truthful, since
+                // `peek_earliest_tick` hands it straight to the engine. Note
+                // this checks pre-existing cache logic, not the mask — if only
+                // this line fails, look at `insert`/`pop_earliest`, not at
+                // `occupied`.
+                prop_assert_eq!(wheel.peek_earliest_tick(), wheel.scan_earliest_naive());
             }
         }
     }

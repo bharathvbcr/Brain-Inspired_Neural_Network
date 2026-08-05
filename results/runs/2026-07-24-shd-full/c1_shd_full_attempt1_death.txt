@@ -1,0 +1,4 @@
+attempt1_start=2026-07-24T18:44:59Z
+attempt1_last_seen_alive=2026-07-24T19:16:54Z
+attempt1_status=DEAD_INCOMPLETE (PID 35094 gone; no out; no end file; log header only)
+attempt1_note=wrapper/parent also gone — likely agent shell teardown killed process group

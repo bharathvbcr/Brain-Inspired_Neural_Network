@@ -1,0 +1,102 @@
+{
+  "contracts": {
+    "fixed": {
+      "count_preserving": true,
+      "duration_ms": 1400,
+      "frames": [
+        100,
+        250,
+        500
+      ],
+      "per_sample_t0": false
+    },
+    "frequency": [
+      "channels-700",
+      "adjacent-sum-5"
+    ],
+    "published": {
+      "count_preserving": true,
+      "frame_ms": [
+        10,
+        4,
+        2
+      ],
+      "per_sample_t0": true
+    }
+  },
+  "environment": {
+    "captured_at": "2026-07-27T06:13:34.488123+00:00",
+    "cargo": "cargo 1.96.0 (30a34c682 2026-05-25)",
+    "git_head": "e3734709f5c8dede37a997e40000184709214c22",
+    "git_status_sha256": "e90204f7ea70cb8c5eb010c4f89b2e1e0778c694994c5b5dbcd2f43d77b524bb",
+    "machine": "arm64",
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6 (main, Jun 10 2026, 10:03:53) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)"
+  },
+  "files": {
+    "cargo_lock": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/Cargo.lock",
+      "sha256": "2333ed502ce68b8e6eaf90c068231553323fa67f15611b397411b89e71aaf396"
+    },
+    "rust_binary": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
+      "sha256": "4c8b3414a7a1dca175852eae11a5a6d21a3a4ed209ad31635d3c9a03e2f4164f"
+    },
+    "test_events": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/events/test.events",
+      "sha256": "9d7088793af81d574b447dc72c6044a192db25e73b6b0a24a66e1306b266fb5a"
+    },
+    "test_h5": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/shd_test.h5",
+      "sha256": "47d8621a092cb483bea9448a93c0a3375a6726d370045090c2f7a77f70f95df3"
+    },
+    "train_events": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/events/train.events",
+      "sha256": "81730543032bb41d0aef048c2e541374a004199f2ebf0e9cae98389c980acab7"
+    },
+    "train_h5": {
+      "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/shd_train.h5",
+      "sha256": "2bddb4bd46732f09982b7d1631b7c29c19853c73d3d240e3eb32bba909bdd6c1"
+    }
+  },
+  "instrument_state": "UNCALIBRATED",
+  "matched_model": {
+    "base_lr": 0.001,
+    "batch_size": 256,
+    "detached_reset": true,
+    "max_lr": 0.005,
+    "optimizer": "adam",
+    "readout": "masked-mean-hidden-rate",
+    "surrogate": "atan-alpha-5",
+    "tau_ms": 10.05,
+    "topology": "input-linear-lif-linear",
+    "weight_decay": 1e-05
+  },
+  "matrix_cells": 432,
+  "reference": {
+    "clean_exposure": {
+      "checkpoint_selected_on": "none-final-epoch",
+      "final_test_reads": 1,
+      "test_reads_during_training": 0,
+      "train_reads": 150,
+      "validation_reads": 0
+    },
+    "commit": "d169b4e3049a3d5bff56c84a8b2f0c4e835aafda",
+    "historical_exposure": {
+      "checkpoint_selected_on": "official-test-best-accuracy",
+      "final_test_reads": 0,
+      "test_reads_during_training": 150,
+      "train_reads": 150,
+      "validation_reads": 0
+    },
+    "repository": "https://github.com/Thvnvtos/SNN-delays"
+  },
+  "schema": "shd-instrument-v1",
+  "seeds": [
+    5170001,
+    5170002,
+    5170003
+  ],
+  "source_fingerprint": "23325201e53a14fd207ee1f2a3cb57708c799f52bd47c5eb3553b0c52d9a579c"
+}

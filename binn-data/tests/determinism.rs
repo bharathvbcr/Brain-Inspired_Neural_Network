@@ -1,8 +1,8 @@
 //! GC3: same seed ⇒ identical encoding / stream fingerprint (U12).
 
 use binn_data::{
-    Encoder, LatencyEncoder, Metrics, Sample, SynthConfig, SyntheticStream, TemporalClassification,
-    WorkCosts, WorkCounters,
+    ClassIncConfig, ClassIncrementalStream, Encoder, LatencyEncoder, Metrics, Sample, SynthConfig,
+    SyntheticStream, TemporalClassification, WorkCosts, WorkCounters,
 };
 
 fn encode_fingerprint(seed: u64) -> u64 {
@@ -68,4 +68,21 @@ fn encoder_info_loss_reported() {
     assert!((0.0..1.0).contains(&loss) || (loss - 1.0).abs() < 1e-6);
     // Smoke: encode does not panic.
     let _ = enc.encode(&Sample::from_values(vec![0.25, 0.75]));
+}
+
+#[test]
+fn class_incremental_no_task_ids_and_no_raw_buffer() {
+    let mut stream = ClassIncrementalStream::new(ClassIncConfig::quick(5));
+    let ex = stream.next_train().expect("example");
+    // Learner API: only sequence + label (no task_id field on the type).
+    let _ = (ex.sequence, ex.label);
+    assert_eq!(stream.phase(), 0);
+    // Probes are regenerated, not retained as a learner replay buffer.
+    assert_eq!(stream.probe_class(0).len(), stream.config().test_per_class);
+}
+
+#[test]
+fn forgetting_metric_smoke() {
+    assert!((Metrics::forgetting(0.8, 0.4) - 0.5).abs() < 1e-12);
+    assert_eq!(Metrics::forgetting(0.0, 0.1), 0.0);
 }

@@ -1,0 +1,12 @@
+# The setup command records the resolved pip freeze in the run manifest.
+# Python 3.12 is required because the workspace Python 3.14 currently has no
+# supported PyTorch wheel for the pinned reference.
+torch
+torchvision
+torchaudio
+numpy
+h5py
+tqdm
+wandb
+dcls
+pillow

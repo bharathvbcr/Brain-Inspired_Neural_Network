@@ -1,0 +1,29 @@
+# BINN cargo configuration.
+#
+# Host of record: Apple M5 Pro (64 GB), aarch64-apple-darwin.
+#
+# ---------------------------------------------------------------------------
+# target-cpu: deliberately NOT enabled. Read before changing.
+# ---------------------------------------------------------------------------
+#
+# The obvious "optimise for my machine" move is `-C target-cpu=native`. On this
+# target it is close to a no-op with a real downside:
+#
+# 1. rustc's default target-cpu for aarch64-apple-darwin is already `apple-m1`.
+#    That baseline includes the full NEON/ASIMD set, fp16, dotprod and LSE. The
+#    hot kernels here (`simd_leak_integrate`, CSR SpMV, `assoc_scan`) are plain
+#    f32 elementwise/gather loops — they compile to the same NEON instructions
+#    under `apple-m1` and under `native`.
+# 2. The newer ISA extensions a native M5 target would unlock (SVE2/SME) are
+#    not auto-emitted by LLVM for scalar-ish Rust loops. Realising them needs
+#    intrinsics, which GC-constrained `binn-core` deliberately avoids.
+# 3. BINN is a preregistered harness whose claims are replayed by config hash.
+#    A machine-specific codegen flag makes "same hash, different machine"
+#    replays harder to defend, for a speedup that is inside benchmark noise.
+#
+# If you ever want to measure it rather than assume it, uncomment below, run
+# `cargo bench -p binn-core`, and compare against the committed criterion
+# baseline. Do not leave it enabled for runs that produce published numbers.
+#
+# [target.aarch64-apple-darwin]
+# rustflags = ["-C", "target-cpu=native"]

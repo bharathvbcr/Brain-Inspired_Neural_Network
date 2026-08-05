@@ -1,0 +1,2 @@
+FAILED rec-alif intact s5170002: shd-instrument: non-finite training value at optimizer step 374
+FAILED rec-alif bin-shuffled s5170002: shd-instrument: non-finite training value at optimizer step 727

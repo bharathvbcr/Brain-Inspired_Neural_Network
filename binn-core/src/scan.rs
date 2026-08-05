@@ -117,11 +117,27 @@ where
     // results identical to a pure sequential scan.
     let mut offsets = vec![State::identity(); n_chunks];
     let mut acc = xs[0];
+    // `chunk_size` is a runtime parameter, so `i % chunk_size` and
+    // `i / chunk_size` were emitting a hardware integer division *per element*
+    // in this loop — ~20-40 cycles each on arm64, and uncancellable by the
+    // compiler since the divisor is not a compile-time constant. That division
+    // dominated the loop body, which is otherwise one `combine` call.
+    //
+    // A running counter gives the same boundaries with a compare and an add.
+    // `combine` is applied to exactly the same elements in exactly the same
+    // order, so the f32 results are bit-identical.
+    let mut since_boundary = 1usize;
+    let mut chunk_idx = 0usize;
     for i in 1..n {
-        if i % chunk_size == 0 {
-            offsets[i / chunk_size] = acc;
+        // At the top of iteration `i`, `since_boundary == i - last_boundary`,
+        // so this fires exactly when `i % chunk_size == 0`.
+        if since_boundary == chunk_size {
+            chunk_idx += 1;
+            offsets[chunk_idx] = acc;
+            since_boundary = 0;
         }
         acc = combine(acc, xs[i]);
+        since_boundary += 1;
     }
 
     // Phase 2 — left-fold each chunk from its offset (parallel across chunks).

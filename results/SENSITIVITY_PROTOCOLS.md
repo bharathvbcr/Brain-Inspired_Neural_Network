@@ -3,7 +3,7 @@
 **Status:** harness + unit/integration tests + **full n=20 scientific runs recorded**.
 These are protocol-v3 sensitivity probes — they do **not** reopen Gate G2 under
 protocol v2, and they do **not** mutate or alias kill-gate hash
-`c1-118207fbc3eaba53`.
+`c1-118207fbc3eaba53`. Scoped U-NEG (v2 + folded v3): [`U-NEG_protocol_v2.md`](U-NEG_protocol_v2.md).
 
 ## What these are
 

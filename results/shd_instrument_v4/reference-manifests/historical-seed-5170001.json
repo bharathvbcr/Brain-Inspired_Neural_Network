@@ -1,0 +1,31 @@
+{
+  "exposure": {
+    "checkpoint_selected_on": "official-test-best-accuracy",
+    "final_test_reads": 0,
+    "test_reads_during_training": 150,
+    "train_reads": 150,
+    "validation_reads": 0
+  },
+  "finalizer_source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "mode": "historical",
+  "parser": {
+    "contract": "one current validation accuracy for each epoch 0..149",
+    "path": "/Users/bharath/Code/parameter_golf/binn/scripts/shd_calibration/reference.py",
+    "sha256": "42b1e0e371272e5a286291e3ebd7d423c6753f6df865deb91bd4902ec6fae07e"
+  },
+  "recovery_reason": "training completed 150 epochs; v3 finalizer failed because it counted current and best accuracy on every epoch line",
+  "schema": "shd-reference-recovery-manifest-v1",
+  "seed": 5170001,
+  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "source_revision": {
+    "log_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/references/historical-seed-5170001.log",
+    "log_sha256": "adf0d1ff9b57ff734dd258c94724af422b4d9041104e230bec562ac29add73db",
+    "manifest_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/reference-manifests/historical-seed-5170001.json",
+    "manifest_sha256": "913c0fa79310cbb4e35b141bcd1daa30ffb64a08970de27e0ee88a208dcf11bd",
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3",
+    "state_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/reference-states/historical-seed-5170001.json",
+    "state_sha256": "2cd7862a2ff055cebef60ba0bafc5d36dc56cf9f0d4ef91b7ec3b10a5e248cc3"
+  },
+  "training_rerun": false,
+  "training_source_fingerprint": "5020b769e1ef1c0066a5a11be005ca3a9502de8e099ef854b1665dd9d2299b6e"
+}

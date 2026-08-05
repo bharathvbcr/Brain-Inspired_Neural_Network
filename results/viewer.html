@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BINN offline viewer</title>
+<style>
+  :root {
+    --bg: #12151a;
+    --panel: #1a1f27;
+    --border: #2a3340;
+    --text: #e6ebf0;
+    --muted: #8b97a8;
+    --accent: #5eb1ff;
+    --input: #3d9e6f;
+    --hidden: #c9a227;
+    --readout: #d07050;
+    --kwta: #ff5e8a;
+    --playhead: #f0f4f8;
+    --good: #6bcf8e;
+    --warn: #e0a84a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.45 "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  }
+  header {
+    display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: #0e1116; position: sticky; top: 0; z-index: 20;
+  }
+  header h1 {
+    margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--accent);
+  }
+  .ctrl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .ctrl label { color: var(--muted); font-size: 11px; display: flex; gap: 6px; align-items: center; }
+  button, select, input[type="file"] {
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 4px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.active { background: #243044; border-color: var(--accent); }
+  input[type="range"] { width: 100px; accent-color: var(--accent); }
+  #status { color: var(--muted); font-size: 11px; margin-left: auto; }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding: 10px;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden; min-height: 280px;
+    display: flex; flex-direction: column;
+  }
+  .panel h2 {
+    margin: 0; padding: 8px 12px; font-size: 12px; font-weight: 600;
+    border-bottom: 1px solid var(--border); color: var(--muted);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .panel h2 span.hint { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; }
+  .panel-body { flex: 1; position: relative; min-height: 240px; }
+  canvas { display: block; width: 100%; height: 100%; }
+  .empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); padding: 24px; text-align: center; pointer-events: none;
+  }
+  .empty.hidden { display: none; }
+  .legend {
+    display: flex; gap: 12px; flex-wrap: wrap; padding: 4px 12px 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .scrub {
+    padding: 6px 12px 10px; display: flex; gap: 10px; align-items: center;
+    border-top: 1px solid var(--border);
+  }
+  .scrub input[type="range"] { flex: 1; width: auto; }
+  .scrub .meta { color: var(--muted); font-size: 11px; min-width: 120px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BINN offline viewer</h1>
+  <div class="ctrl">
+    <label>JSONL <input type="file" id="file" accept=".jsonl,.json,text/plain" /></label>
+    <button id="btnDemo" title="Load embedded demo">Demo</button>
+    <button id="btnPlay">Play</button>
+    <label>Speed <input type="range" id="speed" min="0.25" max="8" step="0.25" value="1" /><span id="speedVal">1×</span></label>
+    <label>Trial
+      <select id="trial">
+        <option value="all">all</option>
+      </select>
+    </label>
+  </div>
+  <div id="status">Opening with demo fixture…</div>
+</header>
+
+<main>
+  <section class="panel" id="panel-replay">
+    <h2>Spike replay <span class="hint" id="replayHint">area bands · playhead · k-WTA overlay</span></h2>
+    <div class="panel-body">
+      <canvas id="cvReplay"></canvas>
+      <div class="empty" id="emptyReplay">No spikes / topology yet</div>
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--input)"></i>input</span>
+      <span><i class="swatch" style="background:var(--hidden)"></i>hidden</span>
+      <span><i class="swatch" style="background:var(--readout)"></i>readout</span>
+      <span><i class="swatch" style="background:var(--kwta)"></i>k-WTA winners</span>
+      <span><i class="swatch" style="background:var(--playhead)"></i>playhead</span>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-flow">
+    <h2>Area flow <span class="hint" id="flowHint">windowed spike→edge · or static nnz</span></h2>
+    <div class="panel-body">
+      <canvas id="cvFlow"></canvas>
+      <div class="empty" id="emptyFlow">No topology / flow_static</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-overlap">
+    <h2>Assembly overlap <span class="hint">cell×class · Jaccard</span></h2>
+    <div class="panel-body">
+      <canvas id="cvOverlap"></canvas>
+      <div class="empty" id="emptyOverlap">No assembly_class records (R1 static traces have none)</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-weights">
+    <h2>Eligibility / weights <span class="hint">Δw heatmap · elig scrubber</span></h2>
+    <div class="panel-body">
+      <canvas id="cvWeights"></canvas>
+      <div class="empty" id="emptyWeights">No weight_frame / elig_event</div>
+    </div>
+    <div class="scrub">
+      <span class="meta" id="eligMeta">frame —</span>
+      <input type="range" id="eligScrub" min="0" max="0" value="0" disabled />
+      <span class="meta" id="eligReward"></span>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── Embedded demo fixture (tiny C1-like trace covering all four panels) ──
+  const DEMO_JSONL = [
+    {"type":"meta","config_hash":"demo","seed":42,"condition":"local_assembly","experiment":"c1","n_classes":3,"k_wta":2,"n_hidden":8},
+    {"type":"topology","areas":[
+      {"id":0,"name":"input","start":0,"end":6},
+      {"id":1,"name":"hidden","start":6,"end":14},
+      {"id":2,"name":"readout","start":14,"end":16}
+    ],"projections":[
+      {"src":0,"dst":1,"nnz":18},
+      {"src":1,"dst":1,"nnz":12},
+      {"src":1,"dst":2,"nnz":8}
+    ]},
+    {"type":"flow_static","projections":[
+      {"src":0,"dst":1,"nnz":18,"coupling":[0.4,0.6,0.3]},
+      {"src":1,"dst":1,"nnz":12},
+      {"src":1,"dst":2,"nnz":8,"coupling":[0.7,0.5]}
+    ]},
+    {"type":"stimulus","trial":0,"label":0,"t0":0,"t1":40,"phase":"train"},
+    {"type":"stimulus","trial":1,"label":1,"t0":50,"t1":90,"phase":"train"},
+    {"type":"stimulus","trial":2,"label":2,"t0":100,"t1":140,"phase":"test"},
+    {"type":"stimulus","trial":3,"label":0,"t0":150,"t1":190,"phase":"test"},
+    // trial 0: input spikes early, kwta at t=12, readout delayed
+    {"type":"spike","t":2,"cell":0,"trial":0},{"type":"spike","t":2,"cell":1,"trial":0},
+    {"type":"spike","t":3,"cell":2,"trial":0},{"type":"spike","t":4,"cell":0,"trial":0},
+    {"type":"spike","t":12,"cell":7,"trial":0},{"type":"spike","t":12,"cell":9,"trial":0},
+    {"type":"spike","t":18,"cell":14,"trial":0},{"type":"spike","t":19,"cell":14,"trial":0},
+    {"type":"kwta","trial":0,"area":1,"t":12,"winners":[7,9],"scores":[[7,1.4],[9,1.1],[8,0.6],[10,0.3]]},
+    // trial 1
+    {"type":"spike","t":52,"cell":3,"trial":1},{"type":"spike","t":53,"cell":4,"trial":1},
+    {"type":"spike","t":54,"cell":5,"trial":1},
+    {"type":"spike","t":62,"cell":8,"trial":1},{"type":"spike","t":62,"cell":11,"trial":1},
+    {"type":"spike","t":68,"cell":15,"trial":1},
+    {"type":"kwta","trial":1,"area":1,"t":62,"winners":[8,11],"scores":[[8,1.5],[11,1.2],[7,0.4],[9,0.2]]},
+    // trial 2 test
+    {"type":"spike","t":102,"cell":1,"trial":2},{"type":"spike","t":103,"cell":2,"trial":2},
+    {"type":"spike","t":112,"cell":7,"trial":2},{"type":"spike","t":112,"cell":10,"trial":2},
+    {"type":"spike","t":118,"cell":14,"trial":2},
+    {"type":"kwta","trial":2,"area":1,"t":112,"winners":[7,10],"scores":[[7,1.3],[10,1.0],[9,0.5]]},
+    // trial 3 test
+    {"type":"spike","t":152,"cell":0,"trial":3},{"type":"spike","t":153,"cell":1,"trial":3},
+    {"type":"spike","t":162,"cell":7,"trial":3},{"type":"spike","t":162,"cell":9,"trial":3},
+    {"type":"spike","t":168,"cell":14,"trial":3},
+    {"type":"kwta","trial":3,"area":1,"t":162,"winners":[7,9],"scores":[[7,1.6],[9,1.3],[8,0.4]]},
+    {"type":"assembly_class","label":0,"members":[7,9],"hits":[3,2]},
+    {"type":"assembly_class","label":1,"members":[8,11],"hits":[2,2]},
+    {"type":"assembly_class","label":2,"members":[7,10],"hits":[1,1]},
+    {"type":"weight_frame","step":0,"kind":"before","edges":[
+      {"pre":7,"post":14,"w":0.2},{"pre":8,"post":14,"w":0.15},{"pre":9,"post":14,"w":0.18},
+      {"pre":10,"post":14,"w":0.1},{"pre":11,"post":15,"w":0.22},{"pre":7,"post":15,"w":0.05},
+      {"pre":8,"post":15,"w":0.12},{"pre":9,"post":15,"w":0.08}
+    ]},
+    {"type":"elig_event","trial":0,"step":1,"reward":1,"edges":[
+      {"pre":7,"post":14,"w":0.25,"e":0.8,"dw":0.05},{"pre":9,"post":14,"w":0.22,"e":0.6,"dw":0.04},
+      {"pre":8,"post":14,"w":0.14,"e":-0.1,"dw":-0.01}
+    ]},
+    {"type":"elig_event","trial":1,"step":2,"reward":-1,"edges":[
+      {"pre":8,"post":15,"w":0.18,"e":0.7,"dw":0.06},{"pre":11,"post":15,"w":0.28,"e":0.9,"dw":0.06},
+      {"pre":7,"post":14,"w":0.24,"e":-0.2,"dw":-0.01}
+    ]},
+    {"type":"elig_event","trial":2,"step":3,"reward":1,"edges":[
+      {"pre":7,"post":14,"w":0.30,"e":0.5,"dw":0.06},{"pre":10,"post":14,"w":0.16,"e":0.4,"dw":0.06}
+    ]},
+    {"type":"weight_frame","step":99,"kind":"after","edges":[
+      {"pre":7,"post":14,"w":0.35},{"pre":8,"post":14,"w":0.12},{"pre":9,"post":14,"w":0.28},
+      {"pre":10,"post":14,"w":0.18},{"pre":11,"post":15,"w":0.32},{"pre":7,"post":15,"w":0.04},
+      {"pre":8,"post":15,"w":0.20},{"pre":9,"post":15,"w":0.07}
+    ]}
+  ].map(function (o) { return JSON.stringify(o); }).join("\n");
+
+  // ── State ──
+  const state = {
+    meta: null,
+    areas: [],
+    projections: [],
+    flowStatic: null,
+    stimuli: [],
+    spikes: [],
+    kwtas: [],
+    assemblies: [],
+    weightFrames: [],
+    eligEvents: [],
+    // derived
+    tMin: 0,
+    tMax: 1,
+    trials: [],
+    trialFilter: "all",
+    // playback
+    playing: false,
+    t: 0,
+    speed: 1,
+    lastTs: 0,
+    eligIdx: 0,
+    // adjacency for flow (cell→outbound area counts via projections)
+    cellToArea: null,
+    projEdges: [] // {srcArea, dstArea, nnz, cells?}
+  };
+
+  const el = {
+    file: document.getElementById("file"),
+    btnDemo: document.getElementById("btnDemo"),
+    btnPlay: document.getElementById("btnPlay"),
+    speed: document.getElementById("speed"),
+    speedVal: document.getElementById("speedVal"),
+    trial: document.getElementById("trial"),
+    status: document.getElementById("status"),
+    eligScrub: document.getElementById("eligScrub"),
+    eligMeta: document.getElementById("eligMeta"),
+    eligReward: document.getElementById("eligReward"),
+    emptyReplay: document.getElementById("emptyReplay"),
+    emptyFlow: document.getElementById("emptyFlow"),
+    emptyOverlap: document.getElementById("emptyOverlap"),
+    emptyWeights: document.getElementById("emptyWeights"),
+    replayHint: document.getElementById("replayHint"),
+    flowHint: document.getElementById("flowHint"),
+    cvReplay: document.getElementById("cvReplay"),
+    cvFlow: document.getElementById("cvFlow"),
+    cvOverlap: document.getElementById("cvOverlap"),
+    cvWeights: document.getElementById("cvWeights")
+  };
+
+  function areaColor(name) {
+    const n = (name || "").toLowerCase();
+    if (n.indexOf("input") >= 0) return getCss("--input");
+    if (n.indexOf("hidden") >= 0) return getCss("--hidden");
+    if (n.indexOf("readout") >= 0) return getCss("--readout");
+    const palette = ["#5eb1ff", "#3d9e6f", "#c9a227", "#d07050", "#9b7bdb", "#5ecfcf"];
+    return palette[(name || "").length % palette.length];
+  }
+  function getCss(v) {
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  function resetTrace() {
+    state.meta = null;
+    state.areas = [];
+    state.projections = [];
+    state.flowStatic = null;
+    state.stimuli = [];
+    state.spikes = [];
+    state.kwtas = [];
+    state.assemblies = [];
+    state.weightFrames = [];
+    state.eligEvents = [];
+    state.tMin = 0;
+    state.tMax = 1;
+    state.trials = [];
+    state.t = 0;
+    state.eligIdx = 0;
+    state.cellToArea = null;
+    state.projEdges = [];
+  }
+
+  function parseJsonl(text) {
+    resetTrace();
+    const lines = text.split(/\r?\n/);
+    let n = 0, bad = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      let obj;
+      try { obj = JSON.parse(line); } catch (e) { bad++; continue; }
+      if (!obj || typeof obj !== "object" || !obj.type) { bad++; continue; }
+      n++;
+      switch (obj.type) {
+        case "meta":
+          state.meta = obj;
+          break;
+        case "topology":
+          state.areas = Array.isArray(obj.areas) ? obj.areas.slice() : [];
+          state.projections = Array.isArray(obj.projections) ? obj.projections.slice() : [];
+          break;
+        case "flow_static":
+          state.flowStatic = obj;
+          if ((!state.projections || !state.projections.length) && Array.isArray(obj.projections)) {
+            state.projections = obj.projections.slice();
+          }
+          break;
+        case "stimulus":
+          state.stimuli.push(obj);
+          break;
+        case "spike":
+          state.spikes.push(obj);
+          break;
+        case "kwta":
+          state.kwtas.push(obj);
+          break;
+        case "assembly_class":
+          state.assemblies.push(obj);
+          break;
+        case "weight_frame":
+          state.weightFrames.push(obj);
+          break;
+        case "elig_event":
+          state.eligEvents.push(obj);
+          break;
+        default:
+          break;
+      }
+    }
+    derive();
+    return { n: n, bad: bad };
+  }
+
+  function derive() {
+    const trialSet = {};
+    state.stimuli.forEach(function (s) { trialSet[s.trial] = true; });
+    state.spikes.forEach(function (s) { trialSet[s.trial] = true; });
+    state.kwtas.forEach(function (s) { trialSet[s.trial] = true; });
+    state.trials = Object.keys(trialSet).map(Number).sort(function (a, b) { return a - b; });
+
+    let tMin = Infinity, tMax = -Infinity;
+    state.spikes.forEach(function (s) {
+      if (s.t < tMin) tMin = s.t;
+      if (s.t > tMax) tMax = s.t;
+    });
+    state.stimuli.forEach(function (s) {
+      if (s.t0 < tMin) tMin = s.t0;
+      if (s.t1 > tMax) tMax = s.t1;
+    });
+    state.kwtas.forEach(function (k) {
+      if (k.t < tMin) tMin = k.t;
+      if (k.t > tMax) tMax = k.t;
+    });
+    if (!isFinite(tMin)) { tMin = 0; tMax = 1; }
+    if (tMax <= tMin) tMax = tMin + 1;
+    state.tMin = tMin;
+    state.tMax = tMax;
+    state.t = tMin;
+
+    // cell → area id
+    const map = [];
+    state.areas.forEach(function (a) {
+      for (let c = a.start; c < a.end; c++) map[c] = a.id;
+    });
+    state.cellToArea = map;
+
+    state.projEdges = (state.projections || []).map(function (p) {
+      return { src: p.src, dst: p.dst, nnz: p.nnz || 0, coupling: p.coupling };
+    });
+    if (state.flowStatic && Array.isArray(state.flowStatic.projections)) {
+      state.flowStatic.projections.forEach(function (p) {
+        const existing = state.projEdges.find(function (e) { return e.src === p.src && e.dst === p.dst; });
+        if (existing) {
+          if (p.nnz != null) existing.nnz = p.nnz;
+          if (p.coupling) existing.coupling = p.coupling;
+        } else {
+          state.projEdges.push({ src: p.src, dst: p.dst, nnz: p.nnz || 0, coupling: p.coupling });
+        }
+      });
+    }
+
+    state.eligEvents.sort(function (a, b) {
+      return (a.step || 0) - (b.step || 0) || (a.trial || 0) - (b.trial || 0);
+    });
+    state.weightFrames.sort(function (a, b) {
+      return (a.step || 0) - (b.step || 0);
+    });
+
+    // trial select
+    const sel = el.trial;
+    const prev = state.trialFilter;
+    sel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "all";
+    optAll.textContent = "all";
+    sel.appendChild(optAll);
+    state.trials.forEach(function (t) {
+      const o = document.createElement("option");
+      o.value = String(t);
+      const stim = state.stimuli.find(function (s) { return s.trial === t; });
+      o.textContent = stim
+        ? ("T" + t + " L" + stim.label + " (" + (stim.phase || "?") + ")")
+        : ("T" + t);
+      sel.appendChild(o);
+    });
+    if (prev !== "all" && state.trials.indexOf(Number(prev)) >= 0) {
+      sel.value = prev;
+      state.trialFilter = prev;
+    } else {
+      sel.value = "all";
+      state.trialFilter = "all";
+    }
+
+    // elig scrubber
+    const nElig = state.eligEvents.length;
+    el.eligScrub.max = String(Math.max(0, nElig - 1));
+    el.eligScrub.value = "0";
+    el.eligScrub.disabled = nElig === 0;
+    state.eligIdx = 0;
+    updateEligMeta();
+
+    const m = state.meta || {};
+    el.status.textContent =
+      (m.experiment || "?") + " · seed " + (m.seed != null ? m.seed : "?") +
+      " · " + state.spikes.length + " spikes · " + state.kwtas.length + " kwta · " +
+      state.assemblies.length + " assemblies · " + state.eligEvents.length + " elig";
+  }
+
+  function trialOk(trial) {
+    if (state.trialFilter === "all") return true;
+    return Number(trial) === Number(state.trialFilter);
+  }
+
+  function filteredSpikes() {
+    return state.spikes.filter(function (s) { return trialOk(s.trial); });
+  }
+  function filteredStimuli() {
+    return state.stimuli.filter(function (s) { return trialOk(s.trial); });
+  }
+  function filteredKwtas() {
+    return state.kwtas.filter(function (k) { return trialOk(k.trial); });
+  }
+
+  function timeBounds() {
+    if (state.trialFilter === "all") return { t0: state.tMin, t1: state.tMax };
+    const stims = filteredStimuli();
+    if (stims.length) {
+      let t0 = Infinity, t1 = -Infinity;
+      stims.forEach(function (s) {
+        if (s.t0 < t0) t0 = s.t0;
+        if (s.t1 > t1) t1 = s.t1;
+      });
+      filteredSpikes().forEach(function (s) {
+        if (s.t < t0) t0 = s.t;
+        if (s.t > t1) t1 = s.t;
+      });
+      filteredKwtas().forEach(function (k) {
+        if (k.t < t0) t0 = k.t;
+        if (k.t > t1) t1 = k.t;
+      });
+      if (!isFinite(t0)) return { t0: state.tMin, t1: state.tMax };
+      if (t1 <= t0) t1 = t0 + 1;
+      return { t0: t0, t1: t1 };
+    }
+    return { t0: state.tMin, t1: state.tMax };
+  }
+
+  // ── Canvas helpers ──
+  function fitCanvas(cv) {
+    const parent = cv.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    const w = parent.clientWidth || 400;
+    const h = parent.clientHeight || 240;
+    if (cv._cssW !== w || cv._cssH !== h || cv._dpr !== dpr) {
+      cv._cssW = w; cv._cssH = h; cv._dpr = dpr;
+      cv.width = Math.floor(w * dpr);
+      cv.height = Math.floor(h * dpr);
+      cv.style.width = w + "px";
+      cv.style.height = h + "px";
+    }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, w: w, h: h };
+  }
+
+  function clear(ctx, w, h) {
+    ctx.fillStyle = "#141820";
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // ── Panel 1: Spike replay ──
+  function drawReplay() {
+    const { ctx, w, h } = fitCanvas(el.cvReplay);
+    clear(ctx, w, h);
+    const areas = state.areas;
+    const spikes = filteredSpikes();
+    const stims = filteredStimuli();
+    const kwtas = filteredKwtas();
+    const has = areas.length > 0 && (spikes.length > 0 || kwtas.length > 0 || stims.length > 0);
+    el.emptyReplay.classList.toggle("hidden", has);
+    if (!areas.length) return;
+
+    const padL = 56, padR = 12, padT = 28, padB = 22;
+    const plotW = w - padL - padR;
+    const plotH = h - padT - padB;
+    const bounds = timeBounds();
+    const t0 = bounds.t0, t1 = bounds.t1;
+    const span = Math.max(1, t1 - t0);
+
+    // total cells
+    let cellMin = Infinity, cellMax = -Infinity;
+    areas.forEach(function (a) {
+      if (a.start < cellMin) cellMin = a.start;
+      if (a.end > cellMax) cellMax = a.end;
+    });
+    if (!isFinite(cellMin)) { cellMin = 0; cellMax = 1; }
+    const nCells = Math.max(1, cellMax - cellMin);
+
+    function xOf(t) { return padL + ((t - t0) / span) * plotW; }
+    function yOf(cell) {
+      const frac = (cell - cellMin + 0.5) / nCells;
+      return padT + frac * plotH;
+    }
+
+    // area bands
+    areas.forEach(function (a) {
+      const y0 = padT + ((a.start - cellMin) / nCells) * plotH;
+      const y1 = padT + ((a.end - cellMin) / nCells) * plotH;
+      ctx.fillStyle = areaColor(a.name);
+      ctx.globalAlpha = 0.12;
+      ctx.fillRect(padL, y0, plotW, Math.max(1, y1 - y0));
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = areaColor(a.name);
+      ctx.font = "11px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(a.name, padL - 6, (y0 + y1) / 2);
+    });
+
+    // phase markers + stimulus windows
+    stims.forEach(function (s) {
+      const xA = xOf(s.t0), xB = xOf(s.t1);
+      ctx.fillStyle = s.phase === "test" ? "rgba(94,177,255,0.08)" : "rgba(107,207,142,0.06)";
+      ctx.fillRect(xA, padT, Math.max(1, xB - xA), plotH);
+
+      // find kwta for this trial for phase labels
+      const kw = kwtas.filter(function (k) { return k.trial === s.trial; });
+      const kwT = kw.length ? kw[0].t : (s.t0 + (s.t1 - s.t0) * 0.35);
+      // input | winner | readout delay bands
+      const mid1 = kwT;
+      const mid2 = s.t0 + (s.t1 - s.t0) * 0.7;
+      drawPhaseLabel(ctx, xOf(s.t0), xOf(mid1), padT - 14, "input", "#3d9e6f");
+      drawPhaseLabel(ctx, xOf(mid1), xOf(mid2), padT - 14, "winner", "#ff5e8a");
+      drawPhaseLabel(ctx, xOf(mid2), xOf(s.t1), padT - 14, "readout", "#d07050");
+
+      // stimulus label
+      ctx.fillStyle = "#e6ebf0";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("L" + s.label + " · " + (s.phase || ""), xA + 4, padT + 2);
+    });
+
+    // spikes (flash near playhead)
+    const playT = state.t;
+    spikes.forEach(function (s) {
+      const x = xOf(s.t);
+      const y = yOf(s.cell);
+      const age = playT - s.t;
+      let alpha = 0.35;
+      let r = 2;
+      if (age >= 0 && age < 4) {
+        alpha = 1 - age / 4;
+        r = 4.5 - age * 0.5;
+      } else if (s.t <= playT) {
+        alpha = 0.55;
+      } else {
+        alpha = 0.2;
+      }
+      const areaId = state.cellToArea[s.cell];
+      const area = areas.find(function (a) { return a.id === areaId; });
+      ctx.fillStyle = area ? areaColor(area.name) : "#aaa";
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // k-WTA winner overlay (mandatory)
+    kwtas.forEach(function (k) {
+      const winners = k.winners || [];
+      const scoreMap = {};
+      (k.scores || []).forEach(function (pair) {
+        if (Array.isArray(pair) && pair.length >= 2) scoreMap[pair[0]] = pair[1];
+      });
+      const x = xOf(k.t);
+      // vertical marker at decision time
+      ctx.strokeStyle = "rgba(255,94,138,0.45)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, padT);
+      ctx.lineTo(x, padT + plotH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      winners.forEach(function (cell) {
+        const y = yOf(cell);
+        const v = scoreMap[cell];
+        const glow = v != null ? Math.min(1, 0.5 + v / 2) : 0.9;
+        // ring
+        ctx.strokeStyle = "rgba(255,94,138," + glow + ")";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.stroke();
+        // filled core
+        ctx.fillStyle = "rgba(255,94,138," + (0.55 + 0.35 * glow) + ")";
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        // flash if near playhead
+        if (Math.abs(playT - k.t) < 3) {
+          ctx.strokeStyle = "rgba(255,200,220,0.9)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 10 + (3 - Math.abs(playT - k.t)) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      });
+      // competitor scores as faint ticks
+      Object.keys(scoreMap).forEach(function (cStr) {
+        const cell = Number(cStr);
+        if (winners.indexOf(cell) >= 0) return;
+        const y = yOf(cell);
+        const v = scoreMap[cell];
+        ctx.fillStyle = "rgba(255,94,138," + Math.min(0.45, v * 0.25) + ")";
+        ctx.fillRect(x - 1, y - 1, 2, 2);
+      });
+    });
+
+    // playhead
+    const px = xOf(playT);
+    ctx.strokeStyle = getCss("--playhead");
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(px, padT);
+    ctx.lineTo(px, padT + plotH);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "#f0f4f8";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText("t=" + playT.toFixed(1), px, padT + plotH + 4);
+
+    // time axis ticks
+    ctx.fillStyle = "#8b97a8";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    for (let i = 0; i <= 4; i++) {
+      const tt = t0 + (span * i) / 4;
+      ctx.fillText(String(Math.round(tt)), xOf(tt), h - 6);
+    }
+
+    const kwNote = kwtas.length ? (kwtas.length + " k-WTA") : "no k-WTA";
+    el.replayHint.textContent = "t∈[" + t0 + "," + t1 + "] · " + spikes.length + " spikes · " + kwNote;
+  }
+
+  function drawPhaseLabel(ctx, x0, x1, y, text, color) {
+    if (x1 - x0 < 28) return;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.85;
+    ctx.font = "9px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, (x0 + x1) / 2, y);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── Panel 2: Area flow ──
+  function drawFlow() {
+    const { ctx, w, h } = fitCanvas(el.cvFlow);
+    clear(ctx, w, h);
+    const areas = state.areas;
+    const has = areas.length > 0 && (state.projEdges.length > 0 || state.flowStatic);
+    el.emptyFlow.classList.toggle("hidden", has);
+    if (!areas.length) return;
+
+    const spikes = filteredSpikes();
+    const useDynamic = spikes.length > 0 && state.projEdges.length > 0;
+    el.flowHint.textContent = useDynamic
+      ? "windowed spike→outbound (live)"
+      : "static flow_static / nnz";
+
+    // layout nodes in a row / arc
+    const cx = w / 2, cy = h / 2;
+    const R = Math.min(w, h) * 0.32;
+    const nodes = areas.map(function (a, i) {
+      const ang = -Math.PI / 2 + (i / Math.max(1, areas.length)) * Math.PI * 2;
+      // for 3 areas, place left-center-right
+      let x, y;
+      if (areas.length === 3) {
+        const xs = [w * 0.18, w * 0.5, w * 0.82];
+        x = xs[i]; y = cy;
+      } else if (areas.length === 2) {
+        x = i === 0 ? w * 0.28 : w * 0.72; y = cy;
+      } else {
+        x = cx + Math.cos(ang) * R;
+        y = cy + Math.sin(ang) * R;
+      }
+      return { area: a, x: x, y: y };
+    });
+    const byId = {};
+    nodes.forEach(function (n) { byId[n.area.id] = n; });
+
+    // edge weights
+    const edges = state.projEdges.map(function (p) {
+      let weight = p.nnz || 0;
+      if (p.coupling && p.coupling.length) {
+        let s = 0;
+        p.coupling.forEach(function (c) { s += Math.abs(c); });
+        weight = Math.max(weight, s * 10);
+      }
+      if (useDynamic) {
+        // count spikes in recent window in src area that could drive outbound
+        const win = 8;
+        const tNow = state.t;
+        let srcSpikes = 0;
+        const srcArea = areas.find(function (a) { return a.id === p.src; });
+        if (srcArea) {
+          spikes.forEach(function (sp) {
+            if (sp.t > tNow - win && sp.t <= tNow &&
+                sp.cell >= srcArea.start && sp.cell < srcArea.end) {
+              srcSpikes++;
+            }
+          });
+        }
+        weight = (p.nnz || 1) * (0.15 + srcSpikes);
+      }
+      return { src: p.src, dst: p.dst, weight: weight };
+    });
+    let maxW = 0;
+    edges.forEach(function (e) { if (e.weight > maxW) maxW = e.weight; });
+    if (maxW <= 0) maxW = 1;
+
+    // draw edges
+    edges.forEach(function (e) {
+      const a = byId[e.src], b = byId[e.dst];
+      if (!a || !b) return;
+      const thick = 1 + 10 * (e.weight / maxW);
+      const self = e.src === e.dst;
+      ctx.strokeStyle = "rgba(94,177,255,0.75)";
+      ctx.lineWidth = thick;
+      ctx.lineCap = "round";
+      if (self) {
+        ctx.beginPath();
+        ctx.arc(a.x, a.y - 28, 22, 0.2 * Math.PI, 1.8 * Math.PI);
+        ctx.stroke();
+      } else {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const ux = dx / len, uy = dy / len;
+        // slight curve
+        const mx = (a.x + b.x) / 2 - uy * 18;
+        const my = (a.y + b.y) / 2 + ux * 18;
+        ctx.beginPath();
+        ctx.moveTo(a.x + ux * 28, a.y + uy * 28);
+        ctx.quadraticCurveTo(mx, my, b.x - ux * 28, b.y - uy * 28);
+        ctx.stroke();
+        // arrowhead
+        const ang = Math.atan2(b.y - my, b.x - mx);
+        const ax = b.x - Math.cos(ang) * 28;
+        const ay = b.y - Math.sin(ang) * 28;
+        ctx.fillStyle = "rgba(94,177,255,0.85)";
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 8 * Math.cos(ang - 0.4), ay - 8 * Math.sin(ang - 0.4));
+        ctx.lineTo(ax - 8 * Math.cos(ang + 0.4), ay - 8 * Math.sin(ang + 0.4));
+        ctx.closePath();
+        ctx.fill();
+      }
+    });
+
+    // nodes
+    nodes.forEach(function (n) {
+      const col = areaColor(n.area.name);
+      ctx.fillStyle = "#1a1f27";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // activity glow from recent spikes
+      if (useDynamic) {
+        let count = 0;
+        const win = 8;
+        spikes.forEach(function (sp) {
+          if (sp.t > state.t - win && sp.t <= state.t &&
+              sp.cell >= n.area.start && sp.cell < n.area.end) count++;
+        });
+        if (count > 0) {
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = Math.min(0.8, 0.25 + count * 0.12);
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(n.x, n.y, 32 + count, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      ctx.fillStyle = "#e6ebf0";
+      ctx.font = "11px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(n.area.name, n.x, n.y);
+      ctx.fillStyle = "#8b97a8";
+      ctx.font = "9px monospace";
+      ctx.fillText("[" + n.area.start + "," + n.area.end + ")", n.x, n.y + 38);
+    });
+  }
+
+  // ── Panel 3: Assembly overlap ──
+  function jaccard(a, b) {
+    const A = {}, B = {};
+    a.forEach(function (x) { A[x] = true; });
+    b.forEach(function (x) { B[x] = true; });
+    let inter = 0, uni = 0;
+    const all = {};
+    a.forEach(function (x) { all[x] = true; });
+    b.forEach(function (x) { all[x] = true; });
+    Object.keys(all).forEach(function (k) {
+      uni++;
+      if (A[k] && B[k]) inter++;
+    });
+    return uni === 0 ? 0 : inter / uni;
+  }
+
+  function drawOverlap() {
+    const { ctx, w, h } = fitCanvas(el.cvOverlap);
+    clear(ctx, w, h);
+    const assemblies = state.assemblies.slice().sort(function (a, b) {
+      return (a.label || 0) - (b.label || 0);
+    });
+    const has = assemblies.length > 0;
+    el.emptyOverlap.classList.toggle("hidden", has);
+    if (!has) return;
+
+    // collect cells
+    const cellSet = {};
+    assemblies.forEach(function (a) {
+      (a.members || []).forEach(function (c) { cellSet[c] = true; });
+    });
+    const cells = Object.keys(cellSet).map(Number).sort(function (a, b) { return a - b; });
+    const nC = assemblies.length;
+    const nR = cells.length;
+
+    const mid = w * 0.52;
+    // left: cell × class
+    const pad = 36;
+    const leftW = mid - pad - 10;
+    const rightW = w - mid - pad;
+    const gridH = h - pad - 20;
+    const cellH = nR ? gridH / nR : gridH;
+    const cellW = nC ? leftW / nC : leftW;
+
+    ctx.fillStyle = "#8b97a8";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("cell × class", pad + leftW / 2, 14);
+
+    assemblies.forEach(function (a, j) {
+      ctx.fillStyle = "#8b97a8";
+      ctx.fillText("L" + a.label, pad + (j + 0.5) * cellW, pad - 6);
+    });
+
+    const memberSet = assemblies.map(function (a) {
+      const s = {};
+      (a.members || []).forEach(function (c) { s[c] = true; });
+      return s;
+    });
+    const hitMap = assemblies.map(function (a) {
+      const m = {};
+      const members = a.members || [];
+      const hits = a.hits || [];
+      members.forEach(function (c, i) { m[c] = hits[i] != null ? hits[i] : 1; });
+      return m;
+    });
+
+    cells.forEach(function (cell, i) {
+      ctx.fillStyle = "#8b97a8";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(cell), pad - 4, pad + (i + 0.5) * cellH);
+      assemblies.forEach(function (a, j) {
+        const on = memberSet[j][cell];
+        const x = pad + j * cellW;
+        const y = pad + i * cellH;
+        if (on) {
+          const hit = hitMap[j][cell] || 1;
+          const intens = Math.min(1, 0.35 + hit * 0.2);
+          ctx.fillStyle = "rgba(201,162,39," + intens + ")";
+        } else {
+          ctx.fillStyle = "rgba(42,51,64,0.6)";
+        }
+        ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+      });
+    });
+
+    // right: class × class Jaccard
+    const jPad = mid + 10;
+    const jSize = Math.min(rightW - 10, gridH);
+    const jCell = nC ? jSize / nC : jSize;
+    ctx.fillStyle = "#8b97a8";
+    ctx.textAlign = "center";
+    ctx.fillText("class × class Jaccard", jPad + jSize / 2, 14);
+
+    for (let i = 0; i < nC; i++) {
+      for (let j = 0; j < nC; j++) {
+        const jac = jaccard(assemblies[i].members || [], assemblies[j].members || []);
+        const x = jPad + j * jCell;
+        const y = pad + i * jCell;
+        ctx.fillStyle = heatColor(jac, 0, 1);
+        ctx.fillRect(x + 1, y + 1, jCell - 2, jCell - 2);
+        if (jCell > 28) {
+          ctx.fillStyle = jac > 0.55 ? "#111" : "#e6ebf0";
+          ctx.font = "10px monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(jac.toFixed(2), x + jCell / 2, y + jCell / 2);
+        }
+      }
+      ctx.fillStyle = "#8b97a8";
+      ctx.font = "10px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText("L" + assemblies[i].label, jPad - 4, pad + (i + 0.5) * jCell);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillText("L" + assemblies[i].label, jPad + (i + 0.5) * jCell, pad + jSize + 2);
+    }
+  }
+
+  function heatColor(v, lo, hi) {
+    const t = hi === lo ? 0 : (v - lo) / (hi - lo);
+    const x = Math.max(0, Math.min(1, t));
+    // dark blue → cyan → yellow → red
+    const r = Math.round(40 + x * 200);
+    const g = Math.round(60 + (x < 0.5 ? x * 2 * 140 : 140 - (x - 0.5) * 80));
+    const b = Math.round(120 + (1 - x) * 80 - x * 100);
+    return "rgb(" + r + "," + g + "," + Math.max(40, b) + ")";
+  }
+
+  function divergingColor(v, maxAbs) {
+    const m = maxAbs || 1;
+    const t = Math.max(-1, Math.min(1, v / m));
+    if (t >= 0) {
+      return "rgba(107,207,142," + (0.15 + 0.85 * t) + ")";
+    }
+    return "rgba(208,112,80," + (0.15 + 0.85 * (-t)) + ")";
+  }
+
+  // ── Panel 4: Eligibility / weights ──
+  function updateEligMeta() {
+    const ev = state.eligEvents[state.eligIdx];
+    if (!ev) {
+      el.eligMeta.textContent = "frame —";
+      el.eligReward.textContent = "";
+      return;
+    }
+    el.eligMeta.textContent = "step " + (ev.step != null ? ev.step : state.eligIdx) +
+      " · trial " + (ev.trial != null ? ev.trial : "?");
+    el.eligReward.textContent = "reward " + (ev.reward != null ? ev.reward : "—");
+  }
+
+  function drawWeights() {
+    const { ctx, w, h } = fitCanvas(el.cvWeights);
+    clear(ctx, w, h);
+    const before = state.weightFrames.find(function (f) { return f.kind === "before"; })
+      || state.weightFrames[0];
+    const after = state.weightFrames.find(function (f) { return f.kind === "after"; })
+      || state.weightFrames[state.weightFrames.length - 1];
+    const elig = state.eligEvents[state.eligIdx];
+    const has = !!(before || after || elig);
+    el.emptyWeights.classList.toggle("hidden", has);
+    if (!has) return;
+
+    // Build edge key set from before/after/elig
+    const edgeKeys = [];
+    const seen = {};
+    function addEdges(edges) {
+      (edges || []).forEach(function (e) {
+        const k = e.pre + "→" + e.post;
+        if (!seen[k]) { seen[k] = true; edgeKeys.push({ key: k, pre: e.pre, post: e.post }); }
+      });
+    }
+    if (before) addEdges(before.edges);
+    if (after) addEdges(after.edges);
+    if (elig) addEdges(elig.edges);
+    edgeKeys.sort(function (a, b) {
+      return a.pre - b.pre || a.post - b.post;
+    });
+
+    const wMap = function (frame) {
+      const m = {};
+      if (!frame) return m;
+      (frame.edges || []).forEach(function (e) { m[e.pre + "→" + e.post] = e.w; });
+      return m;
+    };
+    const wb = wMap(before);
+    const wa = wMap(after);
+
+    // Layout: left Δw bars, right elig e/dw for current frame
+    const pad = 40;
+    const mid = w * 0.5;
+    const n = edgeKeys.length || 1;
+    const rowH = Math.min(22, (h - pad - 10) / n);
+
+    ctx.fillStyle = "#8b97a8";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("Δw (after − before)", pad + (mid - pad) / 2, 14);
+    ctx.fillText("elig e / dw @ scrub", mid + (w - mid) / 2, 14);
+
+    let maxAbsDw = 0;
+    edgeKeys.forEach(function (ek) {
+      const dw = (wa[ek.key] != null && wb[ek.key] != null)
+        ? wa[ek.key] - wb[ek.key]
+        : (wa[ek.key] != null ? wa[ek.key] : 0);
+      if (Math.abs(dw) > maxAbsDw) maxAbsDw = Math.abs(dw);
+    });
+    if (maxAbsDw < 1e-9) maxAbsDw = 1;
+
+    let maxAbsE = 0;
+    if (elig) {
+      (elig.edges || []).forEach(function (e) {
+        if (Math.abs(e.e || 0) > maxAbsE) maxAbsE = Math.abs(e.e || 0);
+        if (Math.abs(e.dw || 0) > maxAbsE) maxAbsE = Math.abs(e.dw || 0);
+      });
+    }
+    if (maxAbsE < 1e-9) maxAbsE = 1;
+
+    const eligMap = {};
+    if (elig) {
+      (elig.edges || []).forEach(function (e) {
+        eligMap[e.pre + "→" + e.post] = e;
+      });
+    }
+
+    const barMax = (mid - pad) * 0.42;
+    edgeKeys.forEach(function (ek, i) {
+      const y = pad + i * rowH;
+      const dw = (wa[ek.key] != null ? wa[ek.key] : 0) - (wb[ek.key] != null ? wb[ek.key] : 0);
+      // label
+      ctx.fillStyle = "#8b97a8";
+      ctx.font = "9px monospace";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
+      ctx.fillText(ek.key, pad - 4, y + rowH / 2);
+
+      // Δw bar centered
+      const cx = pad + (mid - pad) * 0.55;
+      const bw = (dw / maxAbsDw) * barMax;
+      ctx.fillStyle = divergingColor(dw, maxAbsDw);
+      if (bw >= 0) ctx.fillRect(cx, y + 2, Math.max(2, bw), rowH - 4);
+      else ctx.fillRect(cx + bw, y + 2, Math.max(2, -bw), rowH - 4);
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.beginPath();
+      ctx.moveTo(cx, y + 1);
+      ctx.lineTo(cx, y + rowH - 1);
+      ctx.stroke();
+
+      // elig side
+      const ee = eligMap[ek.key];
+      const ex0 = mid + 20;
+      const avail = w - ex0 - 12;
+      if (ee) {
+        const eVal = ee.e || 0;
+        const dwVal = ee.dw || 0;
+        const eW = (eVal / maxAbsE) * (avail * 0.4);
+        const dW = (dwVal / maxAbsE) * (avail * 0.4);
+        ctx.fillStyle = divergingColor(eVal, maxAbsE);
+        if (eW >= 0) ctx.fillRect(ex0, y + 2, Math.max(2, eW), rowH - 4);
+        else ctx.fillRect(ex0 + eW, y + 2, Math.max(2, -eW), rowH - 4);
+        ctx.fillStyle = divergingColor(dwVal, maxAbsE);
+        const x2 = ex0 + avail * 0.5;
+        if (dW >= 0) ctx.fillRect(x2, y + 2, Math.max(2, dW), rowH - 4);
+        else ctx.fillRect(x2 + dW, y + 2, Math.max(2, -dW), rowH - 4);
+        if (rowH > 14) {
+          ctx.fillStyle = "#e6ebf0";
+          ctx.font = "8px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText("e=" + eVal.toFixed(2) + " dw=" + dwVal.toFixed(3), ex0 + avail * 0.5 + 4, y + rowH / 2);
+        }
+      } else {
+        ctx.fillStyle = "rgba(42,51,64,0.5)";
+        ctx.fillRect(ex0, y + 2, avail * 0.35, rowH - 4);
+      }
+    });
+
+    // legend
+    ctx.fillStyle = "#8b97a8";
+    ctx.font = "9px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText("green +Δ / red −Δ", pad, h - 8);
+    if (elig) {
+      ctx.textAlign = "right";
+      ctx.fillText("left=e  right=dw", w - 12, h - 8);
+    }
+  }
+
+  // ── Render loop ──
+  function drawAll() {
+    drawReplay();
+    drawFlow();
+    drawOverlap();
+    drawWeights();
+  }
+
+  function tick(ts) {
+    if (state.playing) {
+      if (!state.lastTs) state.lastTs = ts;
+      const dt = (ts - state.lastTs) / 1000;
+      state.lastTs = ts;
+      const bounds = timeBounds();
+      state.t += dt * 12 * state.speed; // ~12 time-units per second at 1×
+      if (state.t > bounds.t1) {
+        state.t = bounds.t0;
+      }
+    } else {
+      state.lastTs = 0;
+    }
+    drawAll();
+    requestAnimationFrame(tick);
+  }
+
+  // ── Controls ──
+  el.btnPlay.addEventListener("click", function () {
+    state.playing = !state.playing;
+    el.btnPlay.textContent = state.playing ? "Pause" : "Play";
+    el.btnPlay.classList.toggle("active", state.playing);
+  });
+
+  el.speed.addEventListener("input", function () {
+    state.speed = parseFloat(el.speed.value) || 1;
+    el.speedVal.textContent = state.speed + "×";
+  });
+
+  el.trial.addEventListener("change", function () {
+    state.trialFilter = el.trial.value;
+    const bounds = timeBounds();
+    state.t = bounds.t0;
+    drawAll();
+  });
+
+  el.eligScrub.addEventListener("input", function () {
+    state.eligIdx = parseInt(el.eligScrub.value, 10) || 0;
+    updateEligMeta();
+    drawWeights();
+  });
+
+  el.file.addEventListener("change", function () {
+    const f = el.file.files && el.file.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      const stats = parseJsonl(String(reader.result || ""));
+      el.status.textContent =
+        "Loaded " + f.name + " · " + stats.n + " records" +
+        (stats.bad ? (" (" + stats.bad + " bad lines)") : "");
+      state.playing = false;
+      el.btnPlay.textContent = "Play";
+      el.btnPlay.classList.remove("active");
+      drawAll();
+    };
+    reader.readAsText(f);
+  });
+
+  el.btnDemo.addEventListener("click", function () {
+    parseJsonl(DEMO_JSONL);
+    el.status.textContent = "Demo fixture · all four panels";
+    state.playing = true;
+    el.btnPlay.textContent = "Pause";
+    el.btnPlay.classList.add("active");
+    drawAll();
+  });
+
+  // Click on replay canvas to scrub time
+  el.cvReplay.addEventListener("click", function (ev) {
+    const rect = el.cvReplay.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const padL = 56, padR = 12;
+    const plotW = rect.width - padL - padR;
+    if (x < padL || x > rect.width - padR) return;
+    const bounds = timeBounds();
+    const frac = (x - padL) / plotW;
+    state.t = bounds.t0 + frac * (bounds.t1 - bounds.t0);
+    drawReplay();
+    drawFlow();
+  });
+
+  window.addEventListener("resize", function () { drawAll(); });
+
+  // Boot with demo
+  parseJsonl(DEMO_JSONL);
+  state.playing = true;
+  el.btnPlay.textContent = "Pause";
+  el.btnPlay.classList.add("active");
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

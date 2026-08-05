@@ -1,0 +1,3 @@
+6:hash family: c1x-eprop-true-* (frozen c1x-eprop-exact-forward-* unchanged)
+7:  true-surrogate-eprop hash=c1x-eprop-true-true-surrogate-eprop-0e2aeb90d68ac5f9
+8:  hybrid-stdp-eprop hash=c1x-eprop-true-hybrid-stdp-eprop-92333bf4bd223098

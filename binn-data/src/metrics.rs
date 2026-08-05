@@ -35,6 +35,21 @@ impl WorkCosts {
     }
 }
 
+/// F5 activity≠compute disclosure: event work vs naive activity-scaled proxy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActivityComputeAccount {
+    /// Modeled event work from disjoint counters.
+    pub event_work: f64,
+    /// Naive proxy `n_cells × activity_sparsity` (active-cell count as work).
+    pub naive_activity_work: f64,
+    /// `event_work / max(naive_activity_work, ε)` — ≫1 means activity understates compute.
+    pub work_vs_activity_ratio: f64,
+    /// Activity sparsity used for the naive proxy.
+    pub activity_sparsity: f32,
+    /// Population size used for the naive proxy.
+    pub n_cells: usize,
+}
+
 /// Stateless metric helpers used by the lab harness and unit tests.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Metrics;
@@ -75,6 +90,31 @@ impl Metrics {
     pub fn naive_linear_activity_work(dense_ops: f64, activity_fraction: f64) -> f64 {
         assert!((0.0..=1.0).contains(&activity_fraction));
         dense_ops * activity_fraction
+    }
+
+    /// F5: contrast event-counter work against a naive `n_cells × activity` proxy.
+    ///
+    /// Engineering accounting only — not a biology claim and not a G2 reopen.
+    pub fn activity_compute_account(
+        counts: WorkCounters,
+        costs: WorkCosts,
+        n_cells: usize,
+        activity_sparsity: f32,
+    ) -> ActivityComputeAccount {
+        assert!(
+            (0.0..=1.0).contains(&activity_sparsity),
+            "activity_sparsity must be in [0, 1]"
+        );
+        let event_work = Self::total_work(counts, costs);
+        let naive_activity_work = n_cells as f64 * f64::from(activity_sparsity);
+        let work_vs_activity_ratio = event_work / naive_activity_work.max(1e-12);
+        ActivityComputeAccount {
+            event_work,
+            naive_activity_work,
+            work_vs_activity_ratio,
+            activity_sparsity,
+            n_cells,
+        }
     }
 
     /// Relative forgetting: `(acc_initial − acc_after) / acc_initial`.
@@ -159,6 +199,22 @@ mod tests {
         let honest_work = Metrics::total_work(counts, costs);
         assert!((naive - counts.synaptic_deliveries as f64).abs() < 1e-9);
         assert!(honest_work > naive);
+    }
+
+    #[test]
+    fn f5_activity_compute_account_shows_event_overhead() {
+        let counts = WorkCounters {
+            source_spikes: 100,
+            synaptic_deliveries: 800,
+            cell_updates: 800,
+            plasticity_updates: 0,
+        };
+        let acct = Metrics::activity_compute_account(counts, WorkCosts::unit(), 10_000, 0.02);
+        // naive ≈ 10000 * 0.02 (f32→f64 may not be bit-exact 200)
+        assert!((acct.naive_activity_work - 200.0).abs() < 1e-3);
+        // event = 100 + 800 + 800 = 1700
+        assert!((acct.event_work - 1700.0).abs() < 1e-9);
+        assert!(acct.work_vs_activity_ratio > 8.0);
     }
 
     #[test]

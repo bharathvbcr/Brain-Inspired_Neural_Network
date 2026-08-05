@@ -1,0 +1,37 @@
+[package]
+name = "binn-hybrid-lab"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Training-only teachers and scientific gates for BINN-Hybrid"
+
+[dependencies]
+binn-areas.workspace = true
+binn-core.workspace = true
+binn-data.workspace = true
+binn-engine.workspace = true
+binn-hybrid-learn.workspace = true
+binn-learn.workspace = true
+
+[lib]
+doctest = false
+
+[[bin]]
+name = "hybrid-feasibility"
+path = "src/bin/hybrid_feasibility.rs"
+
+[[bin]]
+name = "hybrid-diagnostics"
+path = "src/bin/hybrid_diagnostics.rs"
+
+[[bin]]
+name = "hybrid-production-diagnostics"
+path = "src/bin/hybrid_production_diagnostics.rs"
+
+[[bin]]
+name = "hybrid-temperature-ladder"
+path = "src/bin/hybrid_temperature_ladder.rs"
+
+[[bin]]
+name = "hybrid-temperature-ablation"
+path = "src/bin/hybrid_temperature_ablation.rs"

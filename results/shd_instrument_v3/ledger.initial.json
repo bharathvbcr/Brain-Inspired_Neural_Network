@@ -1,0 +1,4361 @@
+{
+  "cells": [
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170001",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170002",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170003",
+      "seed": 5170003,
+      "status": "PENDING"
+    }
+  ],
+  "cells_total": 432,
+  "harness_status": "PENDING_PREREQUISITES",
+  "mechanical_status": "MATERIALIZED",
+  "references": [
+    {
+      "mode": "historical",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "mode": "historical",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "mode": "historical",
+      "seed": 5170003,
+      "status": "PENDING"
+    },
+    {
+      "mode": "clean",
+      "seed": 5170001,
+      "status": "PENDING"
+    },
+    {
+      "mode": "clean",
+      "seed": 5170002,
+      "status": "PENDING"
+    },
+    {
+      "mode": "clean",
+      "seed": 5170003,
+      "status": "PENDING"
+    }
+  ],
+  "schema": "shd-instrument-v1",
+  "scientific_status": "UNCALIBRATED"
+}

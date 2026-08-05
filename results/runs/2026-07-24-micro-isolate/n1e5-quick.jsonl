@@ -1,0 +1,6 @@
+    Finished `release` profile [optimized] target(s) in 0.02s
+     Running `target/release/c1 --micro --n-hidden 100000 --quick --seed 1 --isolate-condition local-assembly`
+micro-isolate config hash: c1-micro-05c262bd953671b8
+geometry: N=100000 fan=256 k=1000 (k/N=0.0100) regime=capped predicted_nnz≈25704000
+frame: engineering capacity stress after G2 FAIL — not Foundation R0 unlock; no dense SurrogateLif / G2 verdict
+{"condition":"local-assembly","seed":1,"accuracy":0.33333334,"activity_sparsity":0.01000000,"n_cells":100004,"n_params":25704209,"wall_secs":3.94295033,"peak_rss_bytes":1995145216,"source_spikes":29077,"synaptic_deliveries":7320400,"cell_updates":7348495,"plasticity_updates":694013643,"work_per_accuracy":2126134781.63624573,"n_hidden":100000,"k_wta":1000,"k_over_n":0.01000000,"p_sparse":0.34999999,"max_fan_out":256,"measured_nnz":25704209,"predicted_nnz":25704000,"mean_out_degree":256.99758911,"p95_out_degree":258.00000000,"mean_readout_fan_in":49880.00000000,"mean_hidden_fan_in":256.04449463,"regime":"capped","init_w":0.15000001,"effective_init_w":0.06288395,"readout_boost":1.00000000,"effective_readout_gain":49880.00000000,"empty_winner_rate":0.00000000,"matched_budget_repeat":false,"config_hash":"c1-micro-f66a713f50c2d6d1","protocol_version":2}

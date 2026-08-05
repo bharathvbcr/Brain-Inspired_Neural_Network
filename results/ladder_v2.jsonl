@@ -1,0 +1,3 @@
+{"seed": 0, "gradient": 0.71, "broadcast": 0.53, "rpe": 1.0, "rl_transport": 0.54, "dfa": 1.0, "eprop": 0.7, "readout_only": 0.46}
+{"seed": 1, "gradient": 0.45, "broadcast": 0.55, "rpe": 0.55, "rl_transport": 0.55, "dfa": 1.0, "eprop": 0.82, "readout_only": 0.55}
+{"seed": 2, "gradient": 1.0, "broadcast": 0.76, "rpe": 0.48, "rl_transport": 0.48, "dfa": 1.0, "eprop": 0.8, "readout_only": 0.48}

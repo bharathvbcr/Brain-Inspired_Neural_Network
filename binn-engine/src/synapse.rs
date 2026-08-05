@@ -16,6 +16,8 @@ pub struct Synapse {
     pub eligibility: f32,
     /// Tick of the last eligibility touch (for lazy decay in L5).
     pub last_elig_update: Tick,
+    /// Slow eligibility trace (decayed / STDP-updated by L5 for temporal context).
+    pub elig_slow: f32,
 }
 
 impl Synapse {
@@ -27,6 +29,7 @@ impl Synapse {
             delay,
             eligibility: 0.0,
             last_elig_update: 0,
+            elig_slow: 0.0,
         }
     }
 }

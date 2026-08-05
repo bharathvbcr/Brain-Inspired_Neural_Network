@@ -1,0 +1,32 @@
+{
+  "backend": "rust",
+  "contract": "fixed-t100",
+  "core_manifest_sha256": "7f612774972ccd61dd6af283fb9568c6eba88920185bddc212fed269bf41c52d",
+  "datasets": {
+    "test": "9d7088793af81d574b447dc72c6044a192db25e73b6b0a24a66e1306b266fb5a",
+    "train": "81730543032bb41d0aef048c2e541374a004199f2ebf0e9cae98389c980acab7"
+  },
+  "epochs": 100,
+  "exposure": {
+    "checkpoint_selected_on": "none-final-epoch",
+    "final_test_reads": 1,
+    "test_reads_during_training": 0,
+    "train_reads": 100,
+    "validation_reads": 0
+  },
+  "geometry": "adjacent-sum-5",
+  "hidden": 512,
+  "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170001",
+  "orders": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n8156-e100-s5170001.orders",
+    "sha256": "c0690ca4a2f60709d0c1cd40cc55753a0fc326137507cbbc98965586fc2a9321"
+  },
+  "replay_identity": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170001:64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456:7f612774972ccd61dd6af283fb9568c6eba88920185bddc212fed269bf41c52d",
+  "schema": "shd-cal-cell-manifest-v1",
+  "seed": 5170001,
+  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "weights": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n140-h512-s5170001.weights",
+    "sha256": "51b63a5a5dc78639cc82c8b8ecb435dcf102dff7706b5a0bf801ed3e6100cb3f"
+  }
+}

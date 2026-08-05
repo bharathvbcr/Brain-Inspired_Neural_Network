@@ -1,0 +1,6 @@
+3:     Running `target/release/c1 --matched-rl --config-hash c1-rl-42eddc9c801308e9 --out /Users/bharath/Code/parameter_golf/binn/results/runs/2026-07-23-binn-hard-loop/c1_rl_replay.md`
+4:C1-RL config hash: c1-rl-42eddc9c801308e9
+6:does not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:C1-RL verdict: PASS
+10:means: rl_reinforce_fb=0.9200 rl_graded=0.5250 rl_flat=0.5113 gradient=0.8887
+11:gap_closed_rl=0.8444  lower-95=0.6846

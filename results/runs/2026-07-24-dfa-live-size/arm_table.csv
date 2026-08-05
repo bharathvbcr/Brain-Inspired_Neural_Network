@@ -1,0 +1,4 @@
+arm,hash,verdict,primary_mean,gap_lcb,source
+pm1,c1-mac-probe-e14b8f80a366d9c0,reference,0.4969,,[`RESULTS.md`](RESULTS.md)
+structured-fb,c1-mac-probe-a180f42193693700,Reject-floor,0.5,-0.3146,[`RESULTS.md`](RESULTS.md)
+dfa-live,c1-mac-probe-e13053acc4e40c18,Accept,0.7781,0.101,[`RESULTS.md`](RESULTS.md)

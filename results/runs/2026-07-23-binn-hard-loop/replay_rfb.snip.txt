@@ -1,0 +1,2 @@
+3:     Running `target/release/c1 --reinforce-fb --config-hash c1-660401d74db3c88d --out /Users/bharath/Code/parameter_golf/binn/results/runs/2026-07-23-binn-hard-loop/c1_rfb_replay.md`
+4:use either --config-hash or --reinforce-fb, not both

@@ -1,7 +1,12 @@
-//! Plotting bridge (U13). Viz only; optional `plots` feature enables pyo3.
+//! Plotting bridge (U13). Viz only; optional `plots` feature enables plotters.
 //!
 //! Without the feature (default / CI), plot requests return
 //! [`PlotResult::Skipped`] while keeping the public API stable.
+//!
+//! Local enable (no Python):
+//! `cargo run --locked --release -p binn-lab --features plots --bin c1 -- …`
+//! Camera-ready paper figures:
+//! `cargo run --locked --release -p binn-lab --features plots --bin paper-figures`
 
 use std::path::Path;
 
@@ -32,11 +37,11 @@ pub struct PlotRequest<'a> {
 pub enum PlotResult {
     /// Figure written to disk.
     Written,
-    /// pyo3 / matplotlib unavailable — API kept, no figure.
+    /// plotters unavailable / feature off — API kept, no figure.
     Skipped(&'static str),
 }
 
-/// Plot helpers (scaffold + optional pyo3 backend).
+/// Plot helpers (scaffold + optional plotters backend).
 #[derive(Clone, Debug, Default)]
 pub struct Plots;
 
@@ -47,19 +52,18 @@ impl Plots {
     }
 
     /// Render `req`. Always available; may skip when the `plots` feature is off
-    /// or when the Python side fails.
+    /// or when the plotters backend fails.
     pub fn render(&self, req: &PlotRequest<'_>) -> PlotResult {
         if req.xs.len() != req.ys.len() {
             return PlotResult::Skipped("xs/ys length mismatch");
         }
         #[cfg(feature = "plots")]
         {
-            match render_pyo3(req) {
+            match render_plotters(req) {
                 Ok(()) => PlotResult::Written,
                 Err(msg) => {
-                    // Keep CI / machines without matplotlib green.
-                    let _ = msg;
-                    PlotResult::Skipped("pyo3/matplotlib unavailable or failed")
+                    eprintln!("binn-lab plots: {msg}");
+                    PlotResult::Skipped("plotters unavailable or failed")
                 }
             }
         }
@@ -94,45 +98,86 @@ impl Plots {
 }
 
 #[cfg(feature = "plots")]
-fn render_pyo3(req: &PlotRequest<'_>) -> Result<(), String> {
-    use pyo3::prelude::*;
-    use pyo3::types::PyList;
+fn render_plotters(req: &PlotRequest<'_>) -> Result<(), String> {
+    use plotters::prelude::*;
 
-    Python::with_gil(|py| {
-        let plt = py
-            .import_bound("matplotlib.pyplot")
-            .map_err(|e| e.to_string())?;
-        plt.call_method0("figure").map_err(|e| e.to_string())?;
-        let xs = PyList::new_bound(py, req.xs.iter().copied());
-        let ys = PyList::new_bound(py, req.ys.iter().copied());
-        match req.kind {
-            PlotKind::Raster => {
-                plt.call_method1("scatter", (xs, ys))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("title", (req.title,))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("xlabel", ("t",))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("ylabel", ("cell",))
-                    .map_err(|e| e.to_string())?;
-            }
-            PlotKind::Weights => {
-                plt.call_method1("plot", (xs, ys))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("title", (req.title,))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("xlabel", ("step",))
-                    .map_err(|e| e.to_string())?;
-                plt.call_method1("ylabel", ("weight",))
-                    .map_err(|e| e.to_string())?;
-            }
+    if let Some(parent) = req.out_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
+    }
+
+    let root = BitMapBackend::new(req.out_path, (900, 560)).into_drawing_area();
+    root.fill(&WHITE)
+        .map_err(|e| format!("fill background: {e}"))?;
+
+    let (x_min, x_max) = min_max(req.xs);
+    let (y_min, y_max) = min_max(req.ys);
+    let x_pad = ((x_max - x_min) * 0.05).max(1e-6);
+    let y_pad = ((y_max - y_min) * 0.08).max(1e-6);
+
+    let mut chart = ChartBuilder::on(&root)
+        .caption(req.title, ("sans-serif", 22))
+        .margin(18)
+        .x_label_area_size(40)
+        .y_label_area_size(56)
+        .build_cartesian_2d(x_min - x_pad..x_max + x_pad, y_min - y_pad..y_max + y_pad)
+        .map_err(|e| format!("chart: {e}"))?;
+
+    let (xlabel, ylabel) = match req.kind {
+        PlotKind::Raster => ("t", "cell"),
+        PlotKind::Weights => ("step", "weight"),
+    };
+    chart
+        .configure_mesh()
+        .x_desc(xlabel)
+        .y_desc(ylabel)
+        .draw()
+        .map_err(|e| format!("mesh: {e}"))?;
+
+    match req.kind {
+        PlotKind::Raster => {
+            chart
+                .draw_series(
+                    req.xs
+                        .iter()
+                        .zip(req.ys.iter())
+                        .map(|(&x, &y)| Circle::new((x, y), 2, BLUE.filled())),
+                )
+                .map_err(|e| format!("scatter: {e}"))?;
         }
-        let path = req.out_path.to_string_lossy();
-        plt.call_method1("savefig", (path.as_ref(),))
-            .map_err(|e| e.to_string())?;
-        plt.call_method0("close").map_err(|e| e.to_string())?;
-        Ok(())
-    })
+        PlotKind::Weights => {
+            chart
+                .draw_series(LineSeries::new(
+                    req.xs.iter().copied().zip(req.ys.iter().copied()),
+                    &BLUE,
+                ))
+                .map_err(|e| format!("line: {e}"))?;
+        }
+    }
+
+    root.present().map_err(|e| format!("present: {e}"))?;
+    Ok(())
+}
+
+#[cfg(feature = "plots")]
+fn min_max(xs: &[f64]) -> (f64, f64) {
+    let mut lo = f64::INFINITY;
+    let mut hi = f64::NEG_INFINITY;
+    for &v in xs {
+        if v < lo {
+            lo = v;
+        }
+        if v > hi {
+            hi = v;
+        }
+    }
+    if !lo.is_finite() || !hi.is_finite() {
+        return (0.0, 1.0);
+    }
+    if (hi - lo).abs() < 1e-12 {
+        (lo - 0.5, hi + 0.5)
+    } else {
+        (lo, hi)
+    }
 }
 
 #[cfg(test)]
@@ -148,7 +193,7 @@ mod tests {
         match r {
             PlotResult::Skipped(_) => {}
             PlotResult::Written => {
-                // Only possible with --features plots and a working matplotlib.
+                // Only possible with --features plots and a working plotters backend.
             }
         }
     }

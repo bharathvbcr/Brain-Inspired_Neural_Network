@@ -1,0 +1,6 @@
+4:schedule=PILOT seeds=5 matched_epochs=20 protocol=spiking-dfa-rescue burst=3×2
+6:hash family: c1x-dfa-spike-* (frozen c1x-dfa-exact-forward-* / c1-dfa-* unchanged)
+7:  true-dfa hash=c1x-dfa-spike-true-dfa-e6e56030ee7ac4ff
+8:  hybrid-stdp-dfa hash=c1x-dfa-spike-hybrid-stdp-dfa-03088df177cedf9b
+9:  surrogate-gradient hash=c1x-dfa-spike-surrogate-gradient-c97f0c6383a5a206
+10:verdict=PILOT true_dfa=0.6125 gap_lcb=-0.0920 surrogate=0.7625 hybrid=0.5625

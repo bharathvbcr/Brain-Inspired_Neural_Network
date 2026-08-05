@@ -1,0 +1,32 @@
+{
+  "schema": "shd-calibration-interruption-v1",
+  "detected_at": "2026-07-27T18:01:27-07:00",
+  "classification": "INTERRUPTED_WORKER_SESSION",
+  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "core_manifest_sha256": "7f612774972ccd61dd6af283fb9568c6eba88920185bddc212fed269bf41c52d",
+  "completed_cells_preserved": 40,
+  "result_files_removed": 0,
+  "interrupted_cells": [
+    {
+      "id": "python__published-10ms__channels-700__h128__e100__s5170003",
+      "prior_state_sha256": "f1bcd83908a69cdeae322dc8a79b86726bc833fcd5b01460698033314297337d",
+      "prior_state_mtime": "2026-07-27T14:22:26-07:00",
+      "result_existed": false
+    },
+    {
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170003",
+      "prior_state_sha256": "ce717c400dc3856411762dd2c1e7bd7ea11143a4829ef557cc688892b6249fbd",
+      "prior_state_mtime": "2026-07-27T15:30:31-07:00",
+      "result_existed": false
+    }
+  ],
+  "recovery": {
+    "action": "rerun incomplete cells from immutable initialization and batch-order artifacts",
+    "training_reused": false,
+    "completed_results_replaced": false,
+    "worker_partitioning": [
+      "python backend only",
+      "rust backend only"
+    ]
+  }
+}

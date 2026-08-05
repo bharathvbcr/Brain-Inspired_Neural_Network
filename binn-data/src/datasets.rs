@@ -1,7 +1,9 @@
-//! Dataset loaders (U12 stubs).
+//! Dataset loaders (U12).
 //!
-//! Prefer natively-temporal / spike-friendly synthetic tasks. Statically-encoded
-//! image benchmarks (e.g. MNIST) are intentionally **not** first-class here.
+//! Live synthetic temporal / coincidence / class-incremental streams used by the
+//! C1 harness and tests. Prefer natively-temporal / spike-friendly tasks;
+//! statically-encoded image benchmarks (e.g. MNIST) are intentionally **not**
+//! first-class here.
 
 use crate::encoder::Sample;
 use crate::synth::{SynthConfig, SyntheticStream};
@@ -173,6 +175,15 @@ mod tests {
         let mut b = TemporalClassification::toy(11);
         assert_eq!(a.next_sample(), b.next_sample());
         assert_eq!(a.config_fingerprint(), b.config_fingerprint());
+    }
+
+    #[test]
+    fn with_depth_changes_fingerprint_and_labels() {
+        let d1 = TemporalClassification::with_depth(5, 1);
+        let d3 = TemporalClassification::with_depth(5, 3);
+        assert_ne!(d1.config_fingerprint(), d3.config_fingerprint());
+        assert_eq!(d1.stream().config().depth, 1);
+        assert_eq!(d3.stream().config().depth, 3);
     }
 
     #[test]

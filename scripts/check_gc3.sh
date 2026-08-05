@@ -12,6 +12,7 @@ checks=(
   "binn-engine engine::tests::seed_identical_spike_train"
   "binn-areas gc3_same_seed_identical_wiring_assembly_hash"
   "binn-learn gc3_same_seed_identical_weight_update_hash"
+  "binn-learn surrogate_lif_baseline::tests::deterministic_same_seed"
   "binn-data same_seed_identical_encoding_hash"
   "binn-lab c1_same_seed_identical_seed_accuracies"
 )

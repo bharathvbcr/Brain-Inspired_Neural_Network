@@ -1,0 +1,10 @@
+{
+  "clean_reference": false,
+  "data_parity": true,
+  "forward_parity": true,
+  "fresh_process_replay": true,
+  "gradient_parity": true,
+  "historical_reference": false,
+  "matrix_authorized": false,
+  "update_parity": true
+}

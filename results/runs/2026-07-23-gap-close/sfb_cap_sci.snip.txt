@@ -1,0 +1,6 @@
+4:C1 config hash: c1-983ee5303c00b147
+5:protocol version: 17 (structured B × capacity; does not remassage v15 / capacity-only / reopen v2)
+7:G2 verdict: FAIL
+8:note: project/spike/isolation/sensitivity/reinforce-fb/rfb-epoch/sfb/sfb-em/sfb-cap results do not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:means: local=0.6825 dense-local=0.4400 gradient-reference=0.9940 eligibility-reference=1.0000
+10:normalized-gap-closed=0.4670  lower-95=0.3127  |local-dense|=0.3425

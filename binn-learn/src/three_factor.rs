@@ -14,6 +14,7 @@ use binn_engine::{CellId, Engine};
 
 use crate::eligibility::{self, Eligibility};
 use crate::modulators::Modulators;
+use crate::CreditSignal;
 
 /// Production learning interface (no backward pass).
 pub trait Learner {
@@ -79,6 +80,34 @@ impl ThreeFactor {
         self.last_spike.len()
     }
 
+    /// Clear nearest-neighbor STDP pairing times (`last_spike`).
+    ///
+    /// Call at trial boundaries when the scientific protocol requires
+    /// trial-isolated eligibility. Does **not** rewind `spike_cursor` (already
+    /// absorbed spikes stay consumed) and does **not** zero synapse eligibility
+    /// traces — pair with the harness `clear_eligibility` helper for that.
+    ///
+    /// Canonical C1 protocol v2 does **not** call this; isolation schedules
+    /// (e.g. `c1-iso` / protocol v5) do.
+    pub fn reset_pairing_state(&mut self) {
+        for slot in &mut self.last_spike {
+            *slot = None;
+        }
+    }
+
+    /// Fully reset pairing state and spike cursor for clean trial boundaries.
+    pub fn reset_full_trial_state(&mut self) {
+        self.reset_pairing_state();
+        self.spike_cursor = 0;
+        self.last_update = 0;
+    }
+
+    /// Peek last-spike table (tests / diagnostics).
+    #[inline]
+    pub fn last_spike_at(&self, cell: usize) -> Option<Tick> {
+        self.last_spike.get(cell).copied().flatten()
+    }
+
     fn ensure_cells(&mut self, n: usize) {
         if self.last_spike.len() < n {
             self.last_spike.resize(n, None);
@@ -102,13 +131,26 @@ impl ThreeFactor {
             .collect();
         new_spikes.sort_by_key(|&(_, t)| t);
         self.spike_cursor = spikes.len();
-        let conn = engine.conn.clone();
-        let conn_rev = engine.conn_rev.clone();
+        // Topology is immutable for the duration of this loop, so borrow it
+        // rather than deep-cloning it.
+        //
+        // This previously read `engine.conn.clone()` / `engine.conn_rev.clone()`.
+        // That copied the entire CSR *and* CSC — roughly `3·nnz + nrows + 2·ncols`
+        // u32s across 5 heap allocations — on every plasticity step, purely to
+        // dodge a borrow conflict with `engine.syn.as_mut_slice()` below. At
+        // nnz ≈ 2.5e6 that is ~30 MB of memcpy per step, which on M5 Pro memory
+        // bandwidth is on the order of a millisecond of pure waste per step.
+        //
+        // `syn`, `conn` and `conn_rev` are separate public fields of `Engine`, so
+        // NLL accepts the disjoint borrows: `conn`/`conn_rev` shared, `syn` unique.
+        // No numerics change — same values, same order, same iteration.
+        let conn = &engine.conn;
+        let conn_rev = &engine.conn_rev;
         for (cell, t) in new_spikes {
             apply_spike_stdp(
                 engine.syn.as_mut_slice(),
-                &conn,
-                &conn_rev,
+                conn,
+                conn_rev,
                 &mut self.last_spike,
                 &elig,
                 cell,
@@ -117,11 +159,12 @@ impl ThreeFactor {
         }
     }
 
-    fn apply_weights(&self, engine: &mut Engine, m: Modulators, now: Tick) -> u64 {
-        let gate = if self.use_modulator { m.scalar() } else { 0.0 };
+    fn apply_weights<S: CreditSignal>(&self, engine: &mut Engine, signal: &S, now: Tick) -> u64 {
         let elig = Eligibility::new(self.tau_e);
+        let posts = &engine.conn.col;
         let syns = engine.syn.as_mut_slice();
         assert_eq!(syns.len(), engine.edge_w.len());
+        assert_eq!(posts.len(), syns.len());
         let n = syns.len() as u64;
         for (i, syn) in syns.iter_mut().enumerate() {
             // Decay to weight-apply time from last STDP/touch.
@@ -131,7 +174,19 @@ impl ThreeFactor {
             } else {
                 0.0
             };
-            let dw = self.eta * e * gate - self.lambda * syn.weight;
+            // Decay only synapses with nonzero eligibility so idle readout edges
+            // are not bled to zero between sparse credit events (BUILD_AUDIT_v10 A3).
+            let decay_term = if e.abs() > 1e-8 {
+                self.lambda * syn.weight
+            } else {
+                0.0
+            };
+            let gate = if self.use_modulator {
+                signal.for_post(posts[i])
+            } else {
+                0.0
+            };
+            let dw = self.eta * e * gate - decay_term;
             syn.weight += dw;
             engine.edge_w[i] = syn.weight;
         }
@@ -140,11 +195,30 @@ impl ThreeFactor {
 
     /// Absorb spikes, apply weights, and return synapse applications (~nnz).
     pub fn update_counted(&mut self, engine: &mut Engine, m: Modulators) -> u64 {
+        self.update_with_credit_counted(engine, &m)
+    }
+
+    /// Absorb spikes and apply an explicit postsynaptic credit signal.
+    pub fn update_with_credit_counted<S: CreditSignal>(
+        &mut self,
+        engine: &mut Engine,
+        signal: &S,
+    ) -> u64 {
         let now = engine.time();
         self.absorb_spikes(engine);
-        let n = self.apply_weights(engine, m, now);
+        let n = self.apply_weights(engine, signal, now);
         self.last_update = now;
         n
+    }
+
+    /// Advance eligibility from newly observed spikes without changing weights.
+    ///
+    /// Experimental matched-forward arms use this to consume identical
+    /// action/target spikes even when their learning rule updates weights
+    /// directly instead of through [`ThreeFactor`].
+    pub fn observe_spikes(&mut self, engine: &mut Engine) {
+        self.absorb_spikes(engine);
+        self.last_update = engine.time();
     }
 }
 
@@ -394,5 +468,107 @@ mod tests {
         let into_post: Vec<_> = eng.conn_rev.incoming(2).collect();
         assert_eq!(into_post, vec![(0, 0), (1, 1), (3, 2)]);
         assert_eq!(eng.conn_rev.nnz(), eng.conn.nnz());
+    }
+
+    /// Pass-3 H1: sticky `last_spike` lets a prior-trial post pair with a new
+    /// trial's pre → spurious LTD (`stdp(t_old − t_new) < 0`).
+    #[test]
+    fn last_spike_cross_trial_contamination_without_reset() {
+        let mut eng = coincidence_engine(0.0);
+        let mut learner = ThreeFactor::new(0.0, 0.0, 20.0);
+
+        // Trial N: post alone at t=20.
+        eng.force_spike(2, 20);
+        eng.step_until(20);
+        learner.update(&mut eng, Modulators::zero());
+        assert_eq!(learner.last_spike_at(2), Some(20));
+        for syn in eng.syn.as_mut_slice() {
+            syn.eligibility = 0.0;
+        }
+
+        // Trial N+1: pre at t=80 without clearing pairing state.
+        eng.force_spike(0, 80);
+        eng.step_until(80);
+        learner.update(&mut eng, Modulators::zero());
+        let e = eng.syn.as_slice()[EDGE_A].eligibility;
+        let expected_ltd = eligibility::stdp(20.0 - 80.0);
+        assert!(
+            e < -0.01 && (e - expected_ltd).abs() < 1e-5,
+            "sticky last_spike must induce cross-trial LTD: e={e} expected={expected_ltd}"
+        );
+    }
+
+    /// Isolation API: clearing `last_spike` between trials removes the pairing.
+    #[test]
+    fn reset_pairing_state_isolates_cross_trial_stdp() {
+        let mut eng = coincidence_engine(0.0);
+        let mut learner = ThreeFactor::new(0.0, 0.0, 20.0);
+
+        eng.force_spike(2, 20);
+        eng.step_until(20);
+        learner.update(&mut eng, Modulators::zero());
+        for syn in eng.syn.as_mut_slice() {
+            syn.eligibility = 0.0;
+        }
+
+        learner.reset_pairing_state();
+        assert_eq!(learner.last_spike_at(2), None);
+
+        eng.force_spike(0, 80);
+        eng.step_until(80);
+        learner.update(&mut eng, Modulators::zero());
+        let e = eng.syn.as_slice()[EDGE_A].eligibility;
+        assert!(
+            e.abs() < 1e-6,
+            "after reset_pairing_state, lone pre must not pair with prior post: e={e}"
+        );
+        assert_eq!(learner.last_spike_at(0), Some(80));
+    }
+
+    /// Product neuromodulator (v12 family): per-neuron `B_i · r(a−p)` differentiates
+    /// postsynaptic gates under the production ThreeFactor credit path.
+    #[test]
+    fn reinforce_feedback_modulator_differentiates_posts() {
+        use crate::credit::{reinforce_term, ReinforceFeedback};
+        use binn_core::Csr;
+
+        // Two posts (cells 2, 3), each with one pre edge from cell 0 / 1.
+        let mut eng = Engine::with_cells(4);
+        let row_ptr = vec![0u32, 1, 2, 2, 2];
+        let col = vec![2u32, 3];
+        let conn = Csr::from_parts(row_ptr, col).expect("two-post CSR");
+        eng.set_connectivity(conn, vec![0.2; 2]);
+
+        let fb = ReinforceFeedback::from_weights(vec![0.0, 0.0, 0.8, -0.5]);
+        let directional = reinforce_term(1.0, 1.0, 0.25); // 0.75
+        let signal = fb.credit(directional);
+        assert!((signal.for_post(2) - 0.6).abs() < 1e-6);
+        assert!((signal.for_post(3) + 0.375).abs() < 1e-6);
+
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+        // Drive eligibility on both edges: pre0→post2 and pre1→post3.
+        eng.force_spike(0, 10);
+        eng.force_spike(1, 10);
+        eng.step_until(10);
+        eng.force_spike(2, 20);
+        eng.force_spike(3, 20);
+        eng.step_until(20);
+
+        let w0 = eng.edge_w.clone();
+        let _ = learner.update_with_credit_counted(&mut eng, &signal);
+        let dw0 = eng.edge_w[0] - w0[0];
+        let dw1 = eng.edge_w[1] - w0[1];
+        // Opposite-sign B ⇒ opposite-sign weight updates when eligibility matches.
+        assert!(
+            dw0 > 0.0 && dw1 < 0.0,
+            "expected opposite plasticity from signed B; dw0={dw0} dw1={dw1}"
+        );
+        // Magnitude tracks |B|: |B2|=0.8 > |B3|=0.5 ⇒ |dw0| > |dw1| for equal elig.
+        assert!(
+            dw0.abs() > dw1.abs(),
+            "larger |B| should move more: |dw0|={} |dw1|={}",
+            dw0.abs(),
+            dw1.abs()
+        );
     }
 }

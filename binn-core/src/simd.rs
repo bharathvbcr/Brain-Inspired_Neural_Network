@@ -6,7 +6,18 @@
 
 use crate::time::Tick;
 
-/// Lane width for the SIMD-structured leak/integrate kernel (8 × `f32` = 256-bit).
+/// Lane width for the SIMD-structured leak/integrate kernel.
+///
+/// `8 × f32` is **not** a 256-bit vector on the host of record (Apple M5 Pro,
+/// aarch64). NEON registers are 128-bit, so each `LANES` chunk lowers to two
+/// `f32x4` vector ops rather than one. That is still the right width — the pair
+/// gives LLVM a 2× unrolled body that hides `fdiv`/`fmla` latency — but the
+/// "256-bit" reading of this constant is an x86/AVX assumption and does not
+/// describe the generated code here.
+///
+/// Before changing this value, re-run `cargo bench -p binn-core
+/// --bench simd_leak_integrate`; the correct width is an empirical question,
+/// not a derivation from the register file.
 pub const LANES: usize = 8;
 
 /// One Euler step of the linear sub-threshold LIF dynamics

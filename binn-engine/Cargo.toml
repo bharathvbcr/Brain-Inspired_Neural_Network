@@ -9,6 +9,7 @@ description = "BINN L3 event-driven substrate: queue, cells, synapses, loop"
 
 [dependencies]
 binn-core = { workspace = true }
+rayon = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
@@ -22,4 +23,9 @@ harness = false
 [[bench]]
 name = "engine_step"
 path = "benches/engine_step.rs"
+harness = false
+
+[[bench]]
+name = "f1_parallelism"
+path = "benches/f1_parallelism.rs"
 harness = false

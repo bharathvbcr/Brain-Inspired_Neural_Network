@@ -1,0 +1,10 @@
+format=binn-hybrid-credit-head-v1
+feature_schema_version=1
+topology_signature=d281231fe3dae401
+granularity=post-synaptic
+teacher_protocol_hash=b5e3d84c9d3abf46
+training_seed_hash=51c03af4359c67fd
+coefficients=3ac64c4a,3c1a3078,3dc05ca5,3be6149c,3a9c50bc,bc0e6dac,00000000,00000000,bb003457,3b5da802,ba9ca381,babb40c3
+bias=3af6629b
+output_scale=3dcccccd
+checksum=211a00a1cf489203

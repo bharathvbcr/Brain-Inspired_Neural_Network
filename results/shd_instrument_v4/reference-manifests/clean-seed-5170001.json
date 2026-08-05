@@ -1,0 +1,31 @@
+{
+  "exposure": {
+    "checkpoint_selected_on": "none-final-epoch",
+    "final_test_reads": 1,
+    "test_reads_during_training": 0,
+    "train_reads": 150,
+    "validation_reads": 0
+  },
+  "finalizer_source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "mode": "clean",
+  "parser": {
+    "contract": "one current validation accuracy for each epoch 0..149",
+    "path": "/Users/bharath/Code/parameter_golf/binn/scripts/shd_calibration/reference.py",
+    "sha256": "42b1e0e371272e5a286291e3ebd7d423c6753f6df865deb91bd4902ec6fae07e"
+  },
+  "recovery_reason": "immutable completed clean result imported without change",
+  "schema": "shd-reference-recovery-manifest-v1",
+  "seed": 5170001,
+  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "source_revision": {
+    "log_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/references/clean-seed-5170001.log",
+    "log_sha256": "889cddd96bc205fb4a0690f099f7f959d864eabc57e444e8f733485c84d37f38",
+    "manifest_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/reference-manifests/clean-seed-5170001.json",
+    "manifest_sha256": "b95afa4c4127d814057ddaa0b415f71f5398700d78326668040ede7ee59f5c53",
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3",
+    "state_path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3/reference-states/clean-seed-5170001.json",
+    "state_sha256": "def546e72230ea0dae92a53fc592ddf0d90a9eb80d22256097f4a577b5586691"
+  },
+  "training_rerun": false,
+  "training_source_fingerprint": "5020b769e1ef1c0066a5a11be005ca3a9502de8e099ef854b1665dd9d2299b6e"
+}

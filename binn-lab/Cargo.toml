@@ -7,9 +7,19 @@ description = "BINN L7 experiment harness: runner, seeds, logging, plots"
 
 [features]
 default = []
-# Optional pyo3 matplotlib bridge (viz only). CI keeps this off; enable with
-# `--features plots` when a local Python+matplotlib stack is available.
-plots = ["dep:pyo3"]
+# Optional plotters backend (viz only). CI keeps this off; enable with
+# `--features plots`. Never on the scientific hot path / config hashes.
+plots = ["dep:plotters", "dep:svg2pdf", "dep:usvg", "dep:resvg"]
+# Optional Polars result-table harvest (not on scientific hot path).
+tables = ["dep:polars"]
+# Documentation / discoverability alias for the C2 kill-gate override.
+# The binary still requires `--enable-c2` (or env) at runtime; this feature
+# does not silently schedule C2.
+enable-c2 = []
+# Same pattern for post-G2 exploratory branches C3 / R1 / R2.
+enable-c3 = []
+enable-r1 = []
+enable-r2 = []
 
 [dependencies]
 binn-data = { workspace = true }
@@ -17,7 +27,23 @@ binn-learn = { workspace = true }
 binn-areas = { workspace = true }
 binn-engine = { workspace = true }
 binn-core = { workspace = true }
-pyo3 = { version = "0.22", optional = true, features = ["auto-initialize"] }
+plotters = { version = "0.3.7", optional = true, default-features = false, features = [
+    "bitmap_backend",
+    "bitmap_encoder",
+    "svg_backend",
+    "line_series",
+    "point_series",
+    "full_palette",
+    "ttf",
+] }
+svg2pdf = { version = "0.13", optional = true, default-features = false, features = ["text"] }
+usvg = { version = "0.45", optional = true, default-features = false, features = ["text", "system-fonts"] }
+resvg = { version = "0.45", optional = true, default-features = false, features = ["text", "system-fonts"] }
+polars = { version = "0.46", optional = true, default-features = false, features = [
+    "csv",
+    "dtype-slim",
+    "fmt",
+] }
 
 [[bin]]
 name = "c1"
@@ -38,3 +64,92 @@ path = "experiments/r1.rs"
 [[bin]]
 name = "r2"
 path = "experiments/r2.rs"
+
+[[bin]]
+name = "efficiency"
+path = "experiments/efficiency.rs"
+
+[[bin]]
+name = "extensions"
+path = "experiments/extensions.rs"
+
+[[bin]]
+name = "credit-assignment"
+path = "experiments/credit_assignment.rs"
+
+[[bin]]
+name = "c3-production"
+path = "experiments/c3_production.rs"
+
+[[bin]]
+name = "track-b-rescue"
+path = "experiments/track_b_rescue.rs"
+
+[[bin]]
+name = "live-transfer-rescue"
+path = "experiments/live_transfer_rescue.rs"
+
+[[bin]]
+name = "continual-learning"
+path = "experiments/continual_learning.rs"
+
+[[bin]]
+name = "deep-snn-scaling"
+path = "experiments/deep_snn_scaling.rs"
+
+[[bin]]
+name = "shd-scientific-sweep"
+path = "experiments/shd_scientific_sweep.rs"
+
+[[bin]]
+name = "shd-arch-ablation"
+path = "experiments/shd_arch_ablation.rs"
+
+[[bin]]
+name = "temporal-optimizer-control"
+path = "experiments/temporal_optimizer_control.rs"
+
+[[bin]]
+name = "ei-inhibition-sweep"
+path = "experiments/ei_inhibition_sweep.rs"
+
+[[bin]]
+name = "multi-channel-neuromod"
+path = "experiments/multi_channel_neuromod.rs"
+
+[[bin]]
+name = "c1-enhanced"
+path = "experiments/c1_enhanced.rs"
+
+[[bin]]
+name = "multi-area-scaling"
+path = "experiments/multi_area_scaling.rs"
+
+[[bin]]
+name = "paper-figures"
+path = "experiments/paper_figures.rs"
+required-features = ["plots"]
+
+[[bin]]
+name = "transfer-falsifier"
+path = "experiments/transfer_falsifier.rs"
+
+[[bin]]
+name = "temporal-deep-campaign"
+path = "experiments/temporal_deep_campaign.rs"
+
+[[bin]]
+name = "shd-input-control"
+path = "experiments/shd_input_control.rs"
+
+[[bin]]
+name = "temporal-eligibility-diagnostic"
+path = "experiments/temporal_eligibility_diagnostic.rs"
+
+[[bin]]
+name = "shortcut-accessibility-contrast"
+path = "experiments/shortcut_accessibility_contrast.rs"
+
+[[bin]]
+name = "shd-instrument"
+path = "experiments/shd_instrument.rs"

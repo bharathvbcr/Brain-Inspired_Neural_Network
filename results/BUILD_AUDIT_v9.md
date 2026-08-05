@@ -1,5 +1,7 @@
 # Build Audit (v9) — is the BINN substrate built properly?
 
+> **SUPERSEDED (2026-07-23):** C2–R2 are **no longer** empty `fn main(){}` stubs. For current override full-run evidence see [`OVERRIDE_FULL_RUNS.md`](OVERRIDE_FULL_RUNS.md) and [`POST_G2_BUILD.md`](POST_G2_BUILD.md); later harness audits include [`BUILD_AUDIT_v11_RESOLUTION.md`](BUILD_AUDIT_v11_RESOLUTION.md). This file is retained as a historical snapshot — do not cite its “empty stub” claim for the live tree.
+
 **Date:** 22 July 2026
 **Auditor:** static review (no Rust toolchain available in the review sandbox — see limits)
 **Verdict in one line:** the **scaffold is built well and comprehensively; the headline G2 result is NOT yet trustworthy** — it is confounded by a degenerate control and a stale results note, which by the v8 spec's own standard ("the only failure state is an ambiguous result") must be fixed before the negative can be believed.

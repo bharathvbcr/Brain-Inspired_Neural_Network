@@ -1,0 +1,13 @@
+{
+  "cell": "python__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+  "deterministic": true,
+  "fresh_process": true,
+  "mismatches": {},
+  "mode": "smoke",
+  "repeats": 2,
+  "result_sha256": [
+    "1cf1a1f669ddcf7026c31742348978bed34576110fa4036490e062ff07025004",
+    "f8c2434f5848c221bc5098de06c73d8693c2756cca71c05d8e8b68d590caac01"
+  ],
+  "schema": "shd-determinism-v1"
+}

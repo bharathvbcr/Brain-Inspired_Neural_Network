@@ -1,0 +1,3 @@
+FAILED s5170002: shd-instrument: non-finite training value at optimizer step 34
+FAILED s5170001: shd-instrument: non-finite training value at optimizer step 43
+FAILED s5170003: shd-instrument: non-finite training value at optimizer step 76

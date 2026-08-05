@@ -38,6 +38,12 @@ impl SpikeLog {
         self.events.is_empty()
     }
 
+    /// Clear recorded spikes.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.events.clear();
+    }
+
     /// Append a spike.
     #[inline]
     pub fn push(&mut self, t: Tick, cell: CellId) {

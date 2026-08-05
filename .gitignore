@@ -54,6 +54,8 @@ target/
 __pycache__/
 *.py[cod]
 .venv/
+.venv-shd/
+.venv-shd-cal/
 venv/
 node_modules/
 .env
@@ -65,3 +67,26 @@ node_modules/
 .ruff_cache/
 .DS_Store
 Thumbs.db
+
+# SHD offline blobs (keep README + fixture/)
+data/shd/*.bin
+data/shd/*.h5
+data/shd/*.h5.gz
+data/shd/*.hdf5
+data/shd/*.events
+data/shd/events/
+data/shd/reference/
+!data/shd/fixture/
+
+# Regenerable instrument blobs — deterministic from (seed, config) via the
+# `init` / `orders` paths, and hashed into each run's manifest. Excluded so the
+# scientific record (protocols, amendments, results, per-cell JSON) stays
+# committable at a sane size. See results/SUMMARY_2026-08-03.md "Version control".
+results/**/init/
+results/**/states/
+results/**/reference-states/
+results/**/workers/
+results/**/orders/
+*.orders
+# Pinned third-party reference checkouts (Thvnvtos/SNN-delays at REFERENCE_COMMIT)
+results/**/reference-worktrees/

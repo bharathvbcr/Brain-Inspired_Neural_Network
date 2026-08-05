@@ -1,0 +1,6 @@
+start=2026-07-24T19:19:35Z
+restart=1
+pid=56769
+cmd=./target/release/c1 --shd-full --out results/c1_shd_full.md
+c1_pid=56772
+attempt=3_daemon

@@ -1,0 +1,6 @@
+4:C1 config hash: c1-493ddd56f8714fb6
+5:protocol version: 15 (structured frozen B under k-WTA; does not remassage v13 / reopen v2)
+7:G2 verdict: FAIL
+8:note: project/spike/isolation/sensitivity/reinforce-fb/rfb-epoch/sfb results do not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:means: local=0.7262 dense-local=0.5025 gradient-reference=0.8938 eligibility-reference=1.0000
+10:normalized-gap-closed=0.4690  lower-95=0.2567  |local-dense|=0.2488

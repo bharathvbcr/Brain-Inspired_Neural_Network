@@ -1,0 +1,23 @@
+{
+  "accuracy": 0.5993816254416962,
+  "backend": "python",
+  "classes_predicted": 20,
+  "contract": "published-2ms",
+  "epochs": 20,
+  "geometry": "channels-700",
+  "hidden": 128,
+  "majority_prediction": 0.11925795053003534,
+  "mean_firing_rate": 0.23082452092237601,
+  "mean_gradient_norm": 0.20315079859319635,
+  "mean_loss": 1.7210246497398327,
+  "mean_update_rms": 0.0007351066335099781,
+  "mechanical_status": "COMPLETE",
+  "n_test": 2264,
+  "n_train": 8156,
+  "non_finite_events": 0,
+  "saturated_fraction": 0.0,
+  "schema": "shd-cal-cell-v1",
+  "scientific_status": "CELL_FAIL",
+  "silent_fraction": 0.0,
+  "wall_secs": 1682.7950985409552
+}

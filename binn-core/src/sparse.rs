@@ -93,6 +93,26 @@ impl Csr {
         self.col.len()
     }
 
+    /// Inferred number of columns (max column index + 1, or 0 if empty).
+    ///
+    /// # Cost
+    ///
+    /// **This is O(nnz), not O(1).** It scans every stored column index; the
+    /// `#[inline]` below refers to call overhead and does not make it cheap.
+    /// Unlike [`Csc::ncols`], which is a genuine O(1) `col_ptr.len() - 1`, this
+    /// value is not cached because `Csr` does not store a column count.
+    ///
+    /// Never call it in a loop condition. `for c in 0..csr.ncols()` is O(nnz²).
+    /// Hoist it into a `let` before the loop.
+    #[inline]
+    pub fn ncols(&self) -> usize {
+        self.col
+            .iter()
+            .copied()
+            .max()
+            .map_or(0, |m| (m + 1) as usize)
+    }
+
     /// Column indices of neighbors for `row`.
     ///
     /// Panics if `row >= nrows()`.

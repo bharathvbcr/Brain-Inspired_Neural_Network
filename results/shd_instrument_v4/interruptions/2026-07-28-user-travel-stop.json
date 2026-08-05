@@ -1,0 +1,35 @@
+{
+  "schema": "shd-calibration-interruption-v1",
+  "requested_at": "2026-07-28T18:38:32-07:00",
+  "classification": "INTERRUPTED_BY_USER",
+  "reason": "User requested a safe stop before travel.",
+  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "core_manifest_sha256": "7f612774972ccd61dd6af283fb9568c6eba88920185bddc212fed269bf41c52d",
+  "completed_cells_preserved": 208,
+  "result_files_removed": 0,
+  "active_result_files_at_stop": 0,
+  "screen_sessions_stopped": [
+    "shd-cal-python",
+    "shd-cal-rust"
+  ],
+  "interrupted_cells": [
+    {
+      "id": "python__published-4ms__channels-700__h128__e100__s5170001",
+      "running_state_sha256": "44d54481a1e2d66773c4397aa7301c5b464f74e49897e3bb31177504eabb0708",
+      "signal_state_sha256": "33d3dea47e4d57132cf099595bf9f3772c7552ad7562ceaaef44b6606a427832",
+      "result_existed": false
+    },
+    {
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170002",
+      "running_state_sha256": "9181b11c9e84c82cdc2c34053fba5b3af3ea7bcc77a143554914e19868c07b51",
+      "signal_state_sha256": "3d682c9d43cb83eac06a0d48eb0c6af1b932eb9a88bac26c9c284b18f92f73da",
+      "result_existed": false
+    }
+  ],
+  "recovery": {
+    "resumable": true,
+    "action": "Rerun the two incomplete cells from immutable initialization and batch-order artifacts.",
+    "completed_results_replaced": false,
+    "training_reused_for_interrupted_cells": false
+  }
+}

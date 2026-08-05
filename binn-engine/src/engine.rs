@@ -6,8 +6,10 @@
 
 use binn_core::sparse::{Csc, Csr};
 use binn_core::time::Tick;
+use rayon::prelude::*;
 
 use crate::cell::{Cell, CellId, INJECT_WEIGHT, K};
+use crate::parallel::{ParallelismProfile, PartitionPlan, PARALLEL_CELL_THRESHOLD};
 use crate::queue::{Event, TimingWheel};
 use crate::spikelog::SpikeLog;
 use crate::synapse::Synapses;
@@ -260,6 +262,200 @@ impl Engine {
         produced
     }
 
+    /// Deterministic graph-partitioned delta stepping (U18 / F1).
+    ///
+    /// All events at the same tick are drained as one delta bucket, grouped by
+    /// target cell. Wide buckets (`>= PARALLEL_CELL_THRESHOLD` distinct cells)
+    /// integrate in parallel; thin buckets stay sequential in-place to avoid
+    /// rayon overhead. Spike logging and fan-out remain FIFO-ordered so the
+    /// observable result matches [`Self::step_until`].
+    pub fn step_until_partitioned(&mut self, until: Tick, plan: &PartitionPlan) -> SpikeLog {
+        self.step_until_partitioned_profiled(until, plan).0
+    }
+
+    /// Same as [`Self::step_until_partitioned`], plus an F1 [`ParallelismProfile`].
+    pub fn step_until_partitioned_profiled(
+        &mut self,
+        until: Tick,
+        plan: &PartitionPlan,
+    ) -> (SpikeLog, ParallelismProfile) {
+        self.step_until_partitioned_threshold(until, plan, PARALLEL_CELL_THRESHOLD)
+    }
+
+    /// Partitioned step with an explicit parallel-width threshold (F1 benches).
+    ///
+    /// Pass `threshold = 0` or `1` to force the rayon path on every non-empty
+    /// bucket (legacy always-parallel behavior). Observables still match
+    /// [`Self::step_until`] when the plan covers all cells.
+    pub fn step_until_partitioned_threshold(
+        &mut self,
+        until: Tick,
+        plan: &PartitionPlan,
+        parallel_threshold: usize,
+    ) -> (SpikeLog, ParallelismProfile) {
+        assert!(
+            until >= self.t,
+            "step_until_partitioned requires until >= engine time"
+        );
+        assert_eq!(
+            plan.n_cells(),
+            self.cells.len(),
+            "partition plan must cover every cell"
+        );
+
+        #[derive(Clone, Copy)]
+        struct Decoded {
+            ordinal: usize,
+            branch: u8,
+            amount: f32,
+            forced: bool,
+        }
+        struct CellJob {
+            cell_id: CellId,
+            partition: usize,
+            cell: Cell,
+            events: Vec<Decoded>,
+            charge: f32,
+            fired_ordinals: Vec<usize>,
+        }
+
+        let mut produced = SpikeLog::new();
+        let mut profile = ParallelismProfile::default();
+        self.last_step_charge.fill(0.0);
+        while self
+            .queue
+            .peek_earliest_tick()
+            .is_some_and(|tick| tick <= until)
+        {
+            let (tick, events) = self
+                .queue
+                .pop_earliest_batch()
+                .expect("earliest delta bucket existed");
+            self.t = tick;
+            let n_events = events.len();
+            let mut grouped: std::collections::BTreeMap<CellId, Vec<Decoded>> =
+                std::collections::BTreeMap::new();
+            for (ordinal, event) in events.into_iter().enumerate() {
+                let (cell, branch, amount, forced) = decode_event(event);
+                grouped.entry(cell).or_default().push(Decoded {
+                    ordinal,
+                    branch,
+                    amount,
+                    forced,
+                });
+                self.work.cell_updates = self.work.cell_updates.saturating_add(1);
+                if !forced {
+                    self.work.synaptic_deliveries = self.work.synaptic_deliveries.saturating_add(1);
+                }
+            }
+            let distinct = grouped.len();
+            // Profile uses the production threshold so headroom stays comparable.
+            profile.record_bucket(distinct, n_events);
+
+            let mut fired = Vec::new();
+            if distinct < parallel_threshold {
+                // Thin tick: integrate in place (no clone / rayon).
+                // Split the borrow once so `cells` and `last_step_charge` can be
+                // held simultaneously. Previously the `&mut self.cells[..]`
+                // index sat *inside* the per-event loop — re-running a
+                // bounds-checked index `E` times per tick instead of `D` — only
+                // because `self.last_step_charge` is also touched while `cell`
+                // is borrowed. Same arithmetic, same order.
+                let cells = &mut self.cells;
+                let charge = &mut self.last_step_charge;
+                for (cell_id, cell_events) in grouped {
+                    let cell = &mut cells[cell_id as usize];
+                    // Hoisted out of the event loop: `advance_to` early-returns
+                    // when `dt == 0`, so the repeated calls were cheap, but they
+                    // are also plainly redundant — every event here shares one
+                    // `tick`.
+                    cell.advance_to(tick);
+                    for event in &cell_events {
+                        let did_fire = if event.forced {
+                            cell.v = cell.theta;
+                            cell.try_fire()
+                        } else {
+                            charge[cell_id as usize] += event.amount;
+                            cell.deposit(event.branch, event.amount)
+                        };
+                        if did_fire {
+                            fired.push((event.ordinal, cell_id));
+                        }
+                    }
+                }
+            } else {
+                let mut jobs: Vec<CellJob> = grouped
+                    .into_iter()
+                    .map(|(cell_id, events)| CellJob {
+                        cell_id,
+                        partition: plan.owner(cell_id),
+                        cell: self.cells[cell_id as usize].clone(),
+                        events,
+                        charge: 0.0,
+                        fired_ordinals: Vec::new(),
+                    })
+                    .collect();
+                // `sort_by_key` is a *stable* sort: driftsort allocates a
+                // temporary of up to `jobs.len() / 2` elements, and `CellJob` is
+                // ~128 bytes. There is exactly one job per cell, so the key
+                // `(partition, cell_id)` is unique and stability buys nothing —
+                // no two elements ever compare equal, so the resulting order is
+                // identical either way.
+                //
+                // The sort itself only exists for rayon partition locality: the
+                // parallel closure below touches only per-job state, write-back
+                // touches disjoint cells, and `fired` is re-sorted by unique
+                // `ordinal` afterwards. A counting sort over `n_partitions`
+                // (typically 4) would make this O(D) — see
+                // results/PERF_AUDIT_2026-08-02.md §6.
+                jobs.sort_unstable_by_key(|job| (job.partition, job.cell_id));
+                jobs.par_iter_mut().for_each(|job| {
+                    // Hoisted out of the event loop, as in the thin path above.
+                    //
+                    // Equivalence argument: `advance_to` writes `self.last = t`
+                    // only on a non-zero `dt` (cell.rs:195) and early-returns
+                    // when `dt == 0` (cell.rs:139). The only other write to
+                    // `last` is `Cell::reset` (cell.rs:234), which neither
+                    // `deposit` nor `try_fire` calls. So after the first call at
+                    // `tick`, every later call at the same `tick` was already an
+                    // exact no-op. `job.events` is never empty — `grouped` only
+                    // creates an entry by pushing to it.
+                    job.cell.advance_to(tick);
+                    for event in &job.events {
+                        let did_fire = if event.forced {
+                            job.cell.v = job.cell.theta;
+                            job.cell.try_fire()
+                        } else {
+                            job.charge += event.amount;
+                            job.cell.deposit(event.branch, event.amount)
+                        };
+                        if did_fire {
+                            job.fired_ordinals.push(event.ordinal);
+                        }
+                    }
+                });
+                for job in jobs {
+                    self.cells[job.cell_id as usize] = job.cell;
+                    self.last_step_charge[job.cell_id as usize] += job.charge;
+                    fired.extend(
+                        job.fired_ordinals
+                            .into_iter()
+                            .map(|ordinal| (ordinal, job.cell_id)),
+                    );
+                }
+            }
+            fired.sort_unstable_by_key(|&(ordinal, _)| ordinal);
+            for (_, cell) in fired {
+                self.work.source_spikes = self.work.source_spikes.saturating_add(1);
+                self.spikes.push(tick, cell);
+                produced.push(tick, cell);
+                self.schedule_fan_out(cell, tick);
+            }
+        }
+        self.t = until;
+        (produced, profile)
+    }
+
     /// Full recorded spike train.
     #[inline]
     pub fn spikes(&self) -> &SpikeLog {
@@ -276,6 +472,17 @@ impl Engine {
     #[inline]
     pub fn reset_work(&mut self) {
         self.work = EngineWorkCounters::default();
+    }
+
+    /// Completely reset all cell states, clear event queue and spike log, and reset tick to 0.
+    pub fn reset_state(&mut self) {
+        for c in &mut self.cells {
+            c.reset();
+        }
+        self.queue = TimingWheel::new();
+        self.spikes.clear();
+        self.last_step_charge.fill(0.0);
+        self.t = 0;
     }
 
     /// Charge delivered to `cell` during the most recent bounded step.
@@ -326,14 +533,24 @@ impl Engine {
             "synapses must align with CSR"
         );
 
-        for edge in start..end {
-            let post = self.conn.col[edge];
-            let syn = self.syn.get(edge).expect("aligned synapse");
+        // Take both spans as slices once, so the per-edge bounds check and the
+        // `Option` branch from `self.syn.get(edge).expect(..)` collapse into a
+        // single check here. The `assert_eq!` above already guarantees
+        // `end <= syn.len()`.
+        //
+        // Note this still strides the 32-byte AoS `Synapse` to read 12 bytes of
+        // payload (`weight`, `delay`) — 2 synapses per cache line instead of 5.
+        // `edge_w` already holds the weights in SoA form; splitting `delay` out
+        // too would let this loop stream two dense arrays. Left for a measured
+        // pass, see results/PERF_AUDIT_2026-08-02.md §5.
+        let cols = &self.conn.col[start..end];
+        let syns = &self.syn.as_slice()[start..end];
+        for (offset, (&post, syn)) in cols.iter().zip(syns.iter()).enumerate() {
             if syn.weight == 0.0 {
                 continue;
             }
             let delivery_at = at.checked_add(syn.delay).expect("synaptic delay overflow");
-            let branch = (edge % K) as u8;
+            let branch = ((start + offset) % K) as u8;
             self.queue
                 .insert(delivery_at, encode_event(post, branch, syn.weight, false));
         }
@@ -432,6 +649,29 @@ mod tests {
         assert_eq!(eng.last_step_charge(1), 1.0);
     }
 
+    /// U05 / G0: weighted spikes propagate across a 2→3-cell chain at exact delays.
+    ///
+    /// Topology `0 → 1 → 2` with distinct synaptic delays (2 and 3 ticks). Force
+    /// spike cell 0 at t=5 ⇒ cell 1 at t=7, cell 2 at t=10.
+    #[test]
+    fn spike_propagates_across_three_cell_delayed_network() {
+        let mut eng = Engine::with_cells(3);
+        let conn = Csr::from_adjacency(&[vec![1], vec![2], vec![]]);
+        eng.set_connectivity(conn, vec![1.0, 1.0]);
+        eng.syn.get_mut(0).expect("0→1 synapse").delay = 2;
+        eng.syn.get_mut(1).expect("1→2 synapse").delay = 3;
+
+        eng.force_spike(0, 5);
+        let produced = eng.step_until(20);
+        let observed: Vec<(Tick, CellId)> = produced.iter().map(|s| (s.t, s.cell)).collect();
+        assert_eq!(
+            observed,
+            vec![(5, 0), (7, 1), (10, 2)],
+            "2→3-cell chain must fire at exact cumulative delays"
+        );
+        assert_eq!(eng.last_step_charge(2), 1.0);
+    }
+
     #[test]
     fn equal_tick_events_follow_insertion_order() {
         let mut eng = Engine::with_cells(3);
@@ -480,5 +720,31 @@ mod tests {
         let a = spike_train_for_seed(1);
         let b = spike_train_for_seed(2);
         assert_ne!(a, b);
+    }
+
+    /// F1: wide same-tick buckets take the rayon path and still match sequential.
+    #[test]
+    fn wide_tick_partitioned_matches_sequential() {
+        use crate::parallel::{PartitionPlan, PARALLEL_CELL_THRESHOLD};
+
+        let n = PARALLEL_CELL_THRESHOLD * 2;
+        let rows: Vec<Vec<u32>> = (0..n).map(|_| Vec::new()).collect();
+        let conn = Csr::from_adjacency(&rows);
+        let mut sequential = Engine::with_cells(n);
+        sequential.set_connectivity_unit(conn.clone());
+        let mut parallel = Engine::with_cells(n);
+        parallel.set_connectivity_unit(conn.clone());
+        for cell in 0..n as u32 {
+            sequential.force_spike(cell, 5);
+            parallel.force_spike(cell, 5);
+        }
+        let expected = sequential.step_until(5);
+        let plan = PartitionPlan::degree_balanced(&conn, 4);
+        let (observed, profile) = parallel.step_until_partitioned_profiled(5, &plan);
+        assert_eq!(observed, expected);
+        assert_eq!(parallel.work(), sequential.work());
+        assert_eq!(profile.parallel_ticks, 1);
+        assert_eq!(profile.max_width, n);
+        assert!(profile.width_headroom() >= 1.0 - 1e-12);
     }
 }

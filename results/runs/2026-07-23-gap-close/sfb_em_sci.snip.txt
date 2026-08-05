@@ -1,0 +1,6 @@
+4:C1 config hash: c1-677df7f7cbe4f8ec
+5:protocol version: 16 (structured B × epoch-matched; does not remassage v14/v15 / reopen v2)
+7:G2 verdict: FAIL
+8:note: project/spike/isolation/sensitivity/reinforce-fb/rfb-epoch/sfb/sfb-em results do not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:means: local=0.5200 dense-local=0.5113 gradient-reference=0.8938 eligibility-reference=1.0000
+10:normalized-gap-closed=0.2231  lower-95=0.0844  |local-dense|=0.2238

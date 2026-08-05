@@ -1,0 +1,8 @@
+1:===== START rfb_hash_replay 2026-07-24T02:56:27Z =====
+3:     Running `target/release/c1 --config-hash c1-660401d74db3c88d --out /Users/bharath/Code/parameter_golf/binn/results/runs/2026-07-23-binn-hard-loop/wave2/c1_rfb_replay.md`
+4:C1 config hash: c1-660401d74db3c88d
+7:G2 verdict: FAIL
+8:note: project/spike/isolation/sensitivity/reinforce-fb results do not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:means: local=0.4900 dense-local=0.4700 gradient-reference=0.8938 eligibility-reference=1.0000
+10:normalized-gap-closed=0.2135  lower-95=0.0737  |local-dense|=0.1725
+13:===== END rfb_hash_replay rc= 2026-07-24T02:56:42Z =====

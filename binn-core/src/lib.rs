@@ -1,6 +1,7 @@
 //! BINN L2 numeric core.
 
 pub mod buffer;
+pub mod metal_backend;
 pub mod rng;
 pub mod scan;
 pub mod simd;
@@ -8,6 +9,12 @@ pub mod sparse;
 pub mod time;
 
 pub use buffer::Buffer;
+#[cfg(feature = "gpu")]
+pub use metal_backend::MetalGpuContext;
+pub use metal_backend::{
+    benchmarkable_backends, Backend, BackendUnavailable, SpmvBackend, SpmvBackendConfig,
+    METAL_GPU_DISPATCH_IMPLEMENTED,
+};
 pub use rng::Rng;
 pub use scan::{assoc_scan, assoc_scan_chunked, assoc_scan_sequential, State, DEFAULT_CHUNK_SIZE};
 pub use simd::{scalar_leak_integrate, simd_leak_integrate, LANES};

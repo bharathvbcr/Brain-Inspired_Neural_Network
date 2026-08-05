@@ -1,0 +1,10 @@
+metric,value
+sequential_secs,0.001892166
+adaptive_partitioned_secs,0.004334042
+always_rayon_secs,0.0044235
+mean_width,1.1228070175438596
+width_headroom,0.14035087719298245
+scan_barrier_fraction,0.001
+scan_headroom,0.999
+local_work_vs_activity,388731.1515151515
+dense_work_vs_activity,1206907.1515151516

@@ -34,6 +34,8 @@ pub const DEFAULT_TAU_D: f32 = 10.0;
 pub const DEFAULT_G_C: f32 = 1.0;
 /// Default voltage impulse for external inject events.
 pub const INJECT_WEIGHT: f32 = 1.0;
+/// Voltage threshold for dendritic plateau detection.
+pub const PLATEAU_THRESHOLD: f32 = 0.8;
 
 /// Multi-compartment dendritic LIF cell with adaptive somatic threshold.
 ///
@@ -221,6 +223,38 @@ impl Cell {
         self.v = V_RESET;
         self.theta += DELTA_THETA;
         true
+    }
+
+    /// Complete reset of cell state to resting parameters at tick 0.
+    pub fn reset(&mut self) {
+        self.v = V_RESET;
+        self.v_dend = [0.0; K];
+        self.theta = THETA_REST;
+        self.branches = [0.0; K];
+        self.last = 0;
+    }
+
+    /// Nonlinear sub-compartment dendritic coincidence score.
+    #[inline]
+    pub fn dendritic_coincidence_score(&self) -> f32 {
+        let mut s = 0.0f32;
+        for &vd in &self.v_dend {
+            if vd > 0.0 {
+                s += vd * vd;
+            }
+        }
+        s
+    }
+
+    /// True when dendritic branch `branch` voltage crosses the plateau threshold.
+    #[inline]
+    pub fn branch_plateau(&self, branch: u8) -> bool {
+        let b = branch as usize;
+        if b < K {
+            self.v_dend[b] >= PLATEAU_THRESHOLD
+        } else {
+            false
+        }
     }
 }
 
@@ -451,5 +485,15 @@ mod tests {
         let mut cells = vec![Cell::new(DEFAULT_TAU_M), Cell::new(DEFAULT_TAU_M)];
         cells[1].last = 3;
         batch_advance_euler(&mut cells, 1);
+    }
+
+    #[test]
+    fn test_branch_plateau() {
+        let mut c = Cell::new(DEFAULT_TAU_M);
+        c.v_dend[0] = 0.79;
+        c.v_dend[1] = 0.81;
+        assert!(!c.branch_plateau(0));
+        assert!(c.branch_plateau(1));
+        assert!(!c.branch_plateau(99)); // out of bounds check
     }
 }

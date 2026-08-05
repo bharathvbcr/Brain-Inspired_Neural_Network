@@ -75,6 +75,14 @@ impl ActivityLog {
     }
 }
 
+/// Operating phase for contrastive wake-sleep area dynamics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Phase {
+    #[default]
+    Wake,
+    Sleep,
+}
+
 /// Neural area: a contiguous population with a shared k-WTA cap.
 #[derive(Clone, Debug)]
 pub struct Area {
@@ -84,6 +92,8 @@ pub struct Area {
     pub k: usize,
     /// Per-cycle activity log (GC7 hook).
     pub activity: ActivityLog,
+    /// Operating phase for contrastive wake-sleep.
+    pub phase: Phase,
 }
 
 impl Area {
@@ -99,6 +109,7 @@ impl Area {
             cells,
             k,
             activity: ActivityLog::new(),
+            phase: Phase::Wake,
         }
     }
 

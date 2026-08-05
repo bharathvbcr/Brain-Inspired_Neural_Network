@@ -1,0 +1,10 @@
+[package]
+name = "binn-hybrid-learn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Teacher-free local update runtime for the BINN-Hybrid successor"
+
+[dependencies]
+binn-core.workspace = true
+binn-engine.workspace = true

@@ -1,0 +1,8 @@
+# h3-n2000-fan256-quick
+
+- wall_secs_script: 0
+- cmdline: --mac-probe --n-hidden 2000 --max-fan-out 256 --k-wta 8 --quick --seed 1
+
+```json
+{"condition":"local-assembly","seed":1,"accuracy":0.50000000,"activity_sparsity":0.00400000,"n_cells":2004,"n_params":514275,"wall_secs":0.07674375,"peak_rss_bytes":37847040,"source_spikes":334,"synaptic_deliveries":64296,"cell_updates":64615,"plasticity_updates":13885425,"work_per_accuracy":28029340.00000000,"n_hidden":2000,"k_wta":8,"k_over_n":0.00400000,"p_sparse":0.34999999,"max_fan_out":256,"measured_nnz":514275,"predicted_nnz":514032,"mean_out_degree":257.01748657,"p95_out_degree":258.00000000,"mean_readout_fan_in":1017.50000000,"mean_hidden_fan_in":256.11999512,"regime":"capped","init_w":0.15000001,"effective_init_w":0.06287468,"readout_boost":1.00000000,"effective_readout_gain":1017.50000000,"empty_winner_rate":0.00000000,"matched_budget_repeat":false,"config_hash":"c1-mac-probe-8e1e0392148ab7ba","protocol_version":2}
+```

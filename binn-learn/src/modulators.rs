@@ -3,6 +3,12 @@
 //! Third-factor signals applied uniformly to synapses. The scalar gate used by
 //! [`crate::ThreeFactor`] is `attention · (reward + novelty)` so that zeroing
 //! attention or the value channels ablates plasticity as predicted.
+//!
+//! Default production C1 uses [`Modulators::reward`] (±1 broadcast). For the
+//! directional × per-neuron RL family that PASSed matched-arch protocol v12
+//! (`rl_reinforce_fb`), use [`crate::ReinforceFeedback`] with
+//! [`crate::ThreeFactor::update_with_credit_counted`] instead of a single
+//! broadcast scalar.
 
 /// Broadcast neuromodulatory third factors.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

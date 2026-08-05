@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BINN replay viewer</title>
+<style>
+  :root {
+    --bg: #101312; --panel: #181c1a; --line: #2a302d; --text: #d8ddd9;
+    --muted: #8a938d; --input: #1D9E75; --hidden: #7F77DD; --readout: #D85A30;
+    --good: #63bb44; --bad: #e24b4a; --train: #4a524d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+           border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  #meta { color: var(--muted); font-size: 12px; font-family: ui-monospace, monospace; }
+  #drop { border: 1px dashed var(--line); border-radius: 8px; padding: 4px 12px;
+          color: var(--muted); cursor: pointer; }
+  #drop.hover { border-color: var(--input); color: var(--input); }
+  main { padding: 10px 16px; display: none; }
+  #controls { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  button { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+           border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  button:hover { border-color: var(--muted); }
+  input[type=range] { accent-color: var(--input); }
+  canvas { display: block; width: 100%; border: 1px solid var(--line);
+           border-radius: 8px; background: var(--panel); }
+  #timeline { height: 46px; margin-top: 8px; cursor: crosshair; }
+  #raster { height: 200px; margin-top: 8px; cursor: crosshair; }
+  #net { height: 460px; }
+  .lbl { color: var(--muted); font-size: 12px; }
+  #trialinfo { font-family: ui-monospace, monospace; font-size: 12px; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+  #legend { display: flex; gap: 14px; margin-top: 6px; color: var(--muted); font-size: 12px; }
+  #empty { padding: 60px 16px; text-align: center; color: var(--muted); }
+  #empty code { color: var(--text); background: var(--panel); padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>BINN replay</h1>
+  <label id="drop" for="file">load replay JSON (or drop here)</label>
+  <input type="file" id="file" accept=".json,application/json" style="display:none">
+  <span id="meta"></span>
+</header>
+
+<div id="empty">
+  <p>Generate an export, then load it here:</p>
+  <p><code>cargo run -p binn-lab --bin c1 -- --quick --replay results/c1_replay.json</code></p>
+  <p>Format: <code>binn-replay-v1</code> — spikes, topology, and trial windows from the local-assembly condition.</p>
+</div>
+
+<main>
+  <div id="controls">
+    <button id="play">Play</button>
+    <button id="prevTrial" title="previous trial">&#8676; trial</button>
+    <button id="nextTrial" title="next trial">trial &#8677;</button>
+    <span class="lbl">speed</span>
+    <input type="range" id="speed" min="0" max="3" step="0.05" value="1.3" style="width:140px">
+    <span class="lbl" id="speedout"></span>
+    <span class="lbl" id="tickout" style="margin-left:auto"></span>
+    <span id="trialinfo"></span>
+  </div>
+  <canvas id="net"></canvas>
+  <div id="legend">
+    <span><span class="sw" style="background:var(--input)"></span>input</span>
+    <span><span class="sw" style="background:var(--hidden)"></span>hidden (k-WTA)</span>
+    <span><span class="sw" style="background:var(--readout)"></span>readout</span>
+    <span style="margin-left:auto">timeline: <span style="color:var(--train)">&#9632;</span> train
+      <span style="color:var(--good)">&#9632;</span> test correct
+      <span style="color:var(--bad)">&#9632;</span> test wrong — click to seek</span>
+  </div>
+  <canvas id="timeline"></canvas>
+  <canvas id="raster"></canvas>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const GROUP_COLORS = { input: "#1D9E75", hidden: "#7F77DD", readout: "#D85A30" };
+const DPR = window.devicePixelRatio || 1;
+
+let D = null;          // parsed export
+let layout = null;     // per-cell {x,y,color}, adjacency
+let t = 0;             // current playback tick (float)
+let playing = false;
+let lastFrame = 0;
+let glow = null;       // per-cell glow level
+let pulses = [];       // {x0,y0,x1,y1,t0,t1}
+let spikeIdx = 0;      // next spike index at or after floor(t)
+let rasterImg = null;  // offscreen full raster
+
+function fitCanvas(c) {
+  const w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * DPR) || c.height !== Math.round(h * DPR)) {
+    c.width = Math.round(w * DPR); c.height = Math.round(h * DPR);
+  }
+  const ctx = c.getContext("2d");
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return ctx;
+}
+
+function groupOf(cell) {
+  for (const g of D.groups) if (cell >= g.start && cell < g.end) return g;
+  return D.groups[D.groups.length - 1];
+}
+
+function buildLayout() {
+  const c = $("net");
+  const W = c.clientWidth, H = c.clientHeight;
+  const pos = new Array(D.n_cells);
+  const colX = { input: 0.10 * W, hidden: 0.50 * W, readout: 0.90 * W };
+  for (const g of D.groups) {
+    const n = g.end - g.start;
+    const color = GROUP_COLORS[g.name] || "#8a938d";
+    if (g.name === "hidden") {
+      const cols = Math.max(1, Math.ceil(Math.sqrt(n * 1.6)));
+      const rows = Math.max(1, Math.ceil(n / cols));
+      const gw = Math.min(0.52 * W, cols * 26), gh = Math.min(H - 70, rows * 26);
+      for (let i = 0; i < n; i++) {
+        const cx = colX.hidden - gw / 2 + (cols === 1 ? gw / 2 : (i % cols) * gw / (cols - 1 || 1));
+        const cy = (H - gh) / 2 + (rows === 1 ? gh / 2 : Math.floor(i / cols) * gh / (rows - 1 || 1));
+        pos[g.start + i] = { x: cx, y: cy, color };
+      }
+    } else {
+      const x = colX[g.name] !== undefined ? colX[g.name] : 0.5 * W;
+      for (let i = 0; i < n; i++) {
+        const y = H * (i + 1) / (n + 1);
+        pos[g.start + i] = { x, y, color };
+      }
+    }
+  }
+  // Outgoing adjacency: cell -> [{post, w, delay}]
+  const out = Array.from({ length: D.n_cells }, () => []);
+  let wMax = 1e-6;
+  for (const [pre, post, w, delay] of D.edges) {
+    out[pre].push({ post, w, delay });
+    if (Math.abs(w) > wMax) wMax = Math.abs(w);
+  }
+  layout = { pos, out, wMax, W, H };
+}
+
+function buildRaster() {
+  const c = $("raster");
+  const W = Math.round(c.clientWidth * DPR), H = Math.round(c.clientHeight * DPR);
+  rasterImg = document.createElement("canvas");
+  rasterImg.width = W; rasterImg.height = H;
+  const ctx = rasterImg.getContext("2d");
+  const T = Math.max(1, D.tMax);
+  for (const [st, cell] of D.spikes) {
+    const g = groupOf(cell);
+    ctx.fillStyle = GROUP_COLORS[g.name] || "#8a938d";
+    const x = st / T * (W - 2);
+    const y = 4 + (cell / Math.max(1, D.n_cells - 1)) * (H - 10);
+    ctx.fillRect(x, y, Math.max(1.2 * DPR, W / T), 1.6 * DPR);
+  }
+}
+
+function seek(nt) {
+  t = Math.max(0, Math.min(D.tMax, nt));
+  glow.fill(0);
+  pulses = [];
+  // Binary search first spike index with spike.t >= floor(t)
+  let lo = 0, hi = D.spikes.length;
+  const ft = Math.floor(t);
+  while (lo < hi) { const m = (lo + hi) >> 1; (D.spikes[m][0] < ft) ? lo = m + 1 : hi = m; }
+  spikeIdx = lo;
+  // Pre-warm glow from the recent past so a seek doesn't land on a dark screen.
+  for (let i = lo - 1; i >= 0 && D.spikes[i][0] >= ft - 6; i--) {
+    glow[D.spikes[i][1]] = Math.max(glow[D.spikes[i][1]], 1 - (ft - D.spikes[i][0]) / 7);
+  }
+}
+
+function advanceTo(nt) {
+  const ft = Math.floor(nt);
+  while (spikeIdx < D.spikes.length && D.spikes[spikeIdx][0] <= ft) {
+    const [st, cell] = D.spikes[spikeIdx++];
+    glow[cell] = 1;
+    const from = layout.pos[cell];
+    if (from) for (const e of layout.out[cell]) {
+      const to = layout.pos[e.post];
+      if (to) pulses.push({ x0: from.x, y0: from.y, x1: to.x, y1: to.y,
+                            t0: st, t1: st + Math.max(e.delay, 2), w: e.w });
+    }
+    if (pulses.length > 6000) pulses.splice(0, pulses.length - 6000);
+  }
+  t = nt;
+}
+
+function currentTrial() {
+  if (!D.trials.length) return null;
+  let lo = 0, hi = D.trials.length - 1, best = null;
+  while (lo <= hi) {
+    const m = (lo + hi) >> 1, tr = D.trials[m];
+    if (t < tr.t0) hi = m - 1;
+    else { best = tr; if (t > tr.t1) lo = m + 1; else break; }
+  }
+  return best;
+}
+
+function drawNet() {
+  const ctx = fitCanvas($("net"));
+  const { pos, W, H } = layout;
+  ctx.clearRect(0, 0, W, H);
+  // Static edges (sampled if huge).
+  const stride = Math.max(1, Math.ceil(D.edges.length / 2500));
+  ctx.lineWidth = 0.5; ctx.strokeStyle = "rgba(138,147,141,0.10)";
+  ctx.beginPath();
+  for (let i = 0; i < D.edges.length; i += stride) {
+    const [pre, post] = D.edges[i];
+    const a = pos[pre], b = pos[post];
+    if (a && b) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
+  }
+  ctx.stroke();
+  // Group captions.
+  ctx.fillStyle = "#8a938d"; ctx.font = "12px system-ui";
+  for (const g of D.groups) {
+    const first = pos[g.start];
+    if (first) ctx.fillText(g.name + " [" + g.start + "," + g.end + ")", first.x - 20, 16);
+  }
+  // Pulses in flight.
+  for (const p of pulses) {
+    const f = (t - p.t0) / (p.t1 - p.t0);
+    if (f < 0 || f > 1) continue;
+    const x = p.x0 + (p.x1 - p.x0) * f, y = p.y0 + (p.y1 - p.y0) * f;
+    ctx.globalAlpha = 0.75 * (1 - 0.4 * f);
+    ctx.fillStyle = "#e8c265";
+    ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Cells.
+  const big = D.n_cells > 800;
+  for (let i = 0; i < D.n_cells; i++) {
+    const p = pos[i]; if (!p) continue;
+    const g = glow[i];
+    const r = (big ? 2.4 : 4) + g * (big ? 3.5 : 6);
+    ctx.globalAlpha = 0.22 + 0.78 * g;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTimeline() {
+  const c = $("timeline"), ctx = fitCanvas(c);
+  const W = c.clientWidth, H = c.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+  const T = Math.max(1, D.tMax);
+  for (const tr of D.trials) {
+    const x = tr.t0 / T * W, w = Math.max(1, (tr.t1 - tr.t0) / T * W);
+    ctx.fillStyle = tr.phase === "train" ? "#4a524d"
+      : (tr.correct ? "#63bb44" : "#e24b4a");
+    ctx.fillRect(x, tr.phase === "train" ? 14 : 6, w, tr.phase === "train" ? 18 : 34);
+  }
+  ctx.fillStyle = "#d8ddd9";
+  ctx.fillRect(t / T * W - 0.75, 0, 1.5, H);
+}
+
+function drawRaster() {
+  const c = $("raster"), ctx = fitCanvas(c);
+  const W = c.clientWidth, H = c.clientHeight;
+  ctx.clearRect(0, 0, W, H);
+  if (rasterImg) ctx.drawImage(rasterImg, 0, 0, W, H);
+  ctx.fillStyle = "rgba(216,221,217,0.9)";
+  ctx.fillRect(t / Math.max(1, D.tMax) * W - 0.75, 0, 1.5, H);
+}
+
+function updateHud() {
+  const tr = currentTrial();
+  $("tickout").textContent = "tick " + Math.floor(t) + " / " + D.tMax;
+  $("trialinfo").textContent = tr
+    ? tr.phase + " · label " + tr.label +
+      (tr.correct === undefined ? "" : (tr.correct ? " · correct" : " · wrong"))
+    : "";
+  const tps = ticksPerSec();
+  $("speedout").textContent = (tps >= 100 ? Math.round(tps) : tps.toFixed(1)) + " ticks/s";
+}
+
+function ticksPerSec() { return Math.pow(10, parseFloat($("speed").value)); }
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!D) return;
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (playing) {
+    advanceTo(Math.min(D.tMax, t + dt * ticksPerSec()));
+    const decay = Math.pow(0.02, dt * Math.min(ticksPerSec(), 60) / 30);
+    for (let i = 0; i < glow.length; i++) glow[i] *= decay;
+    pulses = pulses.filter(p => t <= p.t1 + 1);
+    if (t >= D.tMax) { playing = false; $("play").textContent = "Play"; }
+  }
+  drawNet(); drawTimeline(); drawRaster(); updateHud();
+}
+
+function load(json) {
+  let d;
+  try { d = JSON.parse(json); } catch (e) { alert("Not valid JSON: " + e.message); return; }
+  if (d.format !== "binn-replay-v1") { alert("Unsupported format: " + d.format); return; }
+  d.spikes.sort((a, b) => a[0] - b[0]);
+  d.tMax = d.spikes.length ? d.spikes[d.spikes.length - 1][0] : 1;
+  for (const tr of d.trials) if (tr.t1 > d.tMax) d.tMax = tr.t1;
+  D = d;
+  glow = new Float32Array(d.n_cells);
+  $("meta").textContent = d.experiment + " · " + d.config_hash + " · seed " + d.seed +
+    " · " + d.condition + " · " + d.n_cells + " cells · k=" + d.k_wta +
+    " · " + d.edges.length + " edges · " + d.spikes.length + " spikes · " +
+    d.trials.length + " trials";
+  $("empty").style.display = "none";
+  document.querySelector("main").style.display = "block";
+  buildLayout(); buildRaster(); seek(0);
+  playing = true; $("play").textContent = "Pause";
+}
+
+$("file").addEventListener("change", ev => {
+  const f = ev.target.files[0];
+  if (f) f.text().then(load);
+});
+const dropTargets = [document.body];
+document.body.addEventListener("dragover", ev => { ev.preventDefault(); $("drop").classList.add("hover"); });
+document.body.addEventListener("dragleave", () => $("drop").classList.remove("hover"));
+document.body.addEventListener("drop", ev => {
+  ev.preventDefault(); $("drop").classList.remove("hover");
+  const f = ev.dataTransfer.files[0];
+  if (f) f.text().then(load);
+});
+$("play").addEventListener("click", () => {
+  if (!D) return;
+  if (!playing && t >= D.tMax) seek(0);
+  playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+});
+function seekTrial(dir) {
+  if (!D || !D.trials.length) return;
+  let idx = D.trials.findIndex(tr => t < tr.t1);
+  if (idx < 0) idx = D.trials.length - 1;
+  idx = Math.max(0, Math.min(D.trials.length - 1, idx + dir));
+  seek(D.trials[idx].t0); advanceTo(t);
+}
+$("prevTrial").addEventListener("click", () => seekTrial(-1));
+$("nextTrial").addEventListener("click", () => seekTrial(1));
+for (const id of ["timeline", "raster"]) {
+  $(id).addEventListener("pointerdown", ev => {
+    if (!D) return;
+    const r = ev.currentTarget.getBoundingClientRect();
+    seek((ev.clientX - r.left) / r.width * D.tMax);
+  });
+}
+window.addEventListener("resize", () => { if (D) { buildLayout(); buildRaster(); } });
+document.addEventListener("keydown", ev => {
+  if (ev.key === " ") { ev.preventDefault(); $("play").click(); }
+  if (ev.key === "ArrowRight") seekTrial(1);
+  if (ev.key === "ArrowLeft") seekTrial(-1);
+});
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

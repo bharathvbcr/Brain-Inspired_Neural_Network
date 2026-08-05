@@ -1,0 +1,5 @@
+mac-probe config hash: c1-mac-probe-0a6ddda5b3a63df7
+geometry: N=2000 fan=50 k=8 mode=pm1 regime=capped predicted_nnz≈102032
+init rescale: init_w_eff = init_w * sqrt(REF_MEAN_FAN_IN / mean_fan_in); REF=45
+readout gain: boost * mean_readout_fan_in ≈ (1.15/0.15)*REF_RO_FAN_IN; REF=64
+{"condition":"local-assembly","seed":2,"accuracy":0.50000000,"activity_sparsity":0.00400000,"n_cells":2004,"n_params":102150,"wall_secs":0.01691996,"peak_rss_bytes":10174464,"source_spikes":322,"synaptic_deliveries":15013,"cell_updates":15333,"plasticity_updates":2860200,"work_per_accuracy":5781736.00000000,"n_hidden":2000,"k_wta":8,"k_over_n":0.00400000,"p_sparse":0.34999999,"max_fan_out":50,"measured_nnz":102150,"predicted_nnz":102032,"mean_out_degree":51.00899887,"p95_out_degree":52.00000000,"mean_readout_fan_in":1009.00000000,"mean_hidden_fan_in":50.06600189,"regime":"capped","init_w":0.15000001,"effective_init_w":0.14220867,"readout_boost":1.00000000,"effective_readout_gain":1009.00000000,"empty_winner_rate":0.00000000,"matched_budget_repeat":false,"config_hash":"c1-mac-probe-816eed1c538a6efc","protocol_version":2}

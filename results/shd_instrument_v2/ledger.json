@@ -1,0 +1,4341 @@
+{
+  "cells": [
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-10ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-10ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-10ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-10ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-10ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-10ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-10ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-10ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-10ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-10ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-10ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-10ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-10ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-4ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-4ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-4ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-4ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-4ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-4ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-4ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-4ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-4ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-4ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-4ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-4ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-4ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__published-2ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__published-2ms__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__published-2ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__published-2ms__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__published-2ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__published-2ms__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__published-2ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__published-2ms__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__published-2ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__published-2ms__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__published-2ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "published-2ms",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__published-2ms__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t100__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t100__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t100__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t100__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t100__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t100__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t100__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t100__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t100__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t100__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t100__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t100",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t100__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t250__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t250__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t250__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t250__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t250__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t250__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t250__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t250__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t250__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t250__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t250__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t250",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t250__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "python__fixed-t500__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 128,
+      "id": "rust__fixed-t500__channels-700__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "python__fixed-t500__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 256,
+      "id": "rust__fixed-t500__channels-700__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "python__fixed-t500__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "channels-700",
+      "hidden": 512,
+      "id": "rust__fixed-t500__channels-700__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "python__fixed-t500__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 128,
+      "id": "rust__fixed-t500__adjacent-sum-5__h128__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "python__fixed-t500__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 256,
+      "id": "rust__fixed-t500__adjacent-sum-5__h256__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 20,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e20__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170001",
+      "result": {},
+      "seed": 5170001
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170002",
+      "result": {},
+      "seed": 5170002
+    },
+    {
+      "backend": "python",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "python__fixed-t500__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    },
+    {
+      "backend": "rust",
+      "contract": "fixed-t500",
+      "epochs": 100,
+      "geometry": "adjacent-sum-5",
+      "hidden": 512,
+      "id": "rust__fixed-t500__adjacent-sum-5__h512__e100__s5170003",
+      "result": {},
+      "seed": 5170003
+    }
+  ],
+  "cells_complete": 0,
+  "cells_failed": 0,
+  "cells_total": 432,
+  "gates": {
+    "clean_reference": false,
+    "data_parity": true,
+    "forward_parity": true,
+    "fresh_process_replay": true,
+    "gradient_parity": true,
+    "historical_reference": false,
+    "matrix_authorized": false,
+    "update_parity": true
+  },
+  "harness_status": "PENDING_PREREQUISITES",
+  "mechanical_status": "IN_PROGRESS",
+  "schema": "shd-instrument-v1",
+  "scientific_status": "UNCALIBRATED"
+}

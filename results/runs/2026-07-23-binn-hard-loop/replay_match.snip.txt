@@ -1,0 +1,6 @@
+3:     Running `target/release/c1 --matched-arch --config-hash c1-match-5dc6822e71229e9e --out /Users/bharath/Code/parameter_golf/binn/results/runs/2026-07-23-binn-hard-loop/c1_match_replay.md`
+4:C1-MATCH config hash: c1-match-5dc6822e71229e9e
+6:does not reopen protocol-v2 hash c1-118207fbc3eaba53
+8:C1-MATCH verdict: FAIL
+9:means: matched-local=0.5000 matched-gradient=0.8963
+10:gap_closed_matched=0.0000  lower-95=0.0000

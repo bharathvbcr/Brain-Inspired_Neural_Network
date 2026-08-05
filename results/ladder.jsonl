@@ -1,0 +1,2 @@
+{"seed": 0, "gradient": 0.7, "broadcast": 0.45, "rpe": 0.45, "rl_dfa": 0.45, "rl_transport": 0.45, "broadcast_sup": 0.8333333333333334, "dfa": 0.45, "eprop": 0.45, "readout_only": 0.45}
+{"seed": 1, "gradient": 0.5333333333333333, "broadcast": 0.5333333333333333, "rpe": 0.5333333333333333, "rl_dfa": 0.5333333333333333, "rl_transport": 0.5333333333333333, "broadcast_sup": 0.5333333333333333, "dfa": 0.5333333333333333, "eprop": 0.5333333333333333, "readout_only": 0.5333333333333333}

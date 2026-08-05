@@ -1,0 +1,10 @@
+{
+  "data_parity": true,
+  "forward_error": 1.0951819377510438e-08,
+  "forward_parity": true,
+  "frame_hash_match": true,
+  "gradient_error": 2.0354141806523185e-06,
+  "gradient_parity": true,
+  "update_error": 1.8095240528390774e-07,
+  "update_parity": true
+}

@@ -78,29 +78,39 @@ fn u06_measured_activity_approx_k_over_n() {
 
 // ─── U07 · project convergence · Gate G1 ───────────────────────────────────
 
-/// Gate G1: repeated projection converges — successive overlap > 0.9 within N rounds.
-///
-/// Fixed source assembly in area A repeatedly projects into area B. Each
-/// `project` Hebbian-imprints `src → winners`, so the support in B stabilizes.
-#[test]
-fn g1_project_converges_successive_overlap() {
+/// Disclosed seed sweep for Gate G1 (wiring seed xor assembly seed per trial).
+/// Spec requires convergence across a disclosed multi-seed sweep, not one fixed seed.
+const G1_DISCLOSED_SEEDS: &[u64] = &[
+    0xB1_5EED,
+    0xB1_5EED ^ 0x9E37_79B9_7F4A_7C15,
+    0xC0FF_EE00_D15C_105E,
+    0xA11C_E555_0000_0007,
+    0xDEAD_BEEF_CAFE_BABE,
+];
+
+/// Gate G1 helper: repeated projection converges for one `(wiring, assembly)` seed pair.
+fn g1_assert_project_converges(wiring_seed: u64, assembly_seed: u64) {
     let n = 400usize;
     let k = 20usize;
     let total = 2 * n;
     let mut eng = Engine::with_cells(total);
     let ranges = vec![0..n as CellId, n as CellId..(2 * n) as CellId];
-    let prior = WiringPrior::new(0xB1_C0DE, ranges, 0.1, 0.1);
+    let prior = WiringPrior::new(wiring_seed, ranges, 0.1, 0.1);
     let conn = wire(AreaRole::Association, Pos::new(1), &prior);
     let initial_nnz = conn.nnz();
     eng.set_connectivity(conn, vec![0.05; initial_nnz]);
 
     let area_a = Area::new(0..n as CellId, k);
     let mut area_b = Area::new(n as CellId..(2 * n) as CellId, k);
-    let mut rng = Rng::new(0xB1_5EED);
+    let mut rng = Rng::new(assembly_seed);
     let src = Assembly::random_in_area(&area_a, k, &mut rng);
 
     let mut curr = project(&mut eng, &src, &mut area_b);
-    assert_eq!(curr.len(), k);
+    assert_eq!(
+        curr.len(),
+        k,
+        "seed={assembly_seed:#x}: first project must return k winners"
+    );
 
     const MAX_ROUNDS: usize = 20;
     let mut converged = false;
@@ -116,20 +126,38 @@ fn g1_project_converges_successive_overlap() {
             let ov2 = overlap(&curr, &next2);
             assert!(
                 ov2 > 0.9,
-                "G1: lost convergence at follow-up round (ov={ov2}, round={round})"
+                "G1: lost convergence at follow-up round (ov={ov2}, round={round}, seed={assembly_seed:#x})"
             );
             break;
         }
     }
     assert!(
         converged,
-        "G1 FAIL: successive overlap only reached {last_overlap} within {MAX_ROUNDS} rounds"
+        "G1 FAIL: seed={assembly_seed:#x} successive overlap only reached {last_overlap} within {MAX_ROUNDS} rounds"
     );
     assert_eq!(
         eng.conn.nnz(),
         initial_nnz,
-        "G1 plasticity must not create structural edges"
+        "G1 plasticity must not create structural edges (seed={assembly_seed:#x})"
     );
+}
+
+/// Gate G1: repeated projection converges — successive overlap > 0.9 within N rounds.
+///
+/// Fixed source assembly in area A repeatedly projects into area B. Each
+/// `project` Hebbian-imprints `src → winners`, so the support in B stabilizes.
+#[test]
+fn g1_project_converges_successive_overlap() {
+    g1_assert_project_converges(0xB1_C0DE, 0xB1_5EED);
+}
+
+/// Gate G1 disclosed multi-seed sweep: every listed seed converges (overlap > 0.9).
+#[test]
+fn g1_project_converges_disclosed_seed_sweep() {
+    const WIRING_SEED: u64 = 0xB1_C0DE;
+    for &seed in G1_DISCLOSED_SEEDS {
+        g1_assert_project_converges(WIRING_SEED ^ seed, seed);
+    }
 }
 
 #[test]

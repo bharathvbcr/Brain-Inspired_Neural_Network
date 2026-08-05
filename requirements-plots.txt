@@ -1,0 +1,2 @@
+# Retired: plots now use Rust plotters (`binn-lab --features plots`).
+# No Python / matplotlib dependencies.

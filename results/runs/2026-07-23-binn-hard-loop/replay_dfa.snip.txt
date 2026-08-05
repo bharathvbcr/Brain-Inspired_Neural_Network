@@ -1,0 +1,6 @@
+3:     Running `target/release/c1 --matched-dfa --config-hash c1-dfa-c8c4fe0899908b84 --out /Users/bharath/Code/parameter_golf/binn/results/runs/2026-07-23-binn-hard-loop/c1_dfa_replay.md`
+4:C1-DFA config hash: c1-dfa-c8c4fe0899908b84
+6:does not reopen protocol-v2 hash c1-118207fbc3eaba53
+8:C1-DFA verdict: PASS
+9:means: dfa=0.9387 broadcast-err=0.9863 gradient=0.8963
+10:gap_closed_dfa=0.8500  lower-95=0.6894

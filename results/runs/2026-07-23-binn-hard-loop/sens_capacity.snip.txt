@@ -1,0 +1,5 @@
+4:C1 config hash: c1-e519403aff33b384
+7:G2 verdict: PILOT
+8:note: project/spike/isolation/sensitivity/reinforce-fb results do not reopen protocol-v2 hash c1-118207fbc3eaba53
+9:means: local=0.5667 dense-local=0.4167 gradient-reference=0.9667 eligibility-reference=0.9667
+10:normalized-gap-closed=0.2857  lower-95=0.1142  |local-dense|=0.1500

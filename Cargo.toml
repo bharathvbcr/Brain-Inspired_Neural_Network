@@ -7,6 +7,8 @@ members = [
     "binn-learn",
     "binn-data",
     "binn-lab",
+    "binn-hybrid-learn",
+    "binn-hybrid-lab",
 ]
 
 [workspace.package]
@@ -21,13 +23,38 @@ binn-areas = { path = "binn-areas" }
 binn-learn = { path = "binn-learn" }
 binn-data = { path = "binn-data" }
 binn-lab = { path = "binn-lab" }
+binn-hybrid-learn = { path = "binn-hybrid-learn" }
+binn-hybrid-lab = { path = "binn-hybrid-lab" }
 
 # Allowed crates (BINN_Agent_Build_Spec_v8 §2)
+metal = "0.29"
+objc = "0.2"
 rand = "0.8"
 rand_chacha = "0.3"
 proptest = "1"
 rayon = "1"
 criterion = "0.5"
 
+# Release and bench must use IDENTICAL codegen settings, otherwise criterion
+# numbers do not describe the binary that actually runs experiments.
+#
+# Defaults were opt-level=3 / lto=false / codegen-units=16. With 16 codegen
+# units LLVM cannot inline across unit boundaries, which matters here because
+# the hot paths (`simd_leak_integrate`, `assoc_scan`'s `combine` closure, the
+# CSR SpMV inner loop, `Cell::deposit`) are small functions called from other
+# crates in the workspace. Cross-crate inlining requires LTO.
+#
+# Cost: full workspace release builds get slower (single codegen unit + fat
+# LTO). Determinism is unaffected — rustc does not enable fast-math, so no
+# float reassociation or FMA contraction is introduced by these settings.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
 [profile.bench]
-lto = false
+lto = "fat"
+codegen-units = 1
+
+[patch.crates-io]
+block = { path = "patches/block" }
+

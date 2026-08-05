@@ -1,0 +1,17 @@
+5:schedule=PILOT seeds=5 matched_epochs=4 trial_isolation=false kwta_all_finite=false
+7:hash family: c1x-* (non-isolated; sticky last_spike / incomplete membrane reset)
+8:  broadcast-one-pass protocol=4 hash=c1x-broadcast-one-pass-a885b80b16dc6c30
+9:  broadcast-epoch-matched protocol=4 hash=c1x-broadcast-epoch-matched-bfd1dc58bb6e6db4
+10:  rpe-three-factor protocol=5 hash=c1x-rpe-three-factor-0d778c10682b1015
+11:  eprop-exact-forward protocol=6 hash=c1x-eprop-exact-forward-024b057e78c3c020
+12:  dfa-exact-forward protocol=7 hash=c1x-dfa-exact-forward-ecbf1b1bc2e1d9c6
+13:  surrogate-gradient-exact-forward protocol=4 hash=c1x-surrogate-gradient-exact-forward-450d24e97542751d
+14:  dense-epoch-matched protocol=4 hash=c1x-dense-epoch-matched-471607fb6639e8fc
+15:forward parity: PASS
+17:broadcast-one-pass accuracy=0.5375 gap_lcb=0.0000 verdict=PILOT
+18:broadcast-epoch-matched accuracy=0.5875 gap_lcb=0.0000 verdict=PILOT
+19:rpe-three-factor accuracy=0.4625 gap_lcb=0.0000 verdict=PILOT
+20:eprop-exact-forward accuracy=0.5750 gap_lcb=-0.0114 verdict=PILOT
+21:dfa-exact-forward accuracy=0.7500 gap_lcb=-0.0801 verdict=PILOT
+22:surrogate-gradient-exact-forward accuracy=0.6875 gap_lcb=0.1199 verdict=PILOT
+23:dense-epoch-matched accuracy=0.5000 gap_lcb=0.0000 verdict=PILOT

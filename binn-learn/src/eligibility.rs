@@ -115,6 +115,132 @@ impl Eligibility {
     }
 }
 
+/// STDP kernel weighted by somatic membrane proximity to threshold.
+///
+/// `contrib = STDP(t_post - t_pre) / (1 + beta * |v_post - theta_post|)^2`
+#[inline]
+pub fn stdp_surrogate(dt: f32, v_post: f32, theta_post: f32, beta: f32) -> f32 {
+    let base = stdp(dt);
+    if base == 0.0 {
+        return 0.0;
+    }
+    let dist = (v_post - theta_post).abs();
+    let prox = 1.0 / (1.0 + beta * dist).powi(2);
+    base * prox
+}
+
+/// Surrogate-weighted eligibility trace helper.
+#[derive(Clone, Debug)]
+pub struct SurrogateEligibility {
+    pub tau_e: f32,
+    pub beta: f32,
+}
+
+impl SurrogateEligibility {
+    pub fn new(tau_e: f32, beta: f32) -> Self {
+        assert!(tau_e > 0.0, "tau_e must be positive");
+        assert!(beta >= 0.0, "beta must be non-negative");
+        Self { tau_e, beta }
+    }
+
+    #[inline]
+    pub fn add_stdp(
+        &self,
+        syn: &mut Synapse,
+        t_pre: Tick,
+        t_post: Tick,
+        v_post: f32,
+        theta_post: f32,
+    ) {
+        let dt = t_post as f32 - t_pre as f32;
+        syn.eligibility += stdp_surrogate(dt, v_post, theta_post, self.beta);
+    }
+}
+
+/// Dual-timescale eligibility trace: fast (spike timing) + slow (temporal context).
+///
+/// Combined trace: `e = α · e_fast + (1−α) · e_slow`
+/// where `e_fast` decays with `tau_fast` and `e_slow` with `tau_slow`.
+///
+/// The fast trace captures precise spike-timing correlations.
+/// The slow trace maintains longer temporal context for delayed credit.
+#[derive(Clone, Debug)]
+pub struct DualEligibility {
+    pub tau_fast: f32,
+    pub tau_slow: f32,
+    pub alpha: f32,
+}
+
+impl DualEligibility {
+    pub fn new(tau_fast: f32, tau_slow: f32, alpha: f32) -> Self {
+        assert!(tau_fast > 0.0, "tau_fast must be positive");
+        assert!(tau_slow > 0.0, "tau_slow must be positive");
+        assert!((0.0..=1.0).contains(&alpha), "alpha must be in [0, 1]");
+        Self {
+            tau_fast,
+            tau_slow,
+            alpha,
+        }
+    }
+
+    #[inline]
+    pub fn decay_to(&self, syn: &mut Synapse, t: Tick) {
+        let dt = if t >= syn.last_elig_update {
+            (t - syn.last_elig_update) as f32
+        } else {
+            0.0
+        };
+        let fast_decayed = decay(syn.eligibility, dt, self.tau_fast);
+        let slow_decayed = decay(syn.elig_slow, dt, self.tau_slow);
+        syn.elig_slow = slow_decayed;
+        syn.eligibility = self.alpha * fast_decayed + (1.0 - self.alpha) * slow_decayed;
+        syn.last_elig_update = t;
+    }
+
+    pub fn decay_all_to(&self, synapses: &mut [Synapse], t: Tick) {
+        for syn in synapses {
+            self.decay_to(syn, t);
+        }
+    }
+
+    #[inline]
+    pub fn add_stdp(&self, syn: &mut Synapse, t_pre: Tick, t_post: Tick) {
+        let dt = t_post as f32 - t_pre as f32;
+        let stdp_val = stdp(dt);
+        syn.eligibility += stdp_val;
+        syn.elig_slow += stdp_val;
+    }
+}
+
+/// Dendritic plateau-gated eligibility trace helper.
+///
+/// Eligibility traces are updated ONLY when the synapse's target dendritic branch
+/// generates a local plateau potential (v_dend >= threshold).
+#[derive(Clone, Debug)]
+pub struct PlateauGatedEligibility {
+    pub tau_e: f32,
+    pub plateau_threshold: f32,
+}
+
+impl PlateauGatedEligibility {
+    pub fn new(tau_e: f32, plateau_threshold: f32) -> Self {
+        assert!(tau_e > 0.0);
+        assert!(plateau_threshold > 0.0);
+        Self {
+            tau_e,
+            plateau_threshold,
+        }
+    }
+
+    #[inline]
+    pub fn add_stdp_gated(&self, syn: &mut Synapse, t_pre: Tick, t_post: Tick, branch_v: f32) {
+        if branch_v >= self.plateau_threshold {
+            let dt = t_post as f32 - t_pre as f32;
+            syn.eligibility += stdp(dt);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,5 +314,67 @@ mod tests {
         // Second call at same t is a no-op.
         e.decay_to(&mut syn, 5);
         assert!((syn.eligibility - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn stdp_surrogate_weights_by_membrane_proximity() {
+        let base_stdp = stdp(5.0);
+        let near = stdp_surrogate(5.0, 0.9, 1.0, 1.0); // dist = 0.1
+        let far = stdp_surrogate(5.0, 0.0, 1.0, 1.0); // dist = 1.0
+        assert!(
+            near > far,
+            "near threshold should have higher surrogate eligibility"
+        );
+        assert!(
+            near < base_stdp,
+            "surrogate proximity should attenuate STDP when dist > 0"
+        );
+    }
+
+    #[test]
+    fn dual_eligibility_combines_traces() {
+        let de = DualEligibility::new(10.0, 100.0, 0.5);
+        let mut syn = Synapse::new(0.5, 1);
+        syn.eligibility = 1.0;
+        syn.elig_slow = 1.0;
+        syn.last_elig_update = 0;
+
+        de.decay_to(&mut syn, 10);
+
+        let expected_fast = decay(1.0, 10.0, 10.0);
+        let expected_slow = decay(1.0, 10.0, 100.0);
+        let expected_combined = 0.5 * expected_fast + 0.5 * expected_slow;
+
+        assert!((syn.elig_slow - expected_slow).abs() < 1e-6);
+        assert!((syn.eligibility - expected_combined).abs() < 1e-6);
+    }
+
+    #[test]
+    fn dual_eligibility_adds_stdp_to_both() {
+        let de = DualEligibility::new(10.0, 100.0, 0.5);
+        let mut syn = Synapse::new(0.5, 1);
+        syn.eligibility = 0.0;
+        syn.elig_slow = 0.0;
+
+        de.add_stdp(&mut syn, 10, 15); // pre before post -> dt = 5
+
+        let expected = stdp(5.0);
+        assert!((syn.eligibility - expected).abs() < 1e-6);
+        assert!((syn.elig_slow - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_plateau_gated_eligibility() {
+        let e = PlateauGatedEligibility::new(20.0, 0.8);
+        let mut syn = Synapse::new(0.5, 1);
+        syn.eligibility = 0.0;
+
+        // Under threshold: no STDP added
+        e.add_stdp_gated(&mut syn, 10, 15, 0.7);
+        assert_eq!(syn.eligibility, 0.0);
+
+        // Above threshold: STDP added
+        e.add_stdp_gated(&mut syn, 10, 15, 0.9);
+        assert!(syn.eligibility > 0.0);
     }
 }

@@ -5,5 +5,18 @@ edition.workspace = true
 license.workspace = true
 description = "BINN L6 data: synthetic events, fixed encoders/decoders, metrics"
 
+[features]
+default = []
+# Offline SHD HDF5 → BINNSHD1 converter (needs system libhdf5).
+shd-convert = ["dep:hdf5-metno", "dep:flate2", "dep:ureq"]
+
 [dependencies]
 binn-core = { workspace = true }
+hdf5-metno = { version = "0.13", optional = true }
+flate2 = { version = "1", optional = true }
+ureq = { version = "2", optional = true, default-features = false, features = ["tls"] }
+
+[[bin]]
+name = "convert-shd"
+path = "src/bin/convert_shd.rs"
+required-features = ["shd-convert"]

@@ -1,0 +1,40 @@
+{
+  "cells": [
+    {
+      "bit_identical": false,
+      "cell": "python__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+      "elapsed_secs": 162.89878437505104,
+      "gate": "F",
+      "mismatches": {
+        "accuracy": {
+          "observed": 0.6303003533568905,
+          "recorded": 0.6258833922261484
+        },
+        "majority_prediction": {
+          "observed": 0.09938162544169611,
+          "recorded": 0.10247349823321555
+        },
+        "mean_firing_rate": {
+          "observed": 0.3100559565418928,
+          "recorded": 0.30771182237536976
+        },
+        "mean_gradient_norm": {
+          "observed": 0.40992961116695037,
+          "recorded": 0.4101857901035054
+        },
+        "mean_loss": {
+          "observed": 1.4693553476781585,
+          "recorded": 1.468234165933105
+        },
+        "mean_update_rms": {
+          "observed": 0.0007364838534164202,
+          "recorded": 0.0007372276877804885
+        }
+      },
+      "observed_wall_secs": 162.57407870795578,
+      "recorded_wall_secs": 504.3076173750451,
+      "speedup": 3.102017378065364
+    }
+  ],
+  "schema": "shd-gate-f-v1"
+}

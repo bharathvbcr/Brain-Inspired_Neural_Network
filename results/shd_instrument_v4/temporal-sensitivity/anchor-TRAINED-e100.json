@@ -1,0 +1,51 @@
+{
+  "schema": "shd-temporal-sensitivity-v1",
+  "purpose": "positive control: does timing reach the hidden representation at all",
+  "weights": "/private/tmp/claude-501/-Users-bharath-Code-parameter-golf/a065e770-ac19-4ae2-bb13-4e7ad491c69e/scratchpad/trained/anchor-e100-s5170001.weights",
+  "trained": false,
+  "samples": 256,
+  "temporal_seed": 5170001,
+  "wall_secs": 3.041961,
+  "conditions": [
+    {
+      "condition": "intact",
+      "mean_spike_hamming": 0.000000000,
+      "mean_membrane_rel_l2": 0.000000000,
+      "mean_rate_rel_l1": 0.000000000,
+      "mean_abs_loss_delta": 0.000000000,
+      "prediction_changed_fraction": 0.000000000,
+      "counts_preserved": true,
+      "relocated_fraction": 0.000000000
+    },
+    {
+      "condition": "bin-shuffled",
+      "mean_spike_hamming": 0.269169744,
+      "mean_membrane_rel_l2": 0.979925339,
+      "mean_rate_rel_l1": 0.118490844,
+      "mean_abs_loss_delta": 2.451059211,
+      "prediction_changed_fraction": 0.542968750,
+      "counts_preserved": true,
+      "relocated_fraction": 0.997252109
+    },
+    {
+      "condition": "channel-shuffled",
+      "mean_spike_hamming": 0.283035438,
+      "mean_membrane_rel_l2": 0.878745283,
+      "mean_rate_rel_l1": 0.565059179,
+      "mean_abs_loss_delta": 10.763561483,
+      "prediction_changed_fraction": 0.660156250,
+      "counts_preserved": true,
+      "relocated_fraction": 0.997151462
+    },
+    {
+      "condition": "reversed",
+      "mean_spike_hamming": 0.271261161,
+      "mean_membrane_rel_l2": 1.239626769,
+      "mean_rate_rel_l1": 0.042057009,
+      "mean_abs_loss_delta": 0.180496346,
+      "prediction_changed_fraction": 0.078125000,
+      "counts_preserved": true,
+      "relocated_fraction": 0.998237267
+    }
+  ]
+}
