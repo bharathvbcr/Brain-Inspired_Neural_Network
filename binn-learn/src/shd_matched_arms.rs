@@ -1722,67 +1722,39 @@ mod tests {
     // Do not repeat the claim in the workspace `Cargo.toml` that "determinism
     // is unaffected" — for this path it is not.
     //
-    // **Open, and load-bearing for cross-architecture work:** the same
-    // mechanism is not Darwin-specific in kind. glibc has `sincosf` and LLVM
-    // performs the same merge against it, so an x86_64 Linux campaign host may
-    // sit on a third set of values rather than on either side pinned here.
-    // That is UNVERIFIED — it has not been measured on Linux — but it must be
-    // measured before attention-arm cells recorded on one architecture are
-    // compared bit-for-bit against another. Fixing it means making
-    // `positional_code` independent of the platform's libm, which changes
-    // release numerics and is therefore a provenance event: a deliberate,
-    // recorded model change, not a cleanup.
+    // # Linux is a third set of values — measured 2026-08-22, not inferred
     //
-    // # Why this test accepts either side
+    // The split is **Darwin-specific, and Linux does not share either side.**
     //
-    // A pin that names one side is red on every build of the other, which is
-    // what happened here for months in both directions (see the history note
-    // below). Accepting either keeps the guarantee: a kernel change moves the
-    // output off *both* recorded sides, and the companion assertion requires
-    // all four arms to land on the same side, so a change cannot hide by
-    // matching the other side for a subset of arms.
+    //   | platform | opt-level | path taken | values |
+    //   |---|---|---|---|
+    //   | Darwin | 0-1 | separate `sinf`/`cosf` | unoptimised pin |
+    //   | Darwin | >=2 | `__sincosf_stret`      | optimised pin |
+    //   | glibc 2.41 | any | `sincosf`          | **neither** |
     //
-    // # History — how a correct pin came to look broken, twice
+    // On glibc, `sincosf` and separate `sinf`/`cosf` agree on all 120 phases of
+    // this fixture, so Linux has no opt-level split at all. But glibc's results
+    // are not Darwin's: against the 40 positional rows, Linux differs from the
+    // unoptimised side in 8 rows and from the optimised side in 4. Verified by
+    // running the same C reproduction of `positional_code` under Debian glibc
+    // 2.41 on **both** x86_64 and aarch64 — the two Linux arches agree with each
+    // other exactly, so this is a libm difference, not an architecture one. The
+    // harness was validated first by checking that the C table reproduces the
+    // Rust optimised side bit-for-bit on Darwin.
     //
-    // `516e9c7` pinned the unoptimised side. `7f908c7` ("Verify the attention
-    // backward, then re-pin it") measured under `--release`, found a mismatch,
-    // concluded the old constants "match no committed state", and re-pinned to
-    // the optimised side. Both measurements were correct and both conclusions
-    // were wrong, because each saw one side of a split neither knew existed:
+    // Consequences, both real:
     //
-    //   | commit | `cargo test` | `cargo test --release` |
-    //   |--------|--------------|------------------------|
-    //   | `0cc0522` (pre-re-pin) | pass | fail |
-    //   | `7f908c7` (post-re-pin) | fail | pass |
-    //
-    // The kernel never moved across that commit, which is checkable three
-    // ways: `7f908c7`'s edit to `shd_attention.rs` is +33 lines entirely
-    // inside `mod tests` and its non-comment, non-constant diff to this file
-    // is empty; no commit since touches `shd_attention.rs`,
-    // `shd_matched_arms.rs` or `shd_matched.rs`; and the `ff-fixed-attn` cell
-    // recorded by `7f908c7` itself still reproduces bit-identically under
-    // `scripts/gate_f_rust.py`. The recorded corpus is unaffected.
-    //
-    // # Why the kernel, not either pin, is the verified party
-    //
-    //   * entries 0-5 — `tests/attention_w_in_independent.rs` reimplements the
-    //     arm forward and backward from the documented equations, in a separate
-    //     crate target reaching only the public API, sharing no layout, no
-    //     sparse skip and no scratch staging with the kernel. It reproduces all
-    //     four base arms **bit-exactly** first — arms Gate F covers over 296
-    //     recorded cells — and only then is applied to the attention arms,
-    //     where it also agrees bit-exactly. A companion test shows the
-    //     comparison fails when attention's credit is withheld, so it is not
-    //     passing vacuously.
-    //   * entry 6 — the attention parameter gradient is finite-difference
-    //     checked per parameter by `shd_attention`'s own suite and again
-    //     through the arm by
-    //     `attention_parameters_match_finite_difference_through_the_arm`.
-    //     Nothing downstream of the spike threshold is a surrogate, so those
-    //     are exact derivative checks rather than plausibility checks.
-    //   * `ds_attn`, which is what makes entry 3 differ from the base arms, is
-    //     checked against central differences of the attention forward at
-    //     **every** index of the spike train, using no backward code at all.
+    //   * This test **will fail on a Linux host**, matching neither side. That
+    //     is the pin working, not a spurious failure — the values genuinely
+    //     differ there. Add a third measured side before running it in Linux
+    //     CI; do not widen the tolerance and do not synthesise the constants,
+    //     measure them.
+    //   * Attention-arm cells recorded on Linux cannot be bit-identical to
+    //     macOS-recorded ones, at any optimisation level. Gate F comparisons of
+    //     attention cells are only meaningful within one platform until
+    //     `positional_code` stops depending on the platform's libm. Fixing that
+    //     changes release numerics and is a provenance event: a deliberate,
+    //     recorded model change, not a cleanup.
     //
     // Re-pin in the same commit as any deliberate model change, and say so —
     // and re-record **both** sides, at `-C opt-level=0` and `--release`, or the

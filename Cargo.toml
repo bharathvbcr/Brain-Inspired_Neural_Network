@@ -58,6 +58,9 @@ criterion = "0.5"
 # comment beside `every_attention_arm_forward_and_backward_is_bit_pinned` in
 # `binn-learn/src/shd_matched_arms.rs`. Compare bit-identity only between
 # builds at the same optimisation level — every recorded cell is `--release`.
+# Linux/glibc has no such split but produces a THIRD set of values (measured on
+# glibc 2.41, x86_64 and aarch64 alike), so attention-arm cells are comparable
+# only within one platform.
 [profile.release]
 lto = "fat"
 codegen-units = 1

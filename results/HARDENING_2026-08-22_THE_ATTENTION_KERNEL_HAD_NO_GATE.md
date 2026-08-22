@@ -67,15 +67,30 @@ per-cell validity gate.
 > path) and why `--fp-contract=off` changed nothing — contraction was never
 > involved.
 >
-> **Open, and load-bearing for cross-architecture work.** The merge is not
-> Darwin-specific in kind: glibc has `sincosf` and LLVM performs the same
-> substitution, so an x86_64 Linux campaign host may sit on a *third* set of
-> values rather than either side pinned here. UNVERIFIED — not yet measured on
-> Linux — but it must be, before attention-arm cells recorded on one
-> architecture are compared bit-for-bit against another. Making
-> `positional_code` independent of the platform's libm would fix it, but that
-> changes release numerics and is therefore a provenance event: a deliberate,
-> recorded model change, not a cleanup.
+> **Linux is a third set of values — measured, not inferred.** The split is
+> Darwin-specific, and Linux shares neither side:
+>
+> | platform | opt-level | path taken | values |
+> |---|---|---|---|
+> | Darwin | 0–1 | separate `sinf`/`cosf` | unoptimised pin |
+> | Darwin | ≥2 | `__sincosf_stret` | optimised pin |
+> | glibc 2.41 | any | `sincosf` | **neither** |
+>
+> On glibc, `sincosf` agrees with separate `sinf`/`cosf` on all 120 phases, so
+> Linux has no opt-level split. But glibc's values are not Darwin's: across the
+> 40 positional rows, Linux differs from the unoptimised side in 8 and from the
+> optimised side in 4. Verified under Debian glibc 2.41 on **both** x86_64 and
+> aarch64, which agree with each other exactly — a libm difference, not an
+> architecture one. The harness was validated by first confirming the C
+> reproduction matches the Rust optimised side bit-for-bit on Darwin.
+>
+> Two consequences, both real. The pin **will fail on a Linux host**, matching
+> neither side — that is the pin working, and it needs a third *measured* side
+> before it runs in Linux CI. And attention-arm cells recorded on Linux cannot
+> be bit-identical to macOS-recorded ones at any optimisation level, so Gate F
+> comparisons of attention cells are meaningful only within one platform until
+> `positional_code` stops depending on the platform's libm — which changes
+> release numerics and is therefore a provenance event, not a cleanup.
 >
 > **What survives.** §3 is independent and stands: Gate F's corpus really was
 > 296 cells with every rust cell `ff+fixed`, `parse_cell_id` really had no field
