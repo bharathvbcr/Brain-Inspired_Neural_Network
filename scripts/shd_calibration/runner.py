@@ -302,8 +302,20 @@ fixture with atypically sparse frames and still missed cell-level divergence
 PROVENANCE_MIN_GATE_F_CELLS = 8
 
 #: Registered in `AMENDMENT_2026-08-03_PROVENANCE_DISCHARGE_BY_BIT_IDENTITY.md`.
-#: Default-off: until a human flips this, freeze semantics are unchanged.
-PROVENANCE_DISCHARGE_ENABLED = False
+#:
+#: **Enabled 2026-08-05 by explicit human authorization.** It shipped default-off
+#: because discharging a provenance freeze is a judgement about what counts as
+#: evidence, not an engineering call, and that judgement was not the agent's to
+#: make. It has now been made.
+#:
+#: Enabling this is **not** a bypass. `gate_f_discharge` still requires a PASS
+#: report, for *this* binary hash, covering at least
+#: `PROVENANCE_MIN_GATE_F_CELLS` recorded cells across two geometries and two
+#: widths. Data-file changes (`train_h5`, `test_h5`, `train_events`,
+#: `test_events`) remain **undischargeable** regardless of this flag — a kernel
+#: proven to reproduce recorded cells says nothing about whether its inputs
+#: moved. `scripts/test_provenance_discharge.py` pins both properties.
+PROVENANCE_DISCHARGE_ENABLED = True
 
 
 def gate_f_discharge(binary_sha: str) -> dict[str, object] | None:

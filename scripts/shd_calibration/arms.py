@@ -2,6 +2,15 @@
 
 Arms: ff+fixed, ff+alif, rec+fixed, rec+alif.
 
+**The `+attn` arms are rust-only and are deliberately not mirrored here.**
+`binn-learn/src/shd_attention.rs` adds a time-axis attention read-out as a third
+architecture axis (`--arm <base>+attn`, container `SHDWGT3`). This module does
+not implement it, so Gate E cross-backend parity **cannot cover an attention
+cell** — not "covers it and agrees", but "is silent about it". Any attention
+result is a single-backend result and must be reported as one. Adding the mirror
+is the only thing that would change that; the python arm is deferred by
+instruction (`results/TODO_2026-08-07_OPEN_WORK.md` §8), so it has not been.
+
 `model.loss_and_gradient` stays the untouched ff+fixed reference. This module
 implements the general form and **must** reproduce it bit-identically at
 `ff+fixed` — that is Gate F at the algebra level, checked by `selftest()`.
