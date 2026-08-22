@@ -1,5 +1,22 @@
 # Finding — wave 4 did not measure the recurrent arm, it killed it
 
+> ## AMENDED 2026-08-22 by wave 11 — clipping was a large cause, not the whole one.
+>
+> The re-run landed **15 of 24** against a registered completion bar of 18. Nine
+> cells still diverged, with the same guard signature but at optimizer steps
+> 438–1035 against wave 4's median of about 176: removing the flag delayed the
+> divergence rather than ending it.
+>
+> **What stands:** the paired control in §1, and the withdrawal of
+> `RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md` — that document claimed
+> *zero* usable cells and there are fifteen. **What is now the operative half:**
+> §4's statement that the numerical marginality is real and independent of
+> clipping. This document's title overstates: wave 4 killed most of its own
+> cells, not all of them.
+>
+> See `RESULT_2026-08-22_W11_CLIPPING_WAS_NOT_THE_WHOLE_CAUSE.md`.
+
+
 **Found:** 2026-08-22, diagnosing why `rec+alif` diverged 24 of 24.
 
 **Withdraws:** `RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md`.
