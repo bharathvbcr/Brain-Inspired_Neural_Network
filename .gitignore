@@ -90,3 +90,8 @@ results/**/orders/
 *.orders
 # Pinned third-party reference checkouts (Thvnvtos/SNN-delays at REFERENCE_COMMIT)
 results/**/reference-worktrees/
+
+# Third-party reference checkout and per-seed worktrees: cloned on demand
+# by scripts/shd_calibration/reference.py at the pinned REFERENCE_COMMIT.
+results/*/reference-cache/
+results/*/reference-worktrees/

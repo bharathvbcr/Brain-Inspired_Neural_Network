@@ -35,6 +35,24 @@ Every one of the six reference artifacts was checked field by field:
 what they were. **Only the source fingerprint moved**, and it moved because the
 rust kernel was edited.
 
+> **Correction, 2026-08-22 — the paragraph above is no longer true of what is on
+> disk.** The six training logs no longer exist anywhere in the repository:
+> `.gitignore` line 43 is `*.log` and they were never tracked. Every recorded
+> `log_sha256` now points at a missing file, so `valid_reference_payload` returns
+> `None` at its file-existence check and never reaches the fingerprint
+> comparison. This was true when the paragraph was written only because the logs
+> were still present then.
+>
+> It matters most for the historical arm, whose accuracy is **parsed out of the
+> log** by `parse_historical_validation_curve` and exists nowhere else. Those
+> three numbers can no longer be re-derived.
+>
+> **Consequence for §6: route 1 is withdrawn.** Accepting these artifacts on
+> content evidence is not available when a third of the content is gone. See
+> `FINDING_2026-08-22_THE_REFERENCE_LOGS_ARE_GONE.md`. The artifacts are archived
+> at `results/shd_instrument_v4/references-superseded-2026-07-27/` and route 2 is
+> under way (`PREREG_2026-08-22_REFERENCE_RERUN.md`).
+
 ## 2. Why that is wrong by construction
 
 `SOURCE_PATHS` covers the rust instrument — `binn-learn/src/shd_matched.rs`,

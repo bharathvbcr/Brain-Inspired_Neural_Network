@@ -1,0 +1,25 @@
+{
+  "archived": "2026-08-22",
+  "files": {
+    "reference-manifests/clean-seed-5170001.json": "4eaaabcf734a8c2e69a0397381eb033d60fcdf2f8c2c6c7e799615e22d2456f3",
+    "reference-manifests/clean-seed-5170002.json": "813ef2bef17d939f453cc0cd1904d11405b18180ac8e22fe6b54ebf017520f00",
+    "reference-manifests/clean-seed-5170003.json": "20eb6d56406e61ca9992437608ab2bb10a9fb9fe22acc9f05ce00a00ffd3372c",
+    "reference-manifests/historical-seed-5170001.json": "654c56e2f74104b659870dc3c46dc28059a51ac55e4587eda04e8895ac87f83b",
+    "reference-manifests/historical-seed-5170002.json": "0123ebbadbbf6342cec71caaefcec59abab0e37b8fe0d656b4c13e5b60c647b6",
+    "reference-manifests/historical-seed-5170003.json": "a9cbb5967119268e7b81be608da0bfed231eff884180054466e057330dc9cb22",
+    "reference-states/clean-seed-5170001.json": "cd07b5cf47b4c7c3e235915e7bb5929fba47608c0a05f72e1d27067fcd6ec76d",
+    "reference-states/clean-seed-5170002.json": "296c723cecfa9bcfd51fc5f4bef49563d9e61ba92c85bfe6aca4b41bacdfeea8",
+    "reference-states/clean-seed-5170003.json": "34b77f4cedac81ee080fe6c0fb0a52bb425d50161f62969b0bda6653ba5c194a",
+    "reference-states/historical-seed-5170001.json": "a083723645845c9936e13e305d9e1f6a727fa589e49dabebe155c9bccedf2916",
+    "reference-states/historical-seed-5170002.json": "55c54385a8e8d1179894e20383dbdf771241d4230824a9c3c958154e19fc28bb",
+    "reference-states/historical-seed-5170003.json": "43e1d527218c250dc7275d4e339410a18e6a6f203f99fb5204e73935f67cac58",
+    "references/clean-seed-5170001.json": "cceec18874ada21fb256fc756bc748a65da30c1a39e1373cb1be933f7a10d34e",
+    "references/clean-seed-5170002.json": "c55d25ef3bb424fe7930c6dd6b0a9b52177e1643924fb0177c5fe5eb630afd7d",
+    "references/clean-seed-5170003.json": "6e4cd82c717fff513e8a9259f839b572bad0df33887175ed430f7e7d5b13fb4e",
+    "references/historical-seed-5170001.json": "6d92acc4825e54a667bafddeac675c4e148a28f2449b95f330ec4771e586c189",
+    "references/historical-seed-5170002.json": "97b2d2f3cc7d99a5d9c2f72a76a4d9f94f8ed610cd7f217a06c6bcd9337e6db5",
+    "references/historical-seed-5170003.json": "662374c2113758a1da098b611e5389be31f4f5e95da6a5a63039c7b363b2c3aa"
+  },
+  "reason": "Superseded by the re-run registered in results/PREREG_2026-08-22_REFERENCE_RERUN.md. Moved, not deleted: the record cites their accuracies and they are the subject of AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md. Note that these artifacts are INCOMPLETE, not merely stale in provenance: the training logs whose log_sha256 each state file records were never tracked by git (.gitignore line 43 is *.log) and no longer exist anywhere in the repository. See FINDING_2026-08-22_THE_REFERENCE_LOGS_ARE_GONE.md.",
+  "training_logs_present": false
+}

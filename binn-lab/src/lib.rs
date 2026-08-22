@@ -45,6 +45,7 @@ pub mod runner_r2_credit;
 pub mod runner_rl_match;
 pub mod runner_shd_cal;
 pub mod shd_cal_config;
+pub mod shd_dense;
 pub mod shd_sweep_runner;
 pub mod transfer_harness;
 
@@ -100,6 +101,10 @@ pub use guards::{
 };
 pub use instrument_status::{
     authorize_campaign, CampaignKind, InstrumentState, SHD_INSTRUMENT_STATE,
+};
+pub use shd_dense::{
+    class_histogram, contract_alpha, contract_timesteps, framed_to_dense_temporal_example,
+    load_shd_dense_examples, majority_class_rate,
 };
 pub use logging::{
     json_escape, trace_export_seed, trace_out_path, EmitError, RunLog, StructuredLogger, TraceArea,

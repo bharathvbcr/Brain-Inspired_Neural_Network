@@ -1,5 +1,21 @@
 # The calibration gap is provenance, not accuracy — and criterion 4 is not about a BINN arm
 
+> **Correction, 2026-08-22.** Two claims in this document no longer hold.
+>
+> 1. **The artifacts are not intact.** The six reference training logs are gone —
+>    never tracked (`.gitignore` line 43 is `*.log`) — so the gates fail at a
+>    file-existence check before the fingerprint is ever compared, and the
+>    historical accuracies can no longer be re-derived from anything. The route
+>    described here as "accepting the artifacts on content evidence" is therefore
+>    **not available**. See `FINDING_2026-08-22_THE_REFERENCE_LOGS_ARE_GONE.md`.
+> 2. **`dcls` is installed.** §7 records the re-run as blocked on a missing
+>    dependency. The package is `dcls` on PyPI and imports as `DCLS`; the
+>    repository's own check (`import torch, h5py, DCLS, spikingjelly`) passes
+>    against the existing `.venv-shd-cal`. The re-run was never blocked.
+>
+> Both corrections point the same way, and the re-run is under way:
+> `PREREG_2026-08-22_REFERENCE_RERUN.md`.
+
 **Found:** 2026-08-21, checking a question I had posed wrongly.
 **Corrects:** `PAPER_STATUS_2026-08-20.md` §3, which framed criterion 4 as a
 choice about whether `ff+fixed+attn` counts as reference architecture, and
