@@ -13,12 +13,13 @@ use std::time::Instant;
 use binn_areas::{k_wta, project, soft_k_wta, wire, Area, AreaRole, Assembly, Pos, WiringPrior};
 use binn_core::{Csr, Rng, Tick};
 use binn_data::{
-    CoincidenceTask, Encoder, LatencyEncoder, Metrics, Sample, WorkCosts, WorkCounters,
+    CoincidenceTask, Encoder, LatencyEncoder, Metrics, Sample, TemporalOrderExample, WorkCosts,
+    WorkCounters, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
 use binn_engine::{CellId, Engine, K};
 use binn_learn::{
     reinforce_term, BpttBaseline, DenseTemporalExample, EpropReference, FixedRandomFeedback,
-    GradientExample, LearnedReinforceFeedback, Modulators, ReinforceFeedback,
+    GradientExample, LearnedReinforceFeedback, Modulators, ReinforceFeedback, ShdExample,
     SurrogateLifReference, ThreeFactor, REFERENCE_SEQUENCE_LEN,
 };
 
@@ -989,6 +990,46 @@ pub fn samples_to_dense_temporal_examples(
                 n_in,
                 label: *label,
             }
+        })
+        .collect()
+}
+
+/// Temporal-order trials in the flat form [`binn_learn::SharedTemporalNet`]
+/// indexes.
+///
+/// The sibling of [`samples_to_dense_temporal_examples`] for the temporal-order
+/// task. Both the length and the channel count come from `binn_data`'s
+/// [`TEMPORAL_ORDER_T`] / [`TEMPORAL_ORDER_N_IN`], so the task generator stays
+/// the single owner of the geometry and no caller can frame a trial at a shape
+/// the generator did not emit.
+pub fn temporal_order_to_dense_examples(
+    examples: &[TemporalOrderExample],
+) -> Vec<DenseTemporalExample> {
+    examples
+        .iter()
+        .map(|example| DenseTemporalExample {
+            frames: example.frames.clone(),
+            timesteps: TEMPORAL_ORDER_T,
+            n_in: TEMPORAL_ORDER_N_IN,
+            label: example.label,
+        })
+        .collect()
+}
+
+/// The same temporal-order trials in the form the SHD stack takes.
+///
+/// [`ShdExample`] and [`DenseTemporalExample`] hold the identical flat frame
+/// buffer under different field names (`t` vs `timesteps`); this is that
+/// rename and nothing else, so the two views of a trial always carry the same
+/// data.
+pub fn temporal_order_to_shd_examples(examples: &[TemporalOrderExample]) -> Vec<ShdExample> {
+    examples
+        .iter()
+        .map(|example| ShdExample {
+            frames: example.frames.clone(),
+            t: TEMPORAL_ORDER_T,
+            n_in: TEMPORAL_ORDER_N_IN,
+            label: example.label,
         })
         .collect()
 }
@@ -2519,10 +2560,19 @@ pub(crate) fn edge_index(conn: &Csr, pre: CellId, post: CellId) -> Option<usize>
 
 /// Arithmetic mean of `values`; `0.0` for an empty slice.
 ///
-/// The canonical mean for this crate. Sibling runners import it from here
-/// rather than re-declaring it, so every reported mean is the same
-/// single-pass `sum / len` in `f32`.
-pub(crate) fn mean(values: &[f32]) -> f32 {
+/// The canonical mean for this crate. Sibling runners and the experiment
+/// binaries import it from here rather than re-declaring it, so every reported
+/// mean is the same single-pass `sum / len` in `f32`.
+///
+/// # Choosing between this and [`mean_or_nan`]
+///
+/// The two differ **only** on an empty slice, and that difference is the whole
+/// point: this one reports `0.0`, which for an accuracy or a rate is a
+/// perfectly plausible number, so a caller that can be handed nothing must not
+/// use it. Use it where emptiness is impossible by construction. Where an empty
+/// input means "this run measured nothing", use [`mean_or_nan`], which poisons
+/// the report instead of quietly filling in a zero.
+pub fn mean(values: &[f32]) -> f32 {
     if values.is_empty() {
         0.0
     } else {
@@ -2535,7 +2585,7 @@ pub(crate) fn mean(values: &[f32]) -> f32 {
 /// The canonical mean/variance for this crate. Returns `(0.0, 0.0)` for an
 /// empty slice and a zero variance for a single sample, so seed sweeps that
 /// ran one seed report a spread of zero rather than NaN.
-pub(crate) fn mean_var(xs: &[f32]) -> (f32, f32) {
+pub fn mean_var(xs: &[f32]) -> (f32, f32) {
     let n = xs.len();
     if n == 0 {
         return (0.0, 0.0);
@@ -2546,6 +2596,39 @@ pub(crate) fn mean_var(xs: &[f32]) -> (f32, f32) {
     }
     let var = xs.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / (n as f32 - 1.0);
     (mean, var)
+}
+
+/// Arithmetic mean of `values`; **NaN** for an empty slice.
+///
+/// The fail-loud sibling of [`mean`], for the reports whose authors decided
+/// that averaging nothing must be visible in the output rather than rounded to
+/// a plausible `0.0`. For every non-empty input the two are the same
+/// single-pass `sum / len` and return bit-identical results; they part company
+/// only on the empty case.
+pub fn mean_or_nan(values: &[f32]) -> f32 {
+    if values.is_empty() {
+        return f32::NAN;
+    }
+    values.iter().sum::<f32>() / values.len() as f32
+}
+
+/// Standard error of the mean, `sqrt(sample_var / n)`; `0.0` for fewer than
+/// two samples.
+///
+/// The canonical standard error for this crate. The variance is
+/// Bessel-corrected by [`mean_var`], so a seed sweep that ran a single seed
+/// reports a spread of zero rather than NaN.
+///
+/// Note this is the standard error, *not* the standard deviation: it carries
+/// the extra `/ n`. A report that wants the spread of the seeds themselves
+/// rather than the precision of their mean needs `mean_var(..).1.sqrt()`, not
+/// this.
+pub fn std_error(values: &[f32]) -> f32 {
+    if values.len() <= 1 {
+        return 0.0;
+    }
+    let (_, var) = mean_var(values);
+    (var / values.len() as f32).sqrt()
 }
 
 pub(crate) fn clear_eligibility(eng: &mut Engine) {
@@ -2807,6 +2890,78 @@ fn peak_rss_bytes() -> u64 {
 mod tests {
     use super::*;
     use crate::logging::{EmitError, RunLog};
+
+    /// The two canonical means must stay distinguishable on the empty slice.
+    ///
+    /// This is the whole reason there are two. Fifteen experiment binaries had
+    /// each re-declared `mean`, and the copies disagreed here and only here:
+    /// nine returned `0.0`, five returned NaN. Merging the classes would turn
+    /// "this run averaged nothing" into a printed accuracy of `0.0000`, which
+    /// no reader can tell from a real measurement. Pin both halves so a later
+    /// consolidation cannot quietly collapse them.
+    #[test]
+    fn mean_and_mean_or_nan_differ_only_on_the_empty_slice() {
+        assert_eq!(mean(&[]), 0.0, "the quiet mean fills an empty run with 0.0");
+        assert!(
+            mean_or_nan(&[]).is_nan(),
+            "the loud mean must poison an empty run, not score it"
+        );
+
+        // Everywhere else they are the same single-pass sum/len, bit for bit.
+        for values in [
+            &[0.5f32][..],
+            &[0.25, 0.75],
+            &[1.0, 2.0, 4.0],
+            &[-3.5, 0.0, 3.5, 7.25],
+        ] {
+            assert_eq!(
+                mean(values).to_bits(),
+                mean_or_nan(values).to_bits(),
+                "the two means diverged on non-empty input {values:?}"
+            );
+        }
+    }
+
+    /// `std_error` reproduces the hand-written copies it replaced, including
+    /// their degenerate case, and stays distinct from the standard deviation.
+    #[test]
+    fn std_error_matches_the_copies_it_replaced() {
+        // The body every converged copy carried, written out longhand.
+        fn reference(values: &[f32]) -> f32 {
+            if values.len() <= 1 {
+                return 0.0;
+            }
+            let m = values.iter().sum::<f32>() / values.len() as f32;
+            let var =
+                values.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (values.len() - 1) as f32;
+            (var / values.len() as f32).sqrt()
+        }
+        for values in [
+            &[][..],
+            &[0.9],
+            &[0.80, 0.84],
+            &[0.71, 0.68, 0.74, 0.70, 0.69],
+        ] {
+            assert_eq!(
+                std_error(values).to_bits(),
+                reference(values).to_bits(),
+                "std_error drifted from the replaced body on {values:?}"
+            );
+        }
+
+        // Fewer than two samples is a zero spread, never NaN: a one-seed sweep
+        // reports "no spread measured", and the report still prints a number.
+        assert_eq!(std_error(&[]), 0.0);
+        assert_eq!(std_error(&[0.42]), 0.0);
+
+        // And it is the standard *error*, carrying the extra 1/sqrt(n) that the
+        // standard deviation does not. `shd_frozen_attention::sd` keeps its own
+        // body because it deliberately reports the other quantity.
+        let values = [0.4f32, 0.6, 0.8, 1.0];
+        let (_, var) = mean_var(&values);
+        assert!((std_error(&values) - var.sqrt() / 2.0).abs() < 1e-6);
+        assert!(std_error(&values) < var.sqrt());
+    }
 
     #[test]
     fn c1_quick_runs_and_emits_gc7_fields() {

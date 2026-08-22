@@ -39,8 +39,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, ShdSample, SHD_CHANCE};
+use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, SHD_CHANCE};
 use binn_lab::guards::{wilson_interval, CeilingHealth, Verdict, Z_95};
+use binn_lab::{mean, shd_sample_to_example, std_error};
 use binn_learn::{
     shuffle_labels, AlifEval, ModulatorScale, ShdAlifArm, ShdAlifConfig, ShdAlifRule, ShdExample,
     MODULATOR_PARITY_TOLERANCE,
@@ -151,35 +152,10 @@ impl Cell {
     }
 }
 
-fn mean(v: &[f32]) -> f32 {
-    if v.is_empty() {
-        return 0.0;
-    }
-    v.iter().sum::<f32>() / v.len() as f32
-}
-
-fn std_error(v: &[f32]) -> f32 {
-    if v.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(v);
-    let var = v.iter().map(|x| (x - m).powi(2)).sum::<f32>() / (v.len() - 1) as f32;
-    (var / v.len() as f32).sqrt()
-}
-
 fn seed_ci(v: &[f32]) -> (f32, f32) {
     let m = mean(v);
     let se = std_error(v);
     ((m - Z_95 * se).max(0.0), (m + Z_95 * se).min(1.0))
-}
-
-fn to_example(s: &ShdSample) -> ShdExample {
-    ShdExample {
-        frames: s.frames.clone(),
-        t: s.t,
-        n_in: s.n_in,
-        label: s.label,
-    }
 }
 
 /// Scalar split metadata, so the heavyweight `ShdSplit` can be freed after
@@ -330,8 +306,8 @@ fn main() -> ExitCode {
     }
 
     let mut split = split;
-    let train: Vec<ShdExample> = split.train.iter().map(to_example).collect();
-    let test: Vec<ShdExample> = split.test.iter().map(to_example).collect();
+    let train: Vec<ShdExample> = split.train.iter().map(shd_sample_to_example).collect();
+    let test: Vec<ShdExample> = split.test.iter().map(shd_sample_to_example).collect();
     if train.is_empty() || test.is_empty() {
         eprintln!("empty SHD split");
         return ExitCode::from(1);

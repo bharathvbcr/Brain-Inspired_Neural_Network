@@ -7,14 +7,14 @@ use std::process::{Command, ExitCode};
 
 use binn_core::Rng;
 use binn_data::{
-    time_shuffle, TemporalOrderExample, TransferBundle, TEMPORAL_DIFFICULTIES,
-    TEMPORAL_ORDER_CHANCE, TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
+    time_shuffle, TransferBundle, TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_CHANCE,
+    TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
-use binn_lab::{MicroTrace, TransferModel, TransferPole, TRANSFER_PROTOCOL_VERSION};
-use binn_learn::{
-    train_bptt, DenseTemporalExample, InputRateClassifier, InputRateConfig, SharedTemporalNet,
-    ShdExample,
+use binn_lab::{
+    mean_or_nan, temporal_order_to_dense_examples, temporal_order_to_shd_examples, MicroTrace,
+    TransferModel, TransferPole, TRANSFER_PROTOCOL_VERSION,
 };
+use binn_learn::{train_bptt, InputRateClassifier, InputRateConfig, SharedTemporalNet};
 
 const MASTER_SEED: u64 = 0x7A4F_5146_0000_0001;
 const SCIENTIFIC_SEEDS: usize = 10;
@@ -151,7 +151,8 @@ fn run() -> Result<(), String> {
             run_numpy_accuracy(&numpy_script, &bundle_path, "matched", epochs, LOCAL_LR)?;
         let numpy_live = run_numpy_accuracy(&numpy_script, &bundle_path, "live", epochs, LOCAL_LR)?;
 
-        let (raw_train, raw_test) = as_shd(&bundle.train, &bundle.test);
+        let raw_train = temporal_order_to_shd_examples(&bundle.train);
+        let raw_test = temporal_order_to_shd_examples(&bundle.test);
         let mut raw = InputRateClassifier::new(
             InputRateConfig {
                 n_in: TEMPORAL_ORDER_N_IN,
@@ -187,8 +188,8 @@ fn run() -> Result<(), String> {
         label_model.train(&label_train, matched_pole, epochs, LOCAL_LR);
         let shuffled_label = label_model.evaluate(&bundle.test, matched_pole).accuracy;
 
-        let deep_train = as_dense(&bundle.train);
-        let deep_test = as_dense(&bundle.test);
+        let deep_train = temporal_order_to_dense_examples(&bundle.train);
+        let deep_test = temporal_order_to_dense_examples(&bundle.test);
         let mut bptt = SharedTemporalNet::new(
             TEMPORAL_ORDER_N_IN,
             TEMPORAL_ORDER_T,
@@ -233,20 +234,20 @@ fn run() -> Result<(), String> {
     let labels = values(&outcomes, |outcome| outcome.shuffled_label);
     let bptt = values(&outcomes, |outcome| outcome.bptt);
 
-    let matched_mean = mean(&rust_matched);
+    let matched_mean = mean_or_nan(&rust_matched);
     let matched_lcb = lower_95(&rust_matched);
-    let rust_gap_mean = mean(&rust_gap);
+    let rust_gap_mean = mean_or_nan(&rust_gap);
     let rust_gap_lcb = lower_95(&rust_gap);
     let matched_valid = (0.40..=0.85).contains(&matched_mean)
         && matched_lcb > TEMPORAL_ORDER_CHANCE + 0.10
-        && mean(&raw) <= 0.28
-        && mean(&time) <= 0.28
-        && mean(&labels) <= 0.28
-        && mean(&bptt) + 0.05 >= matched_mean;
+        && mean_or_nan(&raw) <= 0.28
+        && mean_or_nan(&time) <= 0.28
+        && mean_or_nan(&labels) <= 0.28
+        && mean_or_nan(&bptt) + 0.05 >= matched_mean;
     let phenomenon = rust_gap_mean >= 0.10 && rust_gap_lcb > 0.05;
-    let reproduction = (mean(&numpy_matched) - matched_mean).abs() <= 0.05
-        && (mean(&numpy_live) - mean(&rust_live)).abs() <= 0.05
-        && (mean(&numpy_gap) - rust_gap_mean).abs() <= 0.10
+    let reproduction = (mean_or_nan(&numpy_matched) - matched_mean).abs() <= 0.05
+        && (mean_or_nan(&numpy_live) - mean_or_nan(&rust_live)).abs() <= 0.05
+        && (mean_or_nan(&numpy_gap) - rust_gap_mean).abs() <= 0.10
         && micro_conformance
         && replay;
     let verdict = if quick {
@@ -281,16 +282,16 @@ fn run() -> Result<(), String> {
         yes_no(micro_conformance),
         yes_no(replay),
         matched_mean,
-        mean(&numpy_matched),
-        mean(&rust_live),
-        mean(&numpy_live),
+        mean_or_nan(&numpy_matched),
+        mean_or_nan(&rust_live),
+        mean_or_nan(&numpy_live),
         rust_gap_mean,
         rust_gap_lcb,
-        mean(&numpy_gap),
-        mean(&raw),
-        mean(&time),
-        mean(&labels),
-        mean(&bptt),
+        mean_or_nan(&numpy_gap),
+        mean_or_nan(&raw),
+        mean_or_nan(&time),
+        mean_or_nan(&labels),
+        mean_or_nan(&bptt),
         yes_no(matched_valid),
         yes_no(phenomenon),
         yes_no(reproduction),
@@ -399,50 +400,15 @@ fn nested_integer_array(values: &[Vec<u32>]) -> String {
     )
 }
 
-fn as_shd(
-    train: &[TemporalOrderExample],
-    test: &[TemporalOrderExample],
-) -> (Vec<ShdExample>, Vec<ShdExample>) {
-    (
-        train.iter().map(to_shd).collect(),
-        test.iter().map(to_shd).collect(),
-    )
-}
-
-fn to_shd(example: &TemporalOrderExample) -> ShdExample {
-    ShdExample {
-        frames: example.frames.clone(),
-        t: TEMPORAL_ORDER_T,
-        n_in: TEMPORAL_ORDER_N_IN,
-        label: example.label,
-    }
-}
-
-fn as_dense(examples: &[TemporalOrderExample]) -> Vec<DenseTemporalExample> {
-    examples
-        .iter()
-        .map(|example| DenseTemporalExample {
-            frames: example.frames.clone(),
-            timesteps: TEMPORAL_ORDER_T,
-            n_in: TEMPORAL_ORDER_N_IN,
-            label: example.label,
-        })
-        .collect()
-}
-
 fn values(outcomes: &[SeedOutcome], get: impl Fn(&SeedOutcome) -> f32) -> Vec<f32> {
     outcomes.iter().map(get).collect()
-}
-
-fn mean(values: &[f32]) -> f32 {
-    values.iter().sum::<f32>() / values.len() as f32
 }
 
 fn lower_95(values: &[f32]) -> f32 {
     if values.len() == 1 {
         return values[0];
     }
-    let average = mean(values);
+    let average = mean_or_nan(values);
     let variance = values
         .iter()
         .map(|value| (value - average).powi(2))

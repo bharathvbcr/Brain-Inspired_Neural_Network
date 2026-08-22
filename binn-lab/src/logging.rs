@@ -8,6 +8,19 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+/// Write a finished report to `path`, creating its parent directory.
+///
+/// The canonical report sink for the experiment binaries. Both the `mkdir -p`
+/// and the write surface their `io::Error` as the `String` the binaries'
+/// `main` already returns, so a report that could not be written aborts the
+/// run instead of leaving a run whose result exists only in stdout.
+pub fn write_report(path: &Path, report: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    std::fs::write(path, report).map_err(|error| error.to_string())
+}
+
 /// Why [`StructuredLogger::emit_results`] refused to write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EmitError {

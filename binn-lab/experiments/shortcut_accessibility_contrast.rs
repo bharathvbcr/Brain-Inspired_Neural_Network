@@ -5,19 +5,18 @@
 //! reference, seed, and schedule. The sole intervention is whether class
 //! identity is available in the per-channel count vector.
 
+use binn_lab::{temporal_order_to_dense_examples, temporal_order_to_shd_examples, write_report};
 use std::env;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use binn_data::{
-    RateAccessibility, TemporalDifficulty, TemporalOrderExample, TemporalOrderSplit,
-    RATE_ACCESSIBLE_MARKER_EVENTS, TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_N_CLASSES,
-    TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
+    RateAccessibility, TemporalDifficulty, TemporalOrderSplit, RATE_ACCESSIBLE_MARKER_EVENTS,
+    TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
 use binn_learn::{
     random_feedback, train_bptt, train_feedback, DenseTemporalExample, InputRateClassifier,
-    InputRateConfig, SharedTemporalNet, ShdExample,
+    InputRateConfig, SharedTemporalNet,
 };
 
 const PROTOCOL_VERSION: u64 = 148;
@@ -297,9 +296,10 @@ fn run_variant(
             Variant::RateImmune => RateAccessibility::Immune,
         }
     );
-    let train = as_dense(&split.train);
-    let test = as_dense(&split.test);
-    let (raw_train, raw_test) = as_shd(&split.train, &split.test);
+    let train = temporal_order_to_dense_examples(&split.train);
+    let test = temporal_order_to_dense_examples(&split.test);
+    let raw_train = temporal_order_to_shd_examples(&split.train);
+    let raw_test = temporal_order_to_shd_examples(&split.test);
 
     let mut raw = InputRateClassifier::new(
         InputRateConfig {
@@ -530,34 +530,6 @@ fn easiest_difficulty() -> TemporalDifficulty {
     difficulty
 }
 
-fn as_dense(examples: &[TemporalOrderExample]) -> Vec<DenseTemporalExample> {
-    examples
-        .iter()
-        .map(|example| DenseTemporalExample {
-            frames: example.frames.clone(),
-            timesteps: TEMPORAL_ORDER_T,
-            n_in: TEMPORAL_ORDER_N_IN,
-            label: example.label,
-        })
-        .collect()
-}
-
-fn as_shd(
-    train: &[TemporalOrderExample],
-    test: &[TemporalOrderExample],
-) -> (Vec<ShdExample>, Vec<ShdExample>) {
-    let convert = |example: &TemporalOrderExample| ShdExample {
-        frames: example.frames.clone(),
-        t: TEMPORAL_ORDER_T,
-        n_in: TEMPORAL_ORDER_N_IN,
-        label: example.label,
-    };
-    (
-        train.iter().map(convert).collect(),
-        test.iter().map(convert).collect(),
-    )
-}
-
 fn config_hash() -> String {
     let mut hash = 0xcbf2_9ce4_8422_2325u64;
     for value in [
@@ -587,13 +559,6 @@ fn mean(values: impl Iterator<Item = f32>) -> f32 {
     let values: Vec<_> = values.collect();
     assert!(!values.is_empty());
     values.iter().sum::<f32>() / values.len() as f32
-}
-
-fn write_report(path: &Path, report: &str) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, report).map_err(|error| error.to_string())
 }
 
 const fn yes_no(value: bool) -> &'static str {

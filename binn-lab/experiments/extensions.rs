@@ -13,6 +13,7 @@ use binn_data::{ClassIncConfig, ClassIncrementalStream, Metrics};
 use binn_engine::{
     characterize, matched_null, simulate_resting, Engine, RestingConfig, RestingNull, RestingRaster,
 };
+use binn_lab::mean;
 use binn_learn::{
     prune, replay_schedule, ConsolidationBudget, ConsolidationMode, ExactReplayBuffer,
     GenerativeReplay, PruningStrategy, ReplayItem, ReplaySource,
@@ -493,12 +494,4 @@ fn replay_structure_score(raster: &RestingRaster, templates: &[Vec<u32>]) -> f32
         })
         .sum::<f32>();
     structured / raster.spikes_by_tick.len() as f32
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
 }

@@ -70,7 +70,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Instant;
 
-use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, ShdSample, SHD_CHANCE};
+use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, SHD_CHANCE};
+use binn_lab::{mean_or_nan, shd_sample_to_example};
 use binn_learn::shd_attention::AttentionConfig;
 use binn_learn::{AlifEval, ShdAlifArm, ShdAlifConfig, ShdAlifRule, ShdExample};
 
@@ -105,7 +106,7 @@ impl Cell {
         self.evals.iter().map(|e| e.accuracy).collect()
     }
     fn mean_acc(&self) -> f32 {
-        mean(&self.accuracies())
+        mean_or_nan(&self.accuracies())
     }
     fn degenerate(&self) -> usize {
         self.evals.iter().filter(|e| e.is_degenerate()).count()
@@ -119,28 +120,12 @@ impl Cell {
     }
 }
 
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        return f32::NAN;
-    }
-    values.iter().sum::<f32>() / values.len() as f32
-}
-
 fn sd(values: &[f32]) -> f32 {
     if values.len() < 2 {
         return f32::NAN;
     }
-    let m = mean(values);
+    let m = mean_or_nan(values);
     (values.iter().map(|v| (v - m) * (v - m)).sum::<f32>() / (values.len() - 1) as f32).sqrt()
-}
-
-fn to_example(sample: &ShdSample) -> ShdExample {
-    ShdExample {
-        frames: sample.frames.clone(),
-        t: sample.t,
-        n_in: sample.n_in,
-        label: sample.label,
-    }
 }
 
 fn print_help() {
@@ -279,8 +264,8 @@ fn main() -> ExitCode {
         return ExitCode::from(3);
     }
 
-    let train: Vec<ShdExample> = split.train.iter().map(to_example).collect();
-    let test: Vec<ShdExample> = split.test.iter().map(to_example).collect();
+    let train: Vec<ShdExample> = split.train.iter().map(shd_sample_to_example).collect();
+    let test: Vec<ShdExample> = split.test.iter().map(shd_sample_to_example).collect();
     if train.is_empty() || test.is_empty() {
         eprintln!("empty SHD split");
         return ExitCode::from(1);

@@ -55,13 +55,14 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use binn_data::{
-    RateAccessibility, TemporalDifficulty, TemporalOrderExample, TemporalOrderSplit,
-    TEMPORAL_ORDER_CHANCE, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
+    RateAccessibility, TemporalDifficulty, TemporalOrderSplit, TEMPORAL_ORDER_CHANCE,
+    TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
 use binn_lab::guards::{wilson_interval, Z_95};
+use binn_lab::{mean, std_error, temporal_order_to_dense_examples};
 use binn_learn::{
-    mean_step_rms, random_feedback, train_bptt, train_bptt_sgd, train_feedback,
-    DenseTemporalExample, SharedTemporalNet, ADAM_LR,
+    mean_step_rms, random_feedback, train_bptt, train_bptt_sgd, train_feedback, SharedTemporalNet,
+    ADAM_LR,
 };
 
 const PROTOCOL_VERSION: u64 = 147;
@@ -123,39 +124,11 @@ impl Cell {
     }
 }
 
-fn mean(v: &[f32]) -> f32 {
-    if v.is_empty() {
-        return 0.0;
-    }
-    v.iter().sum::<f32>() / v.len() as f32
-}
-
-fn std_error(v: &[f32]) -> f32 {
-    if v.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(v);
-    let var = v.iter().map(|x| (x - m).powi(2)).sum::<f32>() / (v.len() - 1) as f32;
-    (var / v.len() as f32).sqrt()
-}
-
 fn accessibility_label(a: RateAccessibility) -> &'static str {
     match a {
         RateAccessibility::Accessible => "accessible",
         RateAccessibility::Immune => "immune",
     }
-}
-
-fn as_dense(examples: &[TemporalOrderExample]) -> Vec<DenseTemporalExample> {
-    examples
-        .iter()
-        .map(|e| DenseTemporalExample {
-            frames: e.frames.clone(),
-            timesteps: TEMPORAL_ORDER_T,
-            n_in: TEMPORAL_ORDER_N_IN,
-            label: e.label,
-        })
-        .collect()
 }
 
 fn main() -> ExitCode {
@@ -305,8 +278,8 @@ fn main() -> ExitCode {
                                 return ExitCode::from(1);
                             }
                         };
-                        let train = as_dense(&split.train);
-                        let test = as_dense(&split.test);
+                        let train = temporal_order_to_dense_examples(&split.train);
+                        let test = temporal_order_to_dense_examples(&split.test);
 
                         let mut model = SharedTemporalNet::new(
                             TEMPORAL_ORDER_N_IN,

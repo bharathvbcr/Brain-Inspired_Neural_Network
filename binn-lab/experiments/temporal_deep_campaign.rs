@@ -6,13 +6,16 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use binn_data::{
-    time_shuffle, TemporalDifficulty, TemporalOrderExample, TemporalOrderSplit,
-    TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
+    time_shuffle, TemporalDifficulty, TemporalOrderSplit, TEMPORAL_DIFFICULTIES,
+    TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
 use binn_lab::guards::CeilingHealth;
+use binn_lab::{
+    mean_or_nan, temporal_order_to_dense_examples, temporal_order_to_shd_examples, write_report,
+};
 use binn_learn::{
-    random_feedback, train_bptt, train_feedback, train_learned_feedback, DenseTemporalExample,
-    InputRateClassifier, InputRateConfig, SharedTemporalNet, ShdExample,
+    random_feedback, train_bptt, train_feedback, train_learned_feedback, InputRateClassifier,
+    InputRateConfig, SharedTemporalNet,
 };
 
 const CALIBRATION_PROTOCOL: u64 = 144;
@@ -103,8 +106,8 @@ fn run_calibration(quick: bool, out: PathBuf) -> Result<(), String> {
                 ^ ((difficulty.jitter_radius as u64) << 32)
                 ^ difficulty.distractor_events as u64;
             let split = TemporalOrderSplit::generate(n_train, n_test, difficulty, seed)?;
-            let train = as_dense(&split.train);
-            let test = as_dense(&split.test);
+            let train = temporal_order_to_dense_examples(&split.train);
+            let test = temporal_order_to_dense_examples(&split.test);
             let initial = SharedTemporalNet::new(
                 TEMPORAL_ORDER_N_IN,
                 TEMPORAL_ORDER_T,
@@ -126,7 +129,8 @@ fn run_calibration(quick: bool, out: PathBuf) -> Result<(), String> {
             rfb.push(treatment.accuracy(&test));
             bptt.push(ceiling.accuracy(&test));
 
-            let (raw_train, raw_test) = as_shd(&split.train, &split.test);
+            let raw_train = temporal_order_to_shd_examples(&split.train);
+            let raw_test = temporal_order_to_shd_examples(&split.test);
             let mut raw_model = InputRateClassifier::new(
                 InputRateConfig {
                     n_in: TEMPORAL_ORDER_N_IN,
@@ -138,18 +142,20 @@ fn run_calibration(quick: bool, out: PathBuf) -> Result<(), String> {
             );
             raw.push(raw_model.train_and_evaluate(&raw_train, &raw_test).accuracy);
 
-            let shuffled_train = as_dense(&time_shuffle(&split.train, seed ^ 0x715A));
-            let shuffled_test = as_dense(&time_shuffle(&split.test, seed ^ 0x7E57));
+            let shuffled_train =
+                temporal_order_to_dense_examples(&time_shuffle(&split.train, seed ^ 0x715A));
+            let shuffled_test =
+                temporal_order_to_dense_examples(&time_shuffle(&split.test, seed ^ 0x7E57));
             let mut shuffled_model = initial.clone();
             train_bptt(&mut shuffled_model, &shuffled_train, epochs);
             shuffled.push(shuffled_model.accuracy(&shuffled_test));
         }
         results.push(CalibrationResult {
             difficulty,
-            rfb: mean(&rfb),
-            bptt: mean(&bptt),
-            raw: mean(&raw),
-            shuffled: mean(&shuffled),
+            rfb: mean_or_nan(&rfb),
+            bptt: mean_or_nan(&bptt),
+            raw: mean_or_nan(&raw),
+            shuffled: mean_or_nan(&shuffled),
         });
     }
     let selected = results
@@ -245,8 +251,8 @@ fn run_depth(quick: bool, out: PathBuf) -> Result<(), String> {
         for seed_index in 0..n_seeds {
             let seed = SCIENTIFIC_MASTER_SEED ^ (seed_index as u64).wrapping_mul(0x1000_00D5);
             let split = TemporalOrderSplit::generate(n_train, n_test, difficulty, seed)?;
-            let train = as_dense(&split.train);
-            let test = as_dense(&split.test);
+            let train = temporal_order_to_dense_examples(&split.train);
+            let test = temporal_order_to_dense_examples(&split.test);
             let widths = vec![width; depth];
             let initial = SharedTemporalNet::new(
                 TEMPORAL_ORDER_N_IN,
@@ -266,8 +272,8 @@ fn run_depth(quick: bool, out: PathBuf) -> Result<(), String> {
             treatment_acc.push(treatment.accuracy(&test));
             ceiling_acc.push(ceiling.accuracy(&test));
         }
-        let treatment = mean(&treatment_acc);
-        let ceiling = mean(&ceiling_acc);
+        let treatment = mean_or_nan(&treatment_acc);
+        let ceiling = mean_or_nan(&ceiling_acc);
         // 2026-08-21: was a bare `ceiling + 0.01 < treatment` inversion test,
         // which is silent when the BPTT ceiling never learned and the treatment
         // is below it. `CeilingHealth` tests the reference against chance first.
@@ -340,45 +346,6 @@ fn calibration_hash(difficulty: TemporalDifficulty) -> u64 {
         hash = hash.wrapping_mul(0x100_0000_01b3);
     }
     hash
-}
-
-fn as_dense(examples: &[TemporalOrderExample]) -> Vec<DenseTemporalExample> {
-    examples
-        .iter()
-        .map(|example| DenseTemporalExample {
-            frames: example.frames.clone(),
-            timesteps: TEMPORAL_ORDER_T,
-            n_in: TEMPORAL_ORDER_N_IN,
-            label: example.label,
-        })
-        .collect()
-}
-
-fn as_shd(
-    train: &[TemporalOrderExample],
-    test: &[TemporalOrderExample],
-) -> (Vec<ShdExample>, Vec<ShdExample>) {
-    let convert = |example: &TemporalOrderExample| ShdExample {
-        frames: example.frames.clone(),
-        t: TEMPORAL_ORDER_T,
-        n_in: TEMPORAL_ORDER_N_IN,
-        label: example.label,
-    };
-    (
-        train.iter().map(convert).collect(),
-        test.iter().map(convert).collect(),
-    )
-}
-
-fn mean(values: &[f32]) -> f32 {
-    values.iter().sum::<f32>() / values.len() as f32
-}
-
-fn write_report(path: &Path, report: &str) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, report).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
