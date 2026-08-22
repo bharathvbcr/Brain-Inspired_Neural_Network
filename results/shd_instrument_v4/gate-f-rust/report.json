@@ -1,6 +1,6 @@
 {
   "binary": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
-  "binary_sha256": "15574fb89fc84b3366672cd437caa5f8b5d940a3f001772bedfafb23c66b0cc9",
+  "binary_sha256": "cdc5e0bb1763037187957c19568cae33c72ba1e528d820d02dec7a71a12993c2",
   "cells": 1,
   "failures": 0,
   "status": "PASS",
@@ -9,7 +9,7 @@
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001__ff-fixed-attn__d32l1",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 91.095,
+      "wall_secs": 70.799,
       "compared_traces": [
         "epoch_mean_loss",
         "epoch_mean_gradient_norm",
