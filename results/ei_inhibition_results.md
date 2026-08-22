@@ -1,5 +1,9 @@
 # Dynamic E-I Interneuron Sweeps Report
 
+> **STALE — this report is v133; the source is v135.** Exploratory, and nothing
+> depends on it, but it was not regenerated after the 2026-07-25 hardening pass.
+> See `TODO_2026-08-07_OPEN_WORK.md` §1.
+
 **Protocol Version:** 133  
 **Experiment:** ei-inhibition-sweep  
 

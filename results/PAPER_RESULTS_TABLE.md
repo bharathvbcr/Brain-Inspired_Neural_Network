@@ -1,5 +1,24 @@
 # BINN — camera-ready results table
 
+> **CITATION WARNING (added 2026-08-07).** This document cites the
+> `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
+> matched-substrate result. That report is stale: the source is **v131**, and the
+> 130→131 bump is precisely the clamp-and-separation-gate fix for the defect the
+> row exhibits. Under current code the arm **cannot be reported as PASS**. Do not
+> cite it until `track-b-rescue` has been re-run. The DFA
+> (`c1-dfa-c8c4fe0899908b84`) and RL (`c1-rl-42eddc9c801308e9`) matched PASSes are
+> **not** affected by this defect; they ran through the clamped `runner.rs` path.
+> See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+> **RESOLVED 2026-08-19.** The re-run landed. At v131 the arm reports
+> **INVALID_HARNESS**, not PASS: the ceiling-inverted warning fires on 3 of 20
+> learned-FB seeds and the code refuses to emit a PASS while it is present.
+> The v130 PASS is **withdrawn**. See
+> `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md` and
+> `track_b_results_v131.md`.
+
+
+
 **Authority:** on-disk notes only. Every row cites a file under `binn/results/`.  
 **Do not invent.** Quick/PILOT hashes are excluded from this sheet.
 
@@ -14,11 +33,11 @@ Companion: [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) · [`PAPER_SKELETON.
 | Broadcast ±1 three-factor (v4) | `c1-match-5dc6822e71229e9e` | **FAIL** | 0.5000 | grad 0.8963 | **0.0000** | [`c1_match.md`](c1_match.md) |
 | DFA graded×fixed-B (v5) | `c1-dfa-c8c4fe0899908b84` | **PASS** | 0.9387 | grad 0.8963; broadcast-graded **0.9863** | **0.6894** | [`c1_dfa.md`](c1_dfa.md) |
 | RL `rl_reinforce_fb` (v12) | `c1-rl-42eddc9c801308e9` | **PASS** | 0.9200 | graded 0.5250; flat 0.5113; grad 0.8887 | **0.6846** | [`c1_rl.md`](c1_rl.md) |
-| **RL Online Learned `B_i` (v130)** | `track-b-rescue` *(schedule ID; not `c1-*-<hex>`)* | **PASS (matched)** | **1.0000** | RPE **0.5120**; flat **0.5340**; grad **0.9930** | **0.9988** | [`track_b_results.md`](track_b_results.md) |
+| **RL Online Learned `B_i` (v130)** | `track-b-rescue` | **WITHDRAWN** | — | — | — | [`RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`](RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md) · v131 `INVALID_HARNESS` |
 | Discrete EventProp-style (v28) | `c1-eventprop-5bb083d5e88d0ad2` | **FAIL** | 0.5000 | SuperSpike **0.9150** | **0.0000** | [`c1_eventprop.md`](c1_eventprop.md) |
 | RL graded primary (v11, archived) | `c1-rl-ef504db58916720d` | **FAIL** | 0.5900 | — | 0.0182 | [`c1_rl_v11_graded_primary.md`](c1_rl_v11_graded_primary.md) |
 
-**Paper language (required MUST):** Lead negative is **broadcast ±1 three-factor** (±1 × surrogate eligibility), not “any broadcast rule” and not bare “broadcast credit topology.” On the DFA schedule, **broadcast-graded** also learns coincidence (**0.9863**) — disclose in text and in Figure M; do **not** use coincidence alone to claim “locality is required.” Locality flip evidence is **XOR** (Table D). Falsifier: matched ±1 clearing gap LCB under the same forward overturns the lead claim. Discrete EventProp H2H is **FAIL** (`c1-eventprop-5bb083d5e88d0ad2`); disclose discrete ≠ continuous Wunderlich–Pehle. SuperSpike is the matched ceiling. v131 is matched-only (not live transfer).
+**Paper language (required MUST):** Lead negative is **broadcast ±1 three-factor** (±1 × surrogate eligibility), not “any broadcast rule” and not bare “broadcast credit topology.” On the DFA schedule, **broadcast-graded** also learns coincidence (**0.9863**) — disclose in text and in Figure M; do **not** use coincidence alone to claim “locality is required.” Locality flip evidence is **XOR** (Table D). Falsifier: matched ±1 clearing gap LCB under the same forward overturns the lead claim. Discrete EventProp H2H is **FAIL** (`c1-eventprop-5bb083d5e88d0ad2`); disclose discrete ≠ continuous Wunderlich–Pehle. SuperSpike is the matched ceiling. v131 is matched-only (not live transfer). **A6 ceiling health caveat:** The canonical 80-epoch schedule undertrains the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 at e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`); gap closed at e80 is a statement of *learning speed*.
 
 **Gate:** gap LCB > 0.5 and primary mean ≥ 0.65; gradient mean ≥ 0.65 for harness validity.
 
@@ -82,6 +101,23 @@ Packaging note: [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md), [`MATC
 
 ---
 
+## Table F — SHD Attention Read-out & Mechanism (Waves 1–9)
+
+| Configuration | Arm | Budget | Intact accuracy | Bin-shuffled | Mechanism effect (intact − shf) | Source |
+|---|---|---|---:|---:|---:|---|
+| **d32/L4 (headline)** | `ff+fixed+attn` | e400 | **0.8320** (12/12 ≥ 0.80) | **0.6983** | **+0.1337** (12/12 seeds) | [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md) · [`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md) |
+| d32/L4 Control | `ff+fixed` | e400 | **0.7062** (0/12 ≥ 0.80) | **0.6934** | **+0.0128** | same |
+| d32/L1 (Wave 1) | `ff+fixed+attn` | e400 | 0.7483 | 0.6442 | +0.1041 | [`RESULT_2026-08-19_W1_ATTENTION_AT_CONVERGENCE.md`](RESULT_2026-08-19_W1_ATTENTION_AT_CONVERGENCE.md) |
+| d32/L4 @ e100 | `ff+fixed+attn` | e100 | 0.8209 (11/12 ≥ 0.80) | — | — | [`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md) |
+| d32/L4 @ e10 (sample eff) | `ff+fixed+attn` | e10 | 0.7337 (vs e400: 98.1%) | — | — | [`SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md`](SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md) |
+| `channels-700` geometry | `ff+fixed+attn` | e400 | 0.7864 (gain +0.1090) | — | — | Wave 8 |
+| `published-10ms` geometry | `ff+fixed+attn` | e400 | **0.8225** (gain +0.1491) | — | — | Wave 8 |
+| h1024 width scaling | `ff+fixed+attn` | e400 | **0.5768** (gain **−0.1618**) | — | — | Wave 8 (width inversion) |
+
+**Mechanism summary:** Attention readout advantage collapses from **+0.1258** (intact) to **+0.0049** (shuffled); **96% of the readout benefit is contingent on temporal order**.
+
+---
+
 ## Non-claims (print in paper)
 
 1. Not biology / cortex / digital brain.  
@@ -96,5 +132,10 @@ Packaging note: [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md), [`MATC
 10. Not equating hybrid T=2.0 collapse with live v21 (T=1).  
 11. Not treating appendix G3 / G4 / H0 as reopening G2.  
 12. Not mixing overnight SHD p27 (20-way capped e-prop) with proto-135 SHD sweep (5-class) or protocol-29 full-corpus SuperSpike (`c1-shd-full-*`).
+13. Not claiming online learned FB v130 PASS (withdrawn under v131; `INVALID_HARNESS`).
+14. Not claiming depth collapse / deep SNN scaling (withdrawn under v134; all ceilings at chance).
+15. Not claiming anything from `shd-scientific-sweep` (withdrawn; synthetic data).
+16. Not claiming temporal-resolution mechanism for attention (refuted by S-5).
+17. Not claiming SHD attention calibration (criterion 5 Python mirror unmet).
 
 Hardened package: [`HARD_AUDIT.md`](HARD_AUDIT.md) · [`CLAIM_AXIS.md`](CLAIM_AXIS.md) · [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md) · [`PAPER_METRICS_FULL.md`](PAPER_METRICS_FULL.md) · [`APPENDIX_POST_G2.md`](APPENDIX_POST_G2.md) · mechanism: [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) Figure M.

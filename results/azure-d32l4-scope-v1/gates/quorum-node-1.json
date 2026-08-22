@@ -1,0 +1,14 @@
+{
+  "binary_sha256": "666a73420a6378c3870da04612a178d9103164f579b9683c1d6e75660b347446",
+  "cross_platform_gate_f": "FAIL",
+  "nodes": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "observation_sha256": "50ea8a2630dcdde9a042f678666dd683ffafcb050622b81081595980b5183624",
+  "schema": "azure-local-gate-f-v1",
+  "source_sha256": "52f5e314b934d1821bb585a054058a5a062522aa426ef7c0a22ce5ee0836df06",
+  "status": "PASS"
+}

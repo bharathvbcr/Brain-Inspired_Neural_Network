@@ -1,5 +1,8 @@
 # Amendment: measure H2 at h256, where the instrument works
 
+> ## OUTCOME: H2 is STILL NOT RUN. h256 is not clean at the campaign budget.
+> ## The §5 stopping rule fired. See §7.
+
 **Registered:** 2026-08-03, before any H2 cell was run.
 **Amends:** `PREREG_2026-08-02_SHD_TEMPORAL_INFORMATION.md` §3 — width for the
 `rec+alif` arm only.
@@ -80,3 +83,64 @@ silent-partial failure the verdict tool was hardened against.
   registers h512 for a *ceiling* claim. A ceiling measured below width
   saturation is not a ceiling. That prereg needs its own decision.
 - It does **not** change H1 or H3, both settled at h512/e100 over 6 seeds.
+
+
+## 7. OUTCOME — the premise was wrong, and §5 caught it
+
+**H2 remains NOT RUN.** Of 12 `rec+alif` cells at h256/e100, **two aborted** on
+non-finite per-sample gradients — seed 5170002, `intact` at optimizer step 374
+and `bin-shuffled` at step 727. `ff+fixed` completed 12/12.
+
+Per §5 — *"If any `rec+alif` cell aborts at h256, H2 is reported as NOT RUN
+rather than evaluated on surviving cells"* — the 10 surviving cells were **not**
+used to compute the H2 statistic. The verdict script refused before printing one.
+Evaluating an arm on the subset of seeds that happened to survive is exactly the
+selection effect that would make the number meaningless, and it is the
+silent-partial failure the tooling was hardened against earlier the same day.
+
+### Why §1's premise was wrong
+
+§1 asserted "h256 is clean", on the evidence of a width check at **e20**:
+`non_finite_events` 0/640, no aborts, accuracy 0.3613.
+
+| budget | optimizer steps | result |
+|---|---:|---|
+| e20 (the evidence for §1) | 640 | clean |
+| e100 (the campaign budget) | 3200 | **2 of 12 abort, at steps 374 and 727** |
+
+**The e20 probe covered one fifth of the trajectory the campaign actually runs.**
+A "clean" verdict from it was never evidence about e100, and I treated it as
+though it were.
+
+This is the **third** time in one day that a cheap short-budget probe gave a
+verdict that did not survive the real budget:
+
+1. The e3 scale pilot sampled only the early-training transient, making
+   `rec+fixed` look like it could not learn at all — it reaches 0.2633 at e20.
+2. The registered convergence rule looked undertrained at e400 and was
+   overfitting by e800.
+3. This: h256 clean at e20, aborting at e100.
+
+The pattern is worth naming, because it is cheaper to notice than to rediscover:
+**a short-budget probe answers a question about short budgets.** When the
+quantity of interest is a property of the whole trajectory — stability,
+convergence, a ceiling — a probe that stops early does not approximate it, it
+measures something else.
+
+### What would actually be needed for H2
+
+Narrowing the width was a guess that h512's failure was purely about fan-in. It
+is not: h256 fails too, just later and less often. The remaining candidates from
+`MEASUREMENT_2026-08-03_GRADIENT_CLIPPING_DOES_NOT_FIX_H512.md` §4 — truncated
+BPTT, lower surrogate gain, spectral-radius-normalised initialisation — attack
+the compounding in the per-sample backward, which is where the failure actually
+lives. **h128 is the only width with no observed failure**, and it has not been
+tested at e100 either; on this evidence it should not be assumed clean until it
+is.
+
+### What was produced
+
+The 12 `ff+fixed` cells at h256/e100 are valid and complete. They are **not**
+reported as a result here: they were run as H2's matched baseline, and with H2
+unrun they answer no registered question. They remain on disk under
+`results/shd_instrument_v4/h2-campaign/` for whoever resumes this.

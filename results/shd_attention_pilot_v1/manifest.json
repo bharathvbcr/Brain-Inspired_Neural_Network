@@ -1,0 +1,67 @@
+{
+  "attention": {
+    "d_model": 32,
+    "layers": 1
+  },
+  "backend": "rust",
+  "binary_sha256": "637aaff4c88c9e765ce90c392510291f7170039180fed07c7775885ee670c862",
+  "cells": {
+    "A_base_h128_s5170001.json": "8f44b832b293803358bffa9e4f520a91885aa455f98c9659799e8ff2969efd82",
+    "A_base_h128_s5170002.json": "95841c8886e32400c16cb5c7e48c2b1e720b1f256b07ff27534470e55f792700",
+    "A_base_h128_s5170003.json": "aca8e3a55cba84fab08026f466d6ab2bed16257a500dff14eea44e88e6649893",
+    "B_attn_h128_s5170001.json": "0d7e973ab08a76c9780eb0da3195dbaac9f1e8361f88c5d5cf5bc684a4180333",
+    "B_attn_h128_s5170002.json": "1009228ef3490501aee8d776ada14b79dbcbf55aaf561e5d32899ca74abebaa5",
+    "B_attn_h128_s5170003.json": "626f6bc21f2a2de97eff94ba8641f0a198a0a2defc398f035207e690f2888463",
+    "C_base_h192_s5170001.json": "9112b75b975ea8adbb4160addc0c17b1c3ae0bf757acb74e182a1fdb5f63be2d",
+    "C_base_h192_s5170002.json": "9901cd1f83febebb03716f13da9134bf08c891080814fef7da3263d9534e5c65",
+    "C_base_h192_s5170003.json": "a161f252b41ca70d7b4d9778f468983167a291531d5428c827e137717346cd1d",
+    "D_base_h128_shuf_s5170001.json": "87b91faa97f1afffa9020bb668f423a969e31695ee186410384c3dca827f3e96",
+    "D_base_h128_shuf_s5170002.json": "7d590198b38ed62090f42114c1fad92867a73062d6aed57e1a4421630764ebd8",
+    "D_base_h128_shuf_s5170003.json": "3f30329d46db2a37bd7a5f58871c8142f632a4525d995424a5ca7363ee4f115f",
+    "E_attn_h128_shuf_s5170001.json": "2ba5e7aea9936c495dee493a6ac5e069b0d71462d1058432c5907fc17538c358",
+    "E_attn_h128_shuf_s5170002.json": "857aa6f2852f4d1db47ddf55f5f50a31f018a4b7b32d0e4563b97e77557b3619",
+    "E_attn_h128_shuf_s5170003.json": "570fff97e8874925c2e096a67e7713d2e9ef9afe73e7d81fda4f7ec6cdfb10bb"
+  },
+  "concurrency_note": "cells were run up to 6 at a time; each is single-threaded and deterministic, so only wall_secs is affected",
+  "contract": "published-2ms",
+  "datasets": {
+    "test": "9d7088793af81d574b447dc72c6044a192db25e73b6b0a24a66e1306b266fb5a",
+    "train": "81730543032bb41d0aef048c2e541374a004199f2ebf0e9cae98389c980acab7"
+  },
+  "epochs": 20,
+  "geometry": "adjacent-sum-5",
+  "git_head": "d2a8c173704e9ec353b0d7b27d945beace0803dd",
+  "initialization": {
+    "attn-s5170001.weights": "cdfe3de29bc269393aca9e8c87d3b906673e3ef2eef68e8d81ad434e5d33b908",
+    "attn-s5170002.weights": "f4a5bb63588108daa07530fa17b44eaa787f73f1fa548cb6d7cd12efa2f2cdf6",
+    "attn-s5170003.weights": "1f55db1b54342a52b3e9572034b502dd702df688e6942af29759f310714a5f38",
+    "base-s5170001.weights": "365207f736910a9768c3e970c6f3287e7f94bee9d8d1bf57dc94be99ae7154d3",
+    "base-s5170002.weights": "8898e5a5ee49f778ec8e46de862d8690b4c27743d71bcbf0a4ea6249b1cfc2f6",
+    "base-s5170003.weights": "d4a3c9994567ffa9e1617150466894342f62dbf6ebb872e1ded2c67a752e4e9b",
+    "base192-s5170001.weights": "9a607635f23c9558858527123cc741a05be7a19738c71304fa897258b642f137",
+    "base192-s5170002.weights": "b4f52ae3a6bce89f6b1b4f0beacaf7504fd83054d80b778a3460eca3908f6f0f",
+    "base192-s5170003.weights": "bdbe3b2c8e5cab31074f3d77d03160161dc131091a708682da707a5fb7a1fcd1",
+    "orders-attn-s5170001.orders": "1667abd6bdfa695622f67548c061b8667fa7f67d49c781847326a700af7704f4",
+    "orders-attn-s5170002.orders": "b24225df48b211e6a0ddb5106075198b7f9764e79f4a6aa1f3ff3f7d134b03bd",
+    "orders-attn-s5170003.orders": "cd51ad320679989f8701983e5a15e9676c253b6b3ce2072ad57b1437a61332a7",
+    "orders-s5170001.orders": "1667abd6bdfa695622f67548c061b8667fa7f67d49c781847326a700af7704f4",
+    "orders-s5170002.orders": "b24225df48b211e6a0ddb5106075198b7f9764e79f4a6aa1f3ff3f7d134b03bd",
+    "orders-s5170003.orders": "cd51ad320679989f8701983e5a15e9676c253b6b3ce2072ad57b1437a61332a7",
+    "orders192-s5170001.orders": "1667abd6bdfa695622f67548c061b8667fa7f67d49c781847326a700af7704f4",
+    "orders192-s5170002.orders": "b24225df48b211e6a0ddb5106075198b7f9764e79f4a6aa1f3ff3f7d134b03bd",
+    "orders192-s5170003.orders": "cd51ad320679989f8701983e5a15e9676c253b6b3ce2072ad57b1437a61332a7",
+    "probe.orders": "37ebfe9edd4e5a151cce1fe0a3ec7a823c94dc814ffcde691937986b425139fe",
+    "probe.weights": "cdfe3de29bc269393aca9e8c87d3b906673e3ef2eef68e8d81ad434e5d33b908"
+  },
+  "n_test": 2264,
+  "n_train": 8156,
+  "protocol": "PREREG_2026-08-19_SHD_ATTENTION_READOUT.md",
+  "python_mirror": "none - the attention axis is rust-only; Gate E cannot cover these cells",
+  "schema": "shd-attention-pilot-manifest-v1",
+  "seeds": [
+    5170001,
+    5170002,
+    5170003
+  ],
+  "temporal_seed_for_shuffled_arms": 5170001
+}

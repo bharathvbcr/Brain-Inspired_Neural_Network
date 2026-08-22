@@ -1,0 +1,27 @@
+{
+  "cells": 252,
+  "infrastructure": {
+    "compile_target_cpu": "x86-64-v4",
+    "gate_policy": {
+      "azure_local_quorum": "4/4",
+      "cross_platform_expected_status": "FAIL",
+      "scientific_fields_must_be_bit_identical": true
+    },
+    "host_cores_per_node": 64,
+    "hourly_price_per_node_usd": 2.573,
+    "max_concurrent_cells_per_node": 16,
+    "nodes": 4,
+    "normal_threads_per_cell": 4,
+    "outbound_nat_gateway": "nat-binn-paper-cpu",
+    "outbound_public_ip": "pip-binn-paper-cpu",
+    "region": "eastus",
+    "sku": "Standard_D64als_v7",
+    "watchdog_hours": 19.0,
+    "wide_cell_rule": "hidden>=1024 and attn_dim>=64",
+    "wide_threads_per_cell": 8
+  },
+  "plan_sha256": "0625cffee98dc382a8a113a8e753fdf999626e8163e7b612e73d30de7eabb9d9",
+  "preregistration": "results/PREREG_2026-08-20_AZURE_D32L4_SCOPE.md",
+  "protocol": "azure-d32l4-scope-v1",
+  "source_sha256": "52f5e314b934d1821bb585a054058a5a062522aa426ef7c0a22ce5ee0836df06"
+}

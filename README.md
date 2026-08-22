@@ -1,239 +1,328 @@
 # BINN
 
-**Brain-inspired neural network substrate** — a from-scratch Rust research instrument for one falsifiable question:
+**Brain-Inspired Neural Network Substrate** — a from-scratch Rust research instrument and simulation engine for testing one falsifiable question:
 
 > Can a sparse-assembly, locally learned, event-driven network learn competitively **without backpropagation**?
 
-BINN is not a product, ML framework, or neuromorphic deployment stack. It is a deterministic experiment harness with a pre-registered kill-gate. A clean negative is a successful outcome.
+BINN is not a product or neuromorphic deployment framework. It is an exact, deterministic software instrument built with preregistered kill-gates to isolate the computational capabilities and limits of biological learning primitives.
 
-## The story
+---
 
-The project started from a belief that sounds obvious: if the brain learns through sparse activity, local plasticity, and continual adaptation, then a network built that way should eventually have real advantages over today's ANNs.
+## 1. System Architecture
 
-Then the uncomfortable question: **if that is true, why haven't brain-inspired networks already taken over?**
+BINN organizes biological principles into a tightly coupled hierarchy spanning from single-compartment dynamics up to multi-area network assemblies and experiment harnesses:
 
-Blaming backpropagation alone is too easy. Dense matmul maps onto GPUs. Large batches expose parallelism. PyTorch, CUDA, pretrained checkpoints, and shared benchmarks let every new project inherit years of engineering. ANNs win because algorithm, hardware, data, and tooling reinforce one another — not because researchers ignored biology.
+```mermaid
+flowchart TD
+    subgraph Data["L6: Data & Encoding"]
+        Input[Continuous / Temporal Stream] --> Encoders[Fixed Encoders: Rate / Latency / Pop]
+        Encoders --> SpikeEvents[Timestamped Spike Events]
+    end
 
-That reframed the work. BINN is not "make a network look more like a brain." It asks:
+    subgraph SimulationEngine["L3: Event-Driven Substrate (binn-engine)"]
+        SpikeEvents --> TimingWheel["Hierarchical Timing Wheel (O(1) Queue)"]
+        TimingWheel --> CSR["CSR / CSC Graph Routing"]
+        CSR --> Neurons["Multi-Compartment Dendritic LIF Cells"]
+    end
 
-> Which biological principles create a measurable computational advantage — and what is the cheapest experiment that could prove the hypothesis wrong?
+    subgraph AreaDynamics["L4: Assembly Dynamics (binn-areas)"]
+        Neurons --> kWTA["k-WTA Lateral Inhibition (Target Sparsity k/N)"]
+        kWTA --> Assemblies["Assembly Formation (project / associate)"]
+    end
 
-Scrutiny narrowed the bet. Spiking cells, dendritic compartments, event-driven simulation, and three-factor plasticity already exist as research directions. The unbuilt claim is sharper: **sparse assemblies can make local credit assignment sufficient on difficult tasks.** Adversarial review also forced concrete corrections — spike resets keep forward time sequential; the crux must use fixed encoders (no co-trained autodiff front-end); Assembly Calculus does not prove deep local learning.
+    subgraph PlasticityEngine["L5: Online Learning (binn-learn)"]
+        Assemblies --> Traces["Synaptic STDP Eligibility Traces e_ij(t)"]
+        RewardMod["Neuromodulator / Credit Signal M_j(t)"] --> ThreeFactor["Three-Factor Rule: Δw = η · e · M - λ · w"]
+        Traces --> ThreeFactor
+        ThreeFactor --> SynapseUpdate["O(1) Sequence Memory Weight Update"]
+        SynapseUpdate --> CSR
+    end
 
-So the program became a gated Rust substrate rather than a presumed foundation. Given decades of failed attempts to unseat backprop with local rules, the prior was that the central gate would fail. The point of building was a trustworthy verdict at bounded cost — not confidence theater.
-
-### What the substrate is
-
-Three ingredients, tested together rather than as vibes:
-
-1. **Compartmental, stateful cells** — LIF soma + dendritic branches, lazy integrate-and-fire on an event queue
-2. **Sparse timed events and assemblies** — k-WTA areas, project/associate wiring, cost that should scale with activity not cell count
-3. **Local three-factor plasticity** — eligibility traces + a modulator; no dense matmul or autograd on the production path
-
-Success metric: work-per-accuracy (including queue and cache overhead) at disclosed sparsity, versus matched gradient and eligibility references. Either a clear pass that licenses scaling, or a reproducible negative that ends the central program. Both count as success; ambiguity from sloppy methodology does not.
-
-### What happened
-
-Gate G2 (experiment C1) returned **FAIL** under protocol v2 hash `c1-118207fbc3eaba53`. Local-assembly learning stayed near chance while gradient and eligibility references succeeded on the same splits. The harness was valid; the FAIL is the scientific decision, not a broken run. The scheduled program stops before P3+; later experiments exist only behind explicit overrides.
-
-## Status
-
-
-| Gate | Result | Note |
-|---|---|---|
-| **G2 (C1 crux)** | **FAIL** | Local three-factor / assembly learning did not clear the preregistered gap or accuracy floor |
-| **G3 (C2 continual)** | **FAIL** | Local forgetting 0.8948 vs replay baseline 0.2725 |
-| C3 v1 credit proxy | **Measured** | Tabular terminal-reward D*=3 vs teacher-forced oracle D*=8 |
-| Credit repreregistration | Implemented | Exact-forward C1 + production-engine C3 v2; separate hashes |
-| R1 composition | **Additive** | No tested area count compounded capability |
-| **G4 (R2 scale)** | **NO-GO** | Degrading curve, slope −0.1924 vs ln(#areas) |
-| U21–U23 | Built + measured | Replay, pruning, and resting-state extensions remain exploratory |
-| U18–U20 | Built | Partitioned engine, reset-aware scan path, and G5 accounting |
-
-Canonical packaging: [`results/U-NEG_protocol_v2.md`](results/U-NEG_protocol_v2.md)
-Config hash: `c1-118207fbc3eaba53` · protocol v2 · n=20 seeds
-
-**Paper package (matched + transfer):** [`results/PAPER_DRAFT.md`](results/PAPER_DRAFT.md) · [`results/PAPER_RESULTS_TABLE.md`](results/PAPER_RESULTS_TABLE.md) · verified replays [`results/PAPER_VERIFY.md`](results/PAPER_VERIFY.md)
-
-```bash
-# Matched-arch primary claims (scientific hash replay)
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch \
-  --config-hash c1-match-5dc6822e71229e9e
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa \
-  --config-hash c1-dfa-c8c4fe0899908b84
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl \
-  --config-hash c1-rl-42eddc9c801308e9
-# Live RFB / structured-B transfer
-cargo run --locked --release -p binn-lab --bin c1 -- --reinforce-fb \
-  --config-hash c1-660401d74db3c88d
-cargo run --locked --release -p binn-lab --bin c1 -- --structured-fb \
-  --config-hash c1-493ddd56f8714fb6
-cargo run --locked --release -p binn-lab --bin c1 -- --structured-fb-teach \
-  --config-hash c1-dfab4a7ec19f17c2
+    subgraph Harness["L7: Experiment Harness (binn-lab)"]
+        Assemblies --> Decoders["Fixed Decoders / Readout Audit"]
+        Decoders --> Gates["Preregistered Verification Gates (G2–G5)"]
+    end
 ```
 
-## Quick start
+---
+
+## 2. Core Architectural Components
+
+### A. Multi-Compartment Dendritic LIF Neuron (`binn-engine::Cell`)
+
+Each neuron consists of an adaptive somatic compartment $v(t)$, an adaptive somatic threshold $\theta(t)$, and $K=4$ independent dendritic branches $v_{\text{dend}}[i](t)$:
+
+```mermaid
+flowchart LR
+    subgraph SynapticInputs["Synaptic Event Impulses"]
+        In0["Synapse on Branch 0"] --> Dend0["Branch 0: v_dend[0]"]
+        In1["Synapse on Branch 1"] --> Dend1["Branch 1: v_dend[1]"]
+        InK["Synapse on Branch K"] --> DendK["Branch K: v_dend[K]"]
+    end
+
+    subgraph CellSoma["Soma Dynamics"]
+        Dend0 -->|Coupling g_c| Soma["Soma: dv/dt = -v + Σ g_c(v_dend - v)"]
+        Dend1 -->|Coupling g_c| Soma
+        DendK -->|Coupling g_c| Soma
+        AdaptiveThresh["Adaptive Threshold θ(t)"] -.->|Comparison v >= θ| Comparator{"Spike Threshold"}
+        Soma --> Comparator
+    end
+
+    Comparator -->|Yes| Fire["Emit Spike Event (Tick, CellId)"]
+    Fire -->|Reset v = 0, Jump θ += Δθ| Reset["Soma Reset (Dendrites Preserved)"]
+```
+
+#### Differential Equations:
+$$\tau_d \frac{d v_{\text{dend}}[i]}{dt} = -v_{\text{dend}}[i] + I[i]$$
+$$\tau_m \frac{dv}{dt} = -v + \sum_{i=1}^K g_c \left( v_{\text{dend}}[i] - v \right)$$
+$$\tau_\theta \frac{d\theta}{dt} = -(\theta - \theta_{\text{rest}})$$
+
+- **Analytical Lazy Evaluation:** Sub-threshold dynamics are evaluated analytically when an event touches the cell ($O(1)$ per event), incurring zero compute overhead for silent neurons.
+- **Impulse Deposition:** Synapses deposit charge directly into target dendritic branches; supralinear dendritic coincidence is supported via $\sum \max(0, v_{\text{dend}}[i])^2$.
+- **Spike Reset:** Somatic spikes reset only the soma ($v \leftarrow 0.0, \theta \leftarrow \theta + \Delta\theta$), preserving dendritic branch potentials across emission.
+
+---
+
+### B. Areas, Assemblies & $k$-WTA Lateral Inhibition (`binn-areas`)
+
+Neurons are partitioned into contiguous populations called **Areas**. An Area restricts maximum concurrent firing to $k$ neurons through lateral inhibition, enforcing strict activity sparsity ($\approx k/N$):
+
+```mermaid
+flowchart TD
+    subgraph InputAssembly["Source Area / Assembly A"]
+        A_spikes["Active Neurons (k winners)"]
+    end
+
+    subgraph Projection["Synaptic Projection"]
+        A_spikes -->|Sparse CSR Weights + Delays| DendriticDrive["Dendritic Deposition on Area B"]
+    end
+
+    subgraph TargetArea["Target Area B (Capacity N)"]
+        DendriticDrive --> RawScores["Somatic Potentials / Scores"]
+        RawScores --> SelectTopK["k-WTA Selection: O(N) select_nth_unstable_by"]
+        SelectTopK --> Winners["k Winners Take All"]
+        SelectTopK --> Muted["(N - k) Neurons Muted (θ = ∞)"]
+    end
+
+    Winners --> AssemblyB["Assembly B Formed (k members)"]
+    AssemblyB -.->|Hebbian associate| Recurrent["Potentiate A <-> B Synapses"]
+```
+
+- **Hard $k$-WTA:** Fast $O(N)$ partial selection partitioning top-$k$ scores with deterministic tie-breaking (highest potential $\to$ lowest `CellId`).
+- **Soft / Annealed $k$-WTA:** Probabilistic winner selection via $\text{softmax}(s_i / T)$ for temperature-annealed training.
+- **Assembly Calculus:** High-level graph operations `project(src, dst)` and `associate(a, b)` model compositional neural assemblies.
+
+---
+
+### C. Online Three-Factor Local Plasticity (`binn-learn`)
+
+Synaptic updates require zero backpropagation through time (BPTT), maintaining **$O(1)$ resident memory in sequence length**:
+
+$$\Delta w_{ij} = \eta \cdot e_{ij}(t) \cdot M_j(t) - \lambda \cdot w_{ij}$$
+
+```mermaid
+flowchart LR
+    PreSpike["Pre-synaptic Spike (Cell i)"] --> STDP{"STDP Kernel Pairing"}
+    PostSpike["Post-synaptic Spike (Cell j)"] --> STDP
+    STDP --> Trace["Eligibility Trace: de_ij/dt = -e_ij/τ_e + STDP(Δt)"]
+
+    Trace --> WeightUpdate["Weight Delta: Δw = η · e_ij · M_j - λ · w_ij"]
+    Modulator["Neuromodulator / Feedback M_j(t)"] --> WeightUpdate
+    WeightUpdate --> SynapticWeight["Updated Synaptic Weight w_ij"]
+```
+
+- **Eligibility Traces ($e_{ij}$):** Synaptic pre/post coincidence triggers exponential decay eligibility traces without global coordination. Reverse CSC indexes enable $O(\text{fan-in})$ postsynaptic lookups.
+- **Third Factor ($M_j$):** Global scalar reward, vector Direct Feedback Alignment (DFA), or REINFORCE feedback signals.
+- **Selective Weight Decay:** Applied only to synapses with active eligibility ($|e_{ij}| > 10^{-8}$) to avoid baseline weight erosion during quiescence.
+
+---
+
+### D. Event-Driven Simulation & Timing Wheel (`binn-engine::TimingWheel`)
+
+```mermaid
+flowchart TD
+    subgraph TimingWheelStructure["Hierarchical 8-Level Timing Wheel"]
+        L0["Level 0: 256 Ticks (1 Tick/Slot)"]
+        L1["Level 1: 65,536 Ticks (256 Ticks/Slot)"]
+        L7["... Level 7: Full u64 Time Horizon"]
+    end
+
+    Bitmask["Occupancy Bitmask (32 x u64 words)"] -->|trailing_zeros acceleration| L0
+    Insert["Schedule Event at Tick t"] -->|O(1) Hash Insert| TimingWheelStructure
+    Pop["Pop Earliest Event Batch"] <---|O(1) Cascade| L0
+    Pop --> BatchExecute["Execute Spikes at Current Tick"]
+```
+
+- **Bitmask Acceleration:** 32-word `u64` bitmask eliminates pointer-chasing scans over empty bucket deques.
+- **Activity $\propto$ Compute:** Idle cells incur zero processing time; total work scales with active spike events.
+
+---
+
+## 3. The Research Bet & What Happened
+
+### The Core Hypothesis
+The central thesis was that compartmental LIF cells, sparse $k$-WTA assemblies, and online three-factor plasticity could match gradient-based learning on temporal sequence benchmarks without backward unrolls.
+
+### What the Experiments Found
+1. **Broadcast $\pm 1$ Three-Factor Insufficiency (Lead Negative — Gate G2 / C1):**
+   - On an identical dense-LIF forward pass, broadcast $\pm 1$ scalar reward fails to guide credit assignment, remaining at chance accuracy (**0.5000**, gap LCB **0.0000**; `c1-match-5dc6822e71229e9e`, **FAIL**).
+   - In contrast, graded feedback alignment (**Matched DFA: 0.9387**) and per-neuron feedback (**Matched RL: 0.9200**) pass the gate. Spatial addressability or gradient-aligned signals are strictly required.
+2. **Live $k$-WTA Transfer Barrier:**
+   - Transferring successful continuous credit rules to event-driven $k$-WTA architectures encounters severe performance drops due to hard competition boundaries and muted thresholds (v13–v24).
+3. **Temporal Attention Readout on LIF (SHD Breakthrough):**
+   - Adding a causal self-attention readout layer over feedforward LIF spiking features achieves **0.8320** accuracy on Spiking Heidelberg Digits (**12/12 seeds $\ge 0.80$**, gain **+0.1258** over rate readout).
+   - **Wave 9 proved temporal order is the mechanism**: bin-shuffling causes a **+0.1337 accuracy collapse** (96% of the attention advantage is lost without temporal spike order).
+
+---
+
+## 4. Workspace Architecture
+
+Strict upward crate dependency: `lab → data → learn → areas → engine → core`.
+
+```mermaid
+graph BT
+    Core["binn-core (L2: Numerics, CSR/CSC, SIMD, RNG)"]
+    Engine["binn-engine (L3: Timing Wheel, LIF Cells, Events)"]
+    Areas["binn-areas (L4: k-WTA, Assemblies, Wiring)"]
+    Learn["binn-learn (L5: 3-Factor Plasticity, Baselines)"]
+    Data["binn-data (L6: Fixed Encoders/Decoders, Datasets, Metrics)"]
+    Lab["binn-lab (L7: Harness, Gates, Config Hashes, Logging)"]
+
+    Core --> Engine
+    Core --> Data
+    Engine --> Areas
+    Engine --> Learn
+    Areas --> Learn
+    Areas --> Lab
+    Learn --> Lab
+    Data --> Lab
+```
+
+| Crate | Layer | Purpose |
+|---|---|---|
+| [`binn-core`](binn-core/) | L2 | Numeric foundation: SoA buffers, CSR/CSC sparse graphs, ChaCha12 RNG, SIMD vectorization, associative scans |
+| [`binn-engine`](binn-engine/) | L3 | Event-driven simulation engine: 8-level timing wheel, multi-compartment LIF cells, synapse tables |
+| [`binn-areas`](binn-areas/) | L4 | Cortical populations: $k$-WTA competition, Assembly Calculus (`project`, `associate`), wiring priors |
+| [`binn-learn`](binn-learn/) | L5 | Online 3-factor plasticity ($\Delta w = \eta e M - \lambda w$), STDP eligibility, DFA/e-prop/BPTT reference baselines |
+| [`binn-data`](binn-data/) | L6 | Fixed rate/latency/population encoders/decoders, SHD dataset framing, disjoint work accounting metrics |
+| [`binn-lab`](binn-lab/) | L7 | Experiment runners, multi-seed statistical harnesses, config hashes, verification gates |
+
+---
+
+## 5. Status & Gate Verification
+
+| Gate | Result | Metric / Hash | Scientific Verdict |
+|---|---|---|---|
+| **G2 (C1 Crux)** | **FAIL** | `c1-118207fbc3eaba53` | Local 3-factor / assembly learning stayed near chance; matched gradient reference passed |
+| **Matched DFA** | **PASS** | `c1-dfa-c8c4fe0899908b84` | Accuracy **0.9387**, Gap LCB **0.6894** (disclose broadcast-graded **0.9863**) |
+| **Matched RL** | **PASS** | `c1-rl-42eddc9c801308e9` | Accuracy **0.9200**, Gap LCB **0.6846** (REINFORCE × frozen $B_i$) |
+| **G3 (C2 Continual)** | **FAIL** | Local forgetting 0.8948 vs replay baseline 0.2725 | Plasticity alone does not prevent catastrophic forgetting without replay |
+| **G4 (R2 Scaling)** | **NO-GO** | Degrading curve (slope −0.1924 vs ln(#areas)) | Area composition does not compound accuracy without hierarchy |
+| **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–9, $n=12$, 0 voided | Headline **0.8320** (+0.1258 over rate readout). Mechanism is **temporal order** (+0.1337 shuffle drop) |
+
+---
+
+## 6. Quick Start
 
 ```bash
 cd binn
 
-# Build + test + global constraints (GC1–GC7)
+# 1. Build, run unit & integration tests, check global constraints (GC1-GC7)
 cargo test --locked --workspace
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
 ./scripts/gc_checks.sh
 
-# C1 / Gate G2 — pilot (not a scientific verdict)
+# 2. Run C1 / Gate G2 Quick Pilot (diagnostic only)
 cargo run --locked --release -p binn-lab --bin c1 -- --quick
 
-# C1 full scientific schedule (n=20) → writes results note
-cargo run --locked --release -p binn-lab --bin c1 -- --out results/c1_g2.md
+# 3. Replay exact scientific hashes
+# Matched broadcast ±1 (FAIL):
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch \
+  --config-hash c1-match-5dc6822e71229e9e
 
-# Exact replay from a config hash
+# Matched DFA (PASS):
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa \
+  --config-hash c1-dfa-c8c4fe0899908b84
+
+# Matched RL (PASS):
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl \
+  --config-hash c1-rl-42eddc9c801308e9
+
+# Canonical C1 / Gate G2 Replay:
 cargo run --locked --release -p binn-lab --bin c1 -- \
   --config-hash c1-118207fbc3eaba53 --out results/c1_g2_replay.md
 ```
 
-Full matrix (build, lint, tests, GC, C1 quick/full/replay):
+---
 
-```bash
-./scripts/run_all.sh
-# optional: --with-benches --with-plots --with-post-g2
-```
+## 7. Experiment Inventory & Overrides
 
-## Workspace
-
-Strict upward dependency: `lab → data → learn → areas → engine → core`.
-
-| Crate | Layer | Role |
-|---|---|---|
-| `binn-core` | L2 | Numeric core: buffers, RNG, SIMD, sparse CSR, scan |
-| `binn-engine` | L3 | Event-driven substrate: timing wheel, LIF cells, synapses |
-| `binn-areas` | L4 | Composition: Area, k-WTA, project/associate, wiring |
-| `binn-learn` | L5 | Three-factor plasticity; labeled BPTT / e-prop baselines only |
-| `binn-data` | L6 | Synthetic events, fixed encoders/decoders, metrics |
-| `binn-lab` | L7 | Experiment harness, seeds, config hashes, logging, plots |
-
-## Experiments
-
-| Binary | Gate | Default | Purpose |
+| Binary | Gate | Status | Description |
 |---|---|---|---|
-| `c1` | G2 | Always runnable | Crux: does local-assembly learning close the gap to a gradient reference? |
-| `c2` | G3 | Opt-in | Class-incremental forgetting |
-| `c3` | — | Opt-in | Credit-assignment depth |
-| `credit-assignment` | — | Always runnable | Exact-forward C1 matched/RPE/e-prop/DFA repreregistration |
+| `c1` | G2 | Default | Primary crux: local assembly learning vs matched gradient/DFA/RL references |
+| `credit-assignment` | — | Default | Exact-forward matched/RPE/e-prop/DFA repreregistration sweep |
+| `c2` | G3 | Opt-in | Class-incremental learning and catastrophic forgetting |
+| `c3` | — | Opt-in | Multi-layer credit assignment depth analysis |
 | `c3-production` | — | Opt-in | Production-engine C3 v2 depth sweep |
-| `r1` | — | Opt-in | Area-count sweep |
-| `r2` | G4 | Opt-in | Capability vs #areas scaling curve |
-| `extensions` | — | Opt-in | U21 consolidation, U22 pruning, U23 resting-state notes |
-| `efficiency` | G5 | Opt-in | U18–U20 + P2 F1/F5: adaptive partitioned engine, reset-barrier headroom, activity≠compute accounting |
+| `r1` | — | Opt-in | Multi-area composition sweep |
+| `r2` | G4 | Opt-in | Scaling curve vs area count |
+| `extensions` | — | Opt-in | U21 consolidation, U22 pruning, U23 resting-state diagnostics |
+| `efficiency` | G5 | Opt-in | Activity-vs-compute accounting & reset barrier headroom |
 
-Credit-assignment repreregistration: the frozen protocol and interpretation
-contract are in
-[`results/CREDIT_ASSIGNMENT_PREREGISTRATION.md`](results/CREDIT_ASSIGNMENT_PREREGISTRATION.md).
-The completed held-out reports are
-[`results/credit_assignment.md`](results/credit_assignment.md) and
-[`results/c3_v2_production.md`](results/c3_v2_production.md). All exact-forward
-C1 arms failed the unchanged G2 contract; production C3 v2 measured broadcast
-and RPE D*=3 versus matched-oracle D*=8. Canonical C1 protocol-v2 remains
-unchanged and failed.
-
-C1 conditions (see [`results/c1_g2.md`](results/c1_g2.md)):
-
-- `local-assembly` — three-factor rule + sparse assemblies + k-WTA
-- `dense-local` / `dense-matched` — same local rule without assembly structure
-- `gradient-reference` — surrogate-LIF BPTT (primary positive control)
-- `eligibility-reference` — e-prop-compatible local reference
-
-### Post-G2 overrides (opt-in only)
-
-G2 FAIL stands. These binaries refuse to run unless explicitly enabled; enabling them does **not** reopen the kill-gate.
-
-| Experiment | Docs | Enable |
-|---|---|---|
-| C2 / U14 | [`results/C2_OVERRIDE.md`](results/C2_OVERRIDE.md) | `--enable-c2` |
-| C3 / U15 | [`results/C3_OVERRIDE.md`](results/C3_OVERRIDE.md) | `--enable-c3` |
-| C3 v2 / credit | [`results/CREDIT_ASSIGNMENT_PREREGISTRATION.md`](results/CREDIT_ASSIGNMENT_PREREGISTRATION.md) | `--enable-c3-v2` |
-| R1 / U16 | [`results/R1_OVERRIDE.md`](results/R1_OVERRIDE.md) | `--enable-r1` |
-| R2 / U17 | [`results/R2_OVERRIDE.md`](results/R2_OVERRIDE.md) | `--enable-r2` |
-| U21–U23 | [`results/POST_G2_BUILD.md`](results/POST_G2_BUILD.md) | `--enable-extensions` |
-| U18–U20 / G5 | [`results/POST_G2_BUILD.md`](results/POST_G2_BUILD.md) | `--enable-efficiency` |
-
-Also accepted: `--override-g2-for <id>` or `BINN_OVERRIDE_G2_FOR=<id>`.
-
-Full post-G2 runs:
-
+### Post-G2 Overrides (Explicit Flags Required)
+G2 FAIL is permanent. Running downstream experiments requires explicit opt-in flags:
 ```bash
 cargo run --release -p binn-lab --bin c2 -- --enable-c2 --out results/c2_g3.md
 cargo run --release -p binn-lab --bin c3 -- --enable-c3 --out results/c3_credit_depth.md
-cargo run --release -p binn-lab --bin credit-assignment -- --out results/credit_assignment.md
-cargo run --release -p binn-lab --bin c3-production -- --enable-c3-v2 --out results/c3_v2_production.md
 cargo run --release -p binn-lab --bin r1 -- --enable-r1 --out results/r1_composition.md
 cargo run --release -p binn-lab --bin r2 -- --enable-r2 --out results/r2_scaling.md
-cargo run --release -p binn-lab --bin extensions -- --enable-extensions --out-dir results
-cargo run --release -p binn-lab --bin efficiency -- --enable-efficiency --out results/u20_efficiency.md
 ```
 
-## Optional plots
+---
 
-CI keeps plotting off. Local figures use **plotters** (optional `plots` feature) — no Python / matplotlib / pyo3. Do not bump scientific defaults or hash `c1-118207fbc3eaba53` for plotting.
+## 8. Offline Viewer & Figures
 
 ```bash
-# C1 raster / weight traces
-cargo run --locked --release -p binn-lab --features plots --bin c1 -- --quick
-# or: ./scripts/run_c1_plots.sh --quick
+# Export trace from C1 run to JSONL
+cargo run -p binn-lab --bin c1 -- --quick --export-trace results/c1_trace.jsonl
 
-# Camera-ready paper figures (figM / fig1 / fig3 / graphical abstract)
+# Open the self-contained interactive viewer in your browser
+open results/viewer.html
+
+# Render vector paper figures (uses pure Rust plotters, no Python/matplotlib)
 cargo run --locked --release -p binn-lab --features plots --bin paper-figures -- \
   --out results/runs/2026-07-23-paper-hard-both/figures
 ```
 
-Optional Polars table harvest: `--features tables` (see `binn_lab::harvest`).
+---
 
-Figure copies: [`results/plots/`](results/plots/) and camp `figures/`.
+## 9. Global Architectural Constraints (CI Enforced)
 
-### Offline spike / assembly viewer
+All code adheres to strict global constraints verified by `.github/workflows/ci.yml` and `scripts/gc_checks.sh`:
 
-Opt-in JSONL trace export plus a self-contained HTML viewer. Export is off unless `--export-trace` is set (scientific schedules stay lean).
+| ID | Constraint | Enforcement |
+|---|---|---|
+| **GC1** | **No Autograd on Production Path** | Zero backpropagation graphs or dense matmuls in `binn-engine`, `binn-areas`, or `binn-learn` production paths. |
+| **GC2** | **Zero External ML Frameworks** | No `torch`, `candle`, or `tensorflow` dependencies. |
+| **GC3** | **Bit Determinism** | Bit-identical results for identical PRNG seeds across identical platforms. |
+| **GC4** | **Fixed Input Encoders** | Encoders are fixed functions; zero learned autodiff front-ends. |
+| **GC5** | **Benchmark Coverage** | All hot simulation paths have compiling Criterion benchmarks. |
+| **GC6** | **Zero Undocumented Unsafe** | `#![deny(unsafe_code)]` or mandatory architectural justification. |
+| **GC7** | **Activity Sparsity Logging** | Firing activity ratio ($\le k/N$) must be logged for every run. |
 
-```bash
-# C1: spikes, k-WTA, assembly overlap, weights / eligibility
-cargo run -p binn-lab --bin c1 -- --quick --export-trace results/c1_trace.jsonl
+---
 
-# Optional: one condition + seed (default path when flag alone: results/c1_trace.jsonl)
-cargo run -p binn-lab --bin c1 -- \
-  --quick --isolate-condition local-assembly --seed 1 --export-trace
+## 10. Documentation Index
 
-# R1: static topology / coupling flow only (no Engine spikes)
-cargo run -p binn-lab --bin r1 -- --enable-r1 --quick --export-trace
-```
+- [`results/PAPER_DRAFT.md`](results/PAPER_DRAFT.md) — Camera-ready paper prose draft
+- [`results/PUBLISHABLE_CLAIMS.md`](results/PUBLISHABLE_CLAIMS.md) — Formal claim strength ladder & non-claims
+- [`results/PAPER_RESULTS_TABLE.md`](results/PAPER_RESULTS_TABLE.md) — Complete cross-referenced results table
+- [`results/SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md`](results/SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md) — the whole 2026-08-19→22 record: 720 cells across ten waves, four withdrawn results, the ceiling-health hardening, and the cross-architecture reproducibility finding
+- [`BINN_Agent_Build_Spec_v8.md`](BINN_Agent_Build_Spec_v8.md) — Source of truth specification for agents
 
-Open [`results/viewer.html`](results/viewer.html) in a browser → Load JSONL via the file picker. R1 traces have no spike replay; the flow panel uses static edge thickness from `nnz` / coupling.
+---
 
-## Constraints (CI)
+## License
 
-GC1–GC7 are enforced by `.github/workflows/ci.yml` and `scripts/check_gc*.sh` (see build spec §2):
-
-| ID | Rule |
-|---|---|
-| GC1 | No dense matmul / autograd on the production path |
-| GC2 | No external ML framework deps (`torch` / `candle` / …) |
-| GC3 | Same seed ⇒ identical outputs (fingerprint tests) |
-| GC4 | Fixed encoders through the crux |
-| GC5 | Hot paths have compiling `criterion` benches |
-| GC6 | No undocumented `unsafe` |
-| GC7 | Every run logs activity sparsity |
-
-## Docs
-
-| Document | Role |
-|---|---|
-| [`BINN_Agent_Build_Spec_v8.md`](BINN_Agent_Build_Spec_v8.md) | **Source of truth** for agents — goals, GC rules, work units |
-| [`BINN_Project_Plan_v6.md`](BINN_Project_Plan_v6.md) | Module scopes and API sketches (§4) |
-| [`results/U-NEG_protocol_v2.md`](results/U-NEG_protocol_v2.md) | Publishable G2 FAIL packaging |
-| [`results/c1_g2.md`](results/c1_g2.md) | Canonical C1 numbers |
-| [`results/SENSITIVITY_PROTOCOLS.md`](results/SENSITIVITY_PROTOCOLS.md) | Tier-B confound probes (do not reopen G2) |
-| [`results/CREDIT_ASSIGNMENT_PREREGISTRATION.md`](results/CREDIT_ASSIGNMENT_PREREGISTRATION.md) | Exact-forward C1 and production C3 v2 preregistration |
-| [`results/ANE_FIT_AUDIT.md`](results/ANE_FIT_AUDIT.md) | Closed decision: skip maderix/ANE (no NPU backend) |
-
-License: MIT OR Apache-2.0.
+Dual-licensed under MIT or Apache-2.0.

@@ -1,5 +1,22 @@
 # Track B Rescue Experiment Report
 
+> **STALE — DO NOT CITE. This report is v130; the source is v131, and the
+> 130→131 bump is the fix for the defect visible in this report.**
+>
+> The `Gap Closed Mean` of **1.0155** below means the arm beat the gradient
+> reference it is supposed to be bounded by. `track_b_rescue.rs:39-49` names this
+> exact value as the bug it replaces: both rescue harnesses computed
+> `(acc − 0.5) / (grad − 0.5).max(1e-4)` with no clamp and no reference-separation
+> gate. `runner.rs` has always clamped; these two did not.
+>
+> Under the current code this arm **cannot be reported as PASS**:
+> `track_b_rescue.rs:311-319` emits a `HARNESS WARNING — ceiling inverted` and
+> states that no PASS is permitted while it is present.
+>
+> The fix landed 2026-07-25 (`HARDENING_v12`) and the experiment was never
+> re-run. See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` §2 and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+
 **Protocol Version:** 130  
 **Experiment ID:** `track-b-rescue` (**schedule / experiment name — not a `c1-*-<hex>` config hash**)  
 **Schedule:** FULL SCIENTIFIC (n=20)  

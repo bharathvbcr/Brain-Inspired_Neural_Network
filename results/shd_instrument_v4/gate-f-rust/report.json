@@ -1,7 +1,7 @@
 {
   "binary": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
-  "binary_sha256": "8c169a659c3c7c425cd9713770db0cba4b6692197b6a33ce37563807a7e1636e",
-  "cells": 13,
+  "binary_sha256": "27043db1b98177414030356f373bd02c23227acd71fbbef781ac3d974875de5f",
+  "cells": 12,
   "failures": 0,
   "status": "PASS",
   "results": [
@@ -9,91 +9,84 @@
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.61,
+      "wall_secs": 13.414,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 16.448,
+      "wall_secs": 12.475,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.837,
+      "wall_secs": 12.603,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 16.043,
+      "wall_secs": 11.504,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.553,
+      "wall_secs": 11.721,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.597,
+      "wall_secs": 14.243,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 24.517,
+      "wall_secs": 23.111,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 25.532,
+      "wall_secs": 27.68,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 24.801,
+      "wall_secs": 20.989,
       "compared_traces": []
     },
     {
       "cell": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 23.353,
+      "wall_secs": 13.335,
       "compared_traces": []
     },
     {
       "cell": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 23.483,
+      "wall_secs": 12.873,
       "compared_traces": []
     },
     {
       "cell": "rust__published-4ms__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 23.768,
-      "compared_traces": []
-    },
-    {
-      "cell": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
-      "status": "BIT_IDENTICAL",
-      "mismatches": {},
-      "wall_secs": 29.689,
+      "wall_secs": 14.024,
       "compared_traces": []
     }
   ]

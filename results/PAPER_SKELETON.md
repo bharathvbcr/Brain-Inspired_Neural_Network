@@ -1,5 +1,24 @@
 # BINN paper skeleton — negative result + methods
 
+> **CITATION WARNING (added 2026-08-07).** This document cites the
+> `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
+> matched-substrate result. That report is stale: the source is **v131**, and the
+> 130→131 bump is precisely the clamp-and-separation-gate fix for the defect the
+> row exhibits. Under current code the arm **cannot be reported as PASS**. Do not
+> cite it until `track-b-rescue` has been re-run. The DFA
+> (`c1-dfa-c8c4fe0899908b84`) and RL (`c1-rl-42eddc9c801308e9`) matched PASSes are
+> **not** affected by this defect; they ran through the clamped `runner.rs` path.
+> See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+> **RESOLVED 2026-08-19.** The re-run landed. At v131 the arm reports
+> **INVALID_HARNESS**, not PASS: the ceiling-inverted warning fires on 3 of 20
+> learned-FB seeds and the code refuses to emit a PASS while it is present.
+> The v130 PASS is **withdrawn**. See
+> `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md` and
+> `track_b_results_v131.md`.
+
+
+
 Claim authority: [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md).  
 Cite-every-number: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md).  
 Prose draft: [`PAPER_DRAFT.md`](PAPER_DRAFT.md).  
@@ -28,7 +47,7 @@ Avoid: “digital brain,” “Assembly Calculus fails,” “proves local learn
 
 ## Abstract (filled draft)
 
-Broadcast ±1 three-factor plasticity fails a preregistered accuracy/gap bar when the dense-LIF forward is held identical to a SuperSpike BPTT reference (matched-arch `c1-match-5dc6822e71229e9e`: local 0.5000, gap LCB 0.0000). On that same forward, graded DFA and REINFORCE×frozen per-neuron feedback clear the gate (`c1-dfa-c8c4fe0899908b84` PASS, gap LCB 0.6894; `c1-rl-42eddc9c801308e9` PASS, gap LCB 0.6846). Honesty: DFA-schedule broadcast-graded = **0.9863** — lead FAIL is ±1 three-factor, not any broadcast. Locality flip = XOR. The event-driven C1 pipeline under canonical hash `c1-118207fbc3eaba53` likewise fails Gate G2 (local 0.4912) and should be read as an operationalized pipeline negative with disclosed integrity limits (sticky STDP pairing, partial membrane reset, θ=∞ mute). Live transfer of the matched REINFORCE family onto k-WTA C1 fails (`c1-660401d74db3c88d`); structured feedback and capacity schedules clear the accuracy floor but not gap LCB > 0.5. We do not claim biology, Assembly Calculus success, or impossibility.
+Broadcast ±1 three-factor plasticity fails a preregistered accuracy/gap bar when the dense-LIF forward is held identical to a SuperSpike BPTT reference (matched-arch `c1-match-5dc6822e71229e9e`: local 0.5000, gap LCB 0.0000). On that same forward, graded DFA and REINFORCE×frozen per-neuron feedback clear the gate at the 80-epoch budget (`c1-dfa-c8c4fe0899908b84` PASS, gap LCB 0.6894; `c1-rl-42eddc9c801308e9` PASS, gap LCB 0.6846). Online learned feedback alignment is **withdrawn** (v131 reports `INVALID_HARNESS`). An A6 ceiling health audit reveals the 80-epoch reference is still climbing (0.9013 at e80 vs 1.0000 at e640), so the coincidence gate reflects learning speed rather than asymptotic capacity. Honesty: DFA-schedule broadcast-graded = **0.9863** — lead FAIL is ±1 three-factor, not any broadcast. Locality flip = XOR. The event-driven C1 pipeline under canonical hash `c1-118207fbc3eaba53` likewise fails Gate G2 (local 0.4912) and should be read as an operationalized pipeline negative with disclosed integrity limits (sticky STDP pairing, partial membrane reset, θ=∞ mute). Live transfer of the matched REINFORCE family onto k-WTA C1 fails (`c1-660401d74db3c88d`); structured feedback and capacity schedules clear the accuracy floor but not gap LCB > 0.5. On SHD, a time-axis attention readout reaches **0.8320** at `d32/L4` (12/12 seeds ≥ 0.80, gain **+0.1258** over plain LIF), with temporal order confirmed as the mechanism (96% drop under shuffling; +0.1337 drop in 12/12 seeds). We do not claim biology, Assembly Calculus success, or impossibility.
 
 ---
 
@@ -38,8 +57,9 @@ Broadcast ±1 three-factor plasticity fails a preregistered accuracy/gap bar whe
 - Narrow H₀: **broadcast ±1 three-factor** (eligibility × ±1) is insufficient on a matched dense-LIF coincidence forward under a preregistered accuracy/gap bar.
 - Contrast H₁: **richer / more local credit** (DFA, REINFORCE×`B`) can clear the same matched gate.
 - Transfer H₂: matched PASS does **not** imply live k-WTA C1 PASS under honest mapping + gap-close suite.
+- Neuromorphic H₃: time-axis self-attention readout unlocks temporal order on SHD audio benchmark.
 - Engine C1 is a softer operationalized H₀ with integrity disclosure.
-- Mechanism H\*: richness × addressability + substrate barrier (Figure M).
+- Mechanism H\*: richness × addressability + substrate barrier (Figure M) and temporal order (SHD).
 - Popper framing: severe tests of operationalized hypotheses, not proofs about brains.
 
 ---
@@ -79,7 +99,13 @@ flowchart TD
 - v14–v19: [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md)
 - Positive control stays broadcast ±1; G2 floors unchanged
 
-### 2.5 Integrity limitations
+### 2.5 SHD attention readout
+
+- Dataset: Spiking Heidelberg Digits (SHD), 20 classes.
+- Model: `ff+fixed+attn` (time-axis causal multi-head self-attention readout) vs `ff+fixed` (mean-rate readout).
+- Contrasts: depth, width, geometries, and temporal shuffling controls (`bin-shuffled`, `channel-shuffled`).
+
+### 2.6 Integrity limitations
 
 See §Appendix A and [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md).
 
@@ -92,18 +118,23 @@ See §Appendix A and [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md).
 | Broadcast ±1 3F (v4) | `c1-match-5dc6822e71229e9e` | **FAIL** | 0.5000 | 0.0000 | [`c1_match.md`](c1_match.md) |
 | DFA (v5) | `c1-dfa-c8c4fe0899908b84` | **PASS** | 0.9387 | 0.6894 | [`c1_dfa.md`](c1_dfa.md) |
 | RL reinforce_fb (v12) | `c1-rl-42eddc9c801308e9` | **PASS** | 0.9200 | 0.6846 | [`c1_rl.md`](c1_rl.md) |
-| RL Online Learned `B_i` (v130) | `track-b-rescue` *(schedule ID)* | **PASS (matched)** | 1.0000 | 0.9988 | [`track_b_results.md`](track_b_results.md) |
+| RL Online Learned `B_i` (v130) | `track-b-rescue` | **WITHDRAWN** | — | — | v131 `INVALID_HARNESS` |
 | Discrete EventProp (v28) | `c1-eventprop-5bb083d5e88d0ad2` | **FAIL** | 0.5000 | 0.0000 | [`c1_eventprop.md`](c1_eventprop.md) |
 | RL graded (v11) | `c1-rl-ef504db58916720d` | **FAIL** | 0.5900 | 0.0182 | archived |
 
 **Figure 1:** Rule-swap schematic (forward fixed).  
 **Figure 2:** Matched means — broadcast ±1 3F vs DFA vs RL vs gradient.  
 **Figure M:** Mechanism richness×addressability (incl. broadcast-graded **0.9863** + XOR locality flip).  
-**Table 1:** Gate thresholds + verdicts (above).
+**Table 1:** Gate thresholds + verdicts (above).  
+**A6 Caveat:** Reference reaches 1.0000 at e640; e80 gate reflects learning speed.
 
 ### Honesty note (required in §3)
 
 On the DFA matched schedule, **broadcast-graded** contrast = **0.9863**. Lead FAIL is **broadcast ±1 three-factor**, not “any broadcast.” Locality flip = XOR ([`deep_xor_thresh.json`](deep_xor_thresh.json)), not coincidence alone. Discrete EventProp H2H **FAIL** (`c1-eventprop-5bb083d5e88d0ad2`). v131 is matched-only. See [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) Table A.
+
+---
+
+## 4. Secondary results — Engine C1 / Gate G2
 
 | Item | Hash | Verdict | Local | Gap LCB |
 |---|---|---|---:|---:|
@@ -119,7 +150,20 @@ Interpretation: pipeline FAIL under disclosed object; does not alone prove rule 
 
 ---
 
-## 5. Transfer results — live RFB + gap-close
+## 5. SHD Attention Read-out & Mechanism
+
+| Configuration | Accuracy | Control | Gain | Mechanism (shuffle drop) |
+|---|---:|---:|---:|---:|
+| **d32/L4 headline (e400)** | **0.8320** (12/12 ≥ 0.80) | 0.7062 | **+0.1258** | **+0.1337** (12/12 seeds) |
+| d32/L1 (Wave 1) | 0.7483 | 0.7062 | +0.0421 | +0.1041 |
+| Sample efficiency (e10) | 0.7337 (98.1% of e400) | 0.5336 | +0.2002 | — |
+
+- **Mechanism:** Temporal order confirmed (+0.1337 drop vs plain arm's +0.0128; 96% of benefit lost under shuffling).
+- **Scope:** Scoped to h128 / `adjacent-sum-5` / `published-2ms`; width inversion at h1024 (−0.1618); resolution mechanism (S-5) refuted; uncalibrated.
+
+---
+
+## 6. Transfer results — live RFB + gap-close
 
 | Protocol | Hash | Verdict | Local | Gap LCB |
 |---|---|---|---:|---:|
@@ -137,7 +181,7 @@ Also cite P4 spiking DFA FAIL (`c1x-dfa-spike-true-dfa-a911e793e590b0ed`, gap LC
 
 ---
 
-## 6. Task evidence (optional)
+## 7. Task evidence (optional)
 
 | Exp | Finding | Cite |
 |---|---|---|
@@ -146,46 +190,46 @@ Also cite P4 spiking DFA FAIL (`c1x-dfa-spike-true-dfa-a911e793e590b0ed`, gap LC
 
 ---
 
-## 7. Discussion / limitations (full — see [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §4)
+## 8. Discussion / limitations (full — see [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §4)
 
-### 7.1 Lead + mechanism
+### 8.1 Lead + mechanism
 
 - Lead with **broadcast ±1 three-factor** mechanism claim from matched-arch; contrast with DFA / REINFORCE PASSes.
+- **A6 Ceiling Health Caveat:** Gradient reference climbs to 1.0000 by e640; e80 gate reflects *learning speed*, not asymptotic capacity.
 - Cite **Figure M**: richness × addressability (incl. 0.9863) + XOR locality flip.
 - **Falsifier:** matched ±1 clearing gap LCB under the same dense-LIF forward overturns the lead claim.
 
-### 7.2 Transfer + soft-WTA temperature honesty
+### 8.2 Transfer + soft-WTA temperature honesty
 
 - Transfer: dense continuous PASS ≠ hard k-WTA / sparse eligibility PASS; floor ≠ gate.
 - Hybrid soft→hard collapse at **T=2.0** (appendix) ≠ live v21 soft-WTA at **T=1**.
 
-### 7.3 Baselines / EventProp
+### 8.3 Baselines / EventProp
 
 - Ceiling: **SuperSpike BPTT** (matched primary).
 - True σ′ e-prop: footnote only (`c1x-eprop-true-*`).
 - **Discrete EventProp-style H2H FAIL** — `c1-eventprop-5bb083d5e88d0ad2` (mean 0.5000 / gap LCB 0.0000); disclose ≠ continuous Wunderlich–Pehle.
 
-### 7.4 F1 / F2 / F5 honesty
+### 8.4 F1 / F2 / F5 honesty
 
 - **F1:** spike reset = sequential scan barrier; sub-threshold scan only partial.
 - **F2:** local learning removes BPTT unroll, not sequential forward time.
 - **F5:** activity ≠ compute; work-per-accuracy includes per-event overhead.
 
-### 7.5 Appendix-only G3 / G4 / H0
+### 8.5 Appendix-only G3 / G4 / H0
 
 - G3 FAIL / G4 NO-GO / hybrid H0 → [`APPENDIX_POST_G2.md`](APPENDIX_POST_G2.md) only.
 - Banner does **not** reopen G2.
 - G4 NO-GO → stop scaling areas under ±1; Micro (if ever) = stress/engineering, not Foundation unlock.
 
-### 7.6 Non-claims
+### 8.6 Neuromorphic scope & Non-claims
 
-- Explicit non-claims list from [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) (incl. no live rescue from matched PASS; floor ≠ gate; no “any broadcast” ban).
+- Explicit non-claims list from [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) (incl. no live rescue from matched PASS; floor ≠ gate; no “any broadcast” ban; no temporal-resolution mechanism for attention; no attention calibration claim; withdrawals for v130 learned-FB, deep-snn v134, and shd-scientific-sweep).
 - Integrity fix ⇒ **new hash**; never silent threshold reopen of v2.
-- Synthetic coincidence primary; no standard-benchmark lead claim in this MUST package.
 
 ---
 
-## 8. Reproducibility
+## 9. Reproducibility
 
 Point to [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md):
 
