@@ -39,6 +39,39 @@ def keys(bucket: str, prefix: str) -> set[str]:
             return found
 
 
+# S3's two ways of saying "someone else got there first". Everything else that
+# can fail a PUT is an error, not a race.
+LOST_RACE = ("PreconditionFailed", "ConditionalRequestConflict")
+
+
+def claim(bucket: str, cid: str) -> bool:
+    """Try to take `cid`. True if this worker won it.
+
+    A failed conditional PUT means one of two very different things, and
+    conflating them retires the fleet. `PreconditionFailed` is another worker
+    winning the race, so skip the cell and carry on. Anything else -- expired
+    instance credentials, a revoked bucket policy, the wrong region -- fails for
+    *every* cell in the plan. Treated as a lost race that walks the whole plan,
+    prints nothing and exits 0, which `bootstrap.sh:148` reads as `no work left`:
+    every worker returns, `wait` completes, and line 169 runs `shutdown -h now`.
+    A fleet mid-campaign terminates itself, the campaign comes back short, and
+    the only trace is a console log nobody reads.
+
+    So fail loudly. The worker loop already handles a non-zero exit by sleeping
+    and retrying, which is the correct response to a credentials blip.
+    """
+    out = subprocess.run(
+        ["aws", "s3api", "put-object", "--bucket", bucket,
+         "--key", f"claims/{cid}", "--if-none-match", "*"],
+        capture_output=True, text=True)
+    if out.returncode == 0:
+        return True
+    stderr = out.stderr or ""
+    if any(marker in stderr for marker in LOST_RACE):
+        return False
+    raise SystemExit(f"claim {cid} failed, and not because of a race: {stderr.strip()[:200]}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bucket")
@@ -47,15 +80,13 @@ def main() -> int:
 
     done = {k[: -len(".json")] for k in keys(args.bucket, "results/") if k.endswith(".json")}
     held = keys(args.bucket, "claims/")
-    for cell in json.load(open(args.plan)):
+    with open(args.plan) as handle:
+        plan = json.load(handle)
+    for cell in plan:
         cid = cell["id"]
         if cid in done or cid in held:
             continue
-        claimed = subprocess.run(
-            ["aws", "s3api", "put-object", "--bucket", args.bucket,
-             "--key", f"claims/{cid}", "--if-none-match", "*"],
-            capture_output=True)
-        if claimed.returncode == 0:
+        if claim(args.bucket, cid):
             print(cid)
             return 0
     return 0

@@ -15,11 +15,15 @@ Run: python3 scripts/test_campaign_tooling.py
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import re
 import sys
 import tempfile
+import types
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -236,7 +240,14 @@ class ClaimProtocolTest(unittest.TestCase):
             if argv[1] == "s3api" and argv[2] == "put-object":
                 key = argv[argv.index("--key") + 1]
                 puts.append(key)
-                r.returncode = 0 if put_results.pop(0) else 1
+                won = put_results.pop(0)
+                r.returncode = 0 if won else 1
+                # A losing PUT must look like what S3 actually returns. A bare
+                # non-zero exit is an *error*, and since 2026-08-22 claim_next
+                # refuses to mistake one for the other.
+                r.stderr = "" if won else (
+                    "An error occurred (PreconditionFailed) when calling the "
+                    "PutObject operation")
                 r.stdout = ""
                 return r
             raise AssertionError(f"unexpected call {argv}")
@@ -370,10 +381,19 @@ class CollectAndTeardownTest(unittest.TestCase):
 
     def test_teardown_only_ever_targets_tagged_campaign_instances(self):
         """The blast radius is the whole point. The describe call must filter by
-        the campaign tag, and terminate must receive exactly what it returned."""
+        the campaign tag, and terminate must receive exactly what it returned.
+
+        AMENDED 2026-08-22 with the client-side tag re-check: the two instances
+        now carry the `Project` tag they always had in reality, because since
+        that date teardown terminates only instances whose own tags confirm the
+        campaign. Untagged ids are refused, which is what
+        `TeardownBlastRadiusTest` below pins; the claim here is unchanged — a
+        confirmed instance reaches terminate, unaltered and unabridged."""
         import teardown
+        tags = [{"Key": "Project", "Value": "binn-campaign"}]
         described = {"Reservations": [{"Instances": [
-            {"InstanceId": "i-aaa"}, {"InstanceId": "i-bbb"}]}]}
+            {"InstanceId": "i-aaa", "Tags": tags},
+            {"InstanceId": "i-bbb", "Tags": tags}]}]}
         original, calls = self.scripted(teardown, {"describe-instances": described})
         try:
             old_argv, sys.argv = sys.argv, ["teardown.py", "--bucket", "bkt"]
@@ -409,6 +429,564 @@ class CollectAndTeardownTest(unittest.TestCase):
         flat = [" ".join(c) for c in calls]
         self.assertFalse([c for c in flat if "rb" in c.split() or "delete-bucket" in c],
                          f"teardown attempted to remove a bucket: {flat}")
+
+
+# ---------------------------------------------------------------------------
+# A shared `aws` CLI double for the three scripts below.
+#
+# All three reach AWS through `subprocess.run(["aws", ...])` and nothing else,
+# so that single call is the entire seam; faking it needs no network, no
+# credentials and no new dependency. The double records every argv it is handed
+# and every test below asserts on that transcript, which is the thing that stops
+# a test from going green because the script stopped calling AWS at all.
+# ---------------------------------------------------------------------------
+
+
+class FakeAws:
+    """Record every `aws` invocation and reply from a scripted handler.
+
+    `handler(argv)` returns `(returncode, stdout, stderr)`. A call the handler
+    does not recognise raises rather than returning a benign empty reply: an
+    unanticipated AWS call is a change in behaviour, not a detail to swallow.
+    """
+
+    def __init__(self, handler):
+        self.handler = handler
+        self.calls = []
+
+    def __call__(self, argv, **kwargs):
+        argv = list(argv)
+        self.calls.append(argv)
+        code, stdout, stderr = self.handler(argv)
+        return types.SimpleNamespace(returncode=code, stdout=stdout, stderr=stderr)
+
+    def matching(self, *words):
+        """Every recorded call whose argv contains all of `words`."""
+        return [c for c in self.calls if all(w in c for w in words)]
+
+
+class AwsScriptedTest(unittest.TestCase):
+    """Base class: patch one module's subprocess boundary, keep the transcript.
+
+    The fake is stored on `self` rather than returned, so a test whose script is
+    expected to raise can still inspect what it managed to call first.
+    """
+
+    def drive(self, module, handler, argv, entry):
+        self.fake = FakeAws(handler)
+        self.stdout = ""
+        buf = io.StringIO()
+        old_argv, sys.argv = sys.argv, argv
+        original, module.subprocess.run = module.subprocess.run, self.fake
+        try:
+            with contextlib.redirect_stdout(buf):
+                return entry()
+        finally:
+            module.subprocess.run = original
+            sys.argv = old_argv
+            self.stdout = buf.getvalue()
+
+
+class ClaimConditionalPutTest(AwsScriptedTest):
+    """The conditional PUT itself — the one line the whole protocol rests on.
+
+    `ClaimProtocolTest` above covers which cell gets chosen. It never looks at
+    *how* the claim is written, so dropping `--if-none-match` — which turns the
+    atomic claim into a plain overwrite and lets every worker claim the same
+    cell — leaves all of those tests green. That is what this class pins, along
+    with the two ways the PUT can come back other than "won".
+    """
+
+    def setUp(self):
+        import claim_next
+        self.mod = claim_next
+        self.plan = [{"id": f"cell-{i}"} for i in range(4)]
+
+    def script(self, done=(), held=(), put_codes=(), put_stderr=""):
+        """Two listings and a scripted run of PUT exit codes (0 = claim won).
+
+        Once `put_codes` runs out every further PUT fails, which is the shape of
+        a credentials or policy problem rather than a lost race.
+        """
+        listings = {"results/": list(done), "claims/": list(held)}
+        codes = list(put_codes)
+
+        def handler(argv):
+            if argv[1:3] == ["s3api", "list-objects-v2"]:
+                prefix = argv[argv.index("--prefix") + 1]
+                body = {"Contents": [{"Key": prefix + k} for k in listings[prefix]]}
+                return 0, json.dumps(body), ""
+            if argv[1:3] == ["s3api", "put-object"]:
+                return (codes.pop(0) if codes else 1), "", put_stderr
+            raise AssertionError(f"unexpected aws call: {argv}")
+
+        return handler
+
+    def claim(self, handler, plan=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cells.json"
+            path.write_text(json.dumps(self.plan if plan is None else plan))
+            return self.drive(self.mod, handler,
+                              ["claim_next.py", "bkt", "--plan", str(path)],
+                              self.mod.main)
+
+    def test_the_claim_is_written_as_a_conditional_put(self):
+        """Without `--if-none-match *` the PUT overwrites an existing claim, so
+        two workers both 'win' the same cell and one cell's compute is spent
+        twice while another is never run. Nothing downstream would notice."""
+        self.claim(self.script(put_codes=[0]))
+        puts = self.fake.matching("s3api", "put-object")
+        self.assertEqual(len(puts), 1, "the claim was never written to S3")
+        argv = puts[0]
+        self.assertIn("--if-none-match", argv, "the claim PUT is not conditional")
+        self.assertEqual(argv[argv.index("--if-none-match") + 1], "*",
+                         "a conditional PUT must be conditional on *any* existing object")
+        self.assertEqual(argv[argv.index("--key") + 1], "claims/cell-0")
+
+    def test_a_precondition_failure_is_a_lost_race_not_a_crash(self):
+        """What S3 actually returns when another worker got there first. The
+        loser must walk on to the next cell, not abort and not re-PUT."""
+        rc = self.claim(self.script(
+            put_codes=[1, 0],
+            put_stderr="An error occurred (PreconditionFailed) when calling the "
+                       "PutObject operation: At least one of the pre-conditions "
+                       "you specified did not hold"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.stdout.strip(), "cell-1")
+        self.assertEqual([c[c.index("--key") + 1] for c in
+                          self.fake.matching("s3api", "put-object")],
+                         ["claims/cell-0", "claims/cell-1"])
+
+    def test_a_held_claim_is_never_written_over(self):
+        """A cell that is already claimed must not even be PUT at. The claim
+        object carries no body, so a second PUT would be invisible after the
+        fact — the only evidence is that it was never attempted."""
+        rc = self.claim(self.script(held=["cell-0", "cell-1"], put_codes=[0]))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.stdout.strip(), "cell-2")
+        self.assertEqual([c[c.index("--key") + 1] for c in
+                          self.fake.matching("s3api", "put-object")],
+                         ["claims/cell-2"])
+
+    def test_done_is_read_from_result_objects_and_nothing_else(self):
+        """`done` is the set of `results/<id>.json`. A partial upload landing as
+        `cell-0.json.part`, or a bare `cell-0` marker, must not retire the cell:
+        the campaign would come up one result short with no error anywhere."""
+        rc = self.claim(self.script(
+            done=["cell-0.json.part", "cell-1", "cell-2.json"], put_codes=[0]))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.stdout.strip(), "cell-0",
+                         "a partial upload was mistaken for a finished cell")
+
+    def test_a_drained_queue_exits_zero_having_actually_asked_s3(self):
+        """Both facts matter. Exit 0 with no output is how the worker learns the
+        campaign is over; and the listings must really have happened, or this
+        test would pass just as well against a script that does nothing."""
+        rc = self.claim(self.script(done=[f"cell-{i}.json" for i in range(4)]))
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.stdout.strip(), "")
+        self.assertEqual(len(self.fake.matching("s3api", "list-objects-v2")), 2,
+                         "claim_next must list both results/ and claims/")
+        self.assertEqual(self.fake.matching("s3api", "put-object"), [])
+
+    def test_an_authorisation_failure_is_never_mistaken_for_a_drained_queue(self):
+        """Repaired 2026-08-22. This was how a whole fleet retired itself.
+
+        A PUT can fail for a reason that is not a lost race — expired instance
+        credentials, a revoked bucket policy, the wrong region — and when it
+        does, it fails for *every* cell in the plan. The old code treated all of
+        them as lost races, walked the entire plan, printed nothing and returned
+        0. `bootstrap.sh:148` reads empty stdout as `no work left`; the worker
+        returns, `wait` completes, and line 169 runs `shutdown -h now`. The
+        campaign came back short with the only trace in a console log.
+
+        Now it raises on the first such failure, which the worker loop already
+        handles by sleeping and retrying. **It must also give up immediately** —
+        walking the rest of the plan would issue one doomed PUT per cell and bury
+        the real error under the last one."""
+        with self.assertRaises(SystemExit) as caught:
+            self.claim(self.script(put_stderr="An error occurred (AccessDenied)"))
+        self.assertNotEqual(caught.exception.code, 0,
+                            "a credentials failure must not exit like a clean drain")
+        self.assertIn("AccessDenied", str(caught.exception.code),
+                      "the operator needs the real reason, not a generic message")
+        self.assertEqual(len(self.fake.matching("s3api", "put-object")), 1,
+                         "it must stop at the first real error, not try all four")
+
+
+class CollectDownloadTest(AwsScriptedTest):
+    """`collect.py --out` is how cells leave S3 and become the local record.
+
+    Everything about *which* bytes get written is delegated to `aws s3 sync`,
+    so what can be tested here is the contract collect hands it and what collect
+    claims afterwards. Both turn out to be weaker than the printed summary
+    suggests, and the tests below pin that rather than assert it away.
+    """
+
+    #: The smallest payload `collect.cell_problem` accepts, with plausible values.
+    #: Spelled out here rather than imported from the collector so that a test
+    #: cell stops being valid the moment the collector's idea of a cell changes —
+    #: importing the requirement would make every test below agree with whatever
+    #: the code currently demands, including nothing.
+    VALID_CELL = {"accuracy": 0.8198, "non_finite_events": 0, "classes_predicted": 20,
+                  "majority_prediction": 0.0985, "silent_fraction": 0.0156,
+                  "saturated_fraction": 0.0}
+
+    def setUp(self):
+        import collect
+        self.mod = collect
+        self.plan = [{"id": "cell-0", "wave": "w1"}, {"id": "cell-1", "wave": "w1"}]
+
+    def write_cell(self, target, name, **override):
+        """Write one cell that the collector's validation pass accepts."""
+        target.mkdir(parents=True, exist_ok=True)
+        (target / name).write_text(json.dumps(dict(self.VALID_CELL, **override)))
+
+    def script(self, results=(), claims=(), failures=(), sync=0, on_sync=None):
+        listings = {"results/": list(results), "claims/": list(claims),
+                    "failures/": list(failures), "gates/": []}
+        stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        def handler(argv):
+            joined = " ".join(argv)
+            if argv[1:3] == ["s3", "cp"] and "input/cells.json" in joined:
+                return 0, json.dumps(self.plan), ""
+            if argv[1:3] == ["s3api", "list-objects-v2"]:
+                prefix = argv[argv.index("--prefix") + 1]
+                # Fresh timestamps: every claim is younger than the orphan cutoff.
+                body = {"Contents": [{"Key": prefix + k, "LastModified": stamp}
+                                     for k in listings[prefix]]}
+                return 0, json.dumps(body), ""
+            if argv[1:3] == ["s3", "sync"]:
+                if on_sync is not None:
+                    on_sync(Path(argv[4]))
+                return sync, "", ("boom" if sync else "")
+            raise AssertionError(f"unexpected aws call: {argv}")
+
+        return handler
+
+    def collect(self, handler, extra=()):
+        return self.drive(self.mod, handler,
+                          ["collect.py", "--bucket", "bkt", *extra], self.mod.main)
+
+    def test_the_sync_asks_for_the_results_prefix_and_nothing_wider(self):
+        """The whole download is one delegated call, so its argv is the contract.
+        `--delete` in particular must never appear: the out directory is where
+        the archived record lives, and sync would prune it to match S3."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            self.collect(self.script(results=["cell-0.json"]), ["--out", str(out)])
+            syncs = self.fake.matching("s3", "sync")
+            self.assertEqual(len(syncs), 1, "nothing was downloaded at all")
+            self.assertEqual(syncs[0], ["aws", "s3", "sync", "s3://bkt/results/",
+                                        str(out), "--quiet"])
+            self.assertNotIn("--delete", syncs[0],
+                             "sync would delete local cells that are no longer in S3")
+
+    def test_an_existing_local_cell_is_left_to_the_cli_to_judge(self):
+        """HAZARD, pinned as it stands.
+
+        `aws s3 sync` compares size and mtime, never content. A local cell that
+        was edited in place without changing its length is therefore never
+        re-downloaded, and collect still adds no *content* check of its own — no
+        hash, no comparison against S3. The manifest in
+        `results/shd_attention_campaign_v1` is what catches that class of drift;
+        the collector does not.
+
+        AMENDED 2026-08-22: collect now re-reads every collected cell, so the
+        drifted file here is a complete, valid cell rather than the fragment it
+        used to be — otherwise this test would pass on the validation pass
+        catching a truncation, which is a different claim from the one it makes.
+        Drift that keeps the schema and the length intact is still invisible,
+        and the assertion is deliberately about what collect does *not* do."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            self.write_cell(out, "cell-0.json", accuracy=0.99)
+            drifted = out / "cell-0.json"
+            before = drifted.read_text()
+            rc = self.collect(self.script(results=["cell-0.json"]), ["--out", str(out)])
+            self.assertEqual(rc, 0, "a well-formed cell that drifted still reads as clean")
+            self.assertEqual(drifted.read_text(), before)
+            argv = self.fake.matching("s3", "sync")[0]
+            for flag in ("--exact-timestamps", "--size-only"):
+                self.assertNotIn(flag, argv)
+
+    def test_a_sync_that_downloads_nothing_reports_nothing_downloaded(self):
+        """INVERTED 2026-08-22. It used to assert `synced 3 cells` here.
+
+        `synced N cells` was `len(target.glob('*.json'))` — everything already in
+        the directory, fetched by this run or not — so this exact scenario, a
+        sync that downloads nothing onto three stale files, printed a line that
+        read as three fresh cells. The count is now taken by comparing the
+        directory across the sync, so the same scenario must report zero.
+
+        The stale files are complete cells, because the count and the validation
+        pass are separate claims and this test is only about the count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            for i in range(3):
+                self.write_cell(out, f"stale-{i}.json")
+            rc = self.collect(self.script(results=[]), ["--out", str(out)])
+            self.assertEqual(rc, 0, "three good cells and no download is not a failure")
+            self.assertIn("downloaded 0 cells", self.stdout,
+                          "the count still reflects the directory, not the download")
+            self.assertNotIn("downloaded 3", self.stdout)
+            # The directory total is still worth printing - it is how an operator
+            # sees the collection growing - but it is labelled as what it is.
+            self.assertIn("cells on disk: 3", self.stdout)
+
+    def test_only_the_cells_the_sync_wrote_are_counted_as_downloaded(self):
+        """The other half of the same claim: zero must not be the only number
+        this can print, or a collector that reported `downloaded 0` forever
+        would pass the test above.
+
+        Two cells sit in the directory; the sync writes one of them and leaves
+        the other untouched. A directory count says 3, a download count says 2
+        (one rewritten, one new), and the two must not be confusable."""
+        def sync(target):
+            self.write_cell(target, "cell-0.json", accuracy=0.77)   # rewritten
+            self.write_cell(target, "cell-2.json")                  # new
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            self.write_cell(out, "cell-0.json")
+            self.write_cell(out, "cell-1.json")
+            rc = self.collect(self.script(results=["cell-0.json", "cell-2.json"],
+                                          on_sync=sync), ["--out", str(out)])
+            self.assertEqual(rc, 0)
+            self.assertIn("downloaded 2 cells", self.stdout,
+                          "a cell the sync rewrote and a cell it created are both "
+                          "downloads; a cell it never touched is not")
+            self.assertIn("cells on disk: 3", self.stdout)
+
+    def test_a_failed_download_aborts_loudly_and_reports_no_count(self):
+        """A partial sync must not be summarised as a collection. The truncated
+        file it leaves behind is still on disk afterwards — sync's size compare
+        is what re-fetches it next run — so the guarantee tested here is the
+        narrow one: collect exits non-zero and reports no collection at all,
+        rather than handing a short cell set to an analyser."""""
+        def truncate(target):
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "cell-0.json").write_text('{"accur')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            with self.assertRaises(SystemExit):
+                self.collect(self.script(results=["cell-0.json"], sync=1,
+                                         on_sync=truncate), ["--out", str(out)])
+            # Checked against the current wording, not the retired one: asserting
+            # the absence of a string the script can no longer print anywhere is
+            # a check that cannot fail.
+            self.assertNotIn("downloaded", self.stdout)
+            self.assertNotIn("validated", self.stdout)
+            self.assertTrue((out / "cell-0.json").exists(),
+                            "the truncated file is left behind - the next sync's "
+                            "size compare is what repairs it, not collect")
+
+    def test_a_truncated_cell_is_reported_and_never_folded_into_the_total(self):
+        """INVERTED 2026-08-22. It used to assert `synced 1 cells` for this.
+
+        Nothing in collect parsed what it downloaded, so a half-written cell
+        counted toward the total exactly like a good one and the only trace was
+        a JSONDecodeError days later, inside an analyser, on a machine that no
+        longer had the fleet. Collect now reads every cell in the target
+        directory: the truncated one is named, counted apart from the usable
+        ones, and the run does not exit clean."""
+        def truncate(target):
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "cell-0.json").write_text('{"accur')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            rc = self.collect(self.script(results=["cell-0.json"], on_sync=truncate),
+                              ["--out", str(out)])
+            self.assertEqual(rc, 1, "a corrupt cell must not exit like a clean collection")
+            self.assertIn("1 INVALID", self.stdout)
+            self.assertIn("INVALID cell-0.json", self.stdout,
+                          "the operator needs the filename, not just a count")
+            self.assertIn("0 usable", self.stdout,
+                          "a cell that does not parse was still counted as usable")
+            # Unchanged, and deliberately so: collect does not repair or delete
+            # what it found. The next sync's size compare is what re-fetches it.
+            self.assertTrue((out / "cell-0.json").exists())
+
+    def test_a_cell_that_parses_but_lacks_the_gate_fields_is_refused(self):
+        """The subtler half of the same hazard. A cell can be valid JSON and
+        still be unusable: `validity_problems` in both analysers reads
+        `cell["classes_predicted"]` and the other prereg §5 gates with `[]`, not
+        `.get`, so a cell missing one is a KeyError at analysis time — after the
+        fleet is gone. Truncation is not the only way a cell arrives short."""
+        def partial(target):
+            target.mkdir(parents=True, exist_ok=True)
+            payload = dict(self.VALID_CELL)
+            del payload["classes_predicted"]
+            (target / "cell-0.json").write_text(json.dumps(payload))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            rc = self.collect(self.script(results=["cell-0.json"], on_sync=partial),
+                              ["--out", str(out)])
+            self.assertEqual(rc, 1)
+            self.assertIn("classes_predicted", self.stdout,
+                          "the report must name the missing field")
+
+    def test_a_directory_of_good_cells_validates_clean(self):
+        """The positive case, without which every assertion above is satisfied
+        by a collector that calls everything invalid."""
+        def sync(target):
+            self.write_cell(target, "cell-0.json")
+            self.write_cell(target, "cell-1.json")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            rc = self.collect(self.script(results=["cell-0.json", "cell-1.json"],
+                                          on_sync=sync), ["--out", str(out)])
+            self.assertEqual(rc, 0)
+            self.assertIn("validated 2 cells: 2 usable, 0 INVALID", self.stdout)
+            self.assertNotIn("INVALID cell", self.stdout)
+
+    def test_a_plan_file_beside_the_cells_is_not_reported_as_a_broken_cell(self):
+        """The validation pass must not cry wolf.
+
+        A collection directory holds more than cells — `results/shd_attention_
+        campaign_v2` keeps `plan_w8.json` and `manifest.json` right beside its 96
+        cells, and both would fail a cell schema check on their first line. An
+        operator who sees `INVALID plan_w8.json` once stops reading the line, at
+        which point a real truncated cell scrolls past unread. So the pass is
+        scoped to files that S3 says are results, and everything else is
+        reported as unchecked rather than as broken."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "cells"
+            self.write_cell(out, "cell-0.json")
+            (out / "plan_w8.json").write_text(json.dumps([{"id": "cell-0"}]))
+            rc = self.collect(self.script(results=["cell-0.json"]), ["--out", str(out)])
+            self.assertEqual(rc, 0, "a plan file was treated as a corrupt cell")
+            self.assertIn("validated 1 cells: 1 usable, 0 INVALID", self.stdout)
+            self.assertNotIn("INVALID plan_w8.json", self.stdout)
+            self.assertIn("were not checked", self.stdout,
+                          "a file that was skipped must be declared, not just skipped")
+
+    def test_a_young_claim_is_never_released_back_to_the_queue(self):
+        """`--release-orphans` deletes claim objects, which is the one
+        destructive thing collect can do. A claim younger than the cutoff is a
+        cell that is running right now; releasing it duplicates the work."""
+        self.collect(self.script(results=[], claims=["cell-0", "cell-1"]),
+                     ["--release-orphans"])
+        self.assertEqual(self.fake.matching("s3", "rm"), [],
+                         "a claim in flight was handed back to the queue")
+        self.assertIn("releasable: 0", self.stdout)
+
+
+class TeardownBlastRadiusTest(AwsScriptedTest):
+    """`teardown.py` is the only script here that destroys anything.
+
+    `CollectAndTeardownTest` above covers the happy path: tagged instances in,
+    the same ids out. These are the edges — nothing found, a reply that is not
+    a reply, and the question of what teardown actually trusts.
+    """
+
+    def setUp(self):
+        import teardown
+        self.mod = teardown
+
+    def script(self, described):
+        def handler(argv):
+            if "describe-instances" in argv:
+                return 0, (described if isinstance(described, str)
+                           else json.dumps(described)), ""
+            if "terminate-instances" in argv:
+                return 0, json.dumps({"TerminatingInstances": []}), ""
+            if argv[1] == "iam":
+                return 0, "", ""
+            raise AssertionError(f"unexpected aws call: {argv}")
+
+        return handler
+
+    def tear(self, described, extra=()):
+        return self.drive(self.mod, self.script(described),
+                          ["teardown.py", "--region", "us-east-1", *extra],
+                          self.mod.main)
+
+    def test_an_empty_fleet_terminates_nothing(self):
+        """The filter coming back empty means the fleet is already gone, and the
+        only safe reading of that is to terminate nothing at all."""
+        rc = self.tear({"Reservations": []})
+        self.assertEqual(rc, 0)
+        self.assertEqual(self.fake.matching("ec2", "terminate-instances"), [])
+        self.assertIn("no campaign instances running", self.stdout)
+        self.assertEqual(len(self.fake.matching("ec2", "describe-instances")), 1,
+                         "it must still have asked EC2 - not asking is not the same "
+                         "as being told there is nothing there")
+
+    def test_a_malformed_describe_reply_terminates_nothing(self):
+        """`aws()` only parses stdout that starts with `{` or `[`; anything else
+        comes back as a string. A string has no `.get`, so a garbled or empty
+        reply raises before the terminate call is built. Ugly, but closed."""
+        with self.assertRaises(AttributeError):
+            self.tear("Unable to locate credentials")
+        self.assertEqual(self.fake.matching("ec2", "terminate-instances"), [],
+                         "a reply that could not be parsed still reached terminate")
+
+    def test_an_instance_whose_tags_say_it_is_someone_elses_is_refused(self):
+        """INVERTED 2026-08-22. It used to assert that `i-not-ours` was
+        terminated, and to say so in its own failure message.
+
+        The tag filter was sent to EC2 and whatever came back was terminated:
+        the reply's tags were never read, so a widened filter, another region's
+        instances or a hand-edited call reached `terminate-instances` without a
+        second look. The instance in this reply is explicitly tagged to another
+        project and arrives through the filter anyway — which is exactly the
+        shape of the failure the filter is supposed to make impossible. It must
+        now survive, be named, and take the exit status with it."""
+        rc = self.tear({"Reservations": [{"Instances": [
+            {"InstanceId": "i-not-ours", "Tags": [{"Key": "Project",
+                                                   "Value": "someone-else"}]}]}]})
+        self.assertEqual(self.fake.matching("ec2", "terminate-instances"), [],
+                         "an instance tagged to another project was terminated")
+        self.assertNotEqual(rc, 0, "a refusal must not exit like a clean teardown")
+        self.assertIn("REFUSED", self.stdout)
+        self.assertIn("i-not-ours", self.stdout,
+                      "the operator needs the id that was refused")
+
+    def test_an_untagged_instance_is_refused(self):
+        """The commoner shape of the same thing: a reply with no `Tags` at all.
+
+        That is what a `--query` that projects only `InstanceId`, or an instance
+        that genuinely carries no tags, looks like from here. There is nothing
+        in it that says the instance is ours, and 'nothing that says no' is not
+        confirmation — this is the script that destroys things."""
+        rc = self.tear({"Reservations": [{"Instances": [{"InstanceId": "i-bare"}]}]})
+        self.assertEqual(self.fake.matching("ec2", "terminate-instances"), [],
+                         "an instance with no tags at all was terminated")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("i-bare", self.stdout)
+
+    def test_a_confirmed_instance_is_still_terminated_beside_a_refused_one(self):
+        """Both halves in one reply, because a check that refuses everything
+        would satisfy the two tests above and leave a burning fleet up.
+
+        The confirmed instance is terminated and the unconfirmed one is not, in
+        the same run, and terminate receives only the confirmed id."""
+        rc = self.tear({"Reservations": [{"Instances": [
+            {"InstanceId": "i-ours",
+             "Tags": [{"Key": "Name", "Value": "w3"},
+                      {"Key": "Project", "Value": "binn-campaign"}]},
+            {"InstanceId": "i-theirs", "Tags": [{"Key": "Project", "Value": "other"}]}]}]})
+        terminate = self.fake.matching("ec2", "terminate-instances")
+        self.assertEqual(len(terminate), 1, "the confirmed instance was left running")
+        self.assertEqual([p for p in terminate[0] if p.startswith("i-")], ["i-ours"],
+                         "terminate must receive the confirmed instance and nothing else")
+        self.assertNotEqual(rc, 0, "a partial teardown is not a clean one")
+        self.assertIn("i-theirs", self.stdout)
+
+    def test_iam_is_left_alone_unless_removal_is_asked_for(self):
+        """Deleting the instance profile out from under a fleet that is still
+        running breaks every worker's S3 access mid-cell. It must take the flag."""
+        self.tear({"Reservations": []})
+        self.assertEqual([c for c in self.fake.calls if c[1] == "iam"], [])
+        self.tear({"Reservations": []}, ["--remove-iam"])
+        self.assertTrue([c for c in self.fake.calls if c[1] == "iam"],
+                        "--remove-iam did nothing")
 
 
 #: Sentinel for a scripted AWS call that fails.

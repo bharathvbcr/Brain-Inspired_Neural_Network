@@ -27,6 +27,55 @@ def aws(*argv, check=True):
     return json.loads(out.stdout) if out.stdout.strip().startswith(("{", "[")) else out.stdout
 
 
+#: Fields a real cell carries and that something downstream reads *unconditionally*
+#: — i.e. with `cell[...]`, not `cell.get(...)`. `accuracy` is the measurement
+#: itself (`analyse_campaign.py:161`, `analyse_wave8.py::accs`); the other five are
+#: the preregistration §5 validity gates as read by `validity_problems` in both
+#: analysers. A cell missing any of them is not a cell that will be voided later,
+#: it is a KeyError at analysis time. Optional-by-design fields (`seed`,
+#: `attn_dim`, the epoch traces) are deliberately absent from this list: older
+#: cells legitimately lack them, and `analyse_wave8.load` / `gate_f_rust.py`
+#: already treat their absence as a missing witness rather than a defect.
+REQUIRED_CELL_FIELDS = (
+    "accuracy",
+    "non_finite_events",
+    "classes_predicted",
+    "majority_prediction",
+    "silent_fraction",
+    "saturated_fraction",
+)
+
+
+def cell_files(target):
+    """`{name: (size, mtime_ns)}` for every cell json in `target`."""
+    return {path.name: (path.stat().st_size, path.stat().st_mtime_ns)
+            for path in target.glob("*.json")}
+
+
+def cell_problem(path):
+    """Why `path` is not a usable cell, or None if it is one.
+
+    Deliberately narrow: this says the file parses and carries the fields the
+    analysers index into. It is not a validity gate — whether a cell that parses
+    is a *measurement* is `validity_problems`' question, and it needs the whole
+    arm to answer it.
+    """
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, UnicodeDecodeError) as err:
+        return f"unreadable: {err}"
+    except json.JSONDecodeError as err:
+        return f"not JSON: {err}"
+    if not isinstance(payload, dict):
+        return f"not a cell object: top level is {type(payload).__name__}"
+    missing = [f for f in REQUIRED_CELL_FIELDS if f not in payload]
+    if missing:
+        return f"missing {len(missing)} required field(s): {', '.join(missing)}"
+    if not isinstance(payload["accuracy"], (int, float)) or isinstance(payload["accuracy"], bool):
+        return f"accuracy is not a number: {payload['accuracy']!r}"
+    return None
+
+
 def keys(bucket, prefix):
     found, token = set(), None
     while True:
@@ -130,8 +179,62 @@ def main() -> int:
     if args.out:
         target = Path(args.out)
         target.mkdir(parents=True, exist_ok=True)
+        # Two numbers, because they answer two different questions and the line
+        # this replaced answered neither honestly: it was a glob of the target
+        # directory, so a sync that downloaded nothing still reported every
+        # stale file already sitting there as though this run had fetched it.
+        #
+        # `aws s3 sync` writes only the objects it decided to transfer, and a
+        # write changes the file's size or its mtime, so a name whose
+        # (size, mtime_ns) entry is new or different since the snapshot below is
+        # exactly a cell this run downloaded. Measured, not inferred from the
+        # CLI's output — which `--quiet` suppresses, and `--quiet` stays because
+        # the alternative is parsing human-readable progress lines.
+        before = cell_files(target)
         aws("s3", "sync", f"s3://{args.bucket}/results/", str(target), "--quiet")
-        print(f"\nsynced {len(list(target.glob('*.json')))} cells -> {target}")
+        after = cell_files(target)
+        downloaded = sorted(n for n, stat in after.items() if before.get(n) != stat)
+        print(f"\ndownloaded {len(downloaded)} cells -> {target}")
+        print(f"cells on disk: {len(after)} "
+              f"(this run and every earlier one; not a download count)")
+
+        # Nothing used to parse what was downloaded, so a truncated or
+        # half-written cell counted toward the total exactly like a good one.
+        #
+        # Every cell in the directory is checked, not only the ones this run
+        # fetched: sync compares size and mtime, never content, so a cell that
+        # arrived truncated on an earlier run is never re-fetched and would
+        # otherwise stay invisible here forever.
+        #
+        # "Cell" means a file whose result object exists in `results/`. An
+        # archive directory holds more than cells - `results/shd_attention_
+        # campaign_v2` keeps its plans and manifest beside them - and calling
+        # those malformed cells would be a false alarm, which is the fastest way
+        # to teach an operator to ignore this line.
+        collected = [n for n in sorted(after) if n[:-5] in done]
+        unrecognised = sorted(set(after) - set(collected))
+        broken = {name: cell_problem(target / name) for name in collected}
+        broken = {name: why for name, why in broken.items() if why is not None}
+        print(f"validated {len(collected)} cells: {len(collected) - len(broken)} usable, "
+              f"{len(broken)} INVALID")
+        for name, why in broken.items():
+            print(f"  INVALID {name}: {why}")
+        if unrecognised:
+            print(f"  ({len(unrecognised)} other .json file(s) here are not results of "
+                  f"this campaign and were not checked: {unrecognised[:3]})")
+        if broken:
+            # Exit code: a campaign that is only PARTLY collected is the normal
+            # mid-flight state of this script, and a short cell count is not an
+            # error. A cell that is on disk and unreadable is a different thing
+            # — a corrupt record that the analysers will index straight into —
+            # and it must not be possible for `collect.py --out X && analyse X`
+            # to proceed past one. So: non-zero, while the counts above are
+            # still printed in full so a partial collection is never silently
+            # reported as a clean one.
+            print("REFUSING to report this as a clean collection. Re-run the "
+                  "collection; sync re-fetches a cell whose size differs from "
+                  "S3, and `analyse_wave8.py` will refuse the arm either way.")
+            return 1
     return 0
 
 
