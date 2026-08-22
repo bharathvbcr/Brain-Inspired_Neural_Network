@@ -1699,10 +1699,39 @@ mod tests {
     // only in some entries: `ff+*+attn` in 3 and 6 (`grad_w_in` and the
     // attention gradient), `rec+*+attn` in 2 through 6.
     //
-    // The mechanism is **not** identified. `-C llvm-args=--fp-contract=off` at
-    // opt-level 3 still produces the optimised side, so FMA contraction is not
-    // confirmed as the cause. Do not repeat the claim in the workspace
-    // `Cargo.toml` that "determinism is unaffected" — for this path it is not.
+    // # The mechanism, identified 2026-08-22
+    //
+    // `shd_attention::positional_code` calls `phase.sin()` and `phase.cos()` on
+    // the **same** argument. At opt-level >= 2 LLVM's libcall simplification
+    // merges that pair into Darwin's combined `__sincosf_stret`; at 0 and 1 it
+    // emits separate `sinf` and `cosf`. Confirmed in the emitted assembly —
+    // `__sincosf_stret` is present at opt-level 3 and absent at 0 — and the two
+    // routines are not bit-identical: on this fixture's 120 phases they
+    // disagree by 1 ULP on 12 of them, which reproduces in a standalone C
+    // program calling both against the same `f32` bit patterns.
+    //
+    // That 1 ULP lands in `z[0]`, the embedded input, before any matmul: a
+    // stage-by-stage bisection of the forward shows the input spike train
+    // hashing identically while `z[0]` already differs. From there it
+    // propagates through `q`, `k`, `v`, the softmax and the context into the
+    // gradients. It is also why only the attention read-out is affected —
+    // `positional_code` is the only sin/cos in the arm path, so the base arms
+    // are untouched — and why `-C llvm-args=--fp-contract=off` changed nothing:
+    // FMA contraction was never involved.
+    //
+    // Do not repeat the claim in the workspace `Cargo.toml` that "determinism
+    // is unaffected" — for this path it is not.
+    //
+    // **Open, and load-bearing for cross-architecture work:** the same
+    // mechanism is not Darwin-specific in kind. glibc has `sincosf` and LLVM
+    // performs the same merge against it, so an x86_64 Linux campaign host may
+    // sit on a third set of values rather than on either side pinned here.
+    // That is UNVERIFIED — it has not been measured on Linux — but it must be
+    // measured before attention-arm cells recorded on one architecture are
+    // compared bit-for-bit against another. Fixing it means making
+    // `positional_code` independent of the platform's libm, which changes
+    // release numerics and is therefore a provenance event: a deliberate,
+    // recorded model change, not a cleanup.
     //
     // # Why this test accepts either side
     //

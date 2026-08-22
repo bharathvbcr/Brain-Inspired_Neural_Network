@@ -54,10 +54,28 @@ per-cell validity gate.
 > `--release`, and verified to still fail in both debug and release when the
 > attention kernel is deliberately perturbed.
 >
-> **Not identified:** the mechanism. `-C llvm-args=--fp-contract=off` at
-> opt-level 3 still yields the optimised side, so FMA contraction is not
-> confirmed as the cause. Only the attention read-out is affected; the base arms
-> are stable at all four levels.
+> **Mechanism, identified the same day.** `positional_code` calls `.sin()` and
+> `.cos()` on the same argument. At opt-level >= 2 LLVM merges that pair into
+> Darwin's `__sincosf_stret`; at 0 and 1 it emits separate `sinf` and `cosf`.
+> Confirmed in the emitted assembly (`__sincosf_stret` present at O3, absent at
+> O0), and the two routines disagree by 1 ULP on 12 of this fixture's 120
+> phases — reproduced in a standalone C program calling both on the same `f32`
+> bit patterns, matching the Rust probe bit-for-bit. A stage-by-stage bisection
+> puts the first divergence in `z[0]`, the embedded input, while the spike train
+> hashes identically; it propagates from there. This is also why only the
+> attention read-out moves (`positional_code` is the only sin/cos in the arm
+> path) and why `--fp-contract=off` changed nothing — contraction was never
+> involved.
+>
+> **Open, and load-bearing for cross-architecture work.** The merge is not
+> Darwin-specific in kind: glibc has `sincosf` and LLVM performs the same
+> substitution, so an x86_64 Linux campaign host may sit on a *third* set of
+> values rather than either side pinned here. UNVERIFIED — not yet measured on
+> Linux — but it must be, before attention-arm cells recorded on one
+> architecture are compared bit-for-bit against another. Making
+> `positional_code` independent of the platform's libm would fix it, but that
+> changes release numerics and is therefore a provenance event: a deliberate,
+> recorded model change, not a cleanup.
 >
 > **What survives.** §3 is independent and stands: Gate F's corpus really was
 > 296 cells with every rust cell `ff+fixed`, `parse_cell_id` really had no field
