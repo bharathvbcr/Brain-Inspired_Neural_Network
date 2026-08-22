@@ -159,7 +159,23 @@ impl MatchedDeepGradient {
         assert!(beta > 0.0, "surrogate beta must be positive");
 
         let mut rng = Rng::new(seed ^ 0x007C_D001_00F3_u64);
-        let in_scale = 0.5f32;
+        // 2026-08-22 repair, registered in
+        // `PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`.
+        //
+        // This was `0.5`, which leaves the hidden layer below threshold: zero
+        // spikes, so the rate readout sees zeros, `w_out` never moves and both
+        // classes produce a bit-identical logit equal to the bias.
+        //
+        // Breaking the silence is **necessary but not sufficient** here, unlike
+        // in `shd_eprop_baseline`. Measured on the module's own fixture: 2x-8x
+        // spike (rate 0.031-0.063) and still score 0.5000; only 16x reaches
+        // 1.0000. The rate has to be high enough for the readout to separate the
+        // classes, not merely non-zero. 8.0 is 16x the original, with an initial
+        // rate of 0.0625 - inside the `[0.001, 0.500]` activity band.
+        //
+        // Only the operating point changes. The surrogate, the transport, the
+        // readout and the optimiser are untouched, and every depth shares it.
+        let in_scale = 8.0f32;
         let out_scale = 0.2f32;
 
         let w_in: Vec<f32> = (0..layers[0] * N_IN)
@@ -524,19 +540,39 @@ mod tests {
     //
     // See `FINDING_2026-08-22_MATCHED_DEEP_GRADIENT_COLLAPSES_TO_SILENCE.md`.
 
-    /// It never learns — on its own separable fixture, at any depth.
+    /// **Partially repaired 2026-08-22.** Depth 1 is fixed; depth ≥ 2 is not.
+    ///
+    /// Before the initialisation repair this scored 0.5000 at **every** depth.
+    /// Depth 1 now solves its own separable fixture, which is the registered
+    /// criterion (`PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md` F-3).
+    ///
+    /// Deeper stacks still do not learn. That is the outcome the preregistration
+    /// named in advance — *"silence was necessary but not sufficient"* — and it is
+    /// asserted here rather than declared fixed. **A repair of the deep path makes
+    /// the second half of this test fail**, which is the intended signal.
     #[test]
-    fn defect_the_deep_ceiling_never_learns_its_own_fixture() {
+    fn repaired_at_depth_one_residual_defect_at_greater_depth() {
         let train = toy_data(40);
         let test = toy_data(20);
-        for depth in 1..=4 {
+
+        let depth_one = MatchedDeepGradient::new(&[8], 0.05, 0.0, 5.0, 7)
+            .train_and_evaluate(200, &train, &test)
+            .accuracy;
+        assert!(
+            depth_one >= 0.90,
+            "depth 1 scored {depth_one} - the silent-initialisation repair has \
+             regressed (prereg F-3 bar is 0.90)"
+        );
+
+        for depth in 2..=4 {
             let layers = vec![8usize; depth];
-            let mut g = MatchedDeepGradient::new(&layers, 0.05, 0.0, 5.0, 7);
-            let acc = g.train_and_evaluate(200, &train, &test).accuracy;
+            let acc = MatchedDeepGradient::new(&layers, 0.05, 0.0, 5.0, 7)
+                .train_and_evaluate(200, &train, &test)
+                .accuracy;
             assert!(
-                (acc - 0.5).abs() < 1e-6,
-                "depth {depth} scored {acc} - if this ceiling now learns, the \
-                 defect is fixed and the record must be updated"
+                acc < 0.90,
+                "depth {depth} now scores {acc} - the deep path has been repaired \
+                 and the record must be updated"
             );
         }
     }
@@ -558,13 +594,11 @@ mod tests {
         );
     }
 
-    /// The mechanism: **training drives the network silent.** With enough input
-    /// drive the layer spikes at initialisation, and after training it does not
-    /// spike at all — so `rate` is zero, the readout freezes, and the logit is
-    /// just the bias. Both classes then produce the *same* logit, which is a
-    /// constant predictor by construction.
+    /// The activity must survive training, and the logits must differ across
+    /// classes. Before the repair the layer emitted **zero** spikes after
+    /// training and every class produced a bit-identical logit.
     #[test]
-    fn defect_training_collapses_activity_to_zero() {
+    fn repaired_activity_survives_training_and_logits_separate() {
         let boosted: Vec<GradientExample> = toy_data(4)
             .iter()
             .map(|(a, b, l)| {
@@ -582,27 +616,23 @@ mod tests {
         let mut g = MatchedDeepGradient::new(&[8], 0.05, 0.0, 5.0, 7);
         let (s_init, _, _, _) = g.forward(&boosted[0].0, &boosted[0].1);
         let spikes_before: f32 = s_init[0].iter().sum();
-        assert!(
-            spikes_before > 0.0,
-            "the boosted fixture must spike at init"
-        );
+        assert!(spikes_before > 0.0, "the layer must spike at init");
 
         g.train_and_evaluate(200, &boosted, &boosted);
 
         let mut logits = Vec::new();
         for (x1, x2, _) in &boosted {
             let (s, _, _, logit) = g.forward(x1, x2);
-            assert_eq!(
-                s[0].iter().sum::<f32>(),
-                0.0,
-                "activity survived training - the collapse mechanism has changed"
+            assert!(
+                s[0].iter().sum::<f32>() > 0.0,
+                "activity collapsed to silence during training - the repair regressed"
             );
             logits.push(logit);
         }
         assert!(
-            logits.windows(2).all(|w| w[0].to_bits() == w[1].to_bits()),
-            "logits differ across classes: {logits:?} - it is no longer a \
-             constant predictor and the record must be updated"
+            logits.windows(2).any(|w| w[0].to_bits() != w[1].to_bits()),
+            "every class produced the same logit {logits:?} - still a constant \
+             predictor, the repair regressed"
         );
     }
 }
