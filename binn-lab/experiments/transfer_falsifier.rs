@@ -10,9 +10,10 @@ use binn_data::{
     time_shuffle, TransferBundle, TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_CHANCE,
     TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
+use binn_lab::guards::Z_95;
 use binn_lab::{
-    mean_or_nan, temporal_order_to_dense_examples, temporal_order_to_shd_examples, MicroTrace,
-    TransferModel, TransferPole, TRANSFER_PROTOCOL_VERSION,
+    mean_or_nan, std_error, temporal_order_to_dense_examples, temporal_order_to_shd_examples,
+    MicroTrace, TransferModel, TransferPole, TRANSFER_PROTOCOL_VERSION,
 };
 use binn_learn::{train_bptt, InputRateClassifier, InputRateConfig, SharedTemporalNet};
 
@@ -404,17 +405,23 @@ fn values(outcomes: &[SeedOutcome], get: impl Fn(&SeedOutcome) -> f32) -> Vec<f3
     outcomes.iter().map(get).collect()
 }
 
+/// Lower 95% bound on the mean of `values`; NaN for an empty slice.
+///
+/// The spread comes from the crate's [`binn_lab::std_error`], which is
+/// Bessel-corrected and reports `0.0` below two samples, so a single seed
+/// returns that seed's own value and needs no special case here.
+///
+/// Empty is NaN rather than a number, matching [`mean_or_nan`] in this binary:
+/// a bound computed from nothing must be visible in the report. It also used
+/// to be the one place in the repository that divided by `len() - 1` without a
+/// zero guard, which made an empty slice panic under `debug` and yield NaN
+/// under `release` — the same input, two answers, decided by the build
+/// profile.
 fn lower_95(values: &[f32]) -> f32 {
-    if values.len() == 1 {
-        return values[0];
+    if values.is_empty() {
+        return f32::NAN;
     }
-    let average = mean_or_nan(values);
-    let variance = values
-        .iter()
-        .map(|value| (value - average).powi(2))
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    average - 1.96 * (variance / values.len() as f32).sqrt()
+    mean_or_nan(values) - Z_95 * std_error(values)
 }
 
 fn read_freeze(path: &Path) -> Result<binn_data::TemporalDifficulty, String> {
@@ -452,6 +459,50 @@ const fn yes_no(value: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An empty sample must not be answered differently by `debug` and
+    /// `release`.
+    ///
+    /// `lower_95` divided by `values.len() - 1` behind a guard that only
+    /// covered `len() == 1`, so a zero-length slice underflowed: a panic under
+    /// `debug`, and `usize::MAX` as the divisor under `release`, which fell out
+    /// as NaN. A number this binary reports must not depend on the build
+    /// profile. Pinned here with the single- and multi-sample cases, which the
+    /// fix leaves bit-identical.
+    #[test]
+    fn lower_95_is_nan_on_an_empty_sample_and_unchanged_otherwise() {
+        assert!(
+            lower_95(&[]).is_nan(),
+            "an empty sample has no lower bound; it must not be a number"
+        );
+
+        // One seed has no spread, so the bound is that seed's own value.
+        for single in [0.0f32, 0.42, -1.5, 1.0] {
+            assert_eq!(lower_95(&[single]).to_bits(), single.to_bits());
+        }
+
+        // Two or more: the longhand the fix replaced, bit for bit.
+        fn reference(values: &[f32]) -> f32 {
+            let average = values.iter().sum::<f32>() / values.len() as f32;
+            let variance = values
+                .iter()
+                .map(|value| (value - average).powi(2))
+                .sum::<f32>()
+                / (values.len() - 1) as f32;
+            average - 1.96 * (variance / values.len() as f32).sqrt()
+        }
+        for values in [
+            &[0.80f32, 0.84][..],
+            &[0.71, 0.68, 0.74, 0.70, 0.69],
+            &[0.5, 0.5, 0.5],
+        ] {
+            assert_eq!(
+                lower_95(values).to_bits(),
+                reference(values).to_bits(),
+                "lower_95 drifted from the pre-fix arithmetic on {values:?}"
+            );
+        }
+    }
 
     #[test]
     fn scientific_freeze_selects_registered_nonzero_candidate() {
