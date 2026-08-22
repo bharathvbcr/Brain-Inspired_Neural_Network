@@ -18,6 +18,7 @@ use binn_engine::{CellId, Engine};
 use binn_learn::{C2ReplayBaseline, Modulators, ThreeFactor, C2_REPLAY_BASELINE_LABEL};
 
 use crate::c2_config::C2Config;
+use crate::runner::clear_eligibility;
 
 /// Preregistered overlap interventions (U14): mechanistic, not correlation alone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -732,12 +733,6 @@ fn run_multiclass_trial(
     eng.close_inhibited_cycle();
 
     (active_cells, pred == label)
-}
-
-fn clear_eligibility(eng: &mut Engine) {
-    for syn in eng.syn.as_mut_slice() {
-        syn.eligibility = 0.0;
-    }
 }
 
 fn boost_readouts(eng: &mut Engine, readout0: CellId, n_classes: usize, boost: f32) {

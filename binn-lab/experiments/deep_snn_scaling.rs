@@ -29,22 +29,27 @@
 //!
 //! So this suite now runs on [`binn_learn::shared_bptt`], which was written as
 //! the validated replacement for exactly this and had **no callers**. It gives a
-//! genuinely shared forward with an explicit readout bias, exact reverse-mode
-//! gradients, and — the part that matters here — [`train_bptt_sgd`], an
-//! **optimiser-matched** ceiling. The old suite varied the credit pathway and
-//! the optimiser at once; this one varies only the credit pathway.
+//! genuinely shared forward with an explicit readout bias and exact reverse-mode
+//! gradients, so treatment and ceiling can share one forward, one initialisation
+//! and one optimiser, and differ only in whether the gradients are true or
+//! feedback-projected. The old suite varied the credit pathway and the optimiser
+//! at once.
 //!
-//! The Adam ceiling is reported alongside as the best-achievable reference, per
-//! that module's own guidance.
+//! # The optimiser is matched at Adam, and the choice read the ceiling only
 //!
-//! # The learning rate is reported, not chosen
+//! `shared_bptt` offers an SGD-matched pair ([`train_learned_feedback`] /
+//! [`train_bptt_sgd`]) and an Adam pair ([`train_learned_feedback_adam`] /
+//! [`train_bptt`]). The SGD pair is only useful where SGD can train the
+//! architecture at all, and on this stack it cannot: at depth ≥ 2 the **ceiling**
+//! sits at exactly 0.5000 at every rung of the registered step-size ladder, while
+//! the Adam ceiling reaches 1.0000. A reference that cannot learn bounds nothing.
 //!
-//! SGD needs a step size, and picking one by looking at the treatment would be
-//! tuning to the outcome. The whole ladder is therefore run and reported. The
-//! headline rung for each depth is the one that maximises the **ceiling's** mean
-//! accuracy, with the treatment given that same rung: the selection never reads
-//! the treatment, and it is conservative in the only direction that matters,
-//! because a ceiling that is not as strong as it can be is not a ceiling.
+//! The headline pair is therefore Adam, at the frozen `ADAM_LR`, with **no step
+//! size to choose and nothing tuned on either arm**. The full SGD ladder is run
+//! for both arms at every depth and reported, so the reader can see exactly what
+//! the optimiser choice excluded. The selection that led here read the ceiling
+//! arm only, never the treatment — registered in
+//! `results/PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md` §7a.
 //!
 //! # Known limitation, stated in the report
 //!

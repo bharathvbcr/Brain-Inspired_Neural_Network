@@ -14,7 +14,7 @@ use binn_engine::{Cell, CellId, Engine};
 use binn_learn::{PostSynapticCredit, ThreeFactor};
 
 use crate::c3_bptt_config::{C3BpttArm, C3BpttConfig, C3_BPTT_PROTOCOL_VERSION};
-use crate::runner::clear_eligibility;
+use crate::runner::{clear_eligibility, mean_var};
 
 pub const C3_BPTT_SUPERSPIKE_REFERENCE: &str = "C3_SUPERSPIKE_SURROGATE_BPTT_REFERENCE";
 pub const C3_BPTT_ORACLE_PULSES_CONTRAST: &str = "C3_ORACLE_TARGET_PULSES_NOT_BPTT";
@@ -510,22 +510,6 @@ fn run_arm(
     ArmOutcome {
         accuracy: correct as f32 / split.test.len().max(1) as f32,
     }
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    if values.is_empty() {
-        return (0.0, 0.0);
-    }
-    let mean = values.iter().sum::<f32>() / values.len() as f32;
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|value| (*value - mean).powi(2))
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 fn opt_depth(depth: Option<usize>) -> String {

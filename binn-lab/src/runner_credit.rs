@@ -19,8 +19,8 @@ use binn_learn::{
 use crate::credit_config::{CreditArm, CreditConfig};
 use crate::runner::{
     boost_readout_incoming, build_dense_local, build_sparse_assembly, clear_eligibility,
-    edge_index, freeze_trials, reset_c1_dynamic_state, run_positive_control, FrozenSplit,
-    GateG2Verdict,
+    edge_index, freeze_trials, mean, mean_var, reset_c1_dynamic_state, run_positive_control,
+    FrozenSplit, GateG2Verdict,
 };
 
 /// Stable label for the exact-forward surrogate-gradient reference.
@@ -901,27 +901,6 @@ fn all_equal<T: PartialEq>(values: impl IntoIterator<Item = T>) -> bool {
         return true;
     };
     values.all(|value| value == first)
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    let mean = mean(values);
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|value| (*value - mean).powi(2))
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 fn fingerprint_topology(conn: &Csr) -> u64 {

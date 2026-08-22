@@ -11,6 +11,7 @@ use binn_core::Rng;
 use binn_data::{draw_example, true_transition, CreditDepthExample};
 
 use crate::c3_config::C3Config;
+use crate::runner::mean;
 
 /// Honest label for the disclosed teacher-forced oracle reference.
 pub const C3_ORACLE_TEACHER_FORCED_REFERENCE: &str = "C3_V1_ORACLE_TEACHER_FORCED_REFERENCE";
@@ -219,14 +220,6 @@ impl C3Runner {
 
 fn opt_depth(d: Option<usize>) -> String {
     d.map(|x| x.to_string()).unwrap_or_else(|| "none".into())
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
 }
 
 fn sample_variance(values: &[f32], mean_value: f32) -> f32 {

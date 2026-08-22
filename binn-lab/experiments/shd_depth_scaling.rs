@@ -343,16 +343,83 @@ fn ceiling_has_headroom(ceiling_mean: f32) -> bool {
     ceiling_mean <= HEADROOM_MAX
 }
 
-/// The three registered conditions that independently void a depth reading.
+/// The registered validity gates V-1..V-5. Any one of them voids the depth
+/// reading in either direction; see the preregistration section 5.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Validity {
-    /// Some depth-matched ceiling failed [`CeilingHealth`].
+    /// **V-1.** Some depth-matched ceiling failed [`CeilingHealth`].
     ceiling_defect: bool,
-    /// Some ceiling is above [`HEADROOM_MAX`], the defect this experiment exists
-    /// to avoid.
+    /// **V-2.** Some ceiling is above [`HEADROOM_MAX`] — the defect this
+    /// experiment exists to avoid.
     ceiling_saturated: bool,
-    /// Some hidden layer's initialisation firing rate is outside the band.
+    /// **V-3.** Some hidden layer's initialisation firing rate is outside the
+    /// activity band.
     layer_outside_band: bool,
+    /// **V-4.** Some seed's arm predicted a single class on the held-out split.
+    constant_predictor: bool,
+    /// **V-5.** The evaluation split does not carry all 20 classes.
+    incomplete_eval_classes: bool,
+}
+
+impl Validity {
+    /// Whether any registered gate fired, i.e. whether outcome O-0 applies.
+    const fn voided(self) -> bool {
+        self.ceiling_defect
+            || self.ceiling_saturated
+            || self.layer_outside_band
+            || self.constant_predictor
+            || self.incomplete_eval_classes
+    }
+}
+
+/// The registered outcome names of the preregistration section 7, decided in the
+/// order that document fixes rather than by a reader looking at the table.
+///
+/// `gaps` is `treatment - ceiling` per depth, in the [`DEPTHS`] order.
+fn registered_outcome(
+    validity: Validity,
+    gaps: &[f32],
+    treatment_means: &[f32],
+    ceiling_means: &[f32],
+) -> &'static str {
+    if validity.voided() {
+        return "O-0 - a registered validity gate fired; no depth verdict is issued";
+    }
+    let deepest = gaps.len().saturating_sub(1);
+    let drift = gaps[deepest] - gaps[0];
+    let within = gaps.iter().all(|gap| gap.abs() <= GAP_TOLERANCE);
+    let above_tolerance_positive = gaps.iter().any(|&gap| gap > GAP_TOLERANCE);
+    if above_tolerance_positive {
+        // CeilingHealth classifies an inverted pair as a defect, so this is
+        // normally unreachable; it is named so that it can never be presented
+        // as a finding if it ever is reached.
+        return "O-4 - treatment above the reference that bounds it; not a finding";
+    }
+    let both_below_floor = treatment_means.iter().all(|&m| m < ACCURACY_FLOOR)
+        && ceiling_means.iter().all(|&m| m < ACCURACY_FLOOR);
+    if both_below_floor {
+        return "O-5 - both arms below the accuracy floor; a result about the budget, \
+                not about feedback alignment";
+    }
+    if within {
+        return "O-1 - the treatment tracks its ceiling at every depth; no depth \
+                penalty detected on SHD";
+    }
+    if drift < -GAP_TOLERANCE {
+        "O-2 - a depth penalty for learned feedback alignment"
+    } else {
+        "O-3 - a constant cost of feedback projection, not a depth effect"
+    }
+}
+
+/// **O-6.** Whether the credit reaching the input layer collapses with depth.
+///
+/// If the modulator RMS at layer 0 falls by more than an order of magnitude
+/// between the shallowest and the deepest arm, any gap is confounded with
+/// effective step size and the caveat is attached to the headline rather than
+/// to a footnote.
+fn modulator_collapses_with_depth(shallowest: f32, deepest: f32) -> bool {
+    shallowest.is_finite() && deepest.is_finite() && deepest * 10.0 < shallowest
 }
 
 /// Banner emitted **before any number**, so a reader who stops at the first
@@ -384,6 +451,20 @@ fn validity_banner(validity: &Validity) -> String {
              silent or saturated layer carries no class signal, and two withdrawn results \
              in this workspace came from exactly that.\n\n",
         ));
+    }
+    if validity.constant_predictor {
+        banner.push_str(
+            "> **CONSTANT PREDICTOR.** At least one seed's arm assigned every held-out \
+             utterance to a single class. On a 20-class task such an arm can still print \
+             an accuracy that looks like learning; it is not one.\n\n",
+        );
+    }
+    if validity.incomplete_eval_classes {
+        banner.push_str(
+            "> **EVALUATION SPLIT IS NOT WHAT IT CLAIMS.** Not every class is present in \
+             the held-out split, so the realised chance rate is not the registered one \
+             and no accuracy below is on the registered scale.\n\n",
+        );
     }
     banner
 }
@@ -751,7 +832,11 @@ fn run(options: &Options) -> Result<(), String> {
     let mut modulator_rows = String::new();
     let mut any_ceiling_defect = false;
     let mut any_ceiling_saturated = false;
+    let mut any_constant_predictor = false;
     let mut gaps: Vec<f32> = Vec::new();
+    let mut treatment_means: Vec<f32> = Vec::new();
+    let mut ceiling_means: Vec<f32> = Vec::new();
+    let mut input_modulator: Vec<f32> = Vec::new();
     for (d, &depth) in DEPTHS.iter().enumerate() {
         let arm = &arms[d];
         let t_mean = mean(&arm.treatment);
@@ -764,6 +849,18 @@ fn run(options: &Options) -> Result<(), String> {
             any_ceiling_saturated = true;
         }
         gaps.push(t_mean - c_mean);
+        treatment_means.push(t_mean);
+        ceiling_means.push(c_mean);
+        let per_layer = mean_per_layer(&arm.modulator);
+        input_modulator.push(per_layer.first().copied().unwrap_or(f32::NAN));
+        if arm
+            .treatment_distinct
+            .iter()
+            .chain(&arm.ceiling_distinct)
+            .any(|&distinct| distinct <= 1)
+        {
+            any_constant_predictor = true;
+        }
         let verdict = Verdict::evaluate_mean(
             t_mean,
             ACCURACY_FLOOR,
@@ -787,7 +884,7 @@ fn run(options: &Options) -> Result<(), String> {
         ));
         modulator_rows.push_str(&format!(
             "| {depth} | {} | {} |\n",
-            format_layer_values(&mean_per_layer(&arm.modulator)),
+            format_layer_values(&per_layer),
             verdict.label(),
         ));
     }
@@ -809,11 +906,19 @@ fn run(options: &Options) -> Result<(), String> {
     let gap_drift = gaps[deepest] - gaps[0];
     let tracks = gaps.iter().all(|gap| gap.abs() <= GAP_TOLERANCE);
 
-    let banner = validity_banner(&Validity {
+    let validity = Validity {
         ceiling_defect: any_ceiling_defect,
         ceiling_saturated: any_ceiling_saturated,
         layer_outside_band: any_layer_outside_band,
-    });
+        constant_predictor: any_constant_predictor,
+        incomplete_eval_classes: classes_present != SHD_N_CLASSES,
+    };
+    let banner = validity_banner(&validity);
+    let outcome = registered_outcome(validity, &gaps, &treatment_means, &ceiling_means);
+    let modulator_collapse = modulator_collapses_with_depth(
+        input_modulator[0],
+        input_modulator[input_modulator.len() - 1],
+    );
 
     let summary = format!(
         "# SHD Depth Scaling Report\n\n\
@@ -860,20 +965,23 @@ fn run(options: &Options) -> Result<(), String> {
         |---:|---|---|\n\
         {modulator_rows}\n\
         ## Verdict\n\n\
+        - **Registered outcome: {}**\n\
         - Deepest ({}-layer) learned feedback alignment: **{}**\n\
         - Treatment within +/-{GAP_TOLERANCE:.2} of its ceiling at **every** depth: **{}**\n\
-        - Gap drift, depth {} minus depth {}: **{:+.4}**\n\n\
+        - Gap drift, depth {} minus depth {}: **{:+.4}**\n\
+        - Credit reaching the input layer collapses with depth (O-6): **{}**{}\n\n\
         ## What this may not claim\n\n\
         - **Nothing, if a banner is printed above.** A defective ceiling, a saturated \
-        ceiling or an out-of-band operating point each independently voids the depth \
-        reading, and they are reported before the numbers for that reason.\n\
+        ceiling, an out-of-band operating point, a constant predictor and an incomplete \
+        evaluation split each independently void the depth reading, and they are \
+        reported before the numbers for that reason.\n\
         - **It is not comparable with `deep-snn-scaling` v136.** Different task, \
         different input dimensionality, different class count and a different chance \
         rate. The two share a module, not a measurement.\n\
         - **It does not touch the calibration matrix.** `SHD_INSTRUMENT_STATE` is \
         untouched and no recorded cell is re-derived here.\n\
         - **Seeds measure initialisation variance only.** The SHD split is fixed, so \
-        the standard errors below do not include sampling variability of the data.\n",
+        the standard errors above do not include sampling variability of the data.\n",
         if quick {
             "QUICK / PILOT"
         } else {
@@ -885,12 +993,20 @@ fn run(options: &Options) -> Result<(), String> {
         test.len(),
         started.elapsed().as_secs_f64(),
         probe_set.len(),
+        outcome,
         DEPTHS[deepest],
         overall.label(),
         if tracks { "yes" } else { "no" },
         DEPTHS[deepest],
         DEPTHS[0],
         gap_drift,
+        if modulator_collapse { "yes" } else { "no" },
+        if modulator_collapse {
+            " - the gap is confounded with effective step size and the outcome above \
+             must be read with that attached, not as a statement about credit quality"
+        } else {
+            ""
+        },
     );
 
     println!("\n{summary}");
@@ -990,14 +1106,60 @@ mod tests {
         assert!(live_silent < 1.0);
     }
 
+    /// `distinct_predicted` counts **classes**, not samples. Counting samples
+    /// would make the collapse check unfireable, because a healthy 500-sample
+    /// split would read 500 either way.
     #[test]
-    fn distinct_predicted_is_bounded_by_the_class_count_and_the_split() {
-        let samples: Vec<DenseTemporalExample> =
-            (0..6).map(|s| dense(6, 5, (s % 3) as u32, 7 + s)).collect();
+    fn distinct_predicted_counts_classes_not_samples() {
         let model = build_model(1, 4, 6, 5, 31);
-        let distinct = distinct_predicted(&model, &samples);
+        let one = dense(6, 5, 0, 7);
+        let repeated = vec![one.clone(), one.clone(), one.clone(), one];
+        assert_eq!(
+            distinct_predicted(&model, &repeated),
+            1,
+            "a deterministic model on four copies of one utterance predicts one class"
+        );
+        let varied: Vec<DenseTemporalExample> =
+            (0..6).map(|s| dense(6, 5, (s % 3) as u32, 7 + s)).collect();
+        let distinct = distinct_predicted(&model, &varied);
         assert!(distinct >= 1, "an arm always predicts something");
-        assert!(distinct <= SHD_N_CLASSES.min(samples.len()));
+        assert!(distinct <= SHD_N_CLASSES.min(varied.len()));
+    }
+
+    /// The campaign itself cannot run — the gate refuses it — so the training
+    /// call path is exercised here at toy scale instead. This is plumbing, not a
+    /// measurement: the accuracies it produces are meaningless and are asserted
+    /// only to be well-formed. What it does establish is that both arms execute,
+    /// that the treatment reports **one modulator per hidden layer**, and that
+    /// the ceiling reports none.
+    #[test]
+    fn both_arms_execute_and_only_the_treatment_reports_a_modulator_per_layer() {
+        let n_in = 6;
+        let timesteps = 5;
+        let train: Vec<DenseTemporalExample> = (0..6)
+            .map(|s| dense(n_in, timesteps, (s % 3) as u32, 41 + s))
+            .collect();
+        let test: Vec<DenseTemporalExample> = (0..4)
+            .map(|s| dense(n_in, timesteps, (s % 3) as u32, 907 + s))
+            .collect();
+
+        // depth_idx 2 is DEPTHS[2] == 3 hidden layers.
+        let treatment = Job::Treatment { depth_idx: 2 }.run(4, 1, 5, &train, &test);
+        assert_eq!(
+            treatment.modulator_rms.len(),
+            DEPTHS[2],
+            "the treatment must report one modulator per hidden layer"
+        );
+        assert!(treatment.modulator_rms.iter().all(|v| v.is_finite()));
+        assert!((0.0..=1.0).contains(&treatment.accuracy));
+        assert!(treatment.distinct_predicted >= 1);
+
+        let ceiling = Job::Ceiling { depth_idx: 2 }.run(4, 1, 5, &train, &test);
+        assert!(
+            ceiling.modulator_rms.is_empty(),
+            "the ceiling does not project through a feedback matrix"
+        );
+        assert!((0.0..=1.0).contains(&ceiling.accuracy));
     }
 
     #[test]
@@ -1009,35 +1171,90 @@ mod tests {
         assert_eq!(format_layer_values(&[1.5e-3]), "1.500e-3");
     }
 
-    /// Each registered validity condition must produce its own banner, and a
-    /// clean run must produce none. A banner that could not fire would let a
-    /// saturated ceiling be read as a depth result — which is the exact defect
-    /// this experiment was built to avoid.
+    /// Each registered validity gate must produce its own banner, must void the
+    /// depth reading, and a clean run must produce none. A banner that could not
+    /// fire would let a saturated ceiling be read as a depth result — the exact
+    /// defect this experiment was built to avoid.
     #[test]
-    fn every_validity_condition_has_its_own_banner_and_a_clean_run_has_none() {
+    fn every_validity_gate_has_its_own_banner_voids_the_reading_and_a_clean_run_has_none() {
         assert!(validity_banner(&Validity::default()).is_empty());
-        let defect = validity_banner(&Validity {
-            ceiling_defect: true,
-            ..Validity::default()
-        });
-        assert!(defect.contains("HARNESS DEFECT"));
-        let saturated = validity_banner(&Validity {
+        assert!(!Validity::default().voided());
+
+        type SetGate = fn(&mut Validity);
+        let cases: [(SetGate, &str); 5] = [
+            (|v| v.ceiling_defect = true, "HARNESS DEFECT"),
+            (|v| v.ceiling_saturated = true, "NO HEADROOM"),
+            (|v| v.layer_outside_band = true, "ACTIVITY BAND"),
+            (|v| v.constant_predictor = true, "CONSTANT PREDICTOR"),
+            (|v| v.incomplete_eval_classes = true, "NOT WHAT IT CLAIMS"),
+        ];
+        let mut total = 0usize;
+        for (set, marker) in cases {
+            let mut validity = Validity::default();
+            set(&mut validity);
+            let banner = validity_banner(&validity);
+            assert!(banner.contains(marker), "missing banner for {marker}");
+            assert!(validity.voided(), "{marker} must void the depth reading");
+            assert_eq!(
+                registered_outcome(validity, &[0.0; 4], &[0.9; 4], &[0.9; 4]),
+                "O-0 - a registered validity gate fired; no depth verdict is issued"
+            );
+            total += banner.len();
+        }
+        // The saturated banner must name the run it exists because of.
+        let saturated = Validity {
             ceiling_saturated: true,
             ..Validity::default()
-        });
-        assert!(saturated.contains("NO HEADROOM"));
-        assert!(saturated.contains("v136"));
-        let band = validity_banner(&Validity {
-            layer_outside_band: true,
-            ..Validity::default()
-        });
-        assert!(band.contains("ACTIVITY BAND"));
+        };
+        assert!(validity_banner(&saturated).contains("v136"));
+
         let all = validity_banner(&Validity {
             ceiling_defect: true,
             ceiling_saturated: true,
             layer_outside_band: true,
+            constant_predictor: true,
+            incomplete_eval_classes: true,
         });
-        assert!(all.len() > defect.len() + saturated.len());
+        assert_eq!(all.len(), total, "banners must concatenate, not replace");
+    }
+
+    /// The registered outcome names of section 7 must be decided by the code, in
+    /// the order that document fixes, rather than chosen by a reader.
+    #[test]
+    fn registered_outcomes_are_decided_in_the_order_the_prereg_fixes() {
+        let clean = Validity::default();
+        let high = [0.7f32; 4];
+
+        // O-1: every gap inside tolerance.
+        assert!(
+            registered_outcome(clean, &[-0.01, 0.0, -0.02, -0.03], &high, &high).starts_with("O-1")
+        );
+        // O-2: gap negative and drifting further with depth.
+        assert!(
+            registered_outcome(clean, &[-0.01, -0.05, -0.10, -0.20], &high, &high)
+                .starts_with("O-2")
+        );
+        // O-3: outside tolerance but flat.
+        assert!(
+            registered_outcome(clean, &[-0.20, -0.19, -0.21, -0.22], &high, &high)
+                .starts_with("O-3")
+        );
+        // O-4: treatment above the reference that bounds it.
+        assert!(registered_outcome(clean, &[0.0, 0.0, 0.0, 0.30], &high, &high).starts_with("O-4"));
+        // O-5 dominates a gap reading: both arms below the floor.
+        let low = [ACCURACY_FLOOR - 0.01; 4];
+        assert!(registered_outcome(clean, &[0.0; 4], &low, &low).starts_with("O-5"));
+        // ... but a ceiling above the floor is not O-5, even with a low treatment.
+        assert!(registered_outcome(clean, &[0.0; 4], &low, &high).starts_with("O-1"));
+    }
+
+    /// O-6 is a caveat on the headline, and has to be able to fire.
+    #[test]
+    fn a_modulator_that_collapses_by_an_order_of_magnitude_is_flagged() {
+        assert!(modulator_collapses_with_depth(1.0e-1, 9.0e-3));
+        assert!(!modulator_collapses_with_depth(1.0e-1, 1.1e-2));
+        assert!(!modulator_collapses_with_depth(1.0e-1, 1.0e-1));
+        assert!(!modulator_collapses_with_depth(f32::NAN, 1.0e-3));
     }
 
     /// The headroom bar has to be able to reject the reading v136 produced, and

@@ -12,6 +12,7 @@ use binn_core::Rng;
 use binn_learn::{reinforce_term, FixedRandomFeedback, ReinforceFeedback};
 
 use crate::r2_credit_config::{R2CreditArm, R2CreditConfig, R2_CREDIT_PROTOCOL_VERSION};
+use crate::runner::mean;
 use crate::runner_r2::{
     classify_shape_eps, fit_log_linear, CurveShape, LogLinearFit, ScalingPoint,
 };
@@ -252,14 +253,6 @@ fn run_arm_curve(
         points,
         fit,
         shape,
-    }
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
     }
 }
 

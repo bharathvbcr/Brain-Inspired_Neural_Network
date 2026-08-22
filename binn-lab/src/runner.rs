@@ -2517,7 +2517,25 @@ pub(crate) fn edge_index(conn: &Csr, pre: CellId, post: CellId) -> Option<usize>
         .map(|i| start + i)
 }
 
-fn mean_var(xs: &[f32]) -> (f32, f32) {
+/// Arithmetic mean of `values`; `0.0` for an empty slice.
+///
+/// The canonical mean for this crate. Sibling runners import it from here
+/// rather than re-declaring it, so every reported mean is the same
+/// single-pass `sum / len` in `f32`.
+pub(crate) fn mean(values: &[f32]) -> f32 {
+    if values.is_empty() {
+        0.0
+    } else {
+        values.iter().sum::<f32>() / values.len() as f32
+    }
+}
+
+/// Mean and *sample* variance (Bessel-corrected) of `xs`.
+///
+/// The canonical mean/variance for this crate. Returns `(0.0, 0.0)` for an
+/// empty slice and a zero variance for a single sample, so seed sweeps that
+/// ran one seed report a spread of zero rather than NaN.
+pub(crate) fn mean_var(xs: &[f32]) -> (f32, f32) {
     let n = xs.len();
     if n == 0 {
         return (0.0, 0.0);

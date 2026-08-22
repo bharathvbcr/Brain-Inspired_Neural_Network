@@ -121,9 +121,16 @@ gradients are true or feedback-projected.
 | 3 | 0.9740 | 0.0022 | 1.0000 | 0.0000 | −0.0260 | 2.976e-1 | ok | PASS |
 | 4 | 0.9780 | 0.0052 | 1.0000 | 0.0000 | −0.0220 | 3.914e-1 | ok | PASS |
 
-Every ceiling is healthy, every gap is within 0.05, and the gap does not grow with
-depth. §7's **first** registered outcome fires: *no depth penalty for learned
-feedback is detected on this task.*
+Every ceiling is healthy and every gap is inside the registered 0.05 tolerance.
+§7's **first** registered outcome fires: *no depth penalty for learned feedback is
+detected on this task.*
+
+**A first draft of this section said "the gap does not grow with depth". That
+overstates the table.** From depth 1 to depth 4 the gap moves −0.0025 → −0.0220,
+so it grows by 0.0195 — a fifth of the way to the tolerance, on four points. What
+is true, and all that is claimed, is that it stays inside the registered
+threshold. Whether a trend exists is not answerable from four depths at this
+precision, and is not asserted.
 
 The optimiser choice is documented rather than assumed. The full registered SGD
 ladder, both arms, every depth: depth 1 reaches 1.0000 at `lr = 1e-1`, and **every

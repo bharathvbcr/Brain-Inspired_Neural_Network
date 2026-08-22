@@ -3,11 +3,10 @@
 //! Aggregates one-step loss-drop / eligibility-energy across seeds on the
 //! matched feed-forward dense-LIF coincidence forward.
 
-use binn_data::Sample;
-use binn_learn::{run_mech_diagnostic, GradientExample, MechArmMetrics, REFERENCE_SEQUENCE_LEN};
+use binn_learn::{run_mech_diagnostic, MechArmMetrics, REFERENCE_SEQUENCE_LEN};
 
 use crate::mech_config::MechConfig;
-use crate::runner::freeze_trials;
+use crate::runner::{freeze_trials, samples_to_gradient_examples};
 
 /// Per-seed arm metrics.
 #[derive(Clone, Debug, PartialEq)]
@@ -204,19 +203,4 @@ fn mean_over_seeds(seeds: &[MechSeedResult]) -> Vec<MechArmMetrics> {
         out.push(m);
     }
     out
-}
-
-fn samples_to_gradient_examples(trials: &[(Vec<Sample>, u32)]) -> Vec<GradientExample> {
-    trials
-        .iter()
-        .map(|(sequence, label)| {
-            let mut x1 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            let mut x2 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            for (t, sample) in sequence.iter().enumerate().take(REFERENCE_SEQUENCE_LEN) {
-                x1[t] = sample.values[0];
-                x2[t] = sample.values[1];
-            }
-            (x1, x2, *label as f32)
-        })
-        .collect()
 }

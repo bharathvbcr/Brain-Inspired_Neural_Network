@@ -9,15 +9,14 @@
 //! Does not reopen protocol-v2, mutate `c1-dfa-*`, remassage spiking DFA, or
 //! retune failed v11 `rl_graded` knobs.
 
-use binn_data::Sample;
 use binn_learn::{
-    GradientExample, MatchedGradient, MatchedRlFlat, MatchedRlGraded, MatchedRlReinforceFb,
-    DEFAULT_MATCHED_BETA, MATCHED_GRADIENT_LABEL, MATCHED_RL_FLAT_LABEL, MATCHED_RL_GRADED_LABEL,
+    MatchedGradient, MatchedRlFlat, MatchedRlGraded, MatchedRlReinforceFb, DEFAULT_MATCHED_BETA,
+    MATCHED_GRADIENT_LABEL, MATCHED_RL_FLAT_LABEL, MATCHED_RL_GRADED_LABEL,
     MATCHED_RL_REINFORCE_FB_LABEL, REFERENCE_SEQUENCE_LEN,
 };
 
 use crate::rl_match_config::{RlMatchConfig, C1_RL_CHANCE_BASELINE, C1_RL_PRIMARY_ARM};
-use crate::runner::{freeze_trials, GateG2Verdict};
+use crate::runner::{freeze_trials, mean_var, samples_to_gradient_examples, GateG2Verdict};
 use crate::runner_match::gap_closed_matched;
 
 /// Per-seed accuracies and gap_closed_rl (reinforce_fb vs gradient).
@@ -365,45 +364,6 @@ fn decide_verdict(
     } else {
         GateG2Verdict::Fail
     }
-}
-
-fn samples_to_gradient_examples(trials: &[(Vec<Sample>, u32)]) -> Vec<GradientExample> {
-    trials
-        .iter()
-        .map(|(sequence, label)| {
-            let mut x1 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            let mut x2 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            for (t, sample) in sequence.iter().enumerate().take(REFERENCE_SEQUENCE_LEN) {
-                x1[t] = sample.values[0];
-                x2[t] = sample.values[1];
-            }
-            (x1, x2, *label as f32)
-        })
-        .collect()
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    let mean = mean(values);
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|v| {
-            let d = *v - mean;
-            d * d
-        })
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 #[cfg(test)]
