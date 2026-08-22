@@ -40,6 +40,37 @@ const T: usize = REFERENCE_SEQUENCE_LEN;
 /// Stable label for the depth-matched gradient ceiling.
 pub const MATCHED_DEEP_GRADIENT_LABEL: &str = "MATCHED_ARCH_DEEP_GRADIENT_CEILING";
 
+/// Input-layer initialisation scale.
+///
+/// Raised from `0.5` on 2026-08-22 under
+/// `PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`. At `0.5` the input layer
+/// sat below threshold, emitted zero spikes, and every class produced a logit
+/// equal to the bias.
+pub const DEEP_INPUT_SCALE: f32 = 8.0;
+
+/// Hidden-to-hidden initialisation scale, before the `1/sqrt(fan_in)` factor.
+///
+/// Raised from `0.3` on 2026-08-22 under
+/// `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md`. `0.3` is a scale for a
+/// unit-variance input, but the inter-layer signal here is a **rate**,
+/// `s[l-1][i] / T`, which is roughly an order of magnitude smaller. Every layer
+/// above the first was therefore silent at initialisation, which is why the
+/// earlier `in_scale` repair fixed depth 1 and left depths 2-4 at exactly
+/// 0.5000.
+///
+/// The value is chosen by the activity-band rule registered in that document -
+/// the smallest rung of a doubling ladder from `0.3` whose initial mean firing
+/// rate lies inside `[0.001, 0.500]` at every depth in `1..=4` and at both
+/// widths 16 and 256. Accuracy was not an input to the choice. See
+/// `deep_hidden_scale_is_the_smallest_rung_inside_the_activity_band`, which
+/// re-runs that selection against this constructor.
+pub const DEEP_HIDDEN_SCALE: f32 = 9.6;
+
+/// Activity band shared with the SHD arms: a layer outside it is not usable.
+pub const ACTIVITY_MIN: f32 = 0.001;
+/// Upper edge of the activity band.
+pub const ACTIVITY_MAX: f32 = 0.500;
+
 /// Running RMS of a credit modulator, for cross-arm scale comparison.
 ///
 /// Report this for every arm. If two arms differ by an order of magnitude, the
@@ -99,6 +130,25 @@ impl ModulatorScale {
     }
 }
 
+/// Rescale a vector in place so its RMS equals `target`.
+///
+/// The canonical scale-parity primitive for this workspace. Use it when two arms
+/// must apply updates of comparable magnitude at a shared learning rate, so that
+/// the comparison measures credit-assignment quality rather than effective step
+/// size. An all-zero vector is left alone rather than producing NaN.
+///
+/// Returns the pre-rescale RMS, so callers can record what the scale actually
+/// was instead of assuming the rescale was a no-op.
+pub(crate) fn rescale_rms_to(v: &mut [f32], target: f32) -> f32 {
+    let pre = rms_normalise(v);
+    if pre > 1e-12 {
+        for x in v.iter_mut() {
+            *x *= target;
+        }
+    }
+    pre
+}
+
 /// RMS-normalise a vector in place; returns the pre-normalisation RMS.
 fn rms_normalise(v: &mut [f32]) -> f32 {
     if v.is_empty() {
@@ -151,6 +201,36 @@ impl MatchedDeepGradient {
     ///
     /// Panics if `layers` is empty or contains a zero width.
     pub fn new(layers: &[usize], lr: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        Self::with_scales(
+            layers,
+            lr,
+            lambda,
+            beta,
+            seed,
+            DEEP_INPUT_SCALE,
+            DEEP_HIDDEN_SCALE,
+        )
+    }
+
+    /// Construct with explicit initialisation scales.
+    ///
+    /// The only caller outside the scale sweep is [`Self::new`]. It exists so the
+    /// activity-band selection registered in
+    /// `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md` can be re-run against
+    /// the real constructor rather than a replica of it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `layers` is empty or contains a zero width.
+    pub(crate) fn with_scales(
+        layers: &[usize],
+        lr: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+        in_scale: f32,
+        hidden_scale: f32,
+    ) -> Self {
         assert!(!layers.is_empty(), "deep gradient ceiling needs >= 1 layer");
         assert!(
             layers.iter().all(|&w| w >= 1),
@@ -159,23 +239,10 @@ impl MatchedDeepGradient {
         assert!(beta > 0.0, "surrogate beta must be positive");
 
         let mut rng = Rng::new(seed ^ 0x007C_D001_00F3_u64);
-        // 2026-08-22 repair, registered in
-        // `PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`.
-        //
-        // This was `0.5`, which leaves the hidden layer below threshold: zero
-        // spikes, so the rate readout sees zeros, `w_out` never moves and both
-        // classes produce a bit-identical logit equal to the bias.
-        //
-        // Breaking the silence is **necessary but not sufficient** here, unlike
-        // in `shd_eprop_baseline`. Measured on the module's own fixture: 2x-8x
-        // spike (rate 0.031-0.063) and still score 0.5000; only 16x reaches
-        // 1.0000. The rate has to be high enough for the readout to separate the
-        // classes, not merely non-zero. 8.0 is 16x the original, with an initial
-        // rate of 0.0625 - inside the `[0.001, 0.500]` activity band.
-        //
-        // Only the operating point changes. The surrogate, the transport, the
-        // readout and the optimiser are untouched, and every depth shares it.
-        let in_scale = 8.0f32;
+        // Both scales are operating points, not rules: see `DEEP_INPUT_SCALE`
+        // and `DEEP_HIDDEN_SCALE` for the two repairs and the criterion that
+        // picked each. The surrogate, the transport, the readout and the
+        // optimiser are untouched, and every depth shares the same values.
         let out_scale = 0.2f32;
 
         let w_in: Vec<f32> = (0..layers[0] * N_IN)
@@ -184,7 +251,7 @@ impl MatchedDeepGradient {
 
         let mut w_hh = Vec::with_capacity(layers.len().saturating_sub(1));
         for l in 0..layers.len().saturating_sub(1) {
-            let h_scale = 0.3f32 / (layers[l] as f32).sqrt();
+            let h_scale = hidden_scale / (layers[l] as f32).sqrt();
             let w: Vec<f32> = (0..layers[l + 1] * layers[l])
                 .map(|_| (rng.next_f32() * 2.0 - 1.0) * h_scale)
                 .collect();
@@ -226,6 +293,21 @@ impl MatchedDeepGradient {
 
     pub fn input_modulator_scale(&self) -> ModulatorScale {
         self.input_modulator_scale
+    }
+
+    /// Mean firing rate of each hidden layer on one example, in `[0, 1]`.
+    ///
+    /// `rate[l] = spikes in layer l / (width_l x T)`. A layer outside
+    /// `[ACTIVITY_MIN, ACTIVITY_MAX]` cannot carry credit: below the band it is
+    /// silent, so the eligibility vanishes and no weight grows; above it every
+    /// unit fires at every step and the rate readout has nothing to separate.
+    /// This is what the initialisation scales are chosen against.
+    pub fn layer_rates(&self, x1: &[f32; T], x2: &[f32; T]) -> Vec<f32> {
+        let (s, _, _, _) = self.forward(x1, x2);
+        s.iter()
+            .zip(self.layers.iter())
+            .map(|(sl, &n)| sl.iter().sum::<f32>() / (n as f32 * T as f32))
+            .collect()
     }
 
     /// Forward pass. Returns per-layer spike counts, eligibility traces and the
@@ -499,6 +581,73 @@ mod tests {
         );
     }
 
+    /// Re-runs the activity-band selection registered in
+    /// `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md` section 4 against the
+    /// real constructor.
+    ///
+    /// The rule: the smallest rung of a doubling ladder from the original `0.3`
+    /// whose initial mean firing rate lies inside `[ACTIVITY_MIN, ACTIVITY_MAX]`
+    /// at **every** layer, every depth in `1..=4`, and both widths. Accuracy is
+    /// not an input, and this test does not look at any.
+    ///
+    /// It asserts two things, not one: that the chosen value qualifies, and that
+    /// **every smaller rung does not**. Without the second half the test would
+    /// pass for any sufficiently large scale, which is the same as not pinning
+    /// the choice at all.
+    #[test]
+    fn deep_hidden_scale_is_the_smallest_rung_inside_the_activity_band() {
+        let data = toy_data(4);
+        let qualifies = |hidden_scale: f32| {
+            let mut lo = f32::INFINITY;
+            let mut hi = 0.0f32;
+            for &width in &[16usize, 256] {
+                for depth in 1..=4usize {
+                    let layers = vec![width; depth];
+                    let g = MatchedDeepGradient::with_scales(
+                        &layers,
+                        0.05,
+                        0.0,
+                        5.0,
+                        7,
+                        DEEP_INPUT_SCALE,
+                        hidden_scale,
+                    );
+                    let mut acc = vec![0.0f32; depth];
+                    for (x1, x2, _) in &data {
+                        for (a, r) in acc.iter_mut().zip(g.layer_rates(x1, x2)) {
+                            *a += r / data.len() as f32;
+                        }
+                    }
+                    for rate in acc {
+                        lo = lo.min(rate);
+                        hi = hi.max(rate);
+                    }
+                }
+            }
+            lo >= ACTIVITY_MIN && hi <= ACTIVITY_MAX
+        };
+
+        assert!(
+            qualifies(DEEP_HIDDEN_SCALE),
+            "the shipped hidden scale {DEEP_HIDDEN_SCALE} leaves some layer outside \
+             [{ACTIVITY_MIN}, {ACTIVITY_MAX}] at initialisation"
+        );
+
+        let mut rung = 0.3f32;
+        while rung < DEEP_HIDDEN_SCALE {
+            assert!(
+                !qualifies(rung),
+                "rung {rung} also qualifies, so {DEEP_HIDDEN_SCALE} is not the \
+                 smallest qualifying rung and the registered rule was not followed"
+            );
+            rung *= 2.0;
+        }
+        assert!(
+            (rung - DEEP_HIDDEN_SCALE).abs() < 1e-6,
+            "{DEEP_HIDDEN_SCALE} is not on the doubling ladder from 0.3"
+        );
+    }
+
     #[test]
     fn modulator_scale_arithmetic() {
         let mut a = ModulatorScale::new();
@@ -540,16 +689,24 @@ mod tests {
     //
     // See `FINDING_2026-08-22_MATCHED_DEEP_GRADIENT_COLLAPSES_TO_SILENCE.md`.
 
-    /// **Partially repaired 2026-08-22.** Depth 1 is fixed; depth ≥ 2 is not.
+    /// **Retired 2026-08-22.** This type is no longer used by any experiment.
     ///
-    /// Before the initialisation repair this scored 0.5000 at **every** depth.
-    /// Depth 1 now solves its own separable fixture, which is the registered
-    /// criterion (`PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md` F-3).
+    /// Depth 1 solves its own separable fixture at seed 7, which was the
+    /// registered criterion (`PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`
+    /// F-3). It does **not** do so at every seed — see
+    /// `the_depth_one_repair_does_not_hold_across_seeds`.
     ///
-    /// Deeper stacks still do not learn. That is the outcome the preregistration
-    /// named in advance — *"silence was necessary but not sufficient"* — and it is
-    /// asserted here rather than declared fixed. **A repair of the deep path makes
-    /// the second half of this test fail**, which is the intended signal.
+    /// Depths 2–4 still score exactly 0.5000, now with every layer inside the
+    /// activity band. Raising `DEEP_HIDDEN_SCALE` removed the silence and
+    /// changed nothing else, which is what localised the defect to the credit
+    /// rule: the inter-layer code is a non-negative rate, so the eligibility is
+    /// sign-definite, a hidden unit can learn only a scalar gain on its whole
+    /// input, and that gain runs away until the layer saturates and goes
+    /// class-blind. No initialisation reaches that.
+    ///
+    /// `deep-snn-scaling` v136 runs on `shared_bptt` instead. This test stays as
+    /// the pinned characterisation of a withdrawn result:
+    /// `results/RESULT_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md`.
     #[test]
     fn repaired_at_depth_one_residual_defect_at_greater_depth() {
         let train = toy_data(40);
@@ -575,6 +732,41 @@ mod tests {
                  and the record must be updated"
             );
         }
+    }
+
+    /// The depth-1 repair was validated on one seed and does not generalise.
+    ///
+    /// `RESULT_2026-08-22_SILENT_INITIALISATION_REPAIR.md` records F-3 as met on
+    /// the strength of seed 7 alone. Depth 1 has no hidden-to-hidden weights, so
+    /// `DEEP_HIDDEN_SCALE` cannot have caused this — it was already true and was
+    /// simply never checked.
+    ///
+    /// Asserted here so the record cannot drift back to "the module works at
+    /// depth 1". If someone makes depth 1 robust across seeds, this test fails,
+    /// and that is the intended signal: it would be a real repair and needs
+    /// registering.
+    #[test]
+    fn the_depth_one_repair_does_not_hold_across_seeds() {
+        let train = toy_data(40);
+        let test = toy_data(20);
+        let scores: Vec<f32> = [3u64, 7, 11, 29]
+            .iter()
+            .map(|&seed| {
+                MatchedDeepGradient::new(&[8], 0.05, 0.0, 5.0, seed)
+                    .train_and_evaluate(200, &train, &test)
+                    .accuracy
+            })
+            .collect();
+        assert!(
+            scores.iter().any(|&a| a >= 0.90),
+            "no seed solves the fixture at depth 1; the registered F-3 result is \
+             gone entirely, not merely fragile: {scores:?}"
+        );
+        assert!(
+            scores.iter().any(|&a| a < 0.90),
+            "every seed now solves depth 1. That is better than the record says \
+             and must be registered rather than absorbed: {scores:?}"
+        );
     }
 
     /// The plain reference solves the same fixture perfectly, with the same

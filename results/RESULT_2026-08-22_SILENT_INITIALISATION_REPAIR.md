@@ -11,7 +11,7 @@ the repair and before any post-repair number existed.
 |---|---|---|
 | **F-1** | hidden layer not silent at init, rate in `[0.001, 0.500]` | **MET** — 0.087 (`shd_eprop_baseline`), 0.0625 (`matched_deep_gradient`) |
 | **F-2** | the working reference is not broken | **MET** — `ShdSuperSpikeCeiling` still 1.0000 at 20 epochs |
-| **F-3** | `MatchedDeepGradient` learns its fixture at depth 1 | **MET** — 0.5000 → **1.0000** |
+| **F-3** | `MatchedDeepGradient` learns its fixture at depth 1 | **MET at the registered seed only** — 0.5000 → **1.0000** at seed 7, but **0.5000 at seeds 3 and 11**. See the correction below. |
 | **F-4** | readouts no longer constant | **MET** — `ShdEpropCeiling` and `ShdDfa` both use their whole output layer, at every width |
 | **F-5** | no arm silently advantaged | **MET** — one shared constant per module |
 
@@ -92,11 +92,35 @@ scientific guard rather than a smoke test.
 623 Rust tests pass, 0 fail · `fmt` clean · clippy `-D warnings` clean ·
 GC1–GC7 pass · record checks green (24 tooling tests, 16/16 published numbers).
 
+## 6a. Correction, 2026-08-22 — F-3 was validated on one seed
+
+F-3 above is recorded as MET on the strength of seed 7. It does not generalise:
+
+| seed | depth 1 |
+|---|---:|
+| 7 (registered) | 1.0000 |
+| 29 | 1.0000 |
+| **3** | **0.5000** |
+| **11** | **0.5000** |
+
+Depth 1 has no hidden-to-hidden weights, so nothing in the later repair caused
+this — it was already true when F-3 was recorded and was simply never checked.
+The honest reading is *"this module can sometimes solve its own fixture"*, not
+*"the module works at depth 1"*. Pinned by
+`the_depth_one_repair_does_not_hold_across_seeds` so the record cannot drift back.
+
+No live claim changes: the module is now retired from every experiment.
+
 ## 7. Scope
 
 - **Verified:** every number above, this session, by test.
-- **Not fixed:** the deep path at depth ≥ 2, and the e-prop transport scale. Both
-  are pinned by tests that fail on repair.
+- **Superseded 2026-08-22:** both residuals are closed in
+  `RESULT_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md`. The e-prop transport scale
+  was repaired (ratio 5.0810 → 1.8940, tolerance unmoved). The deep path was
+  **not** repairable — raising the hidden scale removed the silence at every
+  layer and the arm still scored 0.5000 at depths 2–4, which localised the defect
+  to the credit rule. `deep-snn-scaling` v136 runs on `shared_bptt` instead, and
+  `MatchedDeepGradient` is retired from every experiment.
 - **Not verified:** the initial firing rate on **real SHD data**. The band was
   measured on the synthetic fixtures; the real-corpus rate cannot be checked while
   the calibration matrix is unauthorised.

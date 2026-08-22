@@ -80,8 +80,8 @@ pub use pruning::{prune, PruneReport, PruningStrategy};
 pub use scan_training::{forward_scan_training, ScanTrainingTrace};
 pub use shared_bptt::{
     mean_step_rms, random_feedback, train_bptt, train_bptt_sgd, train_feedback,
-    train_learned_feedback, Adam, DenseTemporalExample, SharedForward, SharedGradients,
-    SharedTemporalNet, StepDiagnostics, ADAM_BETA1, ADAM_BETA2, ADAM_EPS, ADAM_LR,
+    train_learned_feedback, train_learned_feedback_adam, Adam, DenseTemporalExample, SharedForward,
+    SharedGradients, SharedTemporalNet, StepDiagnostics, ADAM_BETA1, ADAM_BETA2, ADAM_EPS, ADAM_LR,
     GRADIENT_CLIP_NORM, SHARED_BPTT_LABEL,
 };
 pub use shd_alif::{

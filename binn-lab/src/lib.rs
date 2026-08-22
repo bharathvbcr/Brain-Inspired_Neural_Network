@@ -139,8 +139,9 @@ pub use rl_match_config::{
     C1_RL_PROTOCOL_VERSION,
 };
 pub use runner::{
-    freeze_trials, samples_to_gradient_examples, BudgetDisclosure, C1Report, ConditionLabel,
-    FrozenSplit, GateG2Verdict, MacProbeDiagnostics, PairedSummary, RunRecord, Runner, SeedResult,
+    freeze_trials, samples_to_dense_temporal_examples, samples_to_gradient_examples,
+    BudgetDisclosure, C1Report, ConditionLabel, FrozenSplit, GateG2Verdict, MacProbeDiagnostics,
+    PairedSummary, RunRecord, Runner, SeedResult,
 };
 pub use runner_c2::{C2Report, C2Runner, C2SeedResult, GateG3Verdict, OverlapIntervention};
 pub use runner_c3::{

@@ -17,9 +17,9 @@ use binn_data::{
 };
 use binn_engine::{CellId, Engine, K};
 use binn_learn::{
-    reinforce_term, BpttBaseline, EpropReference, FixedRandomFeedback, GradientExample,
-    LearnedReinforceFeedback, Modulators, ReinforceFeedback, SurrogateLifReference, ThreeFactor,
-    REFERENCE_SEQUENCE_LEN,
+    reinforce_term, BpttBaseline, DenseTemporalExample, EpropReference, FixedRandomFeedback,
+    GradientExample, LearnedReinforceFeedback, Modulators, ReinforceFeedback,
+    SurrogateLifReference, ThreeFactor, REFERENCE_SEQUENCE_LEN,
 };
 
 use crate::config::{
@@ -952,6 +952,45 @@ fn parse_condition_json(line: &str) -> Option<CondOutcome> {
         weight_trace: Vec::new(),
         mac_probe: None,
     })
+}
+
+/// Convert frozen trials into the dense temporal form the shared-forward stack
+/// takes.
+///
+/// The canonical converter for [`binn_learn::SharedTemporalNet`]. Frames are the
+/// flat `timesteps x n_in` layout that `SharedTemporalNet::forward` indexes as
+/// `frames[t * n_in + channel]`; the label is the trial's class id, kept as a
+/// class index rather than the `f32` the two-class `GradientExample` form uses,
+/// because the shared stack is multi-class.
+///
+/// Sequences shorter than [`REFERENCE_SEQUENCE_LEN`] are zero-padded and longer
+/// ones truncated, matching [`samples_to_gradient_examples`] so the two forms of
+/// the same trial contain the same data.
+pub fn samples_to_dense_temporal_examples(
+    trials: &[(Vec<Sample>, u32)],
+    n_in: usize,
+) -> Vec<DenseTemporalExample> {
+    assert!(
+        n_in > 0,
+        "dense temporal examples need at least one channel"
+    );
+    trials
+        .iter()
+        .map(|(sequence, label)| {
+            let mut frames = vec![0.0f32; REFERENCE_SEQUENCE_LEN * n_in];
+            for (t, sample) in sequence.iter().enumerate().take(REFERENCE_SEQUENCE_LEN) {
+                for channel in 0..n_in {
+                    frames[t * n_in + channel] = sample.values.get(channel).copied().unwrap_or(0.0);
+                }
+            }
+            DenseTemporalExample {
+                frames,
+                timesteps: REFERENCE_SEQUENCE_LEN,
+                n_in,
+                label: *label,
+            }
+        })
+        .collect()
 }
 
 pub fn samples_to_gradient_examples(trials: &[(Vec<Sample>, u32)]) -> Vec<GradientExample> {
