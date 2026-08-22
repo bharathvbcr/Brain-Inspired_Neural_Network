@@ -273,14 +273,13 @@ silently. The other two are untouched and named in §7.
 
 ## 8. What is **not** verified
 
-* **Source-versus-campaign-binary equivalence on the attention path.** Gate F now
-  guards future changes against a macOS reference recorded today. It does not
-  establish that today's source reproduces the pinned campaign binary
-  `22d97c51ab02`, and nothing in this work does. The only clean test is running
-  the pinned binary and a build of today's source on the same cell on the same
-  Linux host and diffing the JSON — roughly one spot instance for a few minutes.
-  **Until that is done, a new wave built from today's source should not be
-  assumed comparable to the 96 reused controls.**
+* ~~**Source-versus-campaign-binary equivalence on the attention path.**~~
+  **CLOSED 2026-08-22, same day.** Measured on one aarch64 host running both
+  binaries in the same boot: identical on `ff+fixed` and on `ff+fixed+attn` at
+  d32/L1 and d32/L4, e5 through e400, across 12 scientific fields and 1,200
+  trace values on the e400 cell. The archived controls remain licensed against
+  cells produced by today's source. See
+  [`RESULT_2026-08-22_SOURCE_REPRODUCES_THE_PINNED_BINARY.md`](RESULT_2026-08-22_SOURCE_REPRODUCES_THE_PINNED_BINARY.md).
 * **Whether per-sample clipping makes `rec+alif` usable.** The mechanism is
   reachable and tested; the empirical question is open.
 * **Two weak checks remain.** `matched_deep_gradient::trains_at_every_depth_without_panicking`
