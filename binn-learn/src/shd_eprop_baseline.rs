@@ -991,4 +991,190 @@ mod tests {
         assert!(r.accuracy.is_finite());
         assert!(r.loss.is_finite());
     }
+
+    // ---- characterization of a known defect, 2026-08-22 --------------------
+    //
+    // `shd-scientific-sweep` reported the e-prop ceiling at 0.2140 against a
+    // chance of 0.2000. These localise that and **pin the broken behaviour**.
+    // They assert the defect, not a fix: there is no fix, and a green suite must
+    // not imply one. A repair makes them fail, which is the intended signal.
+    //
+    // See `FINDING_2026-08-22_SHD_EPROP_CEILING_IS_A_CONSTANT_PREDICTOR.md`.
+
+    fn disjoint_fixture(
+        n: usize,
+        n_in: usize,
+        t: usize,
+        classes: usize,
+        seed: u64,
+    ) -> Vec<ShdExample> {
+        let mut rng = Rng::new(seed);
+        (0..n)
+            .map(|_| {
+                let label = rng.gen_index(classes) as u32;
+                let mut frames = vec![0.0f32; t * n_in];
+                for _ in 0..(t / 3).max(1) {
+                    let tt = rng.gen_index(t);
+                    let c = (label as usize * 3 + rng.gen_index(3)) % n_in;
+                    frames[tt * n_in + c] = 1.0;
+                }
+                ShdExample {
+                    frames,
+                    t,
+                    n_in,
+                    label,
+                }
+            })
+            .collect()
+    }
+
+    fn diag_cfg(classes: usize) -> ShdTrainConfig {
+        ShdTrainConfig {
+            hidden: 24,
+            n_classes: classes,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 60,
+        }
+    }
+
+    /// The e-prop ceiling assigns **every** test sample to one class, so its
+    /// reported accuracy is nothing but that class's frequency.
+    #[test]
+    fn defect_the_eprop_ceiling_is_a_constant_predictor() {
+        for (classes, seed) in [(5usize, 11u64), (5, 99), (4, 11)] {
+            let train = toy_data(120, 24, 16, classes, seed);
+            let test = toy_data(60, 24, 16, classes, seed + 1);
+            let mut eprop = ShdEpropCeiling::new(&train[0], diag_cfg(classes), 7);
+            eprop.train_and_evaluate(60, &train, &test);
+            let preds = eprop.arch.predictions(&test);
+            let mut distinct = preds.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            assert_eq!(
+                distinct.len(),
+                1,
+                "classes {classes} seed {seed}: the ceiling now predicts {} classes - \
+                 if it has been repaired the record must be updated",
+                distinct.len()
+            );
+        }
+    }
+
+    /// A working reference solves the same fixtures, so the forward pass and the
+    /// data are fine and the defect is in the local arm.
+    #[test]
+    fn defect_is_localised_superspike_solves_the_same_fixtures() {
+        for build in [
+            toy_data as fn(usize, usize, usize, usize, u64) -> Vec<ShdExample>,
+            disjoint_fixture,
+        ] {
+            let train = build(120, 24, 16, 5, 11);
+            let test = build(60, 24, 16, 5, 12);
+            let acc = ShdSuperSpikeCeiling::new(&train[0], diag_cfg(5), 7)
+                .train_and_evaluate(60, &train, &test)
+                .accuracy;
+            assert!(acc > 0.99, "SuperSpike scored {acc}, expected ~1.0");
+        }
+    }
+
+    /// The mechanism differs from `MatchedDeepGradient`, which collapsed to
+    /// silence. Here credit **is** flowing — the modulator is non-zero and moves
+    /// with the data — and the readout collapses anyway. Same symptom, different
+    /// cause; pinned so the two are not conflated.
+    #[test]
+    fn defect_credit_flows_yet_the_readout_still_collapses() {
+        let mut scales = Vec::new();
+        for seed in [11u64, 99] {
+            let train = toy_data(120, 24, 16, 5, seed);
+            let test = toy_data(60, 24, 16, 5, seed + 1);
+            let mut eprop = ShdEpropCeiling::new(&train[0], diag_cfg(5), 7);
+            eprop.train_and_evaluate(60, &train, &test);
+            let rms = eprop.modulator_scale().rms();
+            assert!(
+                rms > 1e-3,
+                "modulator collapsed to {rms} - this is now the \
+                                 silence mechanism, not the readout one"
+            );
+            scales.push(rms);
+        }
+        assert_ne!(
+            scales[0].to_bits(),
+            scales[1].to_bits(),
+            "the modulator is identical on different data - it has stopped \
+             depending on the input and the diagnosis has changed"
+        );
+    }
+
+    /// Neither local arm escapes the constant predictor at **any** width or
+    /// budget, while `ShdSuperSpikeCeiling` escapes it by epoch 20.
+    ///
+    /// This closes the question left open in
+    /// `FINDING_2026-08-22_SHD_EPROP_CEILING_IS_A_CONSTANT_PREDICTOR.md` §3,
+    /// which declined to call `ShdDfa`'s collapse a defect because the sweep had
+    /// reported it at 1.0000 under a different configuration. Width (16..128,
+    /// including the sweep's 64) and budget (1..60, spanning the sweep's 30) are
+    /// both ruled out.
+    ///
+    /// Asserts the defect, not a fix. A repair makes this fail, which is the
+    /// intended signal.
+    #[test]
+    fn defect_neither_local_arm_escapes_the_constant_predictor() {
+        let (n_in, t, classes) = (24usize, 16usize, 5usize);
+        let train = disjoint_fixture(120, n_in, t, classes, 11);
+        let test = disjoint_fixture(60, n_in, t, classes, 12);
+
+        for hidden in [24usize, 64, 128] {
+            let cfg = ShdTrainConfig {
+                hidden,
+                n_classes: classes,
+                lr: 0.05,
+                beta: 5.0,
+                epochs: 60,
+            };
+            for label in ["dfa", "eprop"] {
+                let preds = if label == "dfa" {
+                    let mut arm = ShdDfa::new(&train[0], cfg, 7);
+                    arm.train_and_evaluate(60, &train, &test);
+                    arm.arch.predictions(&test)
+                } else {
+                    let mut arm = ShdEpropCeiling::new(&train[0], cfg, 7);
+                    arm.train_and_evaluate(60, &train, &test);
+                    arm.arch.predictions(&test)
+                };
+                let mut distinct = preds.clone();
+                distinct.sort_unstable();
+                distinct.dedup();
+                assert_eq!(
+                    distinct.len(),
+                    1,
+                    "{label} at hidden {hidden} now predicts {} classes - the \
+                     defect is fixed and the record must be updated",
+                    distinct.len()
+                );
+            }
+        }
+    }
+
+    /// The same fixture is solved by a working reference, so the collapse above
+    /// is about the local arms and not about the task or the budget.
+    #[test]
+    fn defect_superspike_escapes_the_same_fixture_by_epoch_twenty() {
+        let train = disjoint_fixture(120, 24, 16, 5, 11);
+        let test = disjoint_fixture(60, 24, 16, 5, 12);
+        let cfg = ShdTrainConfig {
+            hidden: 64,
+            n_classes: 5,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 20,
+        };
+        let acc = ShdSuperSpikeCeiling::new(&train[0], cfg, 7)
+            .train_and_evaluate(20, &train, &test)
+            .accuracy;
+        assert!(
+            acc > 0.99,
+            "SuperSpike scored {acc} at 20 epochs, expected ~1.0"
+        );
+    }
 }

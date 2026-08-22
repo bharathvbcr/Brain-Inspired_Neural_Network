@@ -382,6 +382,111 @@ pub fn wilson_interval(successes: usize, n: usize, z: f32) -> (f32, f32) {
 
 /// The only legal way for a report generator to produce a verdict cell.
 ///
+/// A reference arm must clear chance by this margin before anything may be
+/// measured against it.
+///
+/// 0.05 matches the `chance + 0.05` bar the SHD suite already used per arm, and
+/// is deliberately loose: this is a defect detector, not a quality bar. A
+/// reference inside this band is not "weak", it is **not a reference**.
+pub const CEILING_ABOVE_CHANCE_MARGIN: f32 = 0.05;
+
+/// Whether a reference arm can bound anything.
+///
+/// # Why this is not just an inversion check
+///
+/// Every experiment in this workspace that reported ceiling health computed its
+/// own `ceiling_mean < treatment_mean` test, and that test has a hole: it is
+/// silent when the reference is at chance **and the treatment is below it**.
+///
+/// `deep-snn-scaling` v134 hit exactly that hole. At depth 4 the depth-matched
+/// gradient ceiling scored `0.5000 ± 0.0000` on a two-class task — a constant
+/// predictor — while the treatment scored 0.4435. Because 0.5000 is not below
+/// 0.4435, the row printed **`ok`**. A dead reference was certified healthy by
+/// the guard written to catch dead references.
+///
+/// [`CeilingHealth::evaluate`] therefore tests the reference against **chance**
+/// first and against its treatment second. A reference that did not learn is
+/// unusable whatever the treatment did, and that must be said even when — and
+/// especially when — the treatment is also failing.
+///
+/// See `RESULT_2026-08-20_DEEP_SNN_V134_CEILING_IS_AT_CHANCE.md`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CeilingHealth {
+    /// The reference cleared chance and was not exceeded by its treatment.
+    Ok,
+    /// The reference did not learn: it sits within
+    /// [`CEILING_ABOVE_CHANCE_MARGIN`] of chance, or below it. Nothing can be
+    /// measured against it, whatever the treatment scored.
+    DeadReference,
+    /// The treatment beat the reference that is supposed to bound it.
+    Inverted,
+    /// Both defects at once: the reference did not learn *and* the treatment
+    /// still cleared it. Reported distinctly because it is the signature of a
+    /// broken comparison rather than of a strong treatment.
+    DeadAndInverted,
+}
+
+impl CeilingHealth {
+    /// Classify one (reference, treatment) pair against the task's chance rate.
+    ///
+    /// `chance` is `1 / n_classes` for a balanced task. Pass the realised
+    /// majority-class rate instead when the eval set is not balanced.
+    pub fn evaluate(reference_mean: f32, treatment_mean: f32, chance: f32) -> Self {
+        Self::evaluate_with_margin(
+            reference_mean,
+            treatment_mean,
+            chance,
+            CEILING_ABOVE_CHANCE_MARGIN,
+        )
+    }
+
+    /// As [`CeilingHealth::evaluate`], with an explicit above-chance margin.
+    pub fn evaluate_with_margin(
+        reference_mean: f32,
+        treatment_mean: f32,
+        chance: f32,
+        margin: f32,
+    ) -> Self {
+        // Deliberately negated, and NOT `reference_mean <= chance + margin`.
+        // Clippy's rewrite changes the NaN case: `NaN <= x` is false, which
+        // would classify a non-finite reference as **healthy**. `!(NaN > x)` is
+        // true, so a non-finite reference falls to the defect branch, where it
+        // belongs. Pinned by `the_margin_boundary_is_exclusive_and_nan_is_not_healthy`.
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        let dead = !(reference_mean > chance + margin);
+        // The 1e-6 slack keeps an exact tie out of the defect bucket; a
+        // treatment that merely equals its reference is not evidence of a
+        // broken harness.
+        let inverted = reference_mean + 1e-6 < treatment_mean;
+        match (dead, inverted) {
+            (true, true) => CeilingHealth::DeadAndInverted,
+            (true, false) => CeilingHealth::DeadReference,
+            (false, true) => CeilingHealth::Inverted,
+            (false, false) => CeilingHealth::Ok,
+        }
+    }
+
+    /// Whether a comparison against this reference may be interpreted at all.
+    pub const fn is_usable(self) -> bool {
+        matches!(self, CeilingHealth::Ok)
+    }
+
+    /// Report cell. Never a bare "ok" for a defect, so a table row cannot
+    /// contradict the numbers beside it.
+    pub const fn label(self) -> &'static str {
+        match self {
+            CeilingHealth::Ok => "ok",
+            CeilingHealth::DeadReference => {
+                "DEAD REFERENCE — at chance; nothing is measurable against it"
+            }
+            CeilingHealth::Inverted => "INVERTED — ceiling below treatment; do not interpret",
+            CeilingHealth::DeadAndInverted => {
+                "DEAD REFERENCE + INVERTED — reference at chance and treatment above it"
+            }
+        }
+    }
+}
+
 /// Constructing a `Verdict` requires supplying the measurement and the
 /// preregistered threshold, so a verdict can never disagree with the number
 /// printed next to it.
@@ -504,6 +609,92 @@ pub fn gap_closed_exceeds_ceiling(local: f32, dense: f32, reference: f32) -> boo
 
 #[cfg(test)]
 mod tests {
+
+    /// The exact `deep-snn-scaling` v134 depth-4 row: a constant-predictor
+    /// ceiling on a two-class task, with the treatment *below* it.
+    ///
+    /// The pre-2026-08-21 check was `ceiling + 1e-6 < treatment`, which is
+    /// `false` here, so the row printed "ok". This test is the regression.
+    #[test]
+    fn a_dead_reference_is_not_ok_just_because_the_treatment_is_worse() {
+        let health = CeilingHealth::evaluate(0.5000, 0.4435, 0.5);
+        assert_eq!(health, CeilingHealth::DeadReference);
+        assert!(!health.is_usable());
+        assert_ne!(health.label(), "ok");
+
+        // The superseded logic, spelled out, to show what it would have said.
+        let inversion_only = 0.5000f32 + 1e-6 < 0.4435f32;
+        assert!(
+            !inversion_only,
+            "the old check really was silent on this row"
+        );
+    }
+
+    #[test]
+    fn every_deep_snn_v134_ceiling_row_is_now_flagged() {
+        // (reference, treatment) for depths 1..4, two-class task.
+        let rows = [
+            (0.4880f32, 1.0000f32),
+            (0.5000, 0.5060),
+            (0.5000, 0.5810),
+            (0.5000, 0.4435),
+        ];
+        for (reference, treatment) in rows {
+            let health = CeilingHealth::evaluate(reference, treatment, 0.5);
+            assert!(
+                !health.is_usable(),
+                "reference {reference} vs treatment {treatment} must not be usable"
+            );
+        }
+    }
+
+    #[test]
+    fn a_working_reference_above_its_treatment_is_ok() {
+        let health = CeilingHealth::evaluate(0.9013, 0.8500, 0.5);
+        assert_eq!(health, CeilingHealth::Ok);
+        assert!(health.is_usable());
+        assert_eq!(health.label(), "ok");
+    }
+
+    #[test]
+    fn a_live_reference_beaten_by_its_treatment_is_inverted_not_dead() {
+        let health = CeilingHealth::evaluate(0.8963, 0.9387, 0.5);
+        assert_eq!(health, CeilingHealth::Inverted);
+        assert!(!health.is_usable());
+    }
+
+    /// The SHD sweep shape: reference barely over chance, treatment perfect.
+    #[test]
+    fn a_reference_at_chance_with_a_perfect_treatment_reports_both_defects() {
+        let health = CeilingHealth::evaluate(0.2140, 1.0000, 0.2);
+        assert_eq!(health, CeilingHealth::DeadAndInverted);
+        assert!(!health.is_usable());
+    }
+
+    #[test]
+    fn the_margin_boundary_is_exclusive_and_nan_is_not_healthy() {
+        // Exactly at chance + margin is still dead: clearing the bar requires
+        // strictly exceeding it.
+        assert_eq!(
+            CeilingHealth::evaluate_with_margin(0.55, 0.1, 0.5, 0.05),
+            CeilingHealth::DeadReference
+        );
+        assert_eq!(
+            CeilingHealth::evaluate_with_margin(0.5501, 0.1, 0.5, 0.05),
+            CeilingHealth::Ok
+        );
+        // A non-finite reference must fall to the defect branch, not to `Ok`.
+        // `!(NaN > x)` is true, which is why the predicate is written negated.
+        assert_eq!(
+            CeilingHealth::evaluate(f32::NAN, 0.1, 0.5),
+            CeilingHealth::DeadReference
+        );
+        // A reference below chance is dead, not merely weak.
+        assert_eq!(
+            CeilingHealth::evaluate(0.10, 0.05, 0.5),
+            CeilingHealth::DeadReference
+        );
+    }
     use super::*;
 
     #[test]

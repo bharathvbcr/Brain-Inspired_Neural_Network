@@ -50,6 +50,18 @@ criterion = "0.5"
 [profile.release]
 lto = "fat"
 codegen-units = 1
+# Integer overflow must never wrap silently in a scientific instrument. Rust's
+# release default is `overflow-checks = off`, and every experiment runs
+# `--release`, so a wrapping subtraction would corrupt results rather than stop
+# the run — exactly the failure mode found in `binn-engine::queue`
+# (cursor overtaking a scheduled event; see `jump_to_earliest`).
+#
+# Cost is ~nothing at this workload (~30 s rebuild, no measurable runtime
+# effect). This is a PROVENANCE EVENT: it changes `rust_binary`, which
+# `scripts/shd_calibration/runner.py::ensure_manifest` hashes, so any report
+# produced before this line must not be compared by binary hash to one produced
+# after it. Discharge under AMENDMENT_2026-08-03_PROVENANCE_DISCHARGE_BY_BIT_IDENTITY.
+overflow-checks = true
 
 [profile.bench]
 lto = "fat"

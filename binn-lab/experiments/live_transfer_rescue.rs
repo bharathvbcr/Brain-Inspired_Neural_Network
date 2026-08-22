@@ -22,7 +22,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use binn_lab::guards::{gap_closed_clamped, gap_closed_exceeds_ceiling, Verdict};
+use binn_lab::guards::{gap_closed_clamped, gap_closed_exceeds_ceiling, CeilingHealth, Verdict};
 use binn_lab::{freeze_trials, samples_to_gradient_examples, Config};
 use binn_learn::{
     MatchedGradient, MatchedRlFlat, MatchedRlLearnedFb, MatchedRlReinforceFb, DEFAULT_MATCHED_BETA,
@@ -212,7 +212,11 @@ fn main() -> ExitCode {
     let gap_learned_lcb = gap_learned_m - 1.96 * std_error(&gap_learned);
 
     // A treatment that beats its own ceiling means the ceiling is not a ceiling.
-    let harness_valid = gap_exceeded_ceiling == 0;
+    // 2026-08-21: `gap_exceeded_ceiling == 0` is blind to a reference that never
+    // learned — no seed can exceed a ceiling the arm is also below. The reference
+    // is now tested against chance before it is allowed to bound anything.
+    let ceiling_health = CeilingHealth::evaluate(m_grad, m_learned, DENSE_CHANCE);
+    let harness_valid = gap_exceeded_ceiling == 0 && ceiling_health.is_usable();
 
     let v_flat = Verdict::evaluate_mean(
         m_flat,

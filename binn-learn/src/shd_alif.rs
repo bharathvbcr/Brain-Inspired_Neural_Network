@@ -59,6 +59,7 @@ use binn_core::Rng;
 use binn_engine::{DEFAULT_TAU_M, THETA_REST, V_RESET};
 
 use crate::matched_deep_gradient::ModulatorScale;
+use crate::shd_attention::{attention_forward, AttentionConfig, AttentionParams};
 use crate::shd_eprop_baseline::{shd_out_scale, ShdArmReport, ShdExample};
 
 /// Stable arm labels.
@@ -112,6 +113,22 @@ pub struct ShdAlifConfig {
     pub adaptive: bool,
     pub tau_a: f32,
     pub beta_a: f32,
+    /// **Ablation axis 3**: a *frozen* time-axis attention read-out.
+    ///
+    /// The block is drawn once and never updated. Nothing is backpropagated
+    /// through it, and it contributes no credit to the hidden layer — it is a
+    /// fixed temporal feature extractor whose pooled output is concatenated onto
+    /// the rate vector the read-out already sees. The read-out remains a single
+    /// layer trained by the same local rule as before, so **this arm is exactly
+    /// as local as the arm it extends**.
+    ///
+    /// That is what makes it a G2-relevant measurement rather than another
+    /// gradient reference. This module's own opening question is whether 0.234
+    /// is "a limit of local credit assignment, or a limit of a feed-forward
+    /// fixed-threshold forward model". Frozen temporal mixing sharpens it: if
+    /// adding memory to the *forward model*, with the credit machinery untouched,
+    /// moves the local arm, then the binding constraint was the forward model.
+    pub attention: Option<AttentionConfig>,
 }
 
 impl ShdAlifConfig {
@@ -127,7 +144,14 @@ impl ShdAlifConfig {
             adaptive: false,
             tau_a: DEFAULT_TAU_A,
             beta_a: DEFAULT_BETA_A,
+            attention: None,
         }
+    }
+
+    /// Attach a frozen attention read-out. `None` restores the base arm exactly.
+    pub fn with_frozen_attention(mut self, attention: Option<AttentionConfig>) -> Self {
+        self.attention = attention;
+        self
     }
 
     pub fn with_recurrent(mut self, on: bool) -> Self {
@@ -169,19 +193,27 @@ pub struct ShdAlifArch {
     win: Vec<f32>,
     /// `hidden × hidden`, zero when `!recurrent`, zero diagonal always.
     wrec: Vec<f32>,
-    /// `n_classes × hidden`
+    /// `n_classes × feature_len`
     wout: Vec<f32>,
     bout: Vec<f32>,
+    /// Frozen. Never appears on the left of an assignment after construction.
+    attn: Option<AttentionParams>,
+    /// `hidden`, or `hidden + d_model` when a frozen attention block is attached.
+    feature_len: usize,
 }
 
 /// Per-example forward products needed by every update rule.
 struct AlifForward {
-    rates: Vec<f32>,
     /// `hidden × n_in`
     e_in: Vec<f32>,
     /// `hidden × hidden`, empty when `!recurrent`
     e_rec: Vec<f32>,
     logits: Vec<f32>,
+    /// What the read-out consumes: the per-unit hidden rates, followed by the
+    /// frozen attention block's pooled output when one is attached. The first
+    /// `hidden` entries are the rates; there is no separate copy of them,
+    /// because two fields that must agree eventually stop agreeing.
+    features: Vec<f32>,
     /// Mean spikes per neuron per timestep, for sparsity disclosure.
     activity: f32,
 }
@@ -257,7 +289,23 @@ impl ShdAlifArch {
             }
         }
 
-        let wout: Vec<f32> = (0..cfg.n_classes * cfg.hidden)
+        // Drawn once, from a stream that cannot alias the trained weights, and
+        // never touched again. `out_scale` still keys off `hidden` so the
+        // attention columns of `wout` start at the same scale as the rate
+        // columns - a read-out that started hotter on one half would confound
+        // the axis with a learning-rate difference.
+        let attn = cfg.attention.map(|config| {
+            AttentionParams::deterministic(
+                cfg.hidden,
+                cfg.n_classes,
+                config,
+                seed ^ 0x54D0_A11F_4154_544E,
+            )
+            .expect("frozen attention params")
+        });
+        let feature_len = cfg.hidden + attn.as_ref().map_or(0, |p| p.config.d_model);
+
+        let wout: Vec<f32> = (0..cfg.n_classes * feature_len)
             .map(|_| (rng.next_f32() * 2.0 - 1.0) * out_scale)
             .collect();
 
@@ -275,6 +323,8 @@ impl ShdAlifArch {
             win,
             wrec,
             wout,
+            attn,
+            feature_len,
             bout: vec![0.0; cfg.n_classes],
         }
     }
@@ -345,6 +395,10 @@ impl ShdAlifArch {
 
         let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
         let mut total_spikes = 0.0f32;
+        // Only materialised when a frozen block is attached; the base arms keep
+        // their existing memory profile exactly.
+        let mut spike_log: Option<Vec<f32>> =
+            self.attn.as_ref().map(|_| Vec::with_capacity(t_len * h));
 
         for t in 0..t_len {
             let base = t * n_in;
@@ -390,6 +444,10 @@ impl ShdAlifArch {
                 total_spikes += spike;
             }
 
+            if let Some(log) = spike_log.as_mut() {
+                log.extend_from_slice(&s_now);
+            }
+
             if want_elig {
                 for i in 0..h {
                     let sg = surr[i];
@@ -428,20 +486,31 @@ impl ShdAlifArch {
             s_prev.copy_from_slice(&s_now);
         }
 
+        // `features` is `rates` alone unless a frozen block is attached, in
+        // which case its pooled output is appended. The block reads the spike
+        // train and returns; no gradient of any kind flows back into it.
+        let mut features = rates;
+        if let (Some(params), Some(log)) = (self.attn.as_ref(), spike_log.as_ref()) {
+            let cache = attention_forward(params, log, t_len).expect("frozen attention forward");
+            features.extend_from_slice(cache.pooled());
+        }
+        debug_assert_eq!(features.len(), self.feature_len);
+
+        let f = self.feature_len;
         let mut logits = self.bout.clone();
         for c in 0..self.n_classes {
             let mut z = logits[c];
-            for i in 0..h {
-                z += self.wout[c * h + i] * rates[i];
+            for i in 0..f {
+                z += self.wout[c * f + i] * features[i];
             }
             logits[c] = z;
         }
 
         AlifForward {
-            rates,
             e_in,
             e_rec,
             logits,
+            features,
             activity: total_spikes / (h as f32 * t_len as f32),
         }
     }
@@ -717,10 +786,14 @@ impl ShdAlifArm {
                 // Snapshot the transport matrix BEFORE the readout update.
                 let wout_snapshot = self.arch.wout.clone();
 
+                // The read-out is one layer with a local error signal, so
+                // widening it changes nothing about the locality of the rule -
+                // the extra columns are just more presynaptic features.
+                let f = self.arch.feature_len;
                 for k in 0..c {
                     let dk = delta[k];
-                    for i in 0..h {
-                        self.arch.wout[k * h + i] -= self.lr * dk * fwd.rates[i];
+                    for i in 0..f {
+                        self.arch.wout[k * f + i] -= self.lr * dk * fwd.features[i];
                     }
                     self.arch.bout[k] -= self.lr * dk;
                 }
@@ -730,7 +803,12 @@ impl ShdAlifArm {
                         let mut m = 0.0f32;
                         for k in 0..c {
                             let src = match self.rule {
-                                ShdAlifRule::EpropCeiling => wout_snapshot[k * h + i],
+                                // Hidden units occupy the first `h` columns, so
+                                // transport reads `k * f + i`, not `k * h + i`.
+                                // The frozen block's columns are deliberately
+                                // *not* transported: nothing may carry credit
+                                // back through it.
+                                ShdAlifRule::EpropCeiling => wout_snapshot[k * f + i],
                                 _ => self.feedback[i * c + k],
                             };
                             m += src * (-delta[k]);
@@ -749,8 +827,9 @@ impl ShdAlifArm {
                 for k in 0..c {
                     let indicator = if k == action { 1.0f32 } else { 0.0 };
                     let g = reward * (indicator - probs[k]);
-                    for i in 0..h {
-                        self.arch.wout[k * h + i] += self.lr * g * fwd.rates[i];
+                    for i in 0..self.arch.feature_len {
+                        self.arch.wout[k * self.arch.feature_len + i] +=
+                            self.lr * g * fwd.features[i];
                     }
                     self.arch.bout[k] += self.lr * g;
                 }
@@ -866,8 +945,11 @@ mod tests {
             .collect()
     }
 
-    fn total_spikes(f: &AlifForward) -> f32 {
-        f.rates.iter().sum()
+    /// Sum of the hidden rate block. Explicitly parameterised by `hidden`:
+    /// summing the whole feature vector would silently fold in the attention
+    /// block's pooled output and stop being a spike count.
+    fn total_spikes(f: &AlifForward, hidden: usize) -> f32 {
+        f.features.iter().take(hidden).sum()
     }
 
     fn cfg(hidden: usize, n_classes: usize) -> ShdAlifConfig {
@@ -881,19 +963,169 @@ mod tests {
         assert!(src.contains("GC1"));
     }
 
+    /// Every ablation cell must be either **interpretable or flagged** — never
+    /// silently degenerate.
+    ///
+    /// This was `all_four_ablation_cells_run`, asserting only `is_finite()` and
+    /// `(0.0..=1.0).contains(..)`. Both are satisfied by an arm that collapsed to
+    /// a constant predictor, so the only coverage of the four architecture cells
+    /// could not tell "ran" from "produced a result" — the same shape of blind
+    /// spot that let a gradient ceiling sit at chance in `deep-snn-scaling` v134
+    /// (`RESULT_2026-08-20_DEEP_SNN_V134_CEILING_IS_AT_CHANCE.md`).
+    ///
+    /// `AlifEval::defects()` already knew how to say all of this; nothing called
+    /// it. Divergence is **not** asserted away — the recurrent arms genuinely
+    /// diverge (24/24 in the wave-4 campaign) and that is a legitimate outcome.
+    /// What is asserted is that a diverged arm can never look healthy.
     #[test]
-    fn all_four_ablation_cells_run() {
+    fn every_ablation_cell_is_either_interpretable_or_flagged() {
         let train = toy(40, 16, 9, 4, 1);
         let test = toy(20, 16, 9, 4, 2);
+        let mut interpretable = 0usize;
         for &rec in &[false, true] {
             for &ad in &[false, true] {
                 let c = cfg(24, 4).with_recurrent(rec).with_adaptive(ad);
+                let label = c.arch_label();
                 let mut arm = ShdAlifArm::new(&train[0], &c, ShdAlifRule::Dfa, 7);
-                let r = arm.train_and_evaluate(c.epochs, &train, &test);
-                assert!(r.accuracy.is_finite(), "{} produced NaN", c.arch_label());
+                // `train_and_evaluate` returns only (label, accuracy, loss),
+                // which is why the old test could not see a collapse.
+                // `train_and_evaluate_detailed` carries the defect fields and
+                // already existed - nothing in the tests called it.
+                let r = arm.train_and_evaluate_detailed(c.epochs, &train, &test);
+
+                // The contract `AlifEval::diverged` documents but nothing tested:
+                // "A diverged arm is always degenerate, so it can never be
+                // selected or cited."
+                if r.diverged {
+                    assert!(
+                        r.is_degenerate(),
+                        "{label} diverged but reports no defect - it could be cited"
+                    );
+                    assert_eq!(r.accuracy, 0.0, "{label} diverged with a live accuracy");
+                    continue;
+                }
+
+                assert!(r.accuracy.is_finite(), "{label} produced NaN");
                 assert!((0.0..=1.0).contains(&r.accuracy));
+                if r.is_degenerate() {
+                    // Allowed, but it must say so rather than pass silently.
+                    assert!(
+                        !r.defects().is_empty(),
+                        "{label} is degenerate with an empty defect list"
+                    );
+                } else {
+                    // A healthy cell must actually use its output layer.
+                    assert!(
+                        r.n_distinct_predicted > 1,
+                        "{label} is called healthy while predicting one class"
+                    );
+                    assert!(r.majority_pred_frac <= MAJORITY_PRED_MAX);
+                    interpretable += 1;
+                }
             }
         }
+        assert!(
+            interpretable > 0,
+            "all four ablation cells were degenerate - the ALIF path produces no \
+             interpretable result at all, which a finiteness check would have passed"
+        );
+    }
+
+    /// **The locality guarantee.** Training must not move one bit of the frozen
+    /// attention block.
+    ///
+    /// This is the whole reason the arm is admissible as a statement about local
+    /// learning. If anything updated inside the block, credit would be flowing
+    /// through a softmax over all pairs of timesteps, the arm would be a
+    /// gradient reference wearing a local rule's name, and every G2-adjacent
+    /// reading of it would be wrong. Asserted bitwise rather than approximately:
+    /// "it barely moved" is not the claim.
+    #[test]
+    fn training_never_moves_the_frozen_attention_block() {
+        let train = toy(40, 16, 12, 4, 21);
+        let test = toy(20, 16, 12, 4, 22);
+        let config = cfg(24, 4).with_frozen_attention(Some(AttentionConfig::new(8, 1).unwrap()));
+        for rule in [
+            ShdAlifRule::Dfa,
+            ShdAlifRule::EpropCeiling,
+            ShdAlifRule::BroadcastPm1,
+        ] {
+            let mut arm = ShdAlifArm::new(&train[0], &config, rule, 7);
+            let before: Vec<u32> = arm
+                .arch()
+                .attn
+                .as_ref()
+                .expect("frozen block")
+                .iter_all()
+                .map(|v| v.to_bits())
+                .collect();
+            assert!(!before.is_empty());
+            let report = arm.train_and_evaluate(config.epochs, &train, &test);
+            assert!(report.accuracy.is_finite());
+            let after: Vec<u32> = arm
+                .arch()
+                .attn
+                .as_ref()
+                .unwrap()
+                .iter_all()
+                .map(|v| v.to_bits())
+                .collect();
+            assert_eq!(before, after, "{} updated the frozen block", rule.label());
+        }
+    }
+
+    /// The frozen block must widen the read-out and change what it sees, or the
+    /// axis is decoration. Hidden spiking must be untouched, or the axis is
+    /// confounded with a different forward model.
+    #[test]
+    fn frozen_attention_widens_the_read_out_without_touching_the_spiking_forward() {
+        let train = toy(8, 16, 24, 4, 31);
+        let plain = cfg(24, 4);
+        let attentive = cfg(24, 4).with_frozen_attention(Some(AttentionConfig::new(8, 1).unwrap()));
+        let a_plain = ShdAlifArch::new(&train[0], &plain, 11);
+        let a_attn = ShdAlifArch::new(&train[0], &attentive, 11);
+
+        assert_eq!(a_plain.feature_len, 24);
+        assert_eq!(a_attn.feature_len, 24 + 8);
+        assert_eq!(a_attn.wout.len(), 4 * (24 + 8));
+
+        let f_plain = a_plain.forward(&train[0].frames, false);
+        let f_attn = a_attn.forward(&train[0].frames, false);
+        assert!(
+            total_spikes(&f_plain, 24) > 0.0,
+            "silent fixture proves nothing"
+        );
+        // Same spiking forward: `w_in` is drawn from the same stream and the
+        // block reads spikes rather than producing them.
+        assert_eq!(
+            f_plain.features[..24],
+            f_attn.features[..24],
+            "the block perturbed the spiking layer"
+        );
+        assert_eq!(
+            f_plain.features.len(),
+            24,
+            "with no block the feature vector is the rate vector and nothing else"
+        );
+        assert_eq!(f_attn.features.len(), 32);
+        assert!(
+            f_attn.features[24..].iter().any(|v| *v != 0.0),
+            "the pooled block output is all zero; the read-out gained nothing"
+        );
+    }
+
+    /// `attention: None` must leave the arm numerically where it was, so a
+    /// difference between the two is the block and never the plumbing.
+    #[test]
+    fn absent_attention_is_the_base_arm_exactly() {
+        let train = toy(8, 16, 24, 4, 41);
+        let base = ShdAlifArch::new(&train[0], &cfg(24, 4), 11);
+        let explicit = ShdAlifArch::new(&train[0], &cfg(24, 4).with_frozen_attention(None), 11);
+        let f1 = base.forward(&train[0].frames, false);
+        let f2 = explicit.forward(&train[0].frames, false);
+        assert_eq!(f1.logits, f2.logits);
+        assert_eq!(base.wout, explicit.wout);
+        assert!(explicit.attn.is_none());
     }
 
     /// The recurrence axis must actually change the computation. If `W_rec` is
@@ -908,11 +1140,12 @@ mod tests {
         let f1 = a_ff.forward(&train[0].frames, false);
         let f2 = a_rec.forward(&train[0].frames, false);
         assert!(
-            total_spikes(&f1) > 0.0,
+            total_spikes(&f1, 24) > 0.0,
             "test fixture produced a silent network; raise the input drive"
         );
         assert_ne!(
-            f1.rates, f2.rates,
+            f1.features[..24],
+            f2.features[..24],
             "enabling W_rec must change hidden rates"
         );
     }
@@ -927,14 +1160,15 @@ mod tests {
         let a_ad = ShdAlifArch::new(&train[0], &alif, 13);
         let f1 = a_fix.forward(&train[0].frames, false);
         let f2 = a_ad.forward(&train[0].frames, false);
-        let s1 = total_spikes(&f1);
-        let s2 = total_spikes(&f2);
+        let s1 = total_spikes(&f1, 24);
+        let s2 = total_spikes(&f2, 24);
         assert!(
             s1 > 0.0,
             "test fixture produced a silent network; raise the input drive"
         );
         assert_ne!(
-            f1.rates, f2.rates,
+            f1.features[..24],
+            f2.features[..24],
             "enabling threshold adaptation must change hidden rates"
         );
         // Adaptation raises the threshold after a spike, so it cannot increase

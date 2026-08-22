@@ -29,9 +29,8 @@ pub use shd::{
     write_split, ShdSample, ShdSplit, SHD_CHANCE, SHD_DEFAULT_T, SHD_N_CLASSES, SHD_N_IN,
 };
 pub use shd_contract::{
-    frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEvent,
-    ShdEventContract, ShdEventSample, SparseFrame, SHD_EVENT_MAGIC, SHD_FIXED_WINDOW_MS,
-    SHD_PHYSICAL_TAU_MS,
+    frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEvent, ShdEventContract,
+    ShdEventSample, SparseFrame, SHD_EVENT_MAGIC, SHD_FIXED_WINDOW_MS, SHD_PHYSICAL_TAU_MS,
 };
 pub use synth::{SynthConfig, SyntheticStream};
 pub use temporal_order::{

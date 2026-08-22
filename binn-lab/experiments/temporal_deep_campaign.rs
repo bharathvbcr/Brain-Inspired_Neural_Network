@@ -9,6 +9,7 @@ use binn_data::{
     time_shuffle, TemporalDifficulty, TemporalOrderExample, TemporalOrderSplit,
     TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
+use binn_lab::guards::CeilingHealth;
 use binn_learn::{
     random_feedback, train_bptt, train_feedback, train_learned_feedback, DenseTemporalExample,
     InputRateClassifier, InputRateConfig, SharedTemporalNet, ShdExample,
@@ -18,6 +19,9 @@ const CALIBRATION_PROTOCOL: u64 = 144;
 const DEPTH_PROTOCOL: u64 = 145;
 const CALIBRATION_MASTER_SEED: u64 = 0x7E4A_5144_0000_0001;
 const SCIENTIFIC_MASTER_SEED: u64 = 0x7E4A_5145_0000_0001;
+/// Constant-predictor rate for the temporal-order task; a BPTT ceiling must
+/// clear it before anything can be measured against it.
+const CHANCE: f32 = 1.0 / TEMPORAL_ORDER_N_CLASSES as f32;
 const FREEZE_PATH: &str = "results/temporal_task_calibration_v144.txt";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -264,15 +268,14 @@ fn run_depth(quick: bool, out: PathBuf) -> Result<(), String> {
         }
         let treatment = mean(&treatment_acc);
         let ceiling = mean(&ceiling_acc);
-        let inverted = ceiling + 0.01 < treatment;
-        any_inversion |= inverted;
+        // 2026-08-21: was a bare `ceiling + 0.01 < treatment` inversion test,
+        // which is silent when the BPTT ceiling never learned and the treatment
+        // is below it. `CeilingHealth` tests the reference against chance first.
+        let health = CeilingHealth::evaluate(ceiling, treatment, CHANCE);
+        any_inversion |= !health.is_usable();
         rows.push_str(&format!(
             "| {depth} | {width} × {depth} | {treatment:.4} | {ceiling:.4} | {} |\n",
-            if inverted {
-                "INVALID_HARNESS — ceiling inversion"
-            } else {
-                "ok"
-            }
+            health.label()
         ));
     }
     let verdict = if quick {

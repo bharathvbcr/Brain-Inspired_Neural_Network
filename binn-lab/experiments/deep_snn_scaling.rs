@@ -19,6 +19,14 @@
 //!   orders of magnitude weaker than the treatment's is not a ceiling — that is
 //!   exactly how the SHD suite produced a "ceiling" below its own treatment.
 //!
+//! # 2026-08-21 fix (v135)
+//!
+//! Ceiling health came from a local `ceiling_mean < treatment_mean` test, which
+//! is silent when the reference is at chance *and* the treatment is below it. At
+//! v134 the depth-4 row reported `ok` for a ceiling of `0.5000 ± 0.0000` on a
+//! two-class task. Health now comes from [`binn_lab::guards::CeilingHealth`],
+//! which tests the reference against chance before comparing it to anything.
+//!
 //! # Known limitation, stated in the report
 //!
 //! `CoincidenceTask` has `N_IN = 2`. A 256⁴ stack on a 2-dimensional,
@@ -30,14 +38,16 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use binn_lab::guards::Verdict;
+use rayon::prelude::*;
+
+use binn_lab::guards::{CeilingHealth, Verdict};
 use binn_lab::{freeze_trials, samples_to_gradient_examples, Config};
 use binn_learn::{
-    MatchedDeepGradient, MatchedRl3LayerLearnedFb, MatchedRl4LayerLearnedFb,
+    GradientExample, MatchedDeepGradient, MatchedRl3LayerLearnedFb, MatchedRl4LayerLearnedFb,
     MatchedRlDeepLearnedFb, MatchedRlLearnedFb, ModulatorScale, DEFAULT_MATCHED_BETA,
 };
 
-const PROTOCOL_VERSION: u64 = 134;
+const PROTOCOL_VERSION: u64 = 135;
 const EXPERIMENT_NAME: &str = "deep-snn-scaling";
 /// Preregistered accuracy floor.
 const ACCURACY_FLOOR: f32 = 0.65;
@@ -45,6 +55,9 @@ const ACCURACY_FLOOR: f32 = 0.65;
 const REQUIRED_SEEDS: usize = 20;
 /// Task input dimensionality, surfaced in the report as an interpretation caveat.
 const TASK_N_IN: usize = 2;
+/// `CoincidenceTask` is two-class, so this is the constant-predictor rate every
+/// gradient ceiling must clear before it can bound anything.
+const CHANCE: f32 = 0.5;
 
 #[derive(Clone, Debug)]
 struct DepthArm {
@@ -55,6 +68,112 @@ struct DepthArm {
     ceiling_accs: Vec<f32>,
     /// Realised RMS of the ceiling's input-layer modulator.
     ceiling_modulator: ModulatorScale,
+}
+
+/// One trainable unit of the depth grid.
+///
+/// Every cell of the `n_seeds x 8` grid is independent given the seed, so the
+/// whole suite is one flat work list. The 4-deep arms cost several times what
+/// the 1-layer arms cost, and flattening is what lets rayon steal the cheap
+/// jobs while the expensive ones are still running instead of leaving cores
+/// idle behind a per-seed barrier.
+#[derive(Clone, Copy, Debug)]
+enum Job {
+    /// Learned-feedback arm with `depth + 1` hidden layers.
+    Feedback(usize),
+    /// Depth-matched surrogate-gradient ceiling with `depth + 1` hidden layers.
+    Ceiling(usize),
+}
+
+struct JobOutcome {
+    accuracy: f32,
+    /// Realised input-layer modulator scale. Only the ceiling arms report one;
+    /// the learned-feedback arms return an empty accumulator, which `merge`
+    /// folds in as a no-op.
+    modulator: ModulatorScale,
+}
+
+impl Job {
+    fn run(
+        self,
+        hidden: usize,
+        epochs: usize,
+        seed: u64,
+        train: &[GradientExample],
+        test: &[GradientExample],
+    ) -> JobOutcome {
+        let accuracy = match self {
+            Job::Feedback(0) => {
+                MatchedRlLearnedFb::new(hidden, 0.05, 0.0, 0.01, DEFAULT_MATCHED_BETA, seed)
+                    .train_and_evaluate(epochs, train, test)
+                    .accuracy
+            }
+            Job::Feedback(1) => {
+                MatchedRlDeepLearnedFb::new(
+                    hidden,
+                    hidden,
+                    0.05,
+                    0.0,
+                    0.01,
+                    DEFAULT_MATCHED_BETA,
+                    seed,
+                )
+                .train_and_evaluate(epochs, train, test)
+                .accuracy
+            }
+            Job::Feedback(2) => {
+                MatchedRl3LayerLearnedFb::new(
+                    hidden,
+                    hidden,
+                    hidden,
+                    0.05,
+                    0.0,
+                    0.01,
+                    DEFAULT_MATCHED_BETA,
+                    seed,
+                )
+                .train_and_evaluate(epochs, train, test)
+                .accuracy
+            }
+            Job::Feedback(3) => {
+                MatchedRl4LayerLearnedFb::new(
+                    hidden,
+                    hidden,
+                    hidden,
+                    hidden,
+                    0.05,
+                    0.0,
+                    0.01,
+                    DEFAULT_MATCHED_BETA,
+                    seed,
+                )
+                .train_and_evaluate(epochs, train, test)
+                .accuracy
+            }
+            Job::Ceiling(depth_idx) => {
+                let layers = vec![hidden; depth_idx + 1];
+                let mut g =
+                    MatchedDeepGradient::new(&layers, 0.05, 0.0, DEFAULT_MATCHED_BETA, seed);
+                let accuracy = g.train_and_evaluate(epochs, train, test).accuracy;
+                return JobOutcome {
+                    accuracy,
+                    modulator: g.input_modulator_scale(),
+                };
+            }
+            Job::Feedback(d) => unreachable!("depth index {d} is outside the registered 1-4 grid"),
+        };
+        JobOutcome {
+            accuracy,
+            modulator: ModulatorScale::new(),
+        }
+    }
+}
+
+/// Every accuracy produced by one seed, held until the ordered fold.
+struct SeedResult {
+    fb: [f32; 4],
+    ceil: [f32; 4],
+    ceiling_modulator: [ModulatorScale; 4],
 }
 
 fn mean(vals: &[f32]) -> f32 {
@@ -140,89 +259,68 @@ fn main() -> ExitCode {
         })
         .collect();
 
-    for s_idx in 0..n_seeds {
-        let seed = master_seed ^ ((s_idx as u64) * 0x1000_0005_u64);
-        let split = freeze_trials(&base_cfg, seed);
-        let train_data = samples_to_gradient_examples(&split.train);
-        let test_data = samples_to_gradient_examples(&split.test);
+    // MatchedRlLearnedFb / MatchedDeepGradient are each seeded solely by `seed`
+    // and read the split immutably, so no cell can observe any other cell. The
+    // parallelism is therefore not an approximation: rayon's `map(..).collect()`
+    // preserves input order, and the one cross-seed accumulator
+    // (`ceiling_modulator`, an f64 sum) is folded *after* the collect in seed
+    // order. Verified by diffing the `--quick` report against the pre-parallel
+    // binary and against RAYON_NUM_THREADS=1.
+    let seed_results: Vec<SeedResult> = (0..n_seeds)
+        .into_par_iter()
+        .map(|s_idx| {
+            let seed = master_seed ^ ((s_idx as u64) * 0x1000_0005_u64);
+            let split = freeze_trials(&base_cfg, seed);
+            let train_data = samples_to_gradient_examples(&split.train);
+            let test_data = samples_to_gradient_examples(&split.test);
 
-        // ---- Learned-feedback arms, one per depth ----
-        let fb: [f32; 4] = {
-            let mut l1 =
-                MatchedRlLearnedFb::new(hidden, 0.05, 0.0, 0.01, DEFAULT_MATCHED_BETA, seed);
-            let r1 = l1
-                .train_and_evaluate(epochs, &train_data, &test_data)
-                .accuracy;
+            let jobs: Vec<Job> = (0..4)
+                .map(Job::Feedback)
+                .chain((0..4).map(Job::Ceiling))
+                .collect();
+            let outcomes: Vec<JobOutcome> = jobs
+                .par_iter()
+                .map(|job| job.run(hidden, epochs, seed, &train_data, &test_data))
+                .collect();
 
-            let mut l2 = MatchedRlDeepLearnedFb::new(
-                hidden,
-                hidden,
-                0.05,
-                0.0,
-                0.01,
-                DEFAULT_MATCHED_BETA,
-                seed,
-            );
-            let r2 = l2
-                .train_and_evaluate(epochs, &train_data, &test_data)
-                .accuracy;
+            let mut result = SeedResult {
+                fb: [0.0; 4],
+                ceil: [0.0; 4],
+                ceiling_modulator: [ModulatorScale::new(); 4],
+            };
+            for (job, outcome) in jobs.iter().zip(outcomes) {
+                match *job {
+                    Job::Feedback(d) => result.fb[d] = outcome.accuracy,
+                    Job::Ceiling(d) => {
+                        result.ceil[d] = outcome.accuracy;
+                        result.ceiling_modulator[d] = outcome.modulator;
+                    }
+                }
+            }
+            result
+        })
+        .collect();
 
-            let mut l3 = MatchedRl3LayerLearnedFb::new(
-                hidden,
-                hidden,
-                hidden,
-                0.05,
-                0.0,
-                0.01,
-                DEFAULT_MATCHED_BETA,
-                seed,
-            );
-            let r3 = l3
-                .train_and_evaluate(epochs, &train_data, &test_data)
-                .accuracy;
-
-            let mut l4 = MatchedRl4LayerLearnedFb::new(
-                hidden,
-                hidden,
-                hidden,
-                hidden,
-                0.05,
-                0.0,
-                0.01,
-                DEFAULT_MATCHED_BETA,
-                seed,
-            );
-            let r4 = l4
-                .train_and_evaluate(epochs, &train_data, &test_data)
-                .accuracy;
-            [r1, r2, r3, r4]
-        };
-
-        // ---- Depth-MATCHED gradient ceilings ----
-        let mut ceil = [0.0f32; 4];
+    for (s_idx, seed_result) in seed_results.iter().enumerate() {
         for (idx, arm) in arms.iter_mut().enumerate() {
-            let layers = vec![hidden; arm.depth];
-            let mut g = MatchedDeepGradient::new(&layers, 0.05, 0.0, DEFAULT_MATCHED_BETA, seed);
-            ceil[idx] = g
-                .train_and_evaluate(epochs, &train_data, &test_data)
-                .accuracy;
-            arm.ceiling_modulator.merge(&g.input_modulator_scale());
-            arm.fb_accs.push(fb[idx]);
-            arm.ceiling_accs.push(ceil[idx]);
+            arm.ceiling_modulator
+                .merge(&seed_result.ceiling_modulator[idx]);
+            arm.fb_accs.push(seed_result.fb[idx]);
+            arm.ceiling_accs.push(seed_result.ceil[idx]);
         }
 
         println!(
             "Seed {:2}/{n_seeds}: FB 1L={:.4} 2L={:.4} 3L={:.4} 4L={:.4} | \
              ceiling 1L={:.4} 2L={:.4} 3L={:.4} 4L={:.4}",
             s_idx + 1,
-            fb[0],
-            fb[1],
-            fb[2],
-            fb[3],
-            ceil[0],
-            ceil[1],
-            ceil[2],
-            ceil[3]
+            seed_result.fb[0],
+            seed_result.fb[1],
+            seed_result.fb[2],
+            seed_result.fb[3],
+            seed_result.ceil[0],
+            seed_result.ceil[1],
+            seed_result.ceil[2],
+            seed_result.ceil[3]
         );
     }
 
@@ -230,11 +328,34 @@ fn main() -> ExitCode {
     let mut fb_rows = String::new();
     let mut ceiling_rows = String::new();
     let mut any_fb_pass = false;
+    let mut any_ceiling_defect = false;
 
     for arm in &arms {
         let m = mean(&arm.fb_accs);
         let se = std_error(&arm.fb_accs);
-        let verdict = Verdict::evaluate_mean(m, ACCURACY_FLOOR, n_seeds, REQUIRED_SEEDS, true);
+        let cm = mean(&arm.ceiling_accs);
+        let cse = std_error(&arm.ceiling_accs);
+
+        // v135: this was a local `cm + 1e-6 < m` inversion test, which is silent
+        // when the reference is at chance and the treatment happens to be below
+        // it. At v134 that printed `ok` for a depth-4 ceiling of 0.5000 ± 0.0000
+        // on a two-class task. `CeilingHealth` tests against chance first.
+        let health = CeilingHealth::evaluate(cm, m, CHANCE);
+        if !health.is_usable() {
+            any_ceiling_defect = true;
+        }
+
+        // v135: the verdict took `harness_valid = true` unconditionally, so the
+        // 1-layer arm reported **PASS** at v134 against a ceiling of 0.4880 on a
+        // two-class task. An arm whose own reference did not learn has no
+        // measurable gap, so its verdict is INVALID_HARNESS, not PASS or FAIL.
+        let verdict = Verdict::evaluate_mean(
+            m,
+            ACCURACY_FLOOR,
+            n_seeds,
+            REQUIRED_SEEDS,
+            health.is_usable(),
+        );
         if verdict.is_citable_as_positive() {
             any_fb_pass = true;
         }
@@ -249,32 +370,38 @@ fn main() -> ExitCode {
             verdict.label(),
         ));
 
-        let cm = mean(&arm.ceiling_accs);
-        let cse = std_error(&arm.ceiling_accs);
-        // A ceiling that loses to its own treatment is a harness defect.
-        let ceiling_inverted = cm + 1e-6 < m;
         ceiling_rows.push_str(&format!(
             "| {}-Hidden-Layer Gradient Ceiling (depth-matched) | {arch} | {cm:.4} | {cse:.4} | {:.3e} | {} |\n",
             arm.depth,
             arm.ceiling_modulator.rms(),
-            if ceiling_inverted {
-                "INVERTED — ceiling below treatment; do not interpret"
-            } else {
-                "ok"
-            },
+            health.label(),
         ));
     }
 
+    let deepest_health =
+        CeilingHealth::evaluate(mean(&arms[3].ceiling_accs), mean(&arms[3].fb_accs), CHANCE);
     let overall = Verdict::evaluate_mean(
         mean(&arms[3].fb_accs),
         ACCURACY_FLOOR,
         n_seeds,
         REQUIRED_SEEDS,
-        true,
+        deepest_health.is_usable(),
     );
+
+    // A defect banner is emitted before any number, so a reader who stops at the
+    // first table cannot miss it. Empty when every reference cleared chance.
+    let harness_banner = if any_ceiling_defect {
+        "> **HARNESS DEFECT — do not interpret any comparison below.** At least one \
+         depth-matched gradient ceiling failed its health check: a reference must clear \
+         chance before anything can be measured against it. Arm verdicts are reported as \
+         `INVALID_HARNESS` rather than PASS or FAIL for exactly this reason.\n\n"
+    } else {
+        ""
+    };
 
     let summary = format!(
         "# Deep SNN Scaling Report\n\n\
+        {harness_banner}\
         **Protocol Version:** {PROTOCOL_VERSION}  \n\
         **Experiment:** {EXPERIMENT_NAME}  \n\
         **Schedule:** {} (n={n_seeds}, hidden={hidden}, epochs={epochs})  \n\

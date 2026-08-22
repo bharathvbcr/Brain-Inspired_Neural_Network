@@ -420,6 +420,22 @@ mod tests {
     }
 
     #[test]
+    /// **Mechanical completion only — this is not evidence that the ceiling
+    /// learns.**
+    ///
+    /// The assertions below (`is_finite`, in `[0, 1]`) are satisfied by a
+    /// constant predictor at chance, and that is exactly what this ceiling turned
+    /// out to be: `deep-snn-scaling` v134 measured it at 0.4880 / 0.5000 / 0.5000
+    /// / 0.5000 on a two-class task, across 20 seeds, on splits the treatment
+    /// solves at 1.0000 in the same process.
+    /// See `RESULT_2026-08-20_DEEP_SNN_V134_CEILING_IS_AT_CHANCE.md`.
+    ///
+    /// The test is deliberately **not** strengthened to assert learning, because
+    /// it would fail and this module has no fix yet. It is left as the
+    /// smoke test it always was, with its limits stated so that a green tick here
+    /// is never read as a working reference. `guards::CeilingHealth` is what
+    /// prevents that reading downstream; `shared_bptt` is the validated
+    /// replacement for new work.
     fn trains_at_every_depth_without_panicking() {
         let train = toy_data(40);
         let test = toy_data(20);
@@ -493,5 +509,100 @@ mod tests {
         let mut z = vec![0.0f32; 4];
         assert_eq!(rms_normalise(&mut z), 0.0);
         assert!(z.iter().all(|x| x.is_finite()));
+    }
+
+    // ---- characterization of a known defect, 2026-08-22 --------------------
+    //
+    // `deep-snn-scaling` v134/v135 measured this ceiling at chance on
+    // `CoincidenceTask` at every depth. These tests localise that and **pin the
+    // broken behaviour so it cannot silently change**. They assert the defect,
+    // not the fix: there is no fix yet, and a green suite must not imply one.
+    //
+    // If someone repairs `MatchedDeepGradient`, these tests fail. That is the
+    // intended signal — the repair must be registered and the record updated,
+    // not slipped in under a passing build.
+    //
+    // See `FINDING_2026-08-22_MATCHED_DEEP_GRADIENT_COLLAPSES_TO_SILENCE.md`.
+
+    /// It never learns — on its own separable fixture, at any depth.
+    #[test]
+    fn defect_the_deep_ceiling_never_learns_its_own_fixture() {
+        let train = toy_data(40);
+        let test = toy_data(20);
+        for depth in 1..=4 {
+            let layers = vec![8usize; depth];
+            let mut g = MatchedDeepGradient::new(&layers, 0.05, 0.0, 5.0, 7);
+            let acc = g.train_and_evaluate(200, &train, &test).accuracy;
+            assert!(
+                (acc - 0.5).abs() < 1e-6,
+                "depth {depth} scored {acc} - if this ceiling now learns, the \
+                 defect is fixed and the record must be updated"
+            );
+        }
+    }
+
+    /// The plain reference solves the same fixture perfectly, with the same
+    /// learning rate, surrogate width and seed. So the defect is **this
+    /// implementation**, not the task, not depth, and not the hyperparameters.
+    #[test]
+    fn defect_is_localised_the_plain_reference_solves_the_same_fixture() {
+        use crate::matched_local_baseline::MatchedGradient;
+        let train = toy_data(40);
+        let test = toy_data(20);
+        let acc = MatchedGradient::new(8, 0.05, 5.0, 7)
+            .train_and_evaluate(200, &train, &test)
+            .accuracy;
+        assert!(
+            acc > 0.99,
+            "the plain reference scored {acc}, expected ~1.0"
+        );
+    }
+
+    /// The mechanism: **training drives the network silent.** With enough input
+    /// drive the layer spikes at initialisation, and after training it does not
+    /// spike at all — so `rate` is zero, the readout freezes, and the logit is
+    /// just the bias. Both classes then produce the *same* logit, which is a
+    /// constant predictor by construction.
+    #[test]
+    fn defect_training_collapses_activity_to_zero() {
+        let boosted: Vec<GradientExample> = toy_data(4)
+            .iter()
+            .map(|(a, b, l)| {
+                let (mut x1, mut x2) = (*a, *b);
+                for v in x1.iter_mut() {
+                    *v *= 8.0;
+                }
+                for v in x2.iter_mut() {
+                    *v *= 8.0;
+                }
+                (x1, x2, *l)
+            })
+            .collect();
+
+        let mut g = MatchedDeepGradient::new(&[8], 0.05, 0.0, 5.0, 7);
+        let (s_init, _, _, _) = g.forward(&boosted[0].0, &boosted[0].1);
+        let spikes_before: f32 = s_init[0].iter().sum();
+        assert!(
+            spikes_before > 0.0,
+            "the boosted fixture must spike at init"
+        );
+
+        g.train_and_evaluate(200, &boosted, &boosted);
+
+        let mut logits = Vec::new();
+        for (x1, x2, _) in &boosted {
+            let (s, _, _, logit) = g.forward(x1, x2);
+            assert_eq!(
+                s[0].iter().sum::<f32>(),
+                0.0,
+                "activity survived training - the collapse mechanism has changed"
+            );
+            logits.push(logit);
+        }
+        assert!(
+            logits.windows(2).all(|w| w[0].to_bits() == w[1].to_bits()),
+            "logits differ across classes: {logits:?} - it is no longer a \
+             constant predictor and the record must be updated"
+        );
     }
 }

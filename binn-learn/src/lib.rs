@@ -23,6 +23,7 @@ pub mod pruning;
 pub mod scan_training;
 pub mod shared_bptt;
 pub mod shd_alif;
+pub mod shd_attention;
 pub mod shd_eprop_baseline;
 pub mod shd_matched;
 pub mod shd_matched_arms;
@@ -88,6 +89,11 @@ pub use shd_alif::{
     ACTIVITY_MIN, DEFAULT_BETA_A, DEFAULT_TAU_A, MAJORITY_PRED_MAX, SHD_ALIF_BROADCAST_LABEL,
     SHD_ALIF_DFA_LABEL, SHD_ALIF_EPROP_LABEL,
 };
+pub use shd_attention::{
+    attention_forward, attention_gradient, attention_logits, AttentionBlock, AttentionCache,
+    AttentionConfig, AttentionGradient, AttentionParams, ATTENTION_MAX_CYCLES,
+    ATTENTION_MIN_CYCLES, DEFAULT_ATTENTION_DIM, DEFAULT_ATTENTION_LAYERS,
+};
 pub use shd_eprop_baseline::{
     shd_out_scale, ShdArmReport, ShdBroadcastPm1, ShdDfa, ShdEpropCeiling, ShdExample,
     ShdRlLearnedFb, ShdRlReinforceFb, ShdSuperSpikeCeiling, ShdTrainConfig,
@@ -97,18 +103,20 @@ pub use shd_eprop_baseline::{
 pub use shd_matched::{
     load_epoch_orders, loss_and_gradient as shd_matched_loss_and_gradient, one_cycle_lr,
     save_epoch_orders, surrogate_derivative as shd_matched_surrogate_derivative, MatchedAdam,
-    MatchedForward as ShdMatchedForward, MatchedGradient as ShdMatchedGradient,
-    MatchedShdSample, MatchedTrainSpec as ShdMatchedTrainSpec,
-    MatchedWeights as ShdMatchedWeights, PortableRng,
+    MatchedForward as ShdMatchedForward, MatchedGradient as ShdMatchedGradient, MatchedShdSample,
+    MatchedTrainSpec as ShdMatchedTrainSpec, MatchedWeights as ShdMatchedWeights, PortableRng,
     MATCHED_ADAM_BETA1, MATCHED_ADAM_BETA2, MATCHED_ADAM_EPS, MATCHED_ORDER_MAGIC,
     MATCHED_PHYSICAL_TAU_MS, MATCHED_SURROGATE_ALPHA, MATCHED_THRESHOLD, MATCHED_WEIGHTS_MAGIC,
 };
-pub use shd_temporal::{apply_temporal, TemporalAudit, TemporalCondition};
 pub use shd_matched_arms::{
-    loss_and_gradient_arm as shd_matched_loss_and_gradient_arm, ArmGradient as ShdArmGradient,
+    loss_and_gradient_arm as shd_matched_loss_and_gradient_arm,
+    loss_and_gradient_arm_scaled as shd_matched_loss_and_gradient_arm_scaled,
+    loss_and_gradient_arm_scaled_prepared as shd_matched_loss_and_gradient_arm_scaled_prepared,
+    ArmAdam as ShdArmAdam, ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
     ArmWeights as ShdArmWeights, MatchedArm, MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A,
-    MATCHED_WEIGHTS_MAGIC_V2,
+    MATCHED_WEIGHTS_MAGIC_V2, MATCHED_WEIGHTS_MAGIC_V3,
 };
+pub use shd_temporal::{apply_temporal, TemporalAudit, TemporalCondition};
 pub use surrogate_lif_baseline::{
     SurrogateLifReference, DEFAULT_SURROGATE_BETA, SURROGATE_LIF_REFERENCE_LABEL,
 };

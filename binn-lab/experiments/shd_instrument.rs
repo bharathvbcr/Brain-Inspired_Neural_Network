@@ -10,12 +10,16 @@ use binn_data::{
     frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEventContract,
 };
 use binn_lab::{authorize_campaign, CampaignKind};
-use binn_learn::{
-    load_epoch_orders, one_cycle_lr, shd_matched_loss_and_gradient_arm, MatchedArm,
-    MatchedShdSample, PortableRng, ShdArmGradient, ShdArmWeights, ShdMatchedWeights,
-};
+use rayon::prelude::*;
+
+use binn_learn::shd_attention::{AttentionConfig, AttentionParams};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
+use binn_learn::{
+    load_epoch_orders, one_cycle_lr, shd_matched_loss_and_gradient_arm,
+    shd_matched_loss_and_gradient_arm_scaled_prepared, MatchedArm, MatchedShdSample, PortableRng,
+    ShdArmGradient, ShdArmWeightLayout, ShdArmWeights, ShdMatchedWeights,
+};
 
 fn main() -> ExitCode {
     match run(env::args().skip(1).collect()) {
@@ -70,12 +74,18 @@ fn print_help() {
            train-cell --train-events FILE --test-events FILE --contract ID --geometry ID \\\n+                --weights FILE --orders FILE --epochs N --out FILE\n\n\
          Optional on parity/init/train-cell:\n\
            --arm ff+fixed|ff+alif|rec+fixed|rec+alif   (default ff+fixed)\n\
+           any arm above with a +attn suffix adds the time-axis attention read-out\n\
+         Optional on init, attention arms only:\n\
+           --seed N          provenance label recorded in the cell (no effect on results)\n\
+           --attn-dim N      attention width, even (default 32)\n\
+           --attn-layers N   attention blocks (default 1)\n\
          Optional on init, recurrent arms only:\n\
            --w-rec-scale F   multiplies the Glorot recurrent draw (default 1.0)\n\
          Optional on train-cell:\n\
            --temporal intact|bin-shuffled|channel-shuffled|reversed  (default intact)\n\
            --temporal-seed N   (required unless --temporal intact)\n\
-           --clip-grad-norm F  global-norm gradient clipping (default: off)"
+           --clip-grad-norm F  global-norm gradient clipping (default: off)\n\
+           --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)"
     );
 }
 
@@ -129,11 +139,19 @@ fn parity(args: &[String]) -> Result<(), String> {
     } else {
         String::new()
     };
+    // Same append-only discipline as `recurrent_fields`.
+    let attention_fields = match weights.attention_config() {
+        Some(config) => format!(
+            ",\"attn_dim\":{},\"attn_layers\":{}",
+            config.d_model, config.layers
+        ),
+        None => String::new(),
+    };
     let json = format!(
         "{{\"frame_hash\":\"{:016x}\",\"valid_steps\":{},\"dt_ms\":{:.9},\
          \"loss\":{:.9},\"prediction\":{},\"membrane\":{},\"spikes\":{},\"rates\":{},\
          \"logits\":{},\"grad_w_in\":{},\"grad_w_out\":{},\"grad_b_out\":{},\
-         \"updated_w_in\":{},\"updated_w_out\":{},\"updated_b_out\":{},\"arm\":\"{}\"{}}}\n",
+         \"updated_w_in\":{},\"updated_w_out\":{},\"updated_b_out\":{},\"arm\":\"{}\"{}{}}}\n",
         framed.fingerprint(),
         framed.valid_steps(),
         framed.dt_ms,
@@ -151,17 +169,34 @@ fn parity(args: &[String]) -> Result<(), String> {
         json_f32(&updated.base.b_out),
         weights.arm.label(),
         recurrent_fields,
+        attention_fields,
     );
     atomic_write(&out, json.as_bytes())
 }
 
 fn init(args: &[String]) -> Result<(), String> {
-    let n_inputs = require_positive(parse_usize(&required(args, "--n-inputs")?, "--n-inputs")?, "--n-inputs")?;
-    let hidden = require_positive(parse_usize(&required(args, "--hidden")?, "--hidden")?, "--hidden")?;
-    let n_classes = require_positive(parse_usize(&required(args, "--classes")?, "--classes")?, "--classes")?;
+    reject_unknown_flags(args, INIT_FLAGS)?;
+    let n_inputs = require_positive(
+        parse_usize(&required(args, "--n-inputs")?, "--n-inputs")?,
+        "--n-inputs",
+    )?;
+    let hidden = require_positive(
+        parse_usize(&required(args, "--hidden")?, "--hidden")?,
+        "--hidden",
+    )?;
+    let n_classes = require_positive(
+        parse_usize(&required(args, "--classes")?, "--classes")?,
+        "--classes",
+    )?;
     let seed = parse_u64(&required(args, "--seed")?, "--seed")?;
-    let epochs = require_positive(parse_usize(&required(args, "--epochs")?, "--epochs")?, "--epochs")?;
-    let n_train = require_positive(parse_usize(&required(args, "--n-train")?, "--n-train")?, "--n-train")?;
+    let epochs = require_positive(
+        parse_usize(&required(args, "--epochs")?, "--epochs")?,
+        "--epochs",
+    )?;
+    let n_train = require_positive(
+        parse_usize(&required(args, "--n-train")?, "--n-train")?,
+        "--n-train",
+    )?;
     let weights_path = required_path(args, "--weights")?;
     let orders_path = required_path(args, "--orders")?;
     if let Some(parent) = weights_path.parent() {
@@ -193,16 +228,39 @@ fn init(args: &[String]) -> Result<(), String> {
         // scale s uses the same random lineage as one at scale 1.
         let scale = optional_f32(args, "--w-rec-scale")?.unwrap_or(1.0);
         if !(scale.is_finite() && scale > 0.0) {
-            return Err(format!("--w-rec-scale must be finite and positive, got {scale}"));
+            return Err(format!(
+                "--w-rec-scale must be finite and positive, got {scale}"
+            ));
         }
         let w_rec = if arm.recurrent {
             let mut rng = PortableRng::new(seed ^ 0x5245_4300_0000_0001);
             let limit = (6.0_f32 / (hidden + hidden) as f32).sqrt();
-            (0..hidden * hidden).map(|_| rng.uniform(-limit, limit) * scale).collect()
+            (0..hidden * hidden)
+                .map(|_| rng.uniform(-limit, limit) * scale)
+                .collect()
         } else {
             Vec::new()
         };
-        ShdArmWeights::new(base, arm, w_rec)?.save(&weights_path)?;
+        if arm.attention {
+            // Its own `PortableRng` lineage, so an attention arm's base weights
+            // are bit-identical to the same arm without attention at the same
+            // seed. Any difference between the two is then the read-out, not a
+            // different initialisation.
+            let config = AttentionConfig::new(
+                optional_usize(args, "--attn-dim")?.unwrap_or(binn_learn::DEFAULT_ATTENTION_DIM),
+                optional_usize(args, "--attn-layers")?
+                    .unwrap_or(binn_learn::DEFAULT_ATTENTION_LAYERS),
+            )?;
+            let attn = AttentionParams::deterministic(
+                hidden,
+                n_classes,
+                config,
+                seed ^ 0x4154_544E_0000_0000,
+            )?;
+            ShdArmWeights::new_attentive(base, arm, w_rec, attn)?.save(&weights_path)?;
+        } else {
+            ShdArmWeights::new(base, arm, w_rec)?.save(&weights_path)?;
+        }
     }
     let mut rng = PortableRng::new(seed ^ 0x0D3E_45E5_51D0_0001);
     let mut orders = Vec::with_capacity(epochs);
@@ -213,6 +271,14 @@ fn init(args: &[String]) -> Result<(), String> {
     }
     binn_learn::save_epoch_orders(&orders_path, &orders)
 }
+
+/// How many samples are in flight at once inside a batch.
+///
+/// Bounds peak memory to this many per-sample gradients. Larger than any core
+/// count we run a single cell on, so it never limits parallelism; smaller than
+/// `batch_size`, so it bounds memory. Changing it cannot change any result —
+/// sub-chunks are consumed in batch order.
+const PARALLEL_CHUNK: usize = 64;
 
 #[derive(Default)]
 struct TrainDiagnostics {
@@ -260,7 +326,10 @@ fn temporal_sensitivity(args: &[String]) -> Result<(), String> {
     let geometry = parse_geometry(&required(args, "--geometry")?)?;
     let weights_path = required_path(args, "--weights")?;
     let out = required_path(args, "--out")?;
-    let samples = require_positive(optional_usize(args, "--samples")?.unwrap_or(256), "--samples")?;
+    let samples = require_positive(
+        optional_usize(args, "--samples")?.unwrap_or(256),
+        "--samples",
+    )?;
     let temporal_seed = optional_u64(args, "--temporal-seed")?.unwrap_or(5170001);
     let started = Instant::now();
 
@@ -416,15 +485,112 @@ fn counted_samples(framed: &[MatchedShdSample]) -> usize {
     framed.len()
 }
 
+/// Every flag `init` accepts. One owner, so the subcommand and the test that
+/// pins the real campaign invocations can never drift apart.
+const INIT_FLAGS: &[&str] = &[
+    "--n-inputs",
+    "--hidden",
+    "--classes",
+    "--seed",
+    "--epochs",
+    "--n-train",
+    "--weights",
+    "--orders",
+    "--arm",
+    "--attn-dim",
+    "--attn-layers",
+    "--w-rec-scale",
+];
+
+/// Every flag `train-cell` accepts.
+const TRAIN_CELL_FLAGS: &[&str] = &[
+    "--train-events",
+    "--test-events",
+    "--contract",
+    "--geometry",
+    "--epochs",
+    "--weights",
+    "--orders",
+    "--out",
+    "--arm",
+    "--surrogate-scale",
+    "--clip-grad-norm",
+    "--temporal",
+    "--temporal-seed",
+    "--seed",
+    "--max-train",
+    "--max-test",
+    "--save-final-weights",
+];
+
+/// Refuse a flag this subcommand does not understand.
+///
+/// The parser finds flags by searching for them, so an unrecognised one used to
+/// be **silently ignored**. A typo in `--surrogate-scale` or `--attn-dim` would
+/// therefore run the cell at the default and emit a result that is wrong but
+/// entirely plausible — no panic, no warning, and a cell JSON that looks exactly
+/// like a healthy one. That is the "check that cannot fail" shape, applied to
+/// the command line.
+///
+/// Values are skipped by position, so a value that happens to start with `--`
+/// (a negative number never does here) is not mistaken for a flag.
+fn reject_unknown_flags(args: &[String], allowed: &[&str]) -> Result<(), String> {
+    let mut index = 0;
+    while index < args.len() {
+        let arg = &args[index];
+        if let Some(stripped) = arg.strip_prefix("--") {
+            if !allowed.contains(&format!("--{stripped}").as_str()) {
+                return Err(format!(
+                    "unknown flag {arg}; this subcommand accepts: {}",
+                    allowed.join(" ")
+                ));
+            }
+            index += 2; // flag and its value
+        } else {
+            index += 1;
+        }
+    }
+    Ok(())
+}
+
 fn train_cell(args: &[String]) -> Result<(), String> {
+    reject_unknown_flags(args, TRAIN_CELL_FLAGS)?;
+    // Provenance label only — it does NOT touch the computation. The seed that
+    // determines the run was consumed by `init`, and the weights format carries
+    // no seed, so until now a cell recorded every parameter *except* which seed
+    // produced it: the seed lived only in the filename. Every paired statistic
+    // in a campaign ("positive in 12 of 12 seeds") depends on that filename
+    // being right, and nothing inside the cell could confirm it.
+    //
+    // Deliberately optional. Omitting it emits byte-identical output to before
+    // this flag existed, so Gate F still regresses every recorded cell.
+    let provenance_seed = optional_usize(args, "--seed")?;
     let train_events = required_path(args, "--train-events")?;
     let test_events = required_path(args, "--test-events")?;
     let contract = parse_contract(&required(args, "--contract")?)?;
     let geometry = parse_geometry(&required(args, "--geometry")?)?;
-    let epochs = require_positive(parse_usize(&required(args, "--epochs")?, "--epochs")?, "--epochs")?;
+    let epochs = require_positive(
+        parse_usize(&required(args, "--epochs")?, "--epochs")?,
+        "--epochs",
+    )?;
     // Absent means no clipping and bit-identical behaviour to before the
     // flag existed. A non-positive or non-finite threshold is rejected
     // rather than silently disabling clipping on a run that asked for it.
+    // Multiplies MATCHED_SURROGATE_ALPHA. 1.0 (the default) is bit-identical to
+    // before this flag existed; 0.4 gives a peak per-timestep backward gain of
+    // exactly 1.0. Registered in
+    // AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md, which records that a
+    // gradient computed at any other scale is NOT comparable to the 216
+    // recorded cells.
+    let surrogate_scale = match optional_f32(args, "--surrogate-scale")? {
+        None => 1.0_f32,
+        Some(value) if value.is_finite() && value > 0.0 => value,
+        Some(value) => {
+            return Err(format!(
+                "--surrogate-scale must be finite and positive, got {value}"
+            ))
+        }
+    };
     let clip_grad_norm = match optional_f32(args, "--clip-grad-norm")? {
         None => None,
         Some(value) if value.is_finite() && value > 0.0 => Some(f64::from(value)),
@@ -458,7 +624,9 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let condition = optional_temporal(args)?.unwrap_or(TemporalCondition::Intact);
     let temporal_seed = optional_u64(args, "--temporal-seed")?;
     if !condition.is_identity() && temporal_seed.is_none() {
-        return Err("--temporal other than 'intact' requires --temporal-seed for reproducibility".into());
+        return Err(
+            "--temporal other than 'intact' requires --temporal-seed for reproducibility".into(),
+        );
     }
     let temporal_seed = temporal_seed.unwrap_or(0);
     let mut train = train;
@@ -515,7 +683,11 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             orders.len()
         ));
     }
-    if orders.iter().take(epochs).any(|order| order.len() != train.len()) {
+    if orders
+        .iter()
+        .take(epochs)
+        .any(|order| order.len() != train.len())
+    {
         return Err("order file n_train does not match loaded training set".into());
     }
 
@@ -555,17 +727,60 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         // is a warmup transient it should pin to step 0 every epoch.
         let mut epoch_peak_step = 0_usize;
         let mut step_in_epoch = 0_usize;
+        // Counter kept explicit rather than via `enumerate`: it is read and
+        // reported alongside `global_step`, and this loop is a scientific
+        // instrument where an off-by-one would be silent.
+        #[allow(clippy::explicit_counter_loop)]
         for batch in order.chunks(batch_size) {
             let mut gradient = ShdArmGradient::zeros_like(&weights);
-            for &index in batch {
-                let (forward, sample_gradient) =
-                    shd_matched_loss_and_gradient_arm(&weights, &train[index])?;
-                diagnostics.loss_sum += f64::from(forward.loss);
-                diagnostics.samples += 1;
-                if !forward.loss.is_finite() || !sample_gradient.all_finite() {
-                    return Err(format!("non-finite training value at optimizer step {global_step}"));
+            // The optimiser mutates weights once per batch, so this layout is
+            // valid for every sample gradient below and is rebuilt before the
+            // next batch. Previously each sample recopied/transposed the same
+            // input matrix (and recurrent matrix when present).
+            let weight_layout = ShdArmWeightLayout::prepare(&weights);
+            // Per-sample forward/backward runs in parallel; the *accumulation*
+            // stays strictly in batch order.
+            //
+            // This is what lets a cell use more than one core. It is
+            // bit-identical to the serial loop it replaces, and that is a
+            // property of the reduction, not a hope: `par_iter().collect()` on
+            // an indexed parallel iterator preserves order, so `add_assign` sees
+            // exactly the addends it saw before, in exactly the same sequence.
+            // Float addition is not associative, so anything less than that
+            // ordering guarantee would silently change every recorded cell.
+            // Gate F over the recorded cells is the binding check, and
+            // `parallelism_is_bit_identical_to_serial` pins thread-count
+            // independence directly.
+            //
+            // Chunked rather than one `par_iter` over the whole batch so peak
+            // memory is bounded by `PARALLEL_CHUNK` gradients rather than by
+            // `batch_size` of them — at h1024 with a recurrent block a single
+            // sample gradient is ~4 MB, and 256 of them live at once would be
+            // 1 GB per cell with several cells sharing a host. Chunking cannot
+            // perturb the result: sub-chunks are consumed in order too.
+            //
+            // Only `loss` is carried out of the forward. Keeping the whole
+            // `MatchedForward` would hold `membrane` and `spikes`
+            // (`t_steps * hidden` each) alive for every in-flight sample.
+            for chunk in batch.chunks(PARALLEL_CHUNK) {
+                let computed = ordered_sample_gradients(
+                    &weights,
+                    &weight_layout,
+                    &train,
+                    chunk,
+                    surrogate_scale,
+                );
+                for outcome in computed {
+                    let (loss, sample_gradient) = outcome?;
+                    diagnostics.loss_sum += f64::from(loss);
+                    diagnostics.samples += 1;
+                    if !loss.is_finite() || !sample_gradient.all_finite() {
+                        return Err(format!(
+                            "non-finite training value at optimizer step {global_step}"
+                        ));
+                    }
+                    gradient.add_assign(&sample_gradient);
                 }
-                gradient.add_assign(&sample_gradient);
             }
             gradient.scale(1.0 / batch.len() as f32);
             let gradient_norm = gradient.l2_norm();
@@ -649,7 +864,11 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let tail_improvement = if epoch_loss.len() > tail {
         let earlier = epoch_loss[epoch_loss.len() - tail - 1];
         let later = epoch_loss[epoch_loss.len() - 1];
-        if earlier.abs() > 0.0 { (later - earlier) / earlier } else { 0.0 }
+        if earlier.abs() > 0.0 {
+            (later - earlier) / earlier
+        } else {
+            0.0
+        }
     } else {
         0.0
     };
@@ -668,14 +887,31 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         && evaluation.silent_fraction <= 0.95
         && evaluation.saturated_fraction <= 0.05
         && diagnostics.non_finite_events == 0;
+    // Appended, never inserted, and absent for the four base arms, so Gate F's
+    // explicit `COMPARED_FIELDS` list and every recorded cell are unaffected.
+    // Present when the arm is attentive so that a cell can never be read as a
+    // plain arm, or compared against one, without the width and depth in hand.
+    let provenance_fields = match provenance_seed {
+        Some(seed) => format!(",\"seed\":{seed}"),
+        None => String::new(),
+    };
+    let attention_fields = match weights.attention_config() {
+        Some(config) => {
+            format!(
+                ",\"attn_dim\":{},\"attn_layers\":{}",
+                config.d_model, config.layers
+            )
+        }
+        None => String::new(),
+    };
     let result = format!(
         "{{\"schema\":\"shd-cal-cell-v1\",\"backend\":\"rust\",\"arm\":\"{}\",\"contract\":\"{}\",\
          \"geometry\":\"{}\",\"hidden\":{},\"epochs\":{},\"n_train\":{},\"n_test\":{},\
          \"accuracy\":{:.9},\"classes_predicted\":{},\"majority_prediction\":{:.9},\
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
-         \"non_finite_events\":{},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
-         \"scientific_status\":\"{}\",\"wall_secs\":{:.6}}}\n",
+         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
+         \"scientific_status\":\"{}\",\"wall_secs\":{:.6}{}{}}}\n",
         weights.arm.label(),
         contract.id(),
         geometry.id(),
@@ -693,6 +929,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         json_scalar(diagnostics.gradient_norm_sum / diagnostics.optimizer_steps.max(1) as f64),
         json_scalar(diagnostics.update_rms_sum / diagnostics.optimizer_steps.max(1) as f64),
         diagnostics.non_finite_events,
+        surrogate_scale,
         clip_grad_norm.map_or("null".to_string(), |v| format!("{v:.9}")),
         diagnostics.clipped_steps,
         diagnostics.unclippable_steps,
@@ -710,8 +947,33 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         tail_improvement,
         if scientific { "CELL_PASS" } else { "CELL_FAIL" },
         started.elapsed().as_secs_f64(),
+        attention_fields,
+        provenance_fields,
     );
     atomic_write(&out, result.as_bytes())
+}
+
+/// Compute independent sample gradients in parallel while preserving the
+/// caller's index order for the subsequent floating-point reduction.
+fn ordered_sample_gradients(
+    weights: &ShdArmWeights,
+    weight_layout: &ShdArmWeightLayout,
+    train: &[MatchedShdSample],
+    indices: &[usize],
+    surrogate_scale: f32,
+) -> Vec<Result<(f32, ShdArmGradient), String>> {
+    indices
+        .par_iter()
+        .map(|&index| {
+            shd_matched_loss_and_gradient_arm_scaled_prepared(
+                weights,
+                weight_layout,
+                &train[index],
+                surrogate_scale,
+            )
+            .map(|(forward, sample_gradient)| (forward.loss, sample_gradient))
+        })
+        .collect()
 }
 
 struct Evaluation {
@@ -727,12 +989,32 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
     let mut correct = 0usize;
     let mut predictions = vec![0usize; weights.base.n_classes];
     let mut unit_rate = vec![0.0_f64; weights.base.hidden];
-    for sample in samples {
-        let (forward, _) = shd_matched_loss_and_gradient_arm(weights, sample)?;
-        correct += usize::from(forward.prediction == sample.label as usize);
-        predictions[forward.prediction] += 1;
-        for (unit, rate) in unit_rate.iter_mut().zip(forward.rates) {
-            *unit += f64::from(rate);
+    let weight_layout = ShdArmWeightLayout::prepare(weights);
+    // Same discipline as the training loop: evaluate in parallel, accumulate in
+    // sample order. `correct` and `predictions` are integer counts and could not
+    // care, but `unit_rate` is a float sum and would drift with thread count if
+    // the order were not pinned. It feeds `mean_firing_rate`, `silent_fraction`
+    // and `saturated_fraction` — three Gate F compared fields.
+    for chunk in samples.chunks(PARALLEL_CHUNK) {
+        let computed: Vec<Result<(usize, Vec<f32>), String>> = chunk
+            .par_iter()
+            .map(|sample| {
+                shd_matched_loss_and_gradient_arm_scaled_prepared(
+                    weights,
+                    &weight_layout,
+                    sample,
+                    1.0,
+                )
+                .map(|(forward, _)| (forward.prediction, forward.rates))
+            })
+            .collect();
+        for (sample, outcome) in chunk.iter().zip(computed) {
+            let (prediction, rates) = outcome?;
+            correct += usize::from(prediction == sample.label as usize);
+            predictions[prediction] += 1;
+            for (unit, rate) in unit_rate.iter_mut().zip(rates) {
+                *unit += f64::from(rate);
+            }
         }
     }
     for rate in &mut unit_rate {
@@ -844,7 +1126,8 @@ fn required_path(args: &[String], flag: &str) -> Result<PathBuf, String> {
 fn optional_path(args: &[String], flag: &str) -> Result<Option<PathBuf>, String> {
     match args.iter().position(|arg| arg == flag) {
         Some(index) => Ok(Some(PathBuf::from(
-            args.get(index + 1).ok_or_else(|| format!("{flag} requires a value"))?,
+            args.get(index + 1)
+                .ok_or_else(|| format!("{flag} requires a value"))?,
         ))),
         None => Ok(None),
     }
@@ -867,7 +1150,9 @@ fn optional_f32(args: &[String], flag: &str) -> Result<Option<f32>, String> {
             let raw = args
                 .get(index + 1)
                 .ok_or_else(|| format!("{flag} requires a value"))?;
-            Ok(Some(raw.parse().map_err(|error| format!("{flag}: {error}"))?))
+            Ok(Some(
+                raw.parse().map_err(|error| format!("{flag}: {error}"))?,
+            ))
         }
         None => Ok(None),
     }
@@ -997,4 +1282,210 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     fs::write(&temporary, bytes).map_err(|error| error.to_string())?;
     fs::rename(&temporary, path).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+
+    /// Every flag a real campaign invocation uses must be accepted.
+    ///
+    /// When `reject_unknown_flags` was added it omitted `--arm`, which is parsed
+    /// in a shared helper and so never appeared in a per-function grep of the
+    /// flag literals. That would have refused **every attention cell** in the
+    /// next campaign. Gate F did not catch it, because no recorded regression
+    /// cell uses an attention arm — so this list is the only thing standing
+    /// between a flag-parsing change and a dead campaign.
+    #[test]
+    fn every_real_campaign_invocation_is_accepted() {
+        let owned = |v: &[&str]| -> Vec<String> { v.iter().map(|s| (*s).to_string()).collect() };
+
+        // The exact shapes `scripts/aws/run_cell.py` emits.
+        let init_attention = owned(&[
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "128",
+            "--classes",
+            "20",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "400",
+            "--n-train",
+            "8156",
+            "--weights",
+            "w.bin",
+            "--orders",
+            "o.bin",
+            "--arm",
+            "ff+fixed+attn",
+            "--attn-dim",
+            "32",
+            "--attn-layers",
+            "4",
+        ]);
+        let init_recurrent = owned(&[
+            "--n-inputs",
+            "700",
+            "--hidden",
+            "256",
+            "--classes",
+            "20",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "100",
+            "--n-train",
+            "8156",
+            "--weights",
+            "w.bin",
+            "--orders",
+            "o.bin",
+            "--arm",
+            "rec+alif",
+            "--w-rec-scale",
+            "1.0",
+        ]);
+        for (label, args) in [
+            ("init+attn", &init_attention),
+            ("init+rec", &init_recurrent),
+        ] {
+            assert!(
+                reject_unknown_flags(args, INIT_FLAGS).is_ok(),
+                "{label} was refused: {:?}",
+                reject_unknown_flags(args, INIT_FLAGS)
+            );
+        }
+
+        let train_full = owned(&[
+            "--train-events",
+            "t.events",
+            "--test-events",
+            "e.events",
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--weights",
+            "w.bin",
+            "--orders",
+            "o.bin",
+            "--epochs",
+            "400",
+            "--out",
+            "cell.json",
+            "--arm",
+            "ff+fixed+attn",
+            "--temporal",
+            "bin-shuffled",
+            "--temporal-seed",
+            "5170001",
+            "--surrogate-scale",
+            "0.4",
+            "--clip-grad-norm",
+            "1.0",
+            "--max-train",
+            "8156",
+            "--max-test",
+            "2264",
+            "--seed",
+            "5170001",
+        ]);
+        assert!(
+            reject_unknown_flags(&train_full, TRAIN_CELL_FLAGS).is_ok(),
+            "the full train-cell shape was refused: {:?}",
+            reject_unknown_flags(&train_full, TRAIN_CELL_FLAGS)
+        );
+    }
+
+    /// The guard must still refuse what it exists to refuse.
+    #[test]
+    fn a_misspelled_flag_is_refused_rather_than_ignored() {
+        let args: Vec<String> = ["--attn-dims", "32"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let refused = reject_unknown_flags(&args, INIT_FLAGS);
+        assert!(refused.is_err(), "a typo must not be silently ignored");
+        let message = refused.unwrap_err();
+        assert!(
+            message.contains("--attn-dims"),
+            "the message must name the flag"
+        );
+        assert!(message.contains("--attn-dim"), "and list what was expected");
+    }
+    use super::*;
+    use rayon::ThreadPoolBuilder;
+
+    fn sample(sample_index: usize) -> MatchedShdSample {
+        let frames = (0..12)
+            .map(|time| {
+                (0..5)
+                    .map(|event| (((sample_index * 13 + time * 7 + event * 11) % 40), 1.0))
+                    .collect()
+            })
+            .collect();
+        MatchedShdSample {
+            label: (sample_index % 4) as u32,
+            frames,
+            n_inputs: 40,
+            dt_ms: 2.0,
+        }
+    }
+
+    fn result_bits(results: Vec<Result<(f32, ShdArmGradient), String>>) -> Vec<Vec<u32>> {
+        results
+            .into_iter()
+            .map(|result| {
+                let (loss, gradient) = result.expect("sample gradient");
+                let mut bits = vec![loss.to_bits()];
+                bits.extend(
+                    gradient
+                        .base
+                        .w_in
+                        .iter()
+                        .chain(&gradient.base.w_out)
+                        .chain(&gradient.base.b_out)
+                        .chain(&gradient.w_rec)
+                        .map(|value| value.to_bits()),
+                );
+                if let Some(attention) = &gradient.attn {
+                    bits.extend(attention.iter_all().map(|value| value.to_bits()));
+                }
+                bits
+            })
+            .collect()
+    }
+
+    #[test]
+    fn parallelism_is_bit_identical_to_serial() {
+        let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+        let config = AttentionConfig::new(32, 4).expect("attention config");
+        let attention =
+            AttentionParams::deterministic(8, 4, config, 11).expect("attention parameters");
+        let weights =
+            ShdArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), attention)
+                .expect("attention arm");
+        let train: Vec<_> = (0..16).map(sample).collect();
+        let indices: Vec<_> = (0..train.len()).collect();
+
+        let run = |threads| {
+            let weight_layout = ShdArmWeightLayout::prepare(&weights);
+            ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .expect("thread pool")
+                .install(|| {
+                    result_bits(ordered_sample_gradients(
+                        &weights,
+                        &weight_layout,
+                        &train,
+                        &indices,
+                        1.0,
+                    ))
+                })
+        };
+
+        assert_eq!(run(1), run(4));
+    }
 }

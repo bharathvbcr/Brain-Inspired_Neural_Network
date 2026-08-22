@@ -11,9 +11,9 @@ pub mod dfa_spike_config;
 pub mod eprop_true_config;
 pub mod eventprop_match_config;
 pub mod guards;
-pub mod instrument_status;
 #[cfg(feature = "tables")]
 pub mod harvest;
+pub mod instrument_status;
 pub mod logging;
 pub mod mac_probe_config;
 pub mod match_config;

@@ -232,6 +232,7 @@ dependencies = [
  "binn-learn",
  "plotters",
  "polars",
+ "rayon",
  "resvg",
  "svg2pdf",
  "usvg",

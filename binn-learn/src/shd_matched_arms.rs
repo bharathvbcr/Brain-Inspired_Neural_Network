@@ -28,13 +28,21 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
+use crate::shd_attention::{
+    attention_forward, attention_gradient, attention_logits, AttentionConfig, AttentionGradient,
+    AttentionParams,
+};
 use crate::shd_matched::{
-    surrogate_derivative, MatchedAdam, MatchedForward, MatchedGradient, MatchedShdSample,
+    surrogate_derivative_scaled, MatchedAdam, MatchedForward, MatchedGradient, MatchedShdSample,
     MatchedWeights, MATCHED_PHYSICAL_TAU_MS, MATCHED_THRESHOLD, MATCHED_WEIGHTS_MAGIC,
 };
 
 /// Version 2 weight container: arm tag + recurrent block + adaptation block.
 pub const MATCHED_WEIGHTS_MAGIC_V2: &[u8; 8] = b"SHDWGT2\0";
+/// Version 3 weight container: everything in `SHDWGT2` plus the attention
+/// read-out. **Only attention arms write it**, so `SHDWGT1` and `SHDWGT2` files
+/// keep loading and rewriting byte-identically and Gate F is untouched.
+pub const MATCHED_WEIGHTS_MAGIC_V3: &[u8; 8] = b"SHDWGT3\0";
 
 /// Mirrors `binn-learn/src/shd_alif.rs` `DEFAULT_TAU_A` / `DEFAULT_BETA_A`.
 pub const MATCHED_DEFAULT_TAU_A: f32 = 20.0;
@@ -44,22 +52,84 @@ pub const MATCHED_DEFAULT_BETA_A: f32 = 0.18;
 pub struct MatchedArm {
     pub recurrent: bool,
     pub adaptive: bool,
+    /// **Axis 3**: a time-axis attention read-out on top of the rate read-out.
+    /// See [`crate::shd_attention`] for what it computes and why.
+    pub attention: bool,
 }
 
 impl MatchedArm {
-    pub const FF_FIXED: Self = Self { recurrent: false, adaptive: false };
-    pub const FF_ALIF: Self = Self { recurrent: false, adaptive: true };
-    pub const REC_FIXED: Self = Self { recurrent: true, adaptive: false };
-    pub const REC_ALIF: Self = Self { recurrent: true, adaptive: true };
+    pub const FF_FIXED: Self = Self {
+        recurrent: false,
+        adaptive: false,
+        attention: false,
+    };
+    pub const FF_ALIF: Self = Self {
+        recurrent: false,
+        adaptive: true,
+        attention: false,
+    };
+    pub const REC_FIXED: Self = Self {
+        recurrent: true,
+        adaptive: false,
+        attention: false,
+    };
+    pub const REC_ALIF: Self = Self {
+        recurrent: true,
+        adaptive: true,
+        attention: false,
+    };
 
-    pub const ALL: [Self; 4] = [Self::FF_FIXED, Self::FF_ALIF, Self::REC_FIXED, Self::REC_ALIF];
+    pub const FF_FIXED_ATTN: Self = Self {
+        recurrent: false,
+        adaptive: false,
+        attention: true,
+    };
+    pub const FF_ALIF_ATTN: Self = Self {
+        recurrent: false,
+        adaptive: true,
+        attention: true,
+    };
+    pub const REC_FIXED_ATTN: Self = Self {
+        recurrent: true,
+        adaptive: false,
+        attention: true,
+    };
+    pub const REC_ALIF_ATTN: Self = Self {
+        recurrent: true,
+        adaptive: true,
+        attention: true,
+    };
+
+    /// The four architecture arms registered by
+    /// `PREREG_2026-08-02_SHD_BPTT_CEILING_RECALIF`. This stays four elements:
+    /// every recorded cell and every pinned constant is one of these, and
+    /// widening it would silently redefine what "every arm" means in tests that
+    /// were written before attention existed.
+    pub const ALL: [Self; 4] = [
+        Self::FF_FIXED,
+        Self::FF_ALIF,
+        Self::REC_FIXED,
+        Self::REC_ALIF,
+    ];
+
+    /// The same four with the attention read-out attached.
+    pub const ALL_ATTENTION: [Self; 4] = [
+        Self::FF_FIXED_ATTN,
+        Self::FF_ALIF_ATTN,
+        Self::REC_FIXED_ATTN,
+        Self::REC_ALIF_ATTN,
+    ];
 
     pub const fn label(self) -> &'static str {
-        match (self.recurrent, self.adaptive) {
-            (false, false) => "ff+fixed",
-            (false, true) => "ff+alif",
-            (true, false) => "rec+fixed",
-            (true, true) => "rec+alif",
+        match (self.recurrent, self.adaptive, self.attention) {
+            (false, false, false) => "ff+fixed",
+            (false, true, false) => "ff+alif",
+            (true, false, false) => "rec+fixed",
+            (true, true, false) => "rec+alif",
+            (false, false, true) => "ff+fixed+attn",
+            (false, true, true) => "ff+alif+attn",
+            (true, false, true) => "rec+fixed+attn",
+            (true, true, true) => "rec+alif+attn",
         }
     }
 
@@ -69,18 +139,32 @@ impl MatchedArm {
             "ff+alif" => Ok(Self::FF_ALIF),
             "rec+fixed" => Ok(Self::REC_FIXED),
             "rec+alif" => Ok(Self::REC_ALIF),
+            "ff+fixed+attn" => Ok(Self::FF_FIXED_ATTN),
+            "ff+alif+attn" => Ok(Self::FF_ALIF_ATTN),
+            "rec+fixed+attn" => Ok(Self::REC_FIXED_ATTN),
+            "rec+alif+attn" => Ok(Self::REC_ALIF_ATTN),
             other => Err(format!(
-                "unknown arm {other:?}; expected ff+fixed, ff+alif, rec+fixed or rec+alif"
+                "unknown arm {other:?}; expected one of ff+fixed, ff+alif, rec+fixed, \
+                 rec+alif, or any of those with a +attn suffix"
             )),
         }
     }
 
+    /// Bit 2 is the attention axis. Existing `SHDWGT2` files were written with
+    /// codes 0..=3, so they load back as non-attention arms unchanged.
     const fn code(self) -> u32 {
-        (self.recurrent as u32) | ((self.adaptive as u32) << 1)
+        (self.recurrent as u32) | ((self.adaptive as u32) << 1) | ((self.attention as u32) << 2)
     }
 
-    const fn from_code(code: u32) -> Self {
-        Self { recurrent: code & 1 != 0, adaptive: code & 2 != 0 }
+    fn from_code(code: u32) -> Result<Self, String> {
+        if code > 0b111 {
+            return Err(format!("unknown arm code {code} in weight file"));
+        }
+        Ok(Self {
+            recurrent: code & 1 != 0,
+            adaptive: code & 2 != 0,
+            attention: code & 4 != 0,
+        })
     }
 }
 
@@ -95,11 +179,50 @@ pub struct ArmWeights {
     pub w_rec: Vec<f32>,
     pub tau_a: f32,
     pub beta_a: f32,
+    /// Present exactly when `arm.attention`. The invariant is enforced by the
+    /// constructors and re-checked on load, so a file cannot claim an attention
+    /// arm and carry no attention parameters.
+    pub attn: Option<AttentionParams>,
 }
 
 impl ArmWeights {
     pub fn new(base: MatchedWeights, arm: MatchedArm, w_rec: Vec<f32>) -> Result<Self, String> {
-        let expected = if arm.recurrent { base.hidden * base.hidden } else { 0 };
+        if arm.attention {
+            return Err(format!(
+                "arm {} carries an attention read-out; build it with new_attentive",
+                arm.label()
+            ));
+        }
+        Self::assemble(base, arm, w_rec, None)
+    }
+
+    /// Constructor for the `+attn` arms.
+    pub fn new_attentive(
+        base: MatchedWeights,
+        arm: MatchedArm,
+        w_rec: Vec<f32>,
+        attn: AttentionParams,
+    ) -> Result<Self, String> {
+        if !arm.attention {
+            return Err(format!(
+                "arm {} has no attention axis; build it with new",
+                arm.label()
+            ));
+        }
+        Self::assemble(base, arm, w_rec, Some(attn))
+    }
+
+    fn assemble(
+        base: MatchedWeights,
+        arm: MatchedArm,
+        w_rec: Vec<f32>,
+        attn: Option<AttentionParams>,
+    ) -> Result<Self, String> {
+        let expected = if arm.recurrent {
+            base.hidden * base.hidden
+        } else {
+            0
+        };
         if w_rec.len() != expected {
             return Err(format!(
                 "arm {} expects w_rec of len {expected}, got {}",
@@ -107,12 +230,24 @@ impl ArmWeights {
                 w_rec.len()
             ));
         }
+        match (arm.attention, &attn) {
+            (true, Some(params)) => params.check_shapes(base.hidden, base.n_classes)?,
+            (false, None) => {}
+            (true, None) => return Err(format!("arm {} needs attention params", arm.label())),
+            (false, Some(_)) => {
+                return Err(format!(
+                    "arm {} must not carry attention params",
+                    arm.label()
+                ))
+            }
+        }
         let mut weights = Self {
             base,
             arm,
             w_rec,
             tau_a: MATCHED_DEFAULT_TAU_A,
             beta_a: MATCHED_DEFAULT_BETA_A,
+            attn,
         };
         weights.enforce_zero_diagonal();
         Ok(weights)
@@ -126,7 +261,14 @@ impl ArmWeights {
             w_rec: Vec::new(),
             tau_a: MATCHED_DEFAULT_TAU_A,
             beta_a: MATCHED_DEFAULT_BETA_A,
+            attn: None,
         }
+    }
+
+    /// Width and depth of the attention read-out, or `None` for the four base
+    /// arms. Reported into the cell record so a config change cannot be silent.
+    pub fn attention_config(&self) -> Option<AttentionConfig> {
+        self.attn.as_ref().map(|params| params.config)
     }
 
     pub fn enforce_zero_diagonal(&mut self) {
@@ -140,14 +282,20 @@ impl ArmWeights {
     }
 
     /// `ff+fixed` writes `SHDWGT1`, byte-identical to the shipped writer, so
-    /// Gate F is preserved. Every other arm writes `SHDWGT2`.
+    /// Gate F is preserved. Non-attention arms write `SHDWGT2`, unchanged from
+    /// before attention existed. Attention arms write `SHDWGT3`.
     pub fn save(&self, path: &Path) -> Result<(), String> {
         if self.arm == MatchedArm::FF_FIXED {
             return self.base.save(path);
         }
         let file = File::create(path).map_err(|error| error.to_string())?;
         let mut writer = BufWriter::new(file);
-        writer.write_all(MATCHED_WEIGHTS_MAGIC_V2).map_err(|e| e.to_string())?;
+        let magic = if self.arm.attention {
+            MATCHED_WEIGHTS_MAGIC_V3
+        } else {
+            MATCHED_WEIGHTS_MAGIC_V2
+        };
+        writer.write_all(magic).map_err(|e| e.to_string())?;
         for value in [
             self.base.n_inputs as u32,
             self.base.hidden as u32,
@@ -157,7 +305,9 @@ impl ArmWeights {
             write_u32(&mut writer, value)?;
         }
         for value in [self.tau_a, self.beta_a] {
-            writer.write_all(&value.to_bits().to_le_bytes()).map_err(|e| e.to_string())?;
+            writer
+                .write_all(&value.to_bits().to_le_bytes())
+                .map_err(|e| e.to_string())?;
         }
         for &value in self
             .base
@@ -167,7 +317,18 @@ impl ArmWeights {
             .chain(self.base.b_out.iter())
             .chain(self.w_rec.iter())
         {
-            writer.write_all(&value.to_bits().to_le_bytes()).map_err(|e| e.to_string())?;
+            writer
+                .write_all(&value.to_bits().to_le_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+        if let Some(params) = &self.attn {
+            write_u32(&mut writer, params.config.d_model as u32)?;
+            write_u32(&mut writer, params.config.layers as u32)?;
+            for &value in params.iter_all() {
+                writer
+                    .write_all(&value.to_bits().to_le_bytes())
+                    .map_err(|e| e.to_string())?;
+            }
         }
         writer.flush().map_err(|error| error.to_string())
     }
@@ -181,25 +342,59 @@ impl ArmWeights {
             drop(reader);
             return Ok(Self::feedforward(MatchedWeights::load(path)?));
         }
-        if &magic != MATCHED_WEIGHTS_MAGIC_V2 {
+        let attentive = &magic == MATCHED_WEIGHTS_MAGIC_V3;
+        if &magic != MATCHED_WEIGHTS_MAGIC_V2 && !attentive {
             return Err(format!("bad matched-weight magic in {}", path.display()));
         }
         let n_inputs = read_u32(&mut reader)? as usize;
         let hidden = read_u32(&mut reader)? as usize;
         let n_classes = read_u32(&mut reader)? as usize;
-        let arm = MatchedArm::from_code(read_u32(&mut reader)?);
+        let arm = MatchedArm::from_code(read_u32(&mut reader)?)?;
+        if arm.attention != attentive {
+            return Err(format!(
+                "{} declares arm {} but was written in the {} container",
+                path.display(),
+                arm.label(),
+                if attentive { "SHDWGT3" } else { "SHDWGT2" }
+            ));
+        }
         let tau_a = read_f32(&mut reader)?;
         let beta_a = read_f32(&mut reader)?;
         let w_in = read_f32_vec(&mut reader, n_inputs * hidden)?;
         let w_out = read_f32_vec(&mut reader, hidden * n_classes)?;
         let b_out = read_f32_vec(&mut reader, n_classes)?;
         let w_rec = read_f32_vec(&mut reader, if arm.recurrent { hidden * hidden } else { 0 })?;
+        // Sized from a placeholder seed and then overwritten entry by entry in
+        // the canonical `iter_all` order: the file is the authority on every
+        // value, `deterministic` only allocates the blocks. `check_shapes`
+        // re-asserts that afterwards.
+        let attn = if attentive {
+            let d_model = read_u32(&mut reader)? as usize;
+            let layers = read_u32(&mut reader)? as usize;
+            let config = AttentionConfig::new(d_model, layers)?;
+            let mut params = AttentionParams::deterministic(hidden, n_classes, config, 0)?;
+            for value in params.iter_all_mut() {
+                *value = read_f32(&mut reader)?;
+            }
+            params.check_shapes(hidden, n_classes)?;
+            Some(params)
+        } else {
+            None
+        };
         let mut weights = Self {
-            base: MatchedWeights { n_inputs, hidden, n_classes, w_in, w_out, b_out },
+            base: MatchedWeights {
+                n_inputs,
+                hidden,
+                n_classes,
+                w_in,
+                w_out,
+                b_out,
+            },
             arm,
             w_rec,
             tau_a,
             beta_a,
+            attn,
         };
         weights.enforce_zero_diagonal();
         Ok(weights)
@@ -211,6 +406,52 @@ pub struct ArmGradient {
     pub base: MatchedGradient,
     /// `[hidden, hidden]`, empty for feed-forward arms, zero diagonal.
     pub w_rec: Vec<f32>,
+    /// Present exactly when the arm carries an attention read-out.
+    pub attn: Option<AttentionGradient>,
+}
+
+/// Read-optimised views of the input and recurrent weights.
+///
+/// Construct this once for a group of samples evaluated against the same
+/// weights. Training must rebuild it after every optimiser update. The values
+/// are copied without arithmetic, so using the prepared path changes neither
+/// the forward pass nor the gradient bit pattern.
+#[derive(Clone, Debug)]
+pub struct ArmWeightLayout {
+    n_inputs: usize,
+    hidden: usize,
+    recurrent: bool,
+    w_in_t: Vec<f32>,
+    w_rec_t: Vec<f32>,
+}
+
+impl ArmWeightLayout {
+    pub fn prepare(weights: &ArmWeights) -> Self {
+        let hidden = weights.base.hidden;
+        Self {
+            n_inputs: weights.base.n_inputs,
+            hidden,
+            recurrent: weights.arm.recurrent,
+            w_in_t: transpose_rows_to_columns(&weights.base.w_in, hidden, weights.base.n_inputs),
+            w_rec_t: if weights.arm.recurrent {
+                transpose_rows_to_columns(&weights.w_rec, hidden, hidden)
+            } else {
+                Vec::new()
+            },
+        }
+    }
+
+    fn check_compatible(&self, weights: &ArmWeights) -> Result<(), String> {
+        if self.n_inputs != weights.base.n_inputs
+            || self.hidden != weights.base.hidden
+            || self.recurrent != weights.arm.recurrent
+            || self.w_in_t.len() != weights.base.w_in.len()
+            || self.w_rec_t.len() != weights.w_rec.len()
+        {
+            return Err("prepared weight layout/model mismatch".into());
+        }
+        Ok(())
+    }
 }
 
 impl ArmGradient {
@@ -218,6 +459,7 @@ impl ArmGradient {
         Self {
             base: MatchedGradient::zeros_like(&weights.base),
             w_rec: vec![0.0; weights.w_rec.len()],
+            attn: weights.attn.as_ref().map(AttentionGradient::zeros_like),
         }
     }
 
@@ -226,6 +468,9 @@ impl ArmGradient {
         for (value, delta) in self.w_rec.iter_mut().zip(other.w_rec.iter()) {
             *value += *delta;
         }
+        if let (Some(target), Some(source)) = (self.attn.as_mut(), other.attn.as_ref()) {
+            target.add_assign(source);
+        }
     }
 
     pub fn scale(&mut self, factor: f32) {
@@ -233,17 +478,28 @@ impl ArmGradient {
         for value in self.w_rec.iter_mut() {
             *value *= factor;
         }
+        if let Some(attn) = self.attn.as_mut() {
+            attn.scale(factor);
+        }
     }
 
     pub fn l2_norm(&self) -> f32 {
         // Feed-forward arms return the shipped value untouched rather than
-        // round-tripping through sqrt(x*x), which is not exact in f32.
-        if self.w_rec.is_empty() {
+        // round-tripping through sqrt(x*x), which is not exact in f32. An
+        // attention arm has parameters outside `base`, so it must not take this
+        // path even when it is feed-forward — a norm that silently ignored a
+        // whole parameter block would under-report exactly the block whose
+        // stability is in question.
+        if self.w_rec.is_empty() && self.attn.is_none() {
             return self.base.l2_norm();
         }
         let base = self.base.l2_norm();
         let rec: f32 = self.w_rec.iter().map(|v| v * v).sum();
-        let combined = base * base + rec;
+        let attn: f32 = self
+            .attn
+            .as_ref()
+            .map_or(0.0, AttentionGradient::sum_squares);
+        let combined = base * base + rec + attn;
         if combined.is_finite() {
             return combined.sqrt();
         }
@@ -270,11 +526,17 @@ impl ArmGradient {
                 v * v
             })
             .sum();
-        (wide_base + wide_rec).sqrt() as f32
+        let wide_attn: f64 = self
+            .attn
+            .as_ref()
+            .map_or(0.0, AttentionGradient::sum_squares_wide);
+        (wide_base + wide_rec + wide_attn).sqrt() as f32
     }
 
     pub fn all_finite(&self) -> bool {
-        self.base.all_finite() && self.w_rec.iter().all(|v| v.is_finite())
+        self.base.all_finite()
+            && self.w_rec.iter().all(|v| v.is_finite())
+            && self.attn.as_ref().is_none_or(AttentionGradient::all_finite)
     }
 }
 
@@ -290,6 +552,40 @@ pub fn loss_and_gradient_arm(
     weights: &ArmWeights,
     sample: &MatchedShdSample,
 ) -> Result<(MatchedForward, ArmGradient), String> {
+    loss_and_gradient_arm_scaled(weights, sample, 1.0)
+}
+
+/// [`loss_and_gradient_arm`] with the surrogate gain scaled.
+///
+/// `scale == 1.0` reproduces [`loss_and_gradient_arm`] bit-for-bit, and that is
+/// the path every existing caller takes. See
+/// `results/AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md`.
+pub fn loss_and_gradient_arm_scaled(
+    weights: &ArmWeights,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+) -> Result<(MatchedForward, ArmGradient), String> {
+    if sample.n_inputs != weights.base.n_inputs {
+        return Err("sample/model input mismatch".into());
+    }
+    if sample.label as usize >= weights.base.n_classes || sample.frames.is_empty() {
+        return Err("invalid label or empty framed sample".into());
+    }
+    let layout = ArmWeightLayout::prepare(weights);
+    loss_and_gradient_arm_scaled_prepared(weights, &layout, sample, surrogate_scale)
+}
+
+/// [`loss_and_gradient_arm_scaled`] using a layout shared by many samples.
+///
+/// This is the batch hot path. The caller must rebuild `layout` after mutating
+/// `weights`; shape compatibility is checked here, while value freshness is a
+/// batch-lifetime invariant owned by the caller.
+pub fn loss_and_gradient_arm_scaled_prepared(
+    weights: &ArmWeights,
+    layout: &ArmWeightLayout,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+) -> Result<(MatchedForward, ArmGradient), String> {
     let base = &weights.base;
     let arm = weights.arm;
     if sample.n_inputs != base.n_inputs {
@@ -298,6 +594,7 @@ pub fn loss_and_gradient_arm(
     if sample.label as usize >= base.n_classes || sample.frames.is_empty() {
         return Err("invalid label or empty framed sample".into());
     }
+    layout.check_compatible(weights)?;
     let t_steps = sample.frames.len();
     let hidden = base.hidden;
     let alpha = (-sample.dt_ms / MATCHED_PHYSICAL_TAU_MS).exp();
@@ -352,17 +649,13 @@ pub fn loss_and_gradient_arm(
     // decay, then the frame's events in frame order, then the recurrent term in
     // ascending `j`. No reassociation, so this is bit-identical, and
     // `every_arm_forward_and_backward_is_bit_pinned` is the binding check.
-    let w_in_t = transpose_rows_to_columns(&base.w_in, hidden, base.n_inputs);
+    let w_in_t = &layout.w_in_t;
     // `w_rec` is `[hidden, hidden]` indexed `[h * hidden + j]`, so the drive for
     // a fixed `j` gathers a column. Transposing once per sample turns the inner
     // loop into a contiguous AXPY over `h`; at h512 that is one transpose
     // against every timestep of strided access — a few hundred at a 2 ms frame
     // (366 for test sample 0).
-    let w_rec_t = if arm.recurrent {
-        transpose_rows_to_columns(&weights.w_rec, hidden, hidden)
-    } else {
-        Vec::new()
-    };
+    let w_rec_t = &layout.w_rec_t;
     let mut current = vec![0.0_f32; hidden];
     // Indices of units that spiked at `t-1`. Spikes are exactly 0.0 or 1.0, and
     // adding `w * 0.0` is an exact no-op here, so skipping silent units is
@@ -453,11 +746,27 @@ pub fn loss_and_gradient_arm(
             rates[h] += spikes[t * hidden + h] * inv_t;
         }
     }
+    // Time-axis attention read-out. Runs on the completed spike train, adds to
+    // the logits, and leaves the spiking forward untouched — at `w_a = 0` the
+    // arm is numerically its own non-attention counterpart.
+    let attention_cache = match &weights.attn {
+        Some(params) => Some(attention_forward(params, &spikes, t_steps)?),
+        None => None,
+    };
+
     let mut logits = base.b_out.clone();
     for (class, logit) in logits.iter_mut().enumerate() {
         let row = class * hidden;
         for (h, rate) in rates.iter().enumerate() {
             *logit += base.w_out[row + h] * rate;
+        }
+    }
+    if let (Some(params), Some(cache)) = (&weights.attn, &attention_cache) {
+        for (logit, delta) in logits
+            .iter_mut()
+            .zip(attention_logits(params, cache.pooled()))
+        {
+            *logit += delta;
         }
     }
     let prediction = argmax(&logits);
@@ -467,6 +776,17 @@ pub fn loss_and_gradient_arm(
 
     let mut gradient = ArmGradient::zeros_like(weights);
     gradient.base.b_out.copy_from_slice(&probabilities);
+    // `ds_attn[t, h]` is the term that makes credit timestep-specific. Without
+    // it every timestep receives the identical `direct_spike[h]`, which is why
+    // the rate-only arms cannot learn *when* a unit should fire.
+    let ds_attn = match (&weights.attn, &attention_cache) {
+        (Some(params), Some(cache)) => {
+            let (attention, ds_attn) = attention_gradient(params, cache, &spikes, &probabilities)?;
+            gradient.attn = Some(attention);
+            ds_attn
+        }
+        _ => Vec::new(),
+    };
     let mut direct_spike = vec![0.0_f32; hidden];
     for (class, probability) in probabilities.iter().copied().enumerate() {
         let row = class * hidden;
@@ -489,13 +809,16 @@ pub fn loss_and_gradient_arm(
     // below reproduces the original array exactly.
     let mut grad_w_in_t = vec![0.0_f32; base.n_inputs * hidden];
     let mut ds_all = vec![0.0_f32; hidden];
+    let mut ds_combined = if arm.attention {
+        vec![0.0_f32; hidden]
+    } else {
+        Vec::new()
+    };
 
     for t in (0..t_steps).rev() {
         let frame = &sample.frames[t];
         if arm.recurrent {
-            for h in 0..hidden {
-                ds_all[h] = direct_spike[h];
-            }
+            ds_all.copy_from_slice(&direct_spike);
             // `ds[h] += sum_j du_next[j] * w_rec[j * hidden + h]` gathers column
             // `h` across rows when written with `h` outermost — the same strided
             // pattern the input drive had. Hoisting `j` outside makes each step a
@@ -504,6 +827,7 @@ pub fn loss_and_gradient_arm(
             // unchanged term for term.
             //
             // No sparsity is available here: `du_next` is dense.
+            #[allow(clippy::needless_range_loop)]
             for j in 0..hidden {
                 let backward_drive = du_next[j];
                 let row = &weights.w_rec[j * hidden..(j + 1) * hidden];
@@ -523,15 +847,38 @@ pub fn loss_and_gradient_arm(
         // through `ds_all` for every arm (+9.5% over the 13-cell Gate F suite,
         // 291.4 s -> 319.0 s), then leaving the branch in the inner loop
         // (+7%, against a 1.4% same-binary spread).
-        let ds_source: &[f32] = if arm.recurrent { &ds_all } else { &direct_spike };
+        let base_ds: &[f32] = if arm.recurrent {
+            &ds_all
+        } else {
+            &direct_spike
+        };
+        // Staged into a scratch buffer rather than added inside the `h` loop.
+        // Two reasons, both load bearing: the inner loop stays branch-free for
+        // the four base arms, and no `+ 0.0` is executed on the recorded path —
+        // `x + 0.0` turns `-0.0` into `+0.0`, which
+        // `every_arm_forward_and_backward_is_bit_pinned` hashes and would have
+        // reported as a kernel change.
+        let ds_source: &[f32] = if arm.attention {
+            for h in 0..hidden {
+                ds_combined[h] = base_ds[h] + ds_attn[t * hidden + h];
+            }
+            &ds_combined
+        } else {
+            base_ds
+        };
         for h in 0..hidden {
             let index = t * hidden + h;
             let mut ds = ds_source[h];
             if arm.adaptive {
                 ds += da_next[h];
             }
-            let threshold_at = if arm.adaptive { thresholds[index] } else { MATCHED_THRESHOLD };
-            let gated = ds * surrogate_derivative(membrane[index] - threshold_at);
+            let threshold_at = if arm.adaptive {
+                thresholds[index]
+            } else {
+                MATCHED_THRESHOLD
+            };
+            let gated =
+                ds * surrogate_derivative_scaled(membrane[index] - threshold_at, surrogate_scale);
             du[h] = gated + alpha * (1.0 - spikes[index]) * du_next[h];
             if arm.adaptive {
                 da[h] = -beta_a * gated + rho * da_next[h];
@@ -553,12 +900,14 @@ pub fn loss_and_gradient_arm(
                     active_previous.push(j);
                 }
             }
+            // Indexed on purpose: `h` selects a row of `w_rec` as well as an
+            // element of `du`, and the addend order fixes the f32 result.
+            #[allow(clippy::needless_range_loop)]
             for h in 0..hidden {
                 let rec_row = h * hidden;
                 let unit_drive = du[h];
                 for &j in &active_previous {
-                    gradient.w_rec[rec_row + j] +=
-                        unit_drive * previous_spike_log[t * hidden + j];
+                    gradient.w_rec[rec_row + j] += unit_drive * previous_spike_log[t * hidden + j];
                 }
             }
         }
@@ -583,7 +932,14 @@ pub fn loss_and_gradient_arm(
     }
 
     Ok((
-        MatchedForward { membrane, spikes, rates, logits, loss, prediction },
+        MatchedForward {
+            membrane,
+            spikes,
+            rates,
+            logits,
+            loss,
+            prediction,
+        },
         gradient,
     ))
 }
@@ -612,16 +968,24 @@ pub struct ArmAdam {
     base: MatchedAdam,
     m_rec: Vec<f32>,
     v_rec: Vec<f32>,
+    m_attn: Vec<f32>,
+    v_attn: Vec<f32>,
     step: usize,
     base_parameter_count: usize,
 }
 
 impl ArmAdam {
     pub fn new(weights: &ArmWeights) -> Self {
+        let attention_parameters = weights
+            .attn
+            .as_ref()
+            .map_or(0, AttentionParams::parameter_count);
         Self {
             base: MatchedAdam::new(&weights.base),
             m_rec: vec![0.0; weights.w_rec.len()],
             v_rec: vec![0.0; weights.w_rec.len()],
+            m_attn: vec![0.0; attention_parameters],
+            v_attn: vec![0.0; attention_parameters],
             step: 0,
             base_parameter_count: weights.base.w_in.len()
                 + weights.base.w_out.len()
@@ -641,8 +1005,10 @@ impl ArmAdam {
         weight_decay: f32,
     ) -> f32 {
         self.step += 1;
-        let base_rms = self.base.update(&mut weights.base, &gradient.base, lr, weight_decay);
-        if !weights.arm.recurrent {
+        let base_rms = self
+            .base
+            .update(&mut weights.base, &gradient.base, lr, weight_decay);
+        if !weights.arm.recurrent && !weights.arm.attention {
             return base_rms;
         }
         let correction1 = 1.0 - crate::shd_matched::MATCHED_ADAM_BETA1.powi(self.step as i32);
@@ -661,6 +1027,28 @@ impl ArmAdam {
             weights.w_rec[index] -= update;
             squared_step += f64::from(update) * f64::from(update);
             n_step += 1;
+        }
+        // Attention parameters take the same Adam rule and the same decoupled
+        // weight decay, walked in the canonical `iter_all` order so the moment
+        // buffers stay aligned with the parameters across save and load.
+        if let (Some(params), Some(attention)) = (weights.attn.as_mut(), gradient.attn.as_ref()) {
+            for (index, (parameter, entry)) in
+                params.iter_all_mut().zip(attention.iter_all()).enumerate()
+            {
+                let gradient_value = *entry + weight_decay * *parameter;
+                self.m_attn[index] = crate::shd_matched::MATCHED_ADAM_BETA1 * self.m_attn[index]
+                    + (1.0 - crate::shd_matched::MATCHED_ADAM_BETA1) * gradient_value;
+                self.v_attn[index] = crate::shd_matched::MATCHED_ADAM_BETA2 * self.v_attn[index]
+                    + (1.0 - crate::shd_matched::MATCHED_ADAM_BETA2)
+                        * gradient_value
+                        * gradient_value;
+                let update = lr * (self.m_attn[index] / correction1)
+                    / ((self.v_attn[index] / correction2).sqrt()
+                        + crate::shd_matched::MATCHED_ADAM_EPS);
+                *parameter -= update;
+                squared_step += f64::from(update) * f64::from(update);
+                n_step += 1;
+            }
         }
         weights.enforce_zero_diagonal();
         (squared_step / n_step.max(1) as f64).sqrt() as f32
@@ -715,12 +1103,16 @@ fn softmax(logits: &[f32]) -> Vec<f32> {
 }
 
 fn write_u32<W: Write>(writer: &mut W, value: u32) -> Result<(), String> {
-    writer.write_all(&value.to_le_bytes()).map_err(|error| error.to_string())
+    writer
+        .write_all(&value.to_le_bytes())
+        .map_err(|error| error.to_string())
 }
 
 fn read_u32<R: Read>(reader: &mut R) -> Result<u32, String> {
     let mut buffer = [0_u8; 4];
-    reader.read_exact(&mut buffer).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut buffer)
+        .map_err(|error| error.to_string())?;
     Ok(u32::from_le_bytes(buffer))
 }
 
@@ -750,7 +1142,12 @@ mod tests {
             }
             frames.push(frame);
         }
-        MatchedShdSample { label: 7, frames, n_inputs: 40, dt_ms: 10.0 }
+        MatchedShdSample {
+            label: 7,
+            frames,
+            n_inputs: 40,
+            dt_ms: 10.0,
+        }
     }
 
     fn arm_weights(arm: MatchedArm, seed: u64) -> ArmWeights {
@@ -885,6 +1282,9 @@ mod tests {
                     for &(channel, count) in frame {
                         accumulator += weights.base.w_in[h * n_inputs + channel] * count;
                     }
+                    // `j` indexes both `w_rec` and `snapshot`; the ascending
+                    // order is what makes this sum reproducible bit for bit.
+                    #[allow(clippy::needless_range_loop)]
                     for j in 0..hidden {
                         accumulator += weights.w_rec[h * hidden + j] * snapshot[j];
                     }
@@ -921,16 +1321,44 @@ mod tests {
         assert_eq!(expected_forward.spikes, forward.spikes, "spikes");
         assert_eq!(expected_forward.rates, forward.rates, "rates");
         assert_eq!(expected_forward.logits, forward.logits, "logits");
-        assert_eq!(expected_forward.loss.to_bits(), forward.loss.to_bits(), "loss");
+        assert_eq!(
+            expected_forward.loss.to_bits(),
+            forward.loss.to_bits(),
+            "loss"
+        );
         // `prediction` was omitted here originally, which left the two paths'
         // `argmax` implementations free to diverge on tied or non-finite logits
         // — and they did. It feeds `accuracy`, `majority_prediction` and
         // `classes_predicted`, all Gate F compared fields.
-        assert_eq!(expected_forward.prediction, forward.prediction, "prediction");
+        assert_eq!(
+            expected_forward.prediction, forward.prediction,
+            "prediction"
+        );
         assert_eq!(expected_gradient.w_in, gradient.base.w_in, "grad_w_in");
         assert_eq!(expected_gradient.w_out, gradient.base.w_out, "grad_w_out");
         assert_eq!(expected_gradient.b_out, gradient.base.b_out, "grad_b_out");
-        assert!(gradient.w_rec.is_empty(), "ff+fixed must carry no recurrent block");
+        assert!(
+            gradient.w_rec.is_empty(),
+            "ff+fixed must carry no recurrent block"
+        );
+    }
+
+    #[test]
+    fn prepared_weight_layout_is_bit_identical_to_the_public_path() {
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let config = AttentionConfig::new(32, 4).expect("attention config");
+        let attention =
+            AttentionParams::deterministic(24, 20, config, 92).expect("attention parameters");
+        let weights =
+            ArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), attention)
+                .expect("attention arm");
+        let sample = sample();
+        let expected =
+            loss_and_gradient_arm_scaled(&weights, &sample, 1.0).expect("ordinary layout");
+        let layout = ArmWeightLayout::prepare(&weights);
+        let actual = loss_and_gradient_arm_scaled_prepared(&weights, &layout, &sample, 1.0)
+            .expect("prepared layout");
+        assert_eq!(expected, actual);
     }
 
     /// GATE F, storage half. Existing SHDWGT1 files must round-trip untouched.
@@ -950,7 +1378,11 @@ mod tests {
 
         let rewritten = directory.join("weights-rewritten.bin");
         loaded.save(&rewritten).unwrap();
-        assert_eq!(shipped_bytes, std::fs::read(&rewritten).unwrap(), "SHDWGT1 bytes changed");
+        assert_eq!(
+            shipped_bytes,
+            std::fs::read(&rewritten).unwrap(),
+            "SHDWGT1 bytes changed"
+        );
     }
 
     #[test]
@@ -979,15 +1411,26 @@ mod tests {
             .unwrap()
             .0
             .spikes;
-        for arm in [MatchedArm::FF_ALIF, MatchedArm::REC_FIXED, MatchedArm::REC_ALIF] {
+        for arm in [
+            MatchedArm::FF_ALIF,
+            MatchedArm::REC_FIXED,
+            MatchedArm::REC_ALIF,
+        ] {
             let w_rec = if arm.recurrent {
-                (0..hidden * hidden).map(|i| ((i % 17) as f32 - 8.0) * 2e-2).collect()
+                (0..hidden * hidden)
+                    .map(|i| ((i % 17) as f32 - 8.0) * 2e-2)
+                    .collect()
             } else {
                 Vec::new()
             };
             let weights = ArmWeights::new(base.clone(), arm, w_rec).unwrap();
             let spikes = loss_and_gradient_arm(&weights, &sample).unwrap().0.spikes;
-            assert_ne!(baseline, spikes, "arm {} did not change spiking", arm.label());
+            assert_ne!(
+                baseline,
+                spikes,
+                "arm {} did not change spiking",
+                arm.label()
+            );
         }
     }
 
@@ -1015,14 +1458,21 @@ mod tests {
         for t in 0..40 {
             let mut frame = Vec::new();
             for k in 0..14 {
-                frame.push((((t * 13 + k * 7) % n_inputs) as usize, 1.0 + (k % 3) as f32));
+                frame.push(((t * 13 + k * 7) % n_inputs, 1.0 + (k % 3) as f32));
             }
             frames.push(frame);
         }
-        let sample = MatchedShdSample { label: 5, frames, n_inputs, dt_ms: 4.0 };
+        let sample = MatchedShdSample {
+            label: 5,
+            frames,
+            n_inputs,
+            dt_ms: 4.0,
+        };
         let base = MatchedWeights::deterministic(n_inputs, hidden, 20, 4242);
         let w_rec = if arm.recurrent {
-            (0..hidden * hidden).map(|i| (((i % 23) as f32) - 11.0) * 9e-3).collect()
+            (0..hidden * hidden)
+                .map(|i| (((i % 23) as f32) - 11.0) * 9e-3)
+                .collect()
         } else {
             Vec::new()
         };
@@ -1094,7 +1544,10 @@ mod tests {
                 failures.push(arm.label());
             }
         }
-        assert!(failures.is_empty(), "kernel output moved for {failures:?}; re-pin from the log above");
+        assert!(
+            failures.is_empty(),
+            "kernel output moved for {failures:?}; re-pin from the log above"
+        );
     }
 
     // Captured 2026-08-03 from the post-defect-fix kernel. The trailing entry is
@@ -1124,6 +1577,127 @@ mod tests {
         0x8d6f14d7bafb159d,
         0x1be22a5c0af9ce93,
     ];
+    /// Bit-pin of the four attention arms, for the same reason the base arms
+    /// are pinned: they have no recorded cells anywhere, so without this a
+    /// change to the attention kernel would pass every gate in the repository.
+    ///
+    /// The seventh entry is the attention read-out's own gradient, hashed over
+    /// `AttentionGradient::iter_all` — `w_e`, then each block's `w_q, w_k, w_v,
+    /// w_o`, then `w_a`. Pinning only the base blocks would leave the entire
+    /// attention gradient unpinned while the test read as complete.
+    #[test]
+    fn every_attention_arm_forward_and_backward_is_bit_pinned() {
+        let pinned: [(MatchedArm, [u64; 7]); 4] = [
+            (MatchedArm::FF_FIXED_ATTN, PIN_FF_FIXED_ATTN),
+            (MatchedArm::FF_ALIF_ATTN, PIN_FF_ALIF_ATTN),
+            (MatchedArm::REC_FIXED_ATTN, PIN_REC_FIXED_ATTN),
+            (MatchedArm::REC_ALIF_ATTN, PIN_REC_ALIF_ATTN),
+        ];
+        let mut failures = Vec::new();
+        for (arm, expected) in pinned {
+            let (sample, base_weights) = dense_fixture(MatchedArm {
+                attention: false,
+                ..arm
+            });
+            let weights = ArmWeights::new_attentive(
+                base_weights.base.clone(),
+                arm,
+                base_weights.w_rec.clone(),
+                attention_params(base_weights.base.hidden, base_weights.base.n_classes),
+            )
+            .unwrap();
+            let (forward, gradient) = loss_and_gradient_arm(&weights, &sample).unwrap();
+
+            let density = forward.spikes.iter().sum::<f32>() / forward.spikes.len() as f32;
+            assert!(
+                (0.05..=0.95).contains(&density),
+                "{} fixture is degenerate: spike density {density:.4}",
+                arm.label(),
+            );
+            let attention: Vec<f32> = gradient
+                .attn
+                .as_ref()
+                .unwrap()
+                .iter_all()
+                .copied()
+                .collect();
+            assert!(
+                attention.iter().any(|value| *value != 0.0),
+                "{} produced an all-zero attention gradient; the pin would hash nothing",
+                arm.label(),
+            );
+
+            let observed = [
+                fnv1a_f32(&forward.membrane),
+                fnv1a_f32(&forward.spikes),
+                fnv1a_f32(&forward.logits),
+                fnv1a_f32(&gradient.base.w_in),
+                fnv1a_f32(&gradient.base.w_out),
+                fnv1a_f32(&gradient.w_rec),
+                fnv1a_f32(&attention),
+            ];
+            if observed != expected {
+                println!(
+                    "    const PIN_{}: [u64; 7] = {:#018x?};",
+                    arm.label().to_uppercase().replace(['+', '-'], "_"),
+                    observed,
+                );
+                failures.push(arm.label());
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "attention kernel output moved for {failures:?}; re-pin from the log above"
+        );
+    }
+
+    // Captured 2026-08-19 from the kernel these tests accompany, alongside the
+    // finite-difference checks that establish the attention gradient is right
+    // rather than merely stable. Re-pin in the same commit as any deliberate
+    // model change, and say so.
+    //
+    // Entries 0 and 1 — membrane and spikes — are **identical** to the
+    // corresponding non-attention pin above, for all four arms. That is the
+    // additive property under test, taken here on a denser fixture than
+    // `a_zero_read_out_reduces_every_attention_arm_to_its_base_arm` uses: the
+    // read-out cannot perturb the spiking forward.
+    const PIN_FF_FIXED_ATTN: [u64; 7] = [
+        0x59bad35bf85e82b6,
+        0xb09c4cee717f9978,
+        0x487757e346dce48c,
+        0x83541a2b6792da5e,
+        0xb05540e69e9d8df8,
+        0xcbf29ce484222325,
+        0xa6d935b559f92964,
+    ];
+    const PIN_FF_ALIF_ATTN: [u64; 7] = [
+        0xc52ad841b5a668b8,
+        0x5a6e0d090d97e165,
+        0x7a636a5eaf66b249,
+        0xe8a344f7dd9d7873,
+        0x0e63b260391d974d,
+        0xcbf29ce484222325,
+        0x8e5307da30382e06,
+    ];
+    const PIN_REC_FIXED_ATTN: [u64; 7] = [
+        0x3655a2f23174aa02,
+        0x796b1eeee0df6ab5,
+        0xed3be5b13d7c9964,
+        0xfe9dcc250c5302c9,
+        0xc8ada25d7fe6513b,
+        0xe0bdef08e6b7d2f4,
+        0x91be1d618fe8525b,
+    ];
+    const PIN_REC_ALIF_ATTN: [u64; 7] = [
+        0x17e9947421f4b648,
+        0x69f2330042a9be55,
+        0x75d956b694943eae,
+        0x0aca7e135a8536dc,
+        0x792176abaa648960,
+        0x624e796a8ff00dc6,
+        0x4df1538156afb8ec,
+    ];
+
     const PIN_REC_ALIF: [u64; 6] = [
         0x17e9947421f4b648,
         0x69f2330042a9be55,
@@ -1142,6 +1716,9 @@ mod tests {
     /// If the threshold ever legitimately goes to zero or below, the fix is to
     /// drop the skip (add every `j` back), not to relax this test.
     #[test]
+    // Asserting on constants is the whole purpose here: this test exists to trip
+    // if either constant is edited in `shd_matched`.
+    #[allow(clippy::assertions_on_constants)]
     fn sparse_recurrent_skip_requires_a_positive_threshold() {
         assert!(
             MATCHED_THRESHOLD > 0.0,
@@ -1230,12 +1807,22 @@ mod tests {
             *value = 0.0;
         }
         let overflowing: f32 = weights.w_in.iter().map(|v| v * v).sum();
-        assert!(overflowing.is_infinite(), "fixture must actually overflow f32");
+        assert!(
+            overflowing.is_infinite(),
+            "fixture must actually overflow f32"
+        );
 
         let norm = weights.l2_norm();
-        assert!(norm.is_finite(), "fallback must recover a representable norm");
+        assert!(
+            norm.is_finite(),
+            "fallback must recover a representable norm"
+        );
         let expected = (2.0_f64 * 1e40).sqrt() as f32;
-        assert_eq!(norm.to_bits(), expected.to_bits(), "recovered norm is wrong");
+        assert_eq!(
+            norm.to_bits(),
+            expected.to_bits(),
+            "recovered norm is wrong"
+        );
 
         // Genuinely beyond f32: still infinity, and correctly so.
         weights.w_in[0] = f32::MAX;
@@ -1246,11 +1833,247 @@ mod tests {
         );
     }
 
+    /// Attention weights for the fixtures above, with a non-degenerate `w_o`.
+    ///
+    /// `AttentionParams::deterministic` zeroes `w_o` on purpose (identity
+    /// residual at initialisation), which would make every gradient inside a
+    /// block exactly zero and the checks below vacuous.
+    fn attention_params(hidden: usize, n_classes: usize) -> AttentionParams {
+        let config = AttentionConfig::new(6, 1).unwrap();
+        let mut params = AttentionParams::deterministic(hidden, n_classes, config, 771).unwrap();
+        for block in params.blocks.iter_mut() {
+            for (position, value) in block.w_o.iter_mut().enumerate() {
+                *value = (((position % 13) as f32) - 6.0) * 2e-2;
+            }
+        }
+        params
+    }
+
+    /// An attention arm with `w_a = 0` must be its own base arm, numerically.
+    ///
+    /// This is the structural guarantee the axis rests on: attention is
+    /// **additive on top of** the rate read-out, never a replacement for it, so
+    /// a difference between `ff+fixed` and `ff+fixed+attn` can only come from
+    /// the attention read-out having learned something — never from the
+    /// spiking forward having been perturbed by attaching it.
+    #[test]
+    fn a_zero_read_out_reduces_every_attention_arm_to_its_base_arm() {
+        let sample = sample();
+        for (base_arm, attention_arm) in MatchedArm::ALL.into_iter().zip(MatchedArm::ALL_ATTENTION)
+        {
+            let plain = arm_weights(base_arm, 91);
+            let mut params = attention_params(plain.base.hidden, plain.base.n_classes);
+            params.w_a.iter_mut().for_each(|value| *value = 0.0);
+            let attentive = ArmWeights::new_attentive(
+                plain.base.clone(),
+                attention_arm,
+                plain.w_rec.clone(),
+                params,
+            )
+            .unwrap();
+
+            let (expected, expected_gradient) = loss_and_gradient_arm(&plain, &sample).unwrap();
+            let (observed, observed_gradient) = loss_and_gradient_arm(&attentive, &sample).unwrap();
+            let label = attention_arm.label();
+            assert_eq!(expected.membrane, observed.membrane, "{label} membrane");
+            assert_eq!(expected.spikes, observed.spikes, "{label} spikes");
+            assert_eq!(expected.rates, observed.rates, "{label} rates");
+            assert_eq!(expected.logits, observed.logits, "{label} logits");
+            assert_eq!(expected.loss, observed.loss, "{label} loss");
+            assert_eq!(
+                expected.prediction, observed.prediction,
+                "{label} prediction"
+            );
+            assert_eq!(
+                expected_gradient.base.w_in, observed_gradient.base.w_in,
+                "{label} grad_w_in"
+            );
+            assert_eq!(
+                expected_gradient.base.w_out, observed_gradient.base.w_out,
+                "{label} grad_w_out"
+            );
+            assert_eq!(
+                expected_gradient.w_rec, observed_gradient.w_rec,
+                "{label} grad_w_rec"
+            );
+            // The read-out gradient is non-zero even at `w_a = 0`, which is what
+            // lifts the arm off the reduction on the first optimiser step.
+            let attention_gradient = observed_gradient.attn.as_ref().expect("attention gradient");
+            assert!(
+                attention_gradient.w_a.iter().any(|value| *value != 0.0),
+                "{label} would never leave the zero read-out"
+            );
+        }
+    }
+
+    /// Attention parameters sit downstream of the spike threshold, so the loss
+    /// is genuinely smooth in them and the finite-difference check is exact —
+    /// the reason `w_in` and `w_rec` cannot be checked this way does not apply.
+    /// Checked here at the arm level, on top of the module's own per-parameter
+    /// check, so that the wiring into the logits and into `ds` is covered too.
+    #[test]
+    fn attention_parameters_match_finite_difference_through_the_arm() {
+        let sample = sample();
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let params = attention_params(base.hidden, base.n_classes);
+        let weights =
+            ArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), params).unwrap();
+        let (_, gradient) = loss_and_gradient_arm(&weights, &sample).unwrap();
+        let attention = gradient.attn.as_ref().unwrap();
+
+        let mut checks: Vec<(String, f32, f32)> = Vec::new();
+        for index in [0_usize, 37, 91] {
+            checks.push((
+                format!("w_e[{index}]"),
+                attention.w_e[index],
+                numerical_gradient(
+                    &weights,
+                    &sample,
+                    |w| &mut w.attn.as_mut().unwrap().w_e[index],
+                    1e-3,
+                ),
+            ));
+        }
+        for index in [0_usize, 17, 41] {
+            checks.push((
+                format!("w_a[{index}]"),
+                attention.w_a[index],
+                numerical_gradient(
+                    &weights,
+                    &sample,
+                    |w| &mut w.attn.as_mut().unwrap().w_a[index],
+                    1e-3,
+                ),
+            ));
+        }
+        for index in [0_usize, 11, 29] {
+            checks.push((
+                format!("w_v[{index}]"),
+                attention.blocks[0].w_v[index],
+                numerical_gradient(
+                    &weights,
+                    &sample,
+                    |w| &mut w.attn.as_mut().unwrap().blocks[0].w_v[index],
+                    1e-3,
+                ),
+            ));
+            checks.push((
+                format!("w_o[{index}]"),
+                attention.blocks[0].w_o[index],
+                numerical_gradient(
+                    &weights,
+                    &sample,
+                    |w| &mut w.attn.as_mut().unwrap().blocks[0].w_o[index],
+                    1e-3,
+                ),
+            ));
+        }
+        for (name, analytic, numerical) in checks {
+            let absolute = (analytic - numerical).abs();
+            let scale = analytic.abs().max(numerical.abs()).max(1e-5);
+            assert!(
+                absolute < 2e-4 || absolute / scale < 0.05,
+                "{name}: analytic {analytic:e} vs numerical {numerical:e} (absolute {absolute:e})"
+            );
+        }
+    }
+
+    /// The `+attn` arms are the reason `ds` is no longer constant in `t`. If the
+    /// gradient reaching `w_in` were still the same signal at every timestep,
+    /// the arm would be adding parameters and nothing else.
+    #[test]
+    fn attention_makes_the_input_gradient_depend_on_more_than_the_rate() {
+        let sample = sample();
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let plain = ArmWeights::feedforward(base.clone());
+        let attentive = ArmWeights::new_attentive(
+            base,
+            MatchedArm::FF_FIXED_ATTN,
+            Vec::new(),
+            attention_params(24, 20),
+        )
+        .unwrap();
+        let (plain_forward, plain_gradient) = loss_and_gradient_arm(&plain, &sample).unwrap();
+        let (attentive_forward, attentive_gradient) =
+            loss_and_gradient_arm(&attentive, &sample).unwrap();
+        // Same spiking forward: only the read-out and the credit signal moved.
+        assert_eq!(plain_forward.spikes, attentive_forward.spikes);
+        assert_ne!(
+            plain_gradient.base.w_in, attentive_gradient.base.w_in,
+            "attention did not change the credit the hidden layer receives"
+        );
+    }
+
+    /// GATE F, storage. `SHDWGT3` must round-trip, and the two older containers
+    /// must be untouched by its existence.
+    #[test]
+    fn v3_round_trip_preserves_the_attention_block() {
+        let directory = std::env::temp_dir().join("shd-arm-v3-roundtrip");
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("weights.bin");
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let hidden = base.hidden;
+        let w_rec: Vec<f32> = (0..hidden * hidden).map(|i| (i as f32) * 1e-3).collect();
+        let weights = ArmWeights::new_attentive(
+            base,
+            MatchedArm::REC_ALIF_ATTN,
+            w_rec,
+            attention_params(hidden, 20),
+        )
+        .unwrap();
+        weights.save(&path).unwrap();
+        assert_eq!(
+            &std::fs::read(&path).unwrap()[..8],
+            MATCHED_WEIGHTS_MAGIC_V3,
+            "attention arms must write SHDWGT3"
+        );
+        let loaded = ArmWeights::load(&path).unwrap();
+        assert_eq!(loaded, weights);
+        assert_eq!(
+            loaded.attention_config(),
+            Some(AttentionConfig::new(6, 1).unwrap())
+        );
+    }
+
+    /// The two constructors must not be able to produce an arm whose tag and
+    /// parameters disagree — that is how an arm reports as attentive while
+    /// computing the base model.
+    #[test]
+    fn the_attention_tag_and_the_attention_parameters_cannot_disagree() {
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        assert!(ArmWeights::new(base.clone(), MatchedArm::FF_FIXED_ATTN, Vec::new()).is_err());
+        assert!(ArmWeights::new_attentive(
+            base.clone(),
+            MatchedArm::FF_FIXED,
+            Vec::new(),
+            attention_params(24, 20)
+        )
+        .is_err());
+        // Wrong width for the network it is attached to.
+        assert!(ArmWeights::new_attentive(
+            base,
+            MatchedArm::FF_FIXED_ATTN,
+            Vec::new(),
+            attention_params(8, 20)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn arm_labels_round_trip_through_parse() {
+        for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
+            assert_eq!(MatchedArm::parse(arm.label()).unwrap(), arm);
+        }
+        assert!(MatchedArm::parse("ff+fixed+attention").is_err());
+    }
+
     #[test]
     fn recurrent_gradient_has_zero_diagonal() {
         let base = MatchedWeights::deterministic(40, 24, 20, 91);
         let hidden = base.hidden;
-        let w_rec: Vec<f32> = (0..hidden * hidden).map(|i| ((i % 13) as f32 - 6.0) * 1e-2).collect();
+        let w_rec: Vec<f32> = (0..hidden * hidden)
+            .map(|i| ((i % 13) as f32 - 6.0) * 1e-2)
+            .collect();
         let weights = ArmWeights::new(base, MatchedArm::REC_ALIF, w_rec).unwrap();
         let (_, gradient) = loss_and_gradient_arm(&weights, &sample()).unwrap();
         for h in 0..hidden {

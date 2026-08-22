@@ -109,7 +109,9 @@ impl MatchedWeights {
     pub fn load(path: &Path) -> Result<Self, String> {
         let mut reader = BufReader::new(File::open(path).map_err(|error| error.to_string())?);
         let mut magic = [0_u8; 8];
-        reader.read_exact(&mut magic).map_err(|error| error.to_string())?;
+        reader
+            .read_exact(&mut magic)
+            .map_err(|error| error.to_string())?;
         if &magic != MATCHED_WEIGHTS_MAGIC {
             return Err(format!("bad matched-weight magic in {}", path.display()));
         }
@@ -233,6 +235,27 @@ pub fn surrogate_derivative(u_minus_threshold: f32) -> f32 {
     (MATCHED_SURROGATE_ALPHA * 0.5) / (1.0 + scaled * scaled)
 }
 
+/// [`surrogate_derivative`] with the gain constant scaled.
+///
+/// `alpha = MATCHED_SURROGATE_ALPHA * scale`, so the peak derivative at
+/// threshold is `alpha / 2`. **`scale == 1.0` is bit-identical to
+/// [`surrogate_derivative`]** — same expression, same operand order, and `5.0 *
+/// 1.0` is exact — which is what keeps the 216 recorded cells reproducible.
+///
+/// Exposed because the peak gain is the dominant per-timestep term in the
+/// compounded recurrent backward: at the registered `alpha = 5.0` it is 2.5,
+/// and a per-step gain above 1 against a recurrent block with spectral radius
+/// near 1 is sufficient on its own to overflow f32 over several hundred
+/// timesteps. Registered in
+/// `results/AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md`, which also
+/// records why a gradient computed at a different scale is **not comparable**
+/// to the recorded cells.
+pub fn surrogate_derivative_scaled(u_minus_threshold: f32, scale: f32) -> f32 {
+    let alpha = MATCHED_SURROGATE_ALPHA * scale;
+    let scaled = std::f32::consts::FRAC_PI_2 * alpha * u_minus_threshold;
+    (alpha * 0.5) / (1.0 + scaled * scaled)
+}
+
 pub fn loss_and_gradient(
     weights: &MatchedWeights,
     sample: &MatchedShdSample,
@@ -301,8 +324,7 @@ pub fn loss_and_gradient(
         let frame = &sample.frames[t];
         for h in 0..hidden {
             let index = t * hidden + h;
-            let du = direct_spike[h]
-                * surrogate_derivative(membrane[index] - MATCHED_THRESHOLD)
+            let du = direct_spike[h] * surrogate_derivative(membrane[index] - MATCHED_THRESHOLD)
                 + alpha * (1.0 - spikes[index]) * du_next[h];
             let row = h * weights.n_inputs;
             for &(channel, count) in frame {
@@ -416,8 +438,7 @@ fn update_slice(
 ) {
     for index in 0..weights.len() {
         let gradient = gradients[index] + weight_decay * weights[index];
-        first[index] =
-            MATCHED_ADAM_BETA1 * first[index] + (1.0 - MATCHED_ADAM_BETA1) * gradient;
+        first[index] = MATCHED_ADAM_BETA1 * first[index] + (1.0 - MATCHED_ADAM_BETA1) * gradient;
         second[index] =
             MATCHED_ADAM_BETA2 * second[index] + (1.0 - MATCHED_ADAM_BETA2) * gradient * gradient;
         let update = lr * (first[index] / correction1)
@@ -493,7 +514,9 @@ pub fn save_epoch_orders(path: &Path, orders: &[Vec<usize>]) -> Result<(), Strin
 pub fn load_epoch_orders(path: &Path) -> Result<Vec<Vec<usize>>, String> {
     let mut reader = BufReader::new(File::open(path).map_err(|error| error.to_string())?);
     let mut magic = [0_u8; 8];
-    reader.read_exact(&mut magic).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| error.to_string())?;
     if &magic != MATCHED_ORDER_MAGIC {
         return Err(format!("bad epoch-order magic in {}", path.display()));
     }
@@ -542,7 +565,9 @@ fn write_u32(writer: &mut impl Write, value: u32) -> Result<(), String> {
 
 fn read_u32(reader: &mut impl Read) -> Result<u32, String> {
     let mut bytes = [0_u8; 4];
-    reader.read_exact(&mut bytes).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|error| error.to_string())?;
     Ok(u32::from_le_bytes(bytes))
 }
 
@@ -550,7 +575,9 @@ fn read_f32_vec(reader: &mut impl Read, len: usize) -> Result<Vec<f32>, String> 
     (0..len)
         .map(|_| {
             let mut bytes = [0_u8; 4];
-            reader.read_exact(&mut bytes).map_err(|error| error.to_string())?;
+            reader
+                .read_exact(&mut bytes)
+                .map_err(|error| error.to_string())?;
             Ok(f32::from_bits(u32::from_le_bytes(bytes)))
         })
         .collect()

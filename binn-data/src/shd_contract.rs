@@ -180,8 +180,7 @@ pub fn frame_events(
         } => (frames, 0.0, duration_ms / 1_000.0 / frames as f32),
     };
 
-    let mut sparse: Vec<BTreeMap<usize, f32>> =
-        (0..n_steps).map(|_| BTreeMap::new()).collect();
+    let mut sparse: Vec<BTreeMap<usize, f32>> = (0..n_steps).map(|_| BTreeMap::new()).collect();
     let mut retained_events = 0usize;
     let mut clipped_events = 0usize;
     for event in &sample.events {
@@ -223,12 +222,18 @@ pub fn frame_events(
 
 /// Read the count-preserving event cache produced by
 /// `scripts/shd_calibration/data.py`.
-pub fn read_event_cache(path: &Path, max_samples: Option<usize>) -> Result<Vec<ShdEventSample>, String> {
-    let mut reader = BufReader::new(File::open(path).map_err(|error| {
-        format!("open SHD event cache {}: {error}", path.display())
-    })?);
+pub fn read_event_cache(
+    path: &Path,
+    max_samples: Option<usize>,
+) -> Result<Vec<ShdEventSample>, String> {
+    let mut reader = BufReader::new(
+        File::open(path)
+            .map_err(|error| format!("open SHD event cache {}: {error}", path.display()))?,
+    );
     let mut magic = [0_u8; 8];
-    reader.read_exact(&mut magic).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| error.to_string())?;
     if &magic != SHD_EVENT_MAGIC {
         return Err(format!("bad SHD event magic in {}", path.display()));
     }
@@ -251,8 +256,11 @@ pub fn read_event_cache(path: &Path, max_samples: Option<usize>) -> Result<Vec<S
             let bytes = n_events
                 .checked_mul(8)
                 .ok_or_else(|| "event skip overflow".to_string())?;
-            std::io::copy(&mut reader.by_ref().take(bytes as u64), &mut std::io::sink())
-                .map_err(|error| error.to_string())?;
+            std::io::copy(
+                &mut reader.by_ref().take(bytes as u64),
+                &mut std::io::sink(),
+            )
+            .map_err(|error| error.to_string())?;
         }
     }
     Ok(samples)
@@ -260,13 +268,17 @@ pub fn read_event_cache(path: &Path, max_samples: Option<usize>) -> Result<Vec<S
 
 fn read_u32(reader: &mut impl Read) -> Result<u32, String> {
     let mut bytes = [0_u8; 4];
-    reader.read_exact(&mut bytes).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|error| error.to_string())?;
     Ok(u32::from_le_bytes(bytes))
 }
 
 fn read_u16(reader: &mut impl Read) -> Result<u16, String> {
     let mut bytes = [0_u8; 2];
-    reader.read_exact(&mut bytes).map_err(|error| error.to_string())?;
+    reader
+        .read_exact(&mut bytes)
+        .map_err(|error| error.to_string())?;
     Ok(u16::from_le_bytes(bytes))
 }
 
@@ -320,7 +332,10 @@ mod tests {
         assert_eq!(framed.frames[0].values, vec![(0, 2.0)]);
         assert_eq!(framed.retained_events, 6);
         assert_eq!(framed.clipped_events, 0);
-        assert_eq!(framed.frames.iter().map(|f| f.values.len()).sum::<usize>(), 5);
+        assert_eq!(
+            framed.frames.iter().map(|f| f.values.len()).sum::<usize>(),
+            5
+        );
     }
 
     #[test]
