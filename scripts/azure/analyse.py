@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -16,24 +17,11 @@ if str(ROOT) not in sys.path:
 from scripts.azure.plan_cells import NODE_COUNT
 
 
-def validity_problems(cell: dict) -> list[str]:
-    problems = []
-    if cell.get("mechanical_status") != "COMPLETE":
-        problems.append(f"mechanical_status={cell.get('mechanical_status')}")
-    for field, expected in (("non_finite_events", 0), ("classes_predicted", 20)):
-        if cell.get(field) != expected:
-            problems.append(f"{field}={cell.get(field)}")
-    for field, boundary, relation in (
-        ("majority_prediction", 0.30, "lt"),
-        ("silent_fraction", 0.95, "le"),
-        ("saturated_fraction", 0.05, "le"),
-    ):
-        value = cell.get(field)
-        if not isinstance(value, (int, float)) or (
-            relation == "lt" and value >= boundary
-        ) or (relation == "le" and value > boundary):
-            problems.append(f"{field}={value}")
-    return problems
+# Per-cell validity — from the single owner in `scripts/cell_validity.py`.
+# This copy was the only one that checked `mechanical_status`; that check is now
+# in the shared rule, so the AWS analysers get it too.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from cell_validity import stability_warnings, validity_problems  # noqa: E402,F401
 
 
 def main() -> int:

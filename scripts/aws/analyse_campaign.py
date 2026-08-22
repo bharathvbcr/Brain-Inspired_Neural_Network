@@ -21,8 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -47,26 +49,11 @@ def paired_t(deltas: list[float]) -> tuple[float, float, bool]:
     return (t, crit, abs(t) >= crit)
 
 
-def validity_problems(cell: dict, spec: dict) -> list[str]:
-    """Preregistration section 5, applied per cell."""
-    problems = []
-    if cell["non_finite_events"] != 0:
-        problems.append(f"non_finite_events={cell['non_finite_events']}")
-    if cell["classes_predicted"] != 20:
-        problems.append(f"classes_predicted={cell['classes_predicted']}")
-    if cell["majority_prediction"] >= 0.30:
-        problems.append(f"majority_prediction={cell['majority_prediction']:.3f}")
-    if cell["silent_fraction"] > 0.95:
-        problems.append(f"silent_fraction={cell['silent_fraction']:.3f}")
-    if cell["saturated_fraction"] > 0.05:
-        problems.append(f"saturated_fraction={cell['saturated_fraction']:.3f}")
-    if spec["temporal"] != "intact":
-        audit = cell["temporal_audit"]
-        if not audit["counts_preserved"]:
-            problems.append("counts not preserved")
-        if audit["relocated_fraction"] < 0.5:
-            problems.append(f"relocated_fraction={audit['relocated_fraction']:.3f}")
-    return problems
+# Preregistration section 5, per cell — from the single owner in
+# `scripts/cell_validity.py`. Three copies of this rule existed and had already
+# drifted; see that module's docstring.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from cell_validity import stability_warnings, validity_problems  # noqa: E402,F401
 
 
 def key(spec: dict) -> tuple:

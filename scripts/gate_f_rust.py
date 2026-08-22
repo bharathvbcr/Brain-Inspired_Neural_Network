@@ -75,8 +75,46 @@ COMPARED_TRACES = (
 )
 
 
+#: Arm assumed by a cell id that names no arm. Every one of the 216 recorded
+#: rust cells is this arm, which is exactly the hole the optional suffix below
+#: exists to close.
+DEFAULT_ARM = "ff+fixed"
+
+
 def parse_cell_id(cell_id: str) -> dict[str, object]:
-    backend, contract, geometry, hidden, epochs, seed = cell_id.split("__")
+    """Split a cell id, with optional arm and attention-shape suffixes.
+
+    The 216 recorded cells are all six-component ids and all `ff+fixed`, so
+    Gate F could not express a cell on any other arm — a change to the shared
+    kernel could alter `ff+alif`, `rec+*` or any attention arm and every gate in
+    the repository would still pass. Two optional components close that:
+
+        rust__<contract>__<geometry>__h<hidden>__e<epochs>__s<seed>
+        rust__...__s<seed>__<arm>
+        rust__...__s<seed>__<arm>__d<dim>l<layers>
+
+    The arm is written with hyphens, matching the campaign's own cell filenames
+    (`ff-fixed-attn`), and converted to the instrument's `+` spelling here.
+    """
+    parts = cell_id.split("__")
+    if len(parts) < 6 or len(parts) > 8:
+        raise ValueError(
+            f"cell id {cell_id!r} has {len(parts)} components; expected 6 "
+            "(legacy), 7 (with arm) or 8 (with arm and attention shape)"
+        )
+    backend, contract, geometry, hidden, epochs, seed = parts[:6]
+    arm = parts[6].replace("-", "+") if len(parts) > 6 else DEFAULT_ARM
+    attention = None
+    if len(parts) > 7:
+        shape = parts[7]
+        if not shape.startswith("d") or "l" not in shape:
+            raise ValueError(f"attention shape {shape!r} is not d<dim>l<layers>")
+        dim, layers = shape[1:].split("l", 1)
+        attention = (int(dim), int(layers))
+    if arm.endswith("+attn") and attention is None:
+        raise ValueError(f"{cell_id!r} names an attention arm with no d<dim>l<layers>")
+    if attention is not None and not arm.endswith("+attn"):
+        raise ValueError(f"{cell_id!r} carries an attention shape on a plain arm")
     return {
         "backend": backend,
         "contract": contract,
@@ -84,12 +122,29 @@ def parse_cell_id(cell_id: str) -> dict[str, object]:
         "hidden": int(hidden.removeprefix("h")),
         "epochs": int(epochs.removeprefix("e")),
         "seed": int(seed.removeprefix("s")),
+        "arm": arm,
+        "attention": attention,
     }
 
 
 def initialization_paths(spec: dict[str, object]) -> tuple[Path, Path]:
+    """Where a cell's pinned starting point lives.
+
+    The arm is part of the filename for every non-default arm, and the
+    attention shape too, because two arms at the same width do not share a
+    weight file — `ff+alif` carries adaptation parameters and an attention arm
+    carries a whole extra parameter block. Legacy `ff+fixed` names are
+    unchanged, so the 216 recorded cells keep resolving to the artifacts they
+    were recorded from.
+    """
     n_inputs = 700 if spec["geometry"] == "channels-700" else 140
-    weights = RESULT_ROOT / "initialization" / f"n{n_inputs}-h{spec['hidden']}-s{spec['seed']}.weights"
+    stem = f"n{n_inputs}-h{spec['hidden']}-s{spec['seed']}"
+    if spec.get("arm", DEFAULT_ARM) != DEFAULT_ARM:
+        stem += f"-{str(spec['arm']).replace('+', '-')}"
+    if spec.get("attention"):
+        dim, layers = spec["attention"]
+        stem += f"-d{dim}l{layers}"
+    weights = RESULT_ROOT / "initialization" / f"{stem}.weights"
     orders = RESULT_ROOT / "initialization" / f"n8156-e100-s{spec['seed']}.orders"
     return weights, orders
 
@@ -121,6 +176,11 @@ def regress_cell(cell_id: str, binary: Path) -> dict[str, object]:
             "--orders", str(orders),
             "--epochs", str(spec["epochs"]),
             "--out", str(output),
+            # Passed even though the weight file already carries the arm: the
+            # instrument cross-checks the two and refuses a disagreement, so
+            # naming it here turns a mismatched artifact into an error instead
+            # of a silently different cell.
+            *(["--arm", str(spec["arm"])] if spec.get("arm", DEFAULT_ARM) != DEFAULT_ARM else []),
         ],
         capture_output=True,
         text=True,

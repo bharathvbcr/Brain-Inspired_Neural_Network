@@ -10,6 +10,7 @@ pub mod dfa_match_config;
 pub mod dfa_spike_config;
 pub mod eprop_true_config;
 pub mod eventprop_match_config;
+pub mod gradient_clip;
 pub mod guards;
 #[cfg(feature = "tables")]
 pub mod harvest;

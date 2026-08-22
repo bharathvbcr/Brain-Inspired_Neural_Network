@@ -1125,6 +1125,39 @@ mod tests {
         let (grad, ds) = attention_gradient(&params, &cache, &saturated, &d_logits).unwrap();
         assert!(grad.iter_all().all(|v| v.is_finite()));
         assert!(ds.iter().all(|v| v.is_finite()));
+
+        // Finiteness alone is satisfied by a block that returned zeros, which
+        // `scripts/find_weak_checks.py` flagged as a check a degenerate result
+        // would pass. The invariants below are what make it a check.
+        //
+        // Every unit firing at every timestep means the only thing separating
+        // one timestep from another is the positional code — so this is also
+        // the case where a lost `pos` would show up as an exactly uniform
+        // attention row and an identically zero spike gradient.
+        for step in 0..t {
+            let row = cache.final_attention_row(step);
+            let total: f32 = row.iter().sum();
+            assert!(
+                (total - 1.0).abs() < 1e-4,
+                "row {step} of a saturated trace sums to {total}, not 1"
+            );
+        }
+        assert!(
+            grad.iter_all().any(|v| *v != 0.0),
+            "a saturated trace produced an all-zero parameter gradient"
+        );
+        assert!(
+            ds.iter().any(|v| *v != 0.0),
+            "a saturated trace produced an all-zero spike gradient"
+        );
+        // Position is what makes the read-out order sensitive, so a saturated
+        // trace must still credit timesteps differently. If every entry were
+        // equal, the block would be reporting rate and calling it timing.
+        let first = ds[0];
+        assert!(
+            ds.iter().any(|v| (v - first).abs() > 1e-9),
+            "every timestep received identical credit on a saturated trace;              the read-out is not distinguishing position"
+        );
     }
 
     /// A non-finite parameter must **propagate**, not be swallowed.

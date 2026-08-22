@@ -97,20 +97,18 @@ def load(directory: str, stem: str) -> list[dict]:
     return out
 
 
-def validity_problems(cell: dict) -> list[str]:
-    """Preregistration section 5, per cell."""
-    problems = []
-    if cell["non_finite_events"] != 0:
-        problems.append(f"non_finite_events={cell['non_finite_events']}")
-    if cell["classes_predicted"] != 20:
-        problems.append(f"classes_predicted={cell['classes_predicted']}")
-    if cell["majority_prediction"] >= 0.30:
-        problems.append(f"majority_prediction={cell['majority_prediction']:.3f}")
-    if cell["silent_fraction"] > 0.95:
-        problems.append(f"silent_fraction={cell['silent_fraction']:.3f}")
-    if cell["saturated_fraction"] > 0.05:
-        problems.append(f"saturated_fraction={cell['saturated_fraction']:.3f}")
-    return problems
+# Preregistration section 5, per cell — from the single owner in
+# `scripts/cell_validity.py`. This module previously carried its own copy, which
+# had no temporal-audit check; wave 9's whole result is a bin-shuffled arm and
+# was scored through it, and wave 10 imports this name too. Re-exported rather
+# than wrapped so both stay on the same rule.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from cell_validity import stability_warnings, validity_problems  # noqa: E402
+
+
+#: Non-voiding notes, printed with the report. A cell can be perfectly valid and
+#: still have been straining; a mean cannot say that, so it is said separately.
+WARNINGS: list[str] = []
 
 
 def accs(cells: list[dict], label: str, voided: list[str]) -> list[float]:
@@ -118,6 +116,8 @@ def accs(cells: list[dict], label: str, voided: list[str]) -> list[float]:
         problems = validity_problems(cell)
         if problems:
             voided.append(f"{label} s{seed}: {', '.join(problems)}")
+        for warning in stability_warnings(cell):
+            WARNINGS.append(f"{label} s{seed}: {warning}")
     return [c["accuracy"] for c in cells]
 
 
@@ -173,6 +173,17 @@ def main() -> int:
         print("\n".join(lines))
         return 1
     w("**Validity gates: all 144 cells pass.**\n")
+    # Valid is not the same as untroubled. A cell can clear every gate and still
+    # have been straining; printing that is the difference between "this arm
+    # scored lower" and "this arm scored lower while straining".
+    if WARNINGS:
+        w(f"**Stability notes ({len(WARNINGS)}), not voiding:**\n")
+        for line in WARNINGS:
+            w(f"- {line}")
+        w("")
+    else:
+        w("**Stability notes: none — no cell exceeded the recorded peak "
+          "gradient norm, and no cell was clipped.**\n")
 
     w("## Measurements\n")
     w("| configuration | mean | min | max | seeds >= 0.80 |")

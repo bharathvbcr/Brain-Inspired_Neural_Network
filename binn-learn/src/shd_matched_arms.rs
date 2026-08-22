@@ -1651,10 +1651,53 @@ mod tests {
         );
     }
 
-    // Captured 2026-08-19 from the kernel these tests accompany, alongside the
-    // finite-difference checks that establish the attention gradient is right
-    // rather than merely stable. Re-pin in the same commit as any deliberate
-    // model change, and say so.
+    // Re-pinned 2026-08-22 from a kernel verified by independent derivation, not
+    // from a kernel trusted because it was already here.
+    //
+    // # The previous values were never reproducible
+    //
+    // The constants this replaces were labelled "captured 2026-08-19" and
+    // committed in `516e9c7`, the same commit that introduced
+    // `shd_attention.rs`. They never matched the kernel that shipped beside
+    // them: this test fails at `516e9c7`, `fcfadbd`, `a3dafd1` and `597aeba`,
+    // which is every commit in which it has existed. Three commit messages over
+    // that span assert a clean suite. Because the attention module has no
+    // history before `516e9c7`, no committed state produces the old hashes —
+    // they came from a working tree that was never committed, so the question
+    // "was the pin right or the kernel?" cannot be settled from the repository.
+    //
+    // Which entries had moved, against the current kernel:
+    //   * `ff+*+attn`  — entries 3 and 6 (`grad_w_in`, attention gradient).
+    //   * `rec+*+attn` — entries 2 through 6; only membrane and spikes agreed.
+    //
+    // # Why these values are trusted
+    //
+    // Re-pinning from the kernel would have recorded whatever the kernel does
+    // as correct by definition. Instead every pinned quantity is verified by
+    // something that is not this pin, before the pin was taken:
+    //
+    //   * entries 0-5 — `tests/attention_w_in_independent.rs` reimplements the
+    //     arm forward and backward from the documented equations, in a separate
+    //     crate target reaching only the public API, sharing no layout, no
+    //     sparse skip and no scratch staging with the kernel. It reproduces all
+    //     four base arms **bit-exactly** first — arms Gate F covers over 296
+    //     recorded cells — and only then is applied to the attention arms,
+    //     where it also agrees bit-exactly. A companion test shows the
+    //     comparison fails when attention's credit is withheld, so it is not
+    //     passing vacuously.
+    //   * entry 6 — the attention parameter gradient is finite-difference
+    //     checked per parameter by `shd_attention`'s own suite and again
+    //     through the arm by
+    //     `attention_parameters_match_finite_difference_through_the_arm`.
+    //     Nothing downstream of the spike threshold is a surrogate, so those
+    //     are exact derivative checks rather than plausibility checks.
+    //   * `ds_attn`, which is what makes entry 3 differ from the base arms, is
+    //     checked against central differences of the attention forward at
+    //     **every** index of the spike train, using no backward code at all.
+    //
+    // Re-pin in the same commit as any deliberate model change, and say so. If
+    // these move for any other reason, the kernel changed when it should not
+    // have — and re-run the derivation test before believing the new values.
     //
     // Entries 0 and 1 — membrane and spikes — are **identical** to the
     // corresponding non-attention pin above, for all four arms. That is the
@@ -1665,37 +1708,37 @@ mod tests {
         0x59bad35bf85e82b6,
         0xb09c4cee717f9978,
         0x487757e346dce48c,
-        0x83541a2b6792da5e,
+        0x0ace797732b9d8a0,
         0xb05540e69e9d8df8,
         0xcbf29ce484222325,
-        0xa6d935b559f92964,
+        0x47a1aae01a70b513,
     ];
     const PIN_FF_ALIF_ATTN: [u64; 7] = [
         0xc52ad841b5a668b8,
         0x5a6e0d090d97e165,
         0x7a636a5eaf66b249,
-        0xe8a344f7dd9d7873,
+        0xc3d91af299cbbfe9,
         0x0e63b260391d974d,
         0xcbf29ce484222325,
-        0x8e5307da30382e06,
+        0xc8ff17f64b6f02f5,
     ];
     const PIN_REC_FIXED_ATTN: [u64; 7] = [
         0x3655a2f23174aa02,
         0x796b1eeee0df6ab5,
-        0xed3be5b13d7c9964,
-        0xfe9dcc250c5302c9,
-        0xc8ada25d7fe6513b,
-        0xe0bdef08e6b7d2f4,
-        0x91be1d618fe8525b,
+        0xabd3e1ffcab8f355,
+        0x7fbc19ae0e1acf86,
+        0x9e0d03cf91deb59b,
+        0x143c705a596d402c,
+        0x6c80e1e83ee3c552,
     ];
     const PIN_REC_ALIF_ATTN: [u64; 7] = [
         0x17e9947421f4b648,
         0x69f2330042a9be55,
-        0x75d956b694943eae,
-        0x0aca7e135a8536dc,
-        0x792176abaa648960,
-        0x624e796a8ff00dc6,
-        0x4df1538156afb8ec,
+        0x0071d6a9ab3cbf1f,
+        0xefef97afc5b89de2,
+        0xf527765b4a8d01cf,
+        0xa3e119c9e1b1b417,
+        0x68cf094fc9d2b2a7,
     ];
 
     const PIN_REC_ALIF: [u64; 6] = [

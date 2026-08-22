@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from analyse_wave8 import (  # noqa: E402
     SEEDS,
+    WARNINGS,
     accs,
     assert_one_pinned_binary,
     load,
@@ -83,6 +84,16 @@ def main() -> int:
     if voided:
         a("\n**VOIDED cells present — verdicts below are not reportable "
           "until they are explained.**")
+
+    # Non-voiding, and printed either way so silence is a measurement rather
+    # than an omission.
+    if WARNINGS:
+        a(f"\n**Stability notes ({len(WARNINGS)}), not voiding:**")
+        for line in WARNINGS:
+            a(f"- {line}")
+    else:
+        a("\n**Stability notes: none — no cell exceeded the recorded peak "
+          "gradient norm, and no cell was clipped.**")
 
     a("\n## Registered verdicts\n")
     c1 = all(gains[c] >= C1_GAIN and pos[c] >= C1_SEEDS for c in RUNGS)

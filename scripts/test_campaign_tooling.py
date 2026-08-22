@@ -134,9 +134,19 @@ class ValidityGateTest(unittest.TestCase):
     """Each gate must catch its own defect class, and a healthy cell must pass."""
 
     def healthy(self):
-        return {"non_finite_events": 0, "classes_predicted": 20,
+        """A complete cell, not a partial one.
+
+        This fixture used to omit `mechanical_status` and `temporal_condition`,
+        which every real cell carries. Omitting them made the gate look
+        satisfied on a payload the instrument never emits, and hid that two of
+        the three copies of the gate were not checking them at all.
+        """
+        return {"mechanical_status": "COMPLETE",
+                "non_finite_events": 0, "classes_predicted": 20,
                 "majority_prediction": 0.11, "silent_fraction": 0.02,
-                "saturated_fraction": 0.0}
+                "saturated_fraction": 0.0,
+                "temporal_condition": "intact",
+                "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
 
     def problems(self, **override):
         import analyse_wave8
@@ -987,6 +997,134 @@ class TeardownBlastRadiusTest(AwsScriptedTest):
         self.tear({"Reservations": []}, ["--remove-iam"])
         self.assertTrue([c for c in self.fake.calls if c[1] == "iam"],
                         "--remove-iam did nothing")
+
+
+
+class SharedValidityOwnerTest(unittest.TestCase):
+    """The checks the three drifted copies did not have, and the one owner.
+
+    Every test here fails against the pre-2026-08-22 tooling: `analyse_wave8`
+    carried its own gate with no temporal audit, no `mechanical_status`, no
+    plan/cell agreement and no magnitude check, and wave 9 and wave 10 both
+    scored their cells through it.
+    """
+
+    def cell(self, **override):
+        payload = {"mechanical_status": "COMPLETE", "non_finite_events": 0,
+                   "classes_predicted": 20, "majority_prediction": 0.11,
+                   "silent_fraction": 0.02, "saturated_fraction": 0.0,
+                   "temporal_condition": "intact",
+                   "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
+        payload.update(override)
+        return payload
+
+    def test_all_three_analysers_share_one_owner(self):
+        """Re-drift is the failure this is guarding against, not a first drift."""
+        import analyse_campaign
+        import analyse_wave8
+        sys.path.insert(0, str(ROOT / "scripts" / "azure"))
+        import analyse as azure_analyse
+
+        import cell_validity
+        for module in (analyse_wave8, analyse_campaign, azure_analyse):
+            self.assertIs(
+                module.validity_problems,
+                cell_validity.validity_problems,
+                f"{module.__name__} has its own copy of the validity gate again",
+            )
+
+    def test_a_manipulated_cell_must_carry_a_passing_audit(self):
+        """The wave-9 hole: `w9shf` was scored by a gate that never read this."""
+        import cell_validity
+        shuffled = self.cell(temporal_condition="bin-shuffled",
+                             temporal_audit={"counts_preserved": True,
+                                             "relocated_fraction": 0.87})
+        self.assertEqual(cell_validity.validity_problems(shuffled), [])
+
+        no_audit = self.cell(temporal_condition="bin-shuffled")
+        self.assertIn("temporal_audit missing for a manipulated cell",
+                      cell_validity.validity_problems(no_audit))
+
+        counts_moved = self.cell(temporal_condition="bin-shuffled",
+                                 temporal_audit={"counts_preserved": False,
+                                                 "relocated_fraction": 0.87})
+        self.assertIn("counts not preserved",
+                      cell_validity.validity_problems(counts_moved))
+
+        # A "shuffle" that barely moved anything is the case the manipulation
+        # check exists for: it would score as a shuffled arm while being
+        # substantially the intact one.
+        barely = self.cell(temporal_condition="bin-shuffled",
+                           temporal_audit={"counts_preserved": True,
+                                           "relocated_fraction": 0.49})
+        self.assertTrue(any("relocated_fraction" in p
+                            for p in cell_validity.validity_problems(barely)))
+
+    def test_a_cell_that_ran_the_wrong_condition_is_caught(self):
+        import cell_validity
+        payload = self.cell(temporal_condition="intact")
+        problems = cell_validity.validity_problems(payload, {"temporal": "bin-shuffled"})
+        self.assertTrue(any("plan asked for" in p for p in problems), problems)
+
+    def test_magnitude_warns_and_never_voids(self):
+        """Voiding on magnitude would re-score a published run.
+
+        The 2026-08-05 amendment's `rec+alif` cell peaked at 3.93e33 and was
+        reported as a result. This gate must make that visible without
+        retroactively discarding it.
+        """
+        import cell_validity
+        marginal = self.cell(epoch_max_gradient_norm=[1e3, 3.93e33])
+        self.assertEqual(cell_validity.validity_problems(marginal), [])
+        self.assertTrue(any("five orders of f32 overflow" in w
+                            for w in cell_validity.stability_warnings(marginal)))
+
+        # The tier below: above anything recorded, not yet near overflow.
+        loud = self.cell(epoch_max_gradient_norm=[1e3, 1e12])
+        self.assertEqual(cell_validity.validity_problems(loud), [])
+        self.assertTrue(any("exceeds every cell" in w
+                            for w in cell_validity.stability_warnings(loud)))
+
+        # And quiet cells stay quiet, or the notes would be noise.
+        self.assertEqual(cell_validity.stability_warnings(self.cell()), [])
+
+    def test_a_non_finite_norm_trace_is_not_silently_skipped(self):
+        import cell_validity
+        # JSON has no infinity literal, so a non-finite norm arrives as null.
+        payload = self.cell(epoch_max_gradient_norm=[1.0, None, 2.0])
+        problems = cell_validity.validity_problems(payload)
+        self.assertTrue(any("non-finite" in p for p in problems), problems)
+
+    def test_every_recorded_campaign_cell_still_passes(self):
+        """The new checks must void nothing that was already published.
+
+        A gate that retroactively invalidates the record is not a hardening,
+        it is a re-scoring, and it would need its own registration.
+        """
+        import cell_validity
+        roots = [ROOT / "results" / "shd_attention_campaign_v1" / "cells",
+                 ROOT / "results" / "shd_attention_campaign_v2"]
+        checked = 0
+        for root in roots:
+            for path in sorted(root.glob("*.json")):
+                if path.name in ("manifest.json",) or path.name.startswith("plan"):
+                    continue
+                payload = json.loads(path.read_text())
+                if "accuracy" not in payload:
+                    continue
+                self.assertEqual(cell_validity.validity_problems(payload), [],
+                                 f"{path.name} would now be voided")
+                checked += 1
+        self.assertGreater(checked, 600, f"only {checked} cells checked")
+
+    def test_a_clipped_cell_cannot_be_read_as_an_unclipped_one(self):
+        import cell_validity
+        self.assertEqual(cell_validity.stability_warnings(self.cell()), [])
+        clipped = self.cell(clipped_samples=17)
+        self.assertTrue(any("clipping bound" in w
+                            for w in cell_validity.stability_warnings(clipped)))
+
+
 
 
 #: Sentinel for a scripted AWS call that fails.

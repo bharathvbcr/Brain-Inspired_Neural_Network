@@ -12,6 +12,7 @@ use binn_data::{
 use binn_lab::{authorize_campaign, CampaignKind};
 use rayon::prelude::*;
 
+use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
 use binn_learn::shd_attention::{AttentionConfig, AttentionParams};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
@@ -84,7 +85,9 @@ fn print_help() {
          Optional on train-cell:\n\
            --temporal intact|bin-shuffled|channel-shuffled|reversed  (default intact)\n\
            --temporal-seed N   (required unless --temporal intact)\n\
-           --clip-grad-norm F  global-norm gradient clipping (default: off)\n\
+           --clip-grad-norm F  global-norm clipping of the batch gradient (default: off)\n\
+           --clip-sample-grad-norm F  global-norm clipping of each sample gradient,\n\
+                               before accumulation (default: off)\n\
            --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)"
     );
 }
@@ -293,6 +296,10 @@ struct TrainDiagnostics {
     clipped_steps: usize,
     /// Steps whose norm was non-finite, which clipping cannot rescue.
     unclippable_steps: usize,
+    /// Sample gradients where per-sample clipping actually bound. Reported for
+    /// the same reason as `clipped_steps`: a clipped run must not be readable
+    /// as an unclipped one.
+    clipped_samples: usize,
 }
 
 /// Positive control for the temporal-information campaign.
@@ -515,6 +522,7 @@ const TRAIN_CELL_FLAGS: &[&str] = &[
     "--arm",
     "--surrogate-scale",
     "--clip-grad-norm",
+    "--clip-sample-grad-norm",
     "--temporal",
     "--temporal-seed",
     "--seed",
@@ -597,6 +605,35 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         Some(value) => {
             return Err(format!(
                 "--clip-grad-norm must be finite and positive, got {value}"
+            ))
+        }
+    };
+    // Per-sample clipping, and the reason it is separate from `--clip-grad-norm`.
+    //
+    // `AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md` §1 records batch
+    // clipping as "never reached - abort fires on a per-sample gradient,
+    // upstream", and the code was never changed to match that finding. The
+    // recurrent failure compounds *inside* the per-sample backward: by the time
+    // a batch gradient exists, a single sample has already produced non-finite
+    // entries and the accumulation loop has returned an error. A threshold that
+    // only ever sees the batch therefore cannot bind on the cells it was added
+    // for.
+    //
+    // Clipping each sample before accumulation acts one level lower, where the
+    // growth actually happens, and bounds every addend rather than their sum.
+    // It does not replace `--clip-grad-norm`: the two compose, and a run may
+    // pass both.
+    //
+    // **Off is bit-identical to before this existed.** With no flag the value
+    // is `None`, no branch below is entered, and no arithmetic touches the
+    // sample gradient. Gate F over the recorded cells is the binding check, as
+    // it was for batch clipping.
+    let clip_sample_grad_norm = match optional_f32(args, "--clip-sample-grad-norm")? {
+        None => None,
+        Some(value) if value.is_finite() && value > 0.0 => Some(f64::from(value)),
+        Some(value) => {
+            return Err(format!(
+                "--clip-sample-grad-norm must be finite and positive, got {value}"
             ))
         }
     };
@@ -771,13 +808,41 @@ fn train_cell(args: &[String]) -> Result<(), String> {
                     surrogate_scale,
                 );
                 for outcome in computed {
-                    let (loss, sample_gradient) = outcome?;
+                    let (loss, mut sample_gradient) = outcome?;
                     diagnostics.loss_sum += f64::from(loss);
                     diagnostics.samples += 1;
                     if !loss.is_finite() || !sample_gradient.all_finite() {
                         return Err(format!(
                             "non-finite training value at optimizer step {global_step}"
                         ));
+                    }
+                    // Per-sample clipping. Placed after the finite check and
+                    // before accumulation: scaling by `threshold / norm` cannot
+                    // rescue a gradient that already holds inf or NaN, so the
+                    // hard error stays as the last line of defence and this
+                    // bounds the growth that would otherwise reach it.
+                    if let Some(threshold) = clip_sample_grad_norm {
+                        match clip_by_global_norm(&mut sample_gradient, threshold) {
+                            ClipOutcome::Bound => diagnostics.clipped_samples += 1,
+                            ClipOutcome::Untouched => {}
+                            // Every entry is finite - checked above - but their
+                            // sum of squares overflowed. `threshold / inf` is
+                            // zero, so scaling here would silently delete the
+                            // sample from the batch and leave a cell that looks
+                            // trained. Refuse instead, and name the case.
+                            //
+                            // Deliberately not counted into a cell field: this
+                            // branch returns, so no cell is ever emitted and any
+                            // such field would be a constant zero masquerading
+                            // as evidence. The failure log is the record.
+                            ClipOutcome::NormOverflowed => {
+                                return Err(format!(
+                                    "sample gradient norm overflowed with all entries finite \
+                                     at optimizer step {global_step}; per-sample clipping \
+                                     cannot scale it and will not drop it"
+                                ))
+                            }
+                        }
                     }
                     gradient.add_assign(&sample_gradient);
                 }
@@ -806,16 +871,20 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             // The scale is computed in f64: at h512 the norms reaching this
             // point are ~1e29, and `threshold / norm` in f32 would flush to
             // zero for norms above ~1e38.
+            //
+            // The rule itself lives in `binn_lab::gradient_clip`, shared with
+            // the per-sample site below so the two cannot drift. Behaviour here
+            // is unchanged: bind above the threshold, count an unrepresentable
+            // norm, touch nothing otherwise. `gradient_norm` above is the
+            // **pre-clip** value and stays the one reported.
             if let Some(threshold) = clip_grad_norm {
-                let norm = f64::from(gradient_norm);
-                if norm.is_finite() && norm > threshold {
-                    gradient.scale((threshold / norm) as f32);
-                    diagnostics.clipped_steps += 1;
-                } else if !norm.is_finite() {
+                match clip_by_global_norm(&mut gradient, threshold) {
+                    ClipOutcome::Bound => diagnostics.clipped_steps += 1,
                     // An unrepresentable norm cannot be scaled into range by a
                     // ratio, so clipping cannot rescue this step. Count it and
                     // let the existing non-finite accounting report it.
-                    diagnostics.unclippable_steps += 1;
+                    ClipOutcome::NormOverflowed => diagnostics.unclippable_steps += 1,
+                    ClipOutcome::Untouched => {}
                 }
             }
             let lr = one_cycle_lr(global_step, total_steps, 1e-3, 5e-3);
@@ -910,7 +979,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"accuracy\":{:.9},\"classes_predicted\":{},\"majority_prediction\":{:.9},\
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
-         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
+         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
          \"scientific_status\":\"{}\",\"wall_secs\":{:.6}{}{}}}\n",
         weights.arm.label(),
         contract.id(),
@@ -933,6 +1002,8 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         clip_grad_norm.map_or("null".to_string(), |v| format!("{v:.9}")),
         diagnostics.clipped_steps,
         diagnostics.unclippable_steps,
+        clip_sample_grad_norm.map_or("null".to_string(), |v| format!("{v:.9}")),
+        diagnostics.clipped_samples,
         condition.label(),
         audit.samples,
         audit.counts_preserved,
@@ -1457,35 +1528,79 @@ mod tests {
             .collect()
     }
 
+    /// Thread-count independence, for **every arm** and at prime thread counts.
+    ///
+    /// This previously ran one arm — `ff+fixed+attn` — at 1 thread against 4.
+    /// Every cell in the record is produced by this reduction, and a
+    /// thread-count dependence would change results silently rather than
+    /// loudly: `par_iter().collect()` on an indexed parallel iterator preserves
+    /// order, so `add_assign` must see identical addends in an identical
+    /// sequence, and float addition is not associative enough to forgive
+    /// anything less.
+    ///
+    /// Prime counts are included deliberately. A chunking bug that divides
+    /// evenly into the batch is invisible at 1, 2, 4 and 8 and appears at 3, 5
+    /// or 7 — and `PARALLEL_CHUNK` is 64, so an off-by-one in the sub-chunk
+    /// walk would land exactly there.
     #[test]
-    fn parallelism_is_bit_identical_to_serial() {
-        let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
-        let config = AttentionConfig::new(32, 4).expect("attention config");
-        let attention =
-            AttentionParams::deterministic(8, 4, config, 11).expect("attention parameters");
-        let weights =
-            ShdArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), attention)
-                .expect("attention arm");
+    fn parallelism_is_bit_identical_to_serial_for_every_arm() {
+        const THREADS: [usize; 6] = [1, 2, 3, 5, 8, 16];
         let train: Vec<_> = (0..16).map(sample).collect();
         let indices: Vec<_> = (0..train.len()).collect();
 
-        let run = |threads| {
-            let weight_layout = ShdArmWeightLayout::prepare(&weights);
-            ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .expect("thread pool")
-                .install(|| {
-                    result_bits(ordered_sample_gradients(
-                        &weights,
-                        &weight_layout,
-                        &train,
-                        &indices,
-                        1.0,
-                    ))
-                })
-        };
+        for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
+            let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+            let w_rec = if arm.recurrent {
+                (0..8 * 8)
+                    .map(|i| (((i % 13) as f32) - 6.0) * 1.3e-2)
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let weights = if arm.attention {
+                let config = AttentionConfig::new(32, 4).expect("attention config");
+                let attention =
+                    AttentionParams::deterministic(8, 4, config, 11).expect("attention parameters");
+                ShdArmWeights::new_attentive(base, arm, w_rec, attention).expect("attention arm")
+            } else {
+                ShdArmWeights::new(base, arm, w_rec).expect("arm")
+            };
 
-        assert_eq!(run(1), run(4));
+            let run = |threads| {
+                let weight_layout = ShdArmWeightLayout::prepare(&weights);
+                ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .build()
+                    .expect("thread pool")
+                    .install(|| {
+                        result_bits(ordered_sample_gradients(
+                            &weights,
+                            &weight_layout,
+                            &train,
+                            &indices,
+                            1.0,
+                        ))
+                    })
+            };
+
+            let serial = run(1);
+            // A gradient of all zeros would be thread-count independent for
+            // reasons that have nothing to do with the reduction.
+            assert!(
+                serial.iter().any(|bits| bits
+                    .iter()
+                    .any(|value| *value != 0 && *value != 0x8000_0000)),
+                "{}: fixture produced an all-zero gradient; the comparison is vacuous",
+                arm.label()
+            );
+            for threads in THREADS {
+                assert_eq!(
+                    serial,
+                    run(threads),
+                    "{} differs between 1 and {threads} threads",
+                    arm.label()
+                );
+            }
+        }
     }
 }
