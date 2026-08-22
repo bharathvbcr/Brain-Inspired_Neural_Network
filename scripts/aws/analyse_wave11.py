@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import statistics
 import sys
 
@@ -36,11 +37,45 @@ EFFECT_BAR = 0.05
 SIGN_AGREEMENT = 10
 
 
+# Two defects in this file, found 2026-08-22 after the wave closed and fixed
+# here. Both are bugs, not threshold changes, and **no verdict was issued before
+# or after**: the completion expectation failed first, so neither line had ever
+# run. The bars in this file are exactly as registered.
+#
+#   1. `surrogate_scale` arrives as f32, so the cell records 0.400000006. An
+#      `== 0.4` grouping silently produced an empty bucket and a NaN mean.
+#   2. Cells carry no `seed` field at all -- `HARDENING_2026-08-22_THE_EVIDENCE_LAYER_HAD_NO_TESTS.md`
+#      already recorded that as open work, and this analyser was written against
+#      it anyway. Reading `cell["seed"]` would have raised KeyError.
+#
+# The lesson is not "be more careful". It is that **freezing an analyser before
+# the data does not make it correct** -- it has to be exercised against a
+# synthetic fixture before the real cells land, which is what
+# `scripts/test_campaign_tooling.py::Wave11AnalyserTest` now does.
+CELL_NAME = re.compile(r"__ss(?P<scale>[0-9.]+)__s(?P<seed>\d+)\.json$")
+
+
+def identify(path: pathlib.Path) -> tuple[float, int]:
+    """Recover (surrogate scale, seed) from the cell id.
+
+    The id is the only place the seed exists: the emitted cell has no `seed`
+    field. Reading the scale from the name too keeps both halves of the key from
+    one source rather than mixing a parsed seed with an f32 field that does not
+    compare equal to the value that was planned.
+    """
+    match = CELL_NAME.search(path.name)
+    if not match:
+        raise ValueError(f"cell id does not carry a scale and seed: {path.name}")
+    return float(match["scale"]), int(match["seed"])
+
+
 def load() -> list[dict]:
-    return [
-        json.loads(path.read_text())
-        for path in sorted(CELLS.glob("w11rec__*.json"))
-    ]
+    cells = []
+    for path in sorted(CELLS.glob("w11rec__*.json")):
+        cell = json.loads(path.read_text())
+        cell["_scale"], cell["_seed"] = identify(path)
+        cells.append(cell)
+    return cells
 
 
 def usable(cell: dict) -> bool:
@@ -106,7 +141,7 @@ def main() -> int:
 
     # T4-2, paired by seed and surrogate scale.
     paired = []
-    index = {(c["seed"], c.get("surrogate_scale"), c["arm"]): c["accuracy"] for c in good}
+    index = {(c["_seed"], c["_scale"], c["arm"]): c["accuracy"] for c in good}
     for (seed, scale, arm), value in index.items():
         if arm != "rec+alif":
             continue
@@ -126,7 +161,7 @@ def main() -> int:
 
     # T4-3
     by_scale = {
-        scale: [c["accuracy"] for c in good if c.get("surrogate_scale") == scale]
+        scale: [c["accuracy"] for c in good if c["_scale"] == scale]
         for scale in (1.0, 0.4)
     }
     scale_delta = mean(by_scale[1.0]) - mean(by_scale[0.4])

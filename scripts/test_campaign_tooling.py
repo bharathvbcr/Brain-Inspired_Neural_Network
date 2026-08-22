@@ -1174,5 +1174,101 @@ class SharedValidityOwnerTest(unittest.TestCase):
 FAIL = object()
 
 
+class Wave11AnalyserTest(unittest.TestCase):
+    """Exercise the wave-11 analyser against synthetic cells.
+
+    Written because freezing an analyser before the data did **not** make it
+    correct. `analyse_wave11.py` was frozen before wave 11 launched, with two
+    defects that would both have fired had the completion bar passed: it grouped
+    on `surrogate_scale == 0.4` against an f32 field that records 0.400000006,
+    and it keyed pairs on `cell["seed"]`, a field the emitted cell does not have
+    and which the record had already flagged as missing.
+
+    Neither ran, because the completion expectation failed first. That is luck,
+    not process. An analyser has to be run against a fixture before the real
+    cells land, and this is that fixture.
+    """
+
+    def cells(self, directory, spec):
+        """Write synthetic cells with realistic field types.
+
+        `surrogate_scale` is deliberately stored as the f32 value the instrument
+        actually emits, and no `seed` field is written -- reproducing both traps
+        rather than a tidy version of them.
+        """
+        for arm, scale, seed, accuracy in spec:
+            stem = (f"w11rec__{arm.replace('+', '-')}__h256__e100__published-2ms"
+                    f"__adjacent-sum-5__ss{scale}__s{seed}.json")
+            (directory / stem).write_text(json.dumps({
+                "arm": arm,
+                "accuracy": accuracy,
+                "non_finite_events": 0,
+                "surrogate_scale": 0.400000006 if scale == 0.4 else 1.0,
+            }))
+
+    def run_analyser(self, spec):
+        import analyse_wave11
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            self.cells(path, spec)
+            original, analyse_wave11.CELLS = analyse_wave11.CELLS, path
+            try:
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = analyse_wave11.main()
+                return code, out.getvalue()
+            finally:
+                analyse_wave11.CELLS = original
+
+    def full_grid(self):
+        """24 cells: attention ahead by a constant 0.30 at every seed and scale."""
+        spec = []
+        for scale in (1.0, 0.4):
+            for seed in range(5170001, 5170007):
+                spec.append(("rec+alif", scale, seed, 0.45))
+                spec.append(("rec+alif+attn", scale, seed, 0.75))
+        return spec
+
+    def test_the_scale_grouping_survives_an_f32_surrogate_scale(self):
+        """The bug that would have made T4-3 a NaN. Both scale buckets must be
+        populated from a field that records 0.400000006, not 0.4."""
+        code, out = self.run_analyser(self.full_grid())
+        self.assertEqual(code, 0)
+        self.assertIn("**T4-3**", out)
+        self.assertNotIn("nan", out.lower(),
+                         "a scale bucket came back empty; the f32 grouping regressed")
+
+    def test_pairing_works_without_a_seed_field_in_the_cell(self):
+        """The bug that would have raised KeyError. Every planned pair must be
+        found from the cell id alone."""
+        code, out = self.run_analyser(self.full_grid())
+        self.assertEqual(code, 0)
+        self.assertIn("12/12 paired seeds agree in sign", out.replace("  ", " "),
+                      f"pairing did not recover all 12 pairs:\n{out}")
+
+    def test_a_short_wave_refuses_every_scientific_verdict(self):
+        """The registered response to the completion bar, which is what actually
+        fired on the real wave. It must refuse, and it must say so."""
+        # 16 cells, below the registered bar of 18. The real wave landed 15.
+        code, out = self.run_analyser(self.full_grid()[:16])
+        self.assertEqual(code, 1)
+        self.assertIn("NOT MET", out)
+        self.assertIn("NOT EVALUABLE", out)
+        for hypothesis in ("**T4-1**", "**T4-2**", "**T4-3**"):
+            self.assertNotIn(f"{hypothesis} ", out.replace("T4-1, T4-2 and T4-3", ""),
+                             f"{hypothesis} was evaluated on a short wave")
+
+    def test_a_full_wave_with_no_effect_reports_not_supported(self):
+        """The bar has to be able to say no. Identical arms must fail T4-2."""
+        spec = [(arm, scale, seed, 0.45)
+                for scale in (1.0, 0.4)
+                for seed in range(5170001, 5170007)
+                for arm in ("rec+alif", "rec+alif+attn")]
+        code, out = self.run_analyser(spec)
+        self.assertEqual(code, 0)
+        self.assertIn("**T4-2**", out)
+        self.assertIn("NOT SUPPORTED", out)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

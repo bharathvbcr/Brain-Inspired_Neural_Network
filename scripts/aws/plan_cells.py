@@ -301,6 +301,54 @@ def wave11_recurrent_unclipped():
     return cells
 
 
+def wave12_adaptation_by_attention():
+    """W12 - is the read-out adding order sensitivity, or substituting for it?
+
+    Registered in `results/PREREG_2026-08-22_ADAPTATION_BY_ATTENTION.md`.
+
+    Every cell in waves 1-10 that carries the anchor configuration is on
+    `ff+fixed`. The campaign therefore cannot distinguish two readings of the
+    headline +0.1258:
+
+      * attention adds temporal structure the substrate cannot represent, or
+      * attention substitutes for the threshold adaptation this substrate does
+        not have.
+
+    ETLP's conclusion - quoted in `binn-lab/experiments/shd_arch_ablation.rs` -
+    is that threshold adaptation and a recurrent topology are what a spiking net
+    needs for rich temporal structure. Neither is in `ff+fixed`, and attention
+    was added instead of either. The factorial has never been run.
+
+    This wave is the adaptation half: {fixed, adaptive} x {rate read-out,
+    +attention d32/L4} at the anchor, 12 seeds, e400.
+
+    The `ff+fixed` corners are NOT generated. Twelve seeds of `ff+fixed` (w1) and
+    twelve of `ff+fixed+attn` d32/L4 (r1cal) already exist at exactly this
+    configuration from the same pinned binary, and are reused under the manifest
+    hash check waves 8 and 9 use. 24 new cells, 24 reused.
+
+    **The recurrent half is deferred, and the reason is measured rather than
+    assumed.** Wave 11 ran the recurrent arms unclipped at h256/e100 and
+    completed 15 of 24 - `rec+alif` 7 of 12, `rec+alif+attn` 8 of 12. Under the
+    campaign's own validity rule an arm with any diverged cell reports zero
+    usable cells, so a 12-seed recurrent arm at ~60% per-cell completion cannot
+    carry a verdict. Making it complete is a numerical-stability question with
+    its own registration, not something to spend a wave discovering again.
+
+    No clipping and no surrogate scaling on any cell. Wave 4 diverged 24 of 24
+    because `--clip-grad-norm 1.0` bound on essentially every step
+    (`FINDING_2026-08-22_WAVE4_KILLED_ITS_OWN_CELLS.md`), and any scale deviation
+    would make these cells incomparable to the reused controls, which were run at
+    the registered default.
+    """
+    cells = []
+    for seed in SEEDS:
+        cells.append(cell("w12ada", "ff+alif", 128, 400, seed))
+        cells.append(cell("w12ada", "ff+alif+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -313,6 +361,7 @@ WAVES = {
     "w9": wave9_headline_mechanism,
     "w10": wave10_resolution_ladder,
     "w11": wave11_recurrent_unclipped,
+    "w12": wave12_adaptation_by_attention,
 }
 
 
