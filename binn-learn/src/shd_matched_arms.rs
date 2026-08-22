@@ -1587,14 +1587,31 @@ mod tests {
     /// attention gradient unpinned while the test read as complete.
     #[test]
     fn every_attention_arm_forward_and_backward_is_bit_pinned() {
-        let pinned: [(MatchedArm, [u64; 7]); 4] = [
-            (MatchedArm::FF_FIXED_ATTN, PIN_FF_FIXED_ATTN),
-            (MatchedArm::FF_ALIF_ATTN, PIN_FF_ALIF_ATTN),
-            (MatchedArm::REC_FIXED_ATTN, PIN_REC_FIXED_ATTN),
-            (MatchedArm::REC_ALIF_ATTN, PIN_REC_ALIF_ATTN),
+        let pinned: [(MatchedArm, [u64; 7], [u64; 7]); 4] = [
+            (
+                MatchedArm::FF_FIXED_ATTN,
+                PIN_FF_FIXED_ATTN_OPTIMISED,
+                PIN_FF_FIXED_ATTN_UNOPTIMISED,
+            ),
+            (
+                MatchedArm::FF_ALIF_ATTN,
+                PIN_FF_ALIF_ATTN_OPTIMISED,
+                PIN_FF_ALIF_ATTN_UNOPTIMISED,
+            ),
+            (
+                MatchedArm::REC_FIXED_ATTN,
+                PIN_REC_FIXED_ATTN_OPTIMISED,
+                PIN_REC_FIXED_ATTN_UNOPTIMISED,
+            ),
+            (
+                MatchedArm::REC_ALIF_ATTN,
+                PIN_REC_ALIF_ATTN_OPTIMISED,
+                PIN_REC_ALIF_ATTN_UNOPTIMISED,
+            ),
         ];
         let mut failures = Vec::new();
-        for (arm, expected) in pinned {
+        let mut sides: Vec<(&str, &str)> = Vec::new();
+        for (arm, optimised, unoptimised) in pinned {
             let (sample, base_weights) = dense_fixture(MatchedArm {
                 attention: false,
                 ..arm
@@ -1636,9 +1653,13 @@ mod tests {
                 fnv1a_f32(&gradient.w_rec),
                 fnv1a_f32(&attention),
             ];
-            if observed != expected {
+            if observed == optimised {
+                sides.push((arm.label(), "optimised"));
+            } else if observed == unoptimised {
+                sides.push((arm.label(), "unoptimised"));
+            } else {
                 println!(
-                    "    const PIN_{}: [u64; 7] = {:#018x?};",
+                    "    const PIN_{}_<SIDE>: [u64; 7] = {:#018x?};",
                     arm.label().to_uppercase().replace(['+', '-'], "_"),
                     observed,
                 );
@@ -1647,34 +1668,73 @@ mod tests {
         }
         assert!(
             failures.is_empty(),
-            "attention kernel output moved for {failures:?}; re-pin from the log above"
+            "attention kernel output matches NEITHER pinned side for {failures:?}; the kernel \
+             moved. Re-pin from the log above only after re-running \
+             `tests/attention_w_in_independent.rs`, and record both sides — see the comment \
+             below this test."
+        );
+
+        // A single build cannot be optimised for one arm and not another, so a
+        // split verdict is a kernel change that happened to land on the other
+        // side for some arms. Without this, such a change would pass.
+        let first = sides[0].1;
+        assert!(
+            sides.iter().all(|(_, side)| *side == first),
+            "arms disagree on which pinned side they match: {sides:?}; a single build must be \
+             wholly one or the other, so this is a kernel change, not the opt-level split"
         );
     }
 
-    // Re-pinned 2026-08-22 from a kernel verified by independent derivation, not
-    // from a kernel trusted because it was already here.
+    // Two sides, because this kernel's output depends on the optimisation
+    // level. Measured 2026-08-22; same source, same machine, only `-C
+    // opt-level` varying:
     //
-    // # The previous values were never reproducible
+    //   | opt-level | 0 | 1 | 2 | 3 |
+    //   |-----------|---|---|---|---|
+    //   | side      | unoptimised | unoptimised | optimised | optimised |
     //
-    // The constants this replaces were labelled "captured 2026-08-19" and
-    // committed in `516e9c7`, the same commit that introduced
-    // `shd_attention.rs`. They never matched the kernel that shipped beside
-    // them: this test fails at `516e9c7`, `fcfadbd`, `a3dafd1` and `597aeba`,
-    // which is every commit in which it has existed. Three commit messages over
-    // that span assert a clean suite. Because the attention module has no
-    // history before `516e9c7`, no committed state produces the old hashes —
-    // they came from a working tree that was never committed, so the question
-    // "was the pin right or the kernel?" cannot be settled from the repository.
+    // LTO and `codegen-units` are not involved — the flip reproduces in the
+    // plain test profile with only `-C opt-level` changed. The *base* arms are
+    // stable across all four levels; only the attention read-out moves, and
+    // only in some entries: `ff+*+attn` in 3 and 6 (`grad_w_in` and the
+    // attention gradient), `rec+*+attn` in 2 through 6.
     //
-    // Which entries had moved, against the current kernel:
-    //   * `ff+*+attn`  — entries 3 and 6 (`grad_w_in`, attention gradient).
-    //   * `rec+*+attn` — entries 2 through 6; only membrane and spikes agreed.
+    // The mechanism is **not** identified. `-C llvm-args=--fp-contract=off` at
+    // opt-level 3 still produces the optimised side, so FMA contraction is not
+    // confirmed as the cause. Do not repeat the claim in the workspace
+    // `Cargo.toml` that "determinism is unaffected" — for this path it is not.
     //
-    // # Why these values are trusted
+    // # Why this test accepts either side
     //
-    // Re-pinning from the kernel would have recorded whatever the kernel does
-    // as correct by definition. Instead every pinned quantity is verified by
-    // something that is not this pin, before the pin was taken:
+    // A pin that names one side is red on every build of the other, which is
+    // what happened here for months in both directions (see the history note
+    // below). Accepting either keeps the guarantee: a kernel change moves the
+    // output off *both* recorded sides, and the companion assertion requires
+    // all four arms to land on the same side, so a change cannot hide by
+    // matching the other side for a subset of arms.
+    //
+    // # History — how a correct pin came to look broken, twice
+    //
+    // `516e9c7` pinned the unoptimised side. `7f908c7` ("Verify the attention
+    // backward, then re-pin it") measured under `--release`, found a mismatch,
+    // concluded the old constants "match no committed state", and re-pinned to
+    // the optimised side. Both measurements were correct and both conclusions
+    // were wrong, because each saw one side of a split neither knew existed:
+    //
+    //   | commit | `cargo test` | `cargo test --release` |
+    //   |--------|--------------|------------------------|
+    //   | `0cc0522` (pre-re-pin) | pass | fail |
+    //   | `7f908c7` (post-re-pin) | fail | pass |
+    //
+    // The kernel never moved across that commit, which is checkable three
+    // ways: `7f908c7`'s edit to `shd_attention.rs` is +33 lines entirely
+    // inside `mod tests` and its non-comment, non-constant diff to this file
+    // is empty; no commit since touches `shd_attention.rs`,
+    // `shd_matched_arms.rs` or `shd_matched.rs`; and the `ff-fixed-attn` cell
+    // recorded by `7f908c7` itself still reproduces bit-identically under
+    // `scripts/gate_f_rust.py`. The recorded corpus is unaffected.
+    //
+    // # Why the kernel, not either pin, is the verified party
     //
     //   * entries 0-5 — `tests/attention_w_in_independent.rs` reimplements the
     //     arm forward and backward from the documented equations, in a separate
@@ -1695,16 +1755,23 @@ mod tests {
     //     checked against central differences of the attention forward at
     //     **every** index of the spike train, using no backward code at all.
     //
-    // Re-pin in the same commit as any deliberate model change, and say so. If
-    // these move for any other reason, the kernel changed when it should not
-    // have — and re-run the derivation test before believing the new values.
+    // Re-pin in the same commit as any deliberate model change, and say so —
+    // and re-record **both** sides, at `-C opt-level=0` and `--release`, or the
+    // next reader inherits the same half-measurement. If these move for any
+    // other reason, the kernel changed when it should not have; re-run the
+    // derivation test before believing the new values.
     //
     // Entries 0 and 1 — membrane and spikes — are **identical** to the
-    // corresponding non-attention pin above, for all four arms. That is the
-    // additive property under test, taken here on a denser fixture than
-    // `a_zero_read_out_reduces_every_attention_arm_to_its_base_arm` uses: the
-    // read-out cannot perturb the spiking forward.
-    const PIN_FF_FIXED_ATTN: [u64; 7] = [
+    // corresponding non-attention pin above, for all four arms, on both sides.
+    // That is the additive property under test, taken here on a denser fixture
+    // than `a_zero_read_out_reduces_every_attention_arm_to_its_base_arm` uses:
+    // the read-out cannot perturb the spiking forward.
+
+    /// The optimised side: what the kernel produces at `-C opt-level` 2 and 3,
+    /// which is every `--release` build. **These are the values the scientific
+    /// record rests on** — `shd-instrument` and therefore every recorded cell
+    /// and every Gate F re-run are release builds.
+    const PIN_FF_FIXED_ATTN_OPTIMISED: [u64; 7] = [
         0x59bad35bf85e82b6,
         0xb09c4cee717f9978,
         0x487757e346dce48c,
@@ -1713,7 +1780,7 @@ mod tests {
         0xcbf29ce484222325,
         0x47a1aae01a70b513,
     ];
-    const PIN_FF_ALIF_ATTN: [u64; 7] = [
+    const PIN_FF_ALIF_ATTN_OPTIMISED: [u64; 7] = [
         0xc52ad841b5a668b8,
         0x5a6e0d090d97e165,
         0x7a636a5eaf66b249,
@@ -1722,7 +1789,7 @@ mod tests {
         0xcbf29ce484222325,
         0xc8ff17f64b6f02f5,
     ];
-    const PIN_REC_FIXED_ATTN: [u64; 7] = [
+    const PIN_REC_FIXED_ATTN_OPTIMISED: [u64; 7] = [
         0x3655a2f23174aa02,
         0x796b1eeee0df6ab5,
         0xabd3e1ffcab8f355,
@@ -1731,7 +1798,7 @@ mod tests {
         0x143c705a596d402c,
         0x6c80e1e83ee3c552,
     ];
-    const PIN_REC_ALIF_ATTN: [u64; 7] = [
+    const PIN_REC_ALIF_ATTN_OPTIMISED: [u64; 7] = [
         0x17e9947421f4b648,
         0x69f2330042a9be55,
         0x0071d6a9ab3cbf1f,
@@ -1739,6 +1806,47 @@ mod tests {
         0xf527765b4a8d01cf,
         0xa3e119c9e1b1b417,
         0x68cf094fc9d2b2a7,
+    ];
+
+    /// The unoptimised side: what the same source produces at `-C opt-level` 0
+    /// and 1, which is a plain `cargo test`. Pinned so the default developer
+    /// command is a real check rather than a permanent red, and so that the
+    /// difference between the two sides stays a recorded quantity.
+    const PIN_FF_FIXED_ATTN_UNOPTIMISED: [u64; 7] = [
+        0x59bad35bf85e82b6,
+        0xb09c4cee717f9978,
+        0x487757e346dce48c,
+        0x83541a2b6792da5e,
+        0xb05540e69e9d8df8,
+        0xcbf29ce484222325,
+        0xa6d935b559f92964,
+    ];
+    const PIN_FF_ALIF_ATTN_UNOPTIMISED: [u64; 7] = [
+        0xc52ad841b5a668b8,
+        0x5a6e0d090d97e165,
+        0x7a636a5eaf66b249,
+        0xe8a344f7dd9d7873,
+        0x0e63b260391d974d,
+        0xcbf29ce484222325,
+        0x8e5307da30382e06,
+    ];
+    const PIN_REC_FIXED_ATTN_UNOPTIMISED: [u64; 7] = [
+        0x3655a2f23174aa02,
+        0x796b1eeee0df6ab5,
+        0xed3be5b13d7c9964,
+        0xfe9dcc250c5302c9,
+        0xc8ada25d7fe6513b,
+        0xe0bdef08e6b7d2f4,
+        0x91be1d618fe8525b,
+    ];
+    const PIN_REC_ALIF_ATTN_UNOPTIMISED: [u64; 7] = [
+        0x17e9947421f4b648,
+        0x69f2330042a9be55,
+        0x75d956b694943eae,
+        0x0aca7e135a8536dc,
+        0x792176abaa648960,
+        0x624e796a8ff00dc6,
+        0x4df1538156afb8ec,
     ];
 
     const PIN_REC_ALIF: [u64; 6] = [
