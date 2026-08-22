@@ -355,6 +355,49 @@ class CollectAndTeardownTest(unittest.TestCase):
         original, module.subprocess.run = module.subprocess.run, fake_run
         return original, calls
 
+    def test_a_gate_report_that_names_no_binary_is_reported_not_dropped(self):
+        """The multi-binary warning is the check that protects reused controls,
+        and it used to be the one thing a malformed gate report could silence.
+
+        `collect.py` read `payload["binary_sha256"]` unguarded, so a report from
+        an older bootstrap raised KeyError *after* the Gate F verdicts had
+        printed - taking the binary check with it, and leaving a run that looked
+        clean and simply had nothing to warn about. Two binaries in one campaign
+        would then go unreported.
+
+        Skipping such a report is not good enough either: the caller would print
+        "single binary across the campaign", which is the strongest claim this
+        script makes and the one that needs the most evidence.
+        """
+        import collect
+        reports = {
+            "i-old.json": {"instance": "i-old"},               # pre-dates the field
+            "i-blank.json": {"binary_sha256": ""},             # present but empty
+            "i-bad.json": "not a dict",                        # unparsed payload
+            "i-new.json": {"binary_sha256": "a" * 64},
+            "i-other.json": {"binary_sha256": "b" * 64},
+        }
+        binaries, unattributed = collect.attribute_binaries(reports)
+        self.assertEqual(binaries, {"a" * 64, "b" * 64},
+                         "two distinct binaries must both be seen")
+        self.assertEqual(sorted(unattributed),
+                         ["i-bad.json", "i-blank.json", "i-old.json"],
+                         "every report without a usable binary must be named")
+
+    def test_the_binary_check_still_fires_when_a_report_is_malformed(self):
+        """The regression that mattered: one bad report used to hide a real
+        two-binary campaign. Here the bad report and the disagreement coexist,
+        and the disagreement must still be visible."""
+        import collect
+        binaries, unattributed = collect.attribute_binaries({
+            "i-old.json": {"instance": "i-old"},
+            "i-a.json": {"binary_sha256": "a" * 64},
+            "i-b.json": {"binary_sha256": "b" * 64},
+        })
+        self.assertGreater(len(binaries), 1,
+                           "a malformed report suppressed the multi-binary warning")
+        self.assertEqual(unattributed, ["i-old.json"])
+
     def test_collect_follows_pagination_instead_of_stopping_at_page_one(self):
         """A campaign larger than one S3 page must not report itself finished."""
         import collect

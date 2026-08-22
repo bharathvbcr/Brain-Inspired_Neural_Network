@@ -90,6 +90,27 @@ def keys(bucket, prefix):
             return found
 
 
+def attribute_binaries(reports: dict) -> tuple[set, list]:
+    """Split gate reports into the binaries they name and the ones that name none.
+
+    Separated out because it is the check that protects reused controls, and it
+    used to be the easiest thing in this script to silence: `payload["binary_sha256"]`
+    read unguarded raised KeyError on a report written by an older bootstrap,
+    *after* the Gate F verdicts had printed, so the run looked clean and simply
+    had nothing to warn about. Two binaries in one campaign would go unreported.
+
+    A report that names no binary is returned separately rather than skipped.
+    Dropping it would leave the caller printing "single binary across the
+    campaign", which is the strongest claim here and the one needing the most
+    evidence.
+    """
+    binaries = {r["binary_sha256"] for r in reports.values()
+                if isinstance(r, dict) and r.get("binary_sha256")}
+    unattributed = [name for name, r in reports.items()
+                    if not (isinstance(r, dict) and r.get("binary_sha256"))]
+    return binaries, unattributed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bucket", required=True)
@@ -142,26 +163,39 @@ def main() -> int:
     if unknown:
         print(f"WARNING: {len(unknown)} results are not in the plan: {sorted(unknown)[:3]}")
 
+    # Each gate object is fetched once. It used to be fetched twice, once per
+    # loop below, which doubled the round trips for no benefit.
     gates = keys(args.bucket, "gates/")
-    print("\ncross-machine Gate F")
-    if not gates:
-        print("  no instance has reported yet")
+    reports = {}
     for name in sorted(g for g in gates if g.endswith(".json")):
         payload = aws("s3", "cp", f"s3://{args.bucket}/gates/{name}", "-")
         if isinstance(payload, str):
             payload = json.loads(payload)
-        print(f"  {payload['instance']}  {payload['cross_machine_gate_f']}  {payload['uname']}")
+        reports[name] = payload if isinstance(payload, dict) else {}
+
+    print("\ncross-machine Gate F")
+    if not gates:
+        print("  no instance has reported yet")
+    for name, payload in reports.items():
+        # A gate report written by an older bootstrap can be missing fields.
+        # Reading them with [] used to raise KeyError partway through printing,
+        # which killed the binary check below -- the one thing here that
+        # protects reused controls. Report the gap and keep going.
+        instance = payload.get("instance", f"<{name} has no instance field>")
+        verdict = payload.get("cross_machine_gate_f", "<no verdict recorded>")
+        print(f"  {instance}  {verdict}  {payload.get('uname', '<no uname>')}")
 
     # A campaign whose cells came from more than one binary is not a single
     # experiment, and nothing downstream would notice on its own. Two binaries
     # can behave identically - the Gate F logs are the evidence for that, not an
     # assumption - but the check has to be visible either way.
-    binaries = set()
-    for name in sorted(g for g in gates if g.endswith(".json")):
-        payload = aws("s3", "cp", f"s3://{args.bucket}/gates/{name}", "-")
-        if isinstance(payload, str):
-            payload = json.loads(payload)
-        binaries.add(payload["binary_sha256"])
+    binaries, unattributed = attribute_binaries(reports)
+    if unattributed:
+        # Silence here would read as "one binary", which is the answer that
+        # needs the most evidence.
+        print(f"\nWARNING: {len(unattributed)} gate report(s) record no binary: "
+              f"{sorted(unattributed)[:3]}")
+        print("  Those instances' cells cannot be attributed to a binary at all.")
     if len(binaries) > 1:
         print(f"\nWARNING: {len(binaries)} distinct binaries have run cells: "
               f"{sorted(b[:12] for b in binaries)}")
