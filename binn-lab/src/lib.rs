@@ -102,10 +102,6 @@ pub use guards::{
 pub use instrument_status::{
     authorize_campaign, CampaignKind, InstrumentState, SHD_INSTRUMENT_STATE,
 };
-pub use shd_dense::{
-    class_histogram, contract_alpha, contract_timesteps, framed_to_dense_temporal_example,
-    load_shd_dense_examples, majority_class_rate,
-};
 pub use logging::{
     json_escape, trace_export_seed, trace_out_path, EmitError, RunLog, StructuredLogger, TraceArea,
     TraceEligEdge, TraceProjection, TraceRecorder, TraceScore, TraceWeightEdge, TRACE_OUT_ENV,
@@ -193,6 +189,10 @@ pub use shd_cal_config::{
     C1_SHD_CAL_PROTOCOL_VERSION_V26, C1_SHD_CAL_SCIENTIFIC_HASH, C1_SHD_CAL_V26_SCIENTIFIC_HASH,
     C1_SHD_FULL_EXPERIMENT, C1_SHD_FULL_HASH_PREFIX, C1_SHD_FULL_PROTOCOL_VERSION,
     C1_SHD_FULL_SCIENTIFIC_HASH, C1_SHD_FULL_SMOKE_HASH,
+};
+pub use shd_dense::{
+    class_histogram, contract_alpha, contract_timesteps, framed_to_dense_temporal_example,
+    load_shd_dense_examples, majority_class_rate,
 };
 pub use shd_sweep_runner::{ShdSweepReport, ShdSweepResult};
 pub use transfer_harness::{

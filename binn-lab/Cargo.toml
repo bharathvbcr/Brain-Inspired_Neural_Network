@@ -111,6 +111,10 @@ name = "shd-frozen-attention"
 path = "experiments/shd_frozen_attention.rs"
 
 [[bin]]
+name = "shd-depth-scaling"
+path = "experiments/shd_depth_scaling.rs"
+
+[[bin]]
 name = "temporal-optimizer-control"
 path = "experiments/temporal_optimizer_control.rs"
 

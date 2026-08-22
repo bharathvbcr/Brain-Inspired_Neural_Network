@@ -113,9 +113,22 @@ def wave3_scope():
 def wave4_recurrent():
     """T4 - rec+alif is unmeasured, not refuted. Does the attention read-out change that?
 
-    The surrogate-scale ladder and clipping are the two levers the record says
-    were needed to get any recurrent cell to complete at all; both are carried
-    here so a failure is attributable rather than mysterious.
+    **The 2026-08-20 run of this wave diverged 24 of 24, and the clipping below is
+    why.** The rationale that used to stand here said the record named clipping as
+    a lever needed to get a recurrent cell to complete. The record says the
+    opposite, in a document titled `MEASUREMENT_2026-08-03_GRADIENT_CLIPPING_DOES_NOT_FIX_H512.md`
+    - "gradient clipping does not rescue rec+alif at h512, and cannot".
+
+    The recurrent arm's own epoch-mean gradient norm exceeds 1.0 in 100 of 100
+    epochs, so a 1.0 threshold taken from the healthy `ff+fixed` scale binds on
+    essentially every step. That is not outlier suppression, it is unconditional
+    renormalisation to a constant norm, and under Adam it removes the
+    second-moment damping the arm needs to absorb its excursions and recover.
+
+    Kept as written so the diverged wave stays reproducible. The re-run is
+    `wave11_recurrent_unclipped`, registered in
+    `results/AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md`.
+    See `results/FINDING_2026-08-22_WAVE4_KILLED_ITS_OWN_CELLS.md`.
     """
     cells = []
     for seed in SEEDS[:6]:
@@ -259,6 +272,35 @@ def wave10_resolution_ladder():
     return cells
 
 
+def wave11_recurrent_unclipped():
+    """W11 - wave 4, re-run with the flag that diverged it removed.
+
+    Registered in `results/AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md`.
+    Identical to `wave4_recurrent` in every respect except `clip_grad_norm`,
+    which goes from 1.0 to None: same arms, width, budget, surrogate ladder,
+    seeds, contract, geometry and attention configuration.
+
+    Wave 4 diverged 24 of 24 and was written up as the recurrent arm being
+    unusable. A paired control - same binary, seed, initial weights and data
+    order, differing only in the clip flag - overflows at optimizer step 244
+    clipped and completes 100 epochs unclipped. Thirteen `rec+alif` cells at
+    exactly this width and budget were already on disk, all unclipped, all with
+    zero non-finite events. See
+    `results/FINDING_2026-08-22_WAVE4_KILLED_ITS_OWN_CELLS.md`.
+
+    The registered completion expectation is >= 18 of 24, not 24 of 24: the
+    numerical marginality is real and independent of clipping, and the unclipped
+    record at this operating point is 13 of 15.
+    """
+    cells = []
+    for seed in SEEDS[:6]:
+        for scale in (1.0, 0.4):
+            cells.append(cell("w11rec", "rec+alif", 256, 100, seed, surrogate_scale=scale))
+            cells.append(cell("w11rec", "rec+alif+attn", 256, 100, seed, attn_dim=32,
+                              attn_layers=1, surrogate_scale=scale))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -270,6 +312,7 @@ WAVES = {
     "w8": wave8_headline_scope,
     "w9": wave9_headline_mechanism,
     "w10": wave10_resolution_ladder,
+    "w11": wave11_recurrent_unclipped,
 }
 
 

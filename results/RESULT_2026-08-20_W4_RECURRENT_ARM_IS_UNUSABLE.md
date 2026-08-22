@@ -1,5 +1,25 @@
 # The recurrent arm produces zero usable cells, with or without attention — 24 of 24 diverged
 
+> ## WITHDRAWN 2026-08-22 — this result measured a protocol parameter, not the arm.
+>
+> All 24 cells were diverged by `--clip-grad-norm 1.0`, which this wave carried
+> and which the record had already shown cannot help. A paired control — same
+> binary, seed, initial weights and data order, differing only in the clip flag —
+> overflows at step 244 clipped and completes 100 epochs unclipped.
+>
+> **Thirteen completing `rec+alif` cells at exactly h256/e100 were already on
+> disk when this wave ran**, all unclipped, all with zero non-finite events.
+> 13/15 unclipped complete versus 0/24 clipped, Fisher exact p = 1.3e-8.
+>
+> §4 below also misquotes its source: `TODO_2026-08-07_OPEN_WORK.md` §4 reads
+> "3/3 seeds complete with **zero non-finite events**", not "zero usable cells".
+> That inversion is what put clipping into the design.
+>
+> `rec+alif` is unmeasured, as it was before. It is **not** refuted, and this
+> document must not be cited as refuting it.
+> See `FINDING_2026-08-22_WAVE4_KILLED_ITS_OWN_CELLS.md`.
+
+
 **Protocol:** `PREREG_2026-08-19_SHD_ATTENTION_CAMPAIGN.md` §4 (wave 4),
 registered before any campaign cell ran. Verdicts computed once.
 **Cells:** 24 planned, **0 completed, 24 diverged**, 0 voided.
