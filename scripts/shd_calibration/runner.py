@@ -302,8 +302,20 @@ fixture with atypically sparse frames and still missed cell-level divergence
 PROVENANCE_MIN_GATE_F_CELLS = 8
 
 #: Registered in `AMENDMENT_2026-08-03_PROVENANCE_DISCHARGE_BY_BIT_IDENTITY.md`.
-#: Default-off: until a human flips this, freeze semantics are unchanged.
-PROVENANCE_DISCHARGE_ENABLED = False
+#:
+#: **Enabled 2026-08-05 by explicit human authorization.** It shipped default-off
+#: because discharging a provenance freeze is a judgement about what counts as
+#: evidence, not an engineering call, and that judgement was not the agent's to
+#: make. It has now been made.
+#:
+#: Enabling this is **not** a bypass. `gate_f_discharge` still requires a PASS
+#: report, for *this* binary hash, covering at least
+#: `PROVENANCE_MIN_GATE_F_CELLS` recorded cells across two geometries and two
+#: widths. Data-file changes (`train_h5`, `test_h5`, `train_events`,
+#: `test_events`) remain **undischargeable** regardless of this flag — a kernel
+#: proven to reproduce recorded cells says nothing about whether its inputs
+#: moved. `scripts/test_provenance_discharge.py` pins both properties.
+PROVENANCE_DISCHARGE_ENABLED = True
 
 
 def gate_f_discharge(binary_sha: str) -> dict[str, object] | None:
@@ -753,7 +765,20 @@ def reference(mode: str, seed: int, python: Path) -> None:
                 "official-test-best-accuracy" if mode == "historical" else "none-final-epoch",
             )
         ),
-        "source_fingerprint": relevant_source_fingerprint(),
+        # Narrow scope, registered in
+        # `AMENDMENT_2026-08-22_REFERENCE_FINGERPRINT_SCOPE_FORWARD.md`. The
+        # reference is a third-party PyTorch baseline that never executes a line
+        # of the rust instrument, so fingerprinting it against the kernel meant
+        # every unrelated kernel edit invalidated a recorded accuracy. The scope
+        # is written into the artifact because a fingerprint is only meaningful
+        # alongside the path set it was computed over; `reference_fingerprint_matches`
+        # reads it back and will not compare across scopes.
+        "fingerprint_scope": "reference",
+        "source_fingerprint": reference_source_fingerprint(),
+        # Recorded alongside, for provenance only. Nothing validates against it:
+        # it is what the broad scope happened to be when this artifact was
+        # frozen, and it is expected to drift.
+        "instrument_source_fingerprint_at_freeze": relevant_source_fingerprint(),
     }
     reference_manifest_path = (
         RESULT_ROOT / "reference-manifests" / f"{mode}-seed-{seed}.json"
@@ -798,6 +823,39 @@ def reference(mode: str, seed: int, python: Path) -> None:
     update_reference_gates()
 
 
+def reference_fingerprint_matches(reference_manifest: dict[str, object]) -> bool:
+    """Check a reference manifest's fingerprint against the scope it declares.
+
+    Two scopes exist, and which one applies is a property **of the artifact**,
+    recorded when it was frozen. That is not a convenience: a fingerprint is the
+    output of a function over a set of paths, so a value computed over
+    `SOURCE_PATHS` and a value computed over `REFERENCE_SOURCE_PATHS` are not a
+    stale and a fresh reading of the same quantity -- they are outputs of
+    different functions and are never comparable.
+    `AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md` was withdrawn for
+    assuming otherwise, and this must not repeat that mistake.
+
+    So the narrow scope applies **only** to artifacts that declare it. Every
+    artifact frozen before 2026-08-22 declares nothing and is checked against the
+    broad scope exactly as before: this change cannot validate a single existing
+    reference, and is not intended to. It is registered in
+    `AMENDMENT_2026-08-22_REFERENCE_FINGERPRINT_SCOPE_FORWARD.md`.
+
+    What it buys is that the *next* set of references does not rot. The reference
+    pipeline never executes a line of the rust instrument, so without this a
+    freshly re-run reference is invalidated by the next unrelated kernel edit and
+    route 2 of that amendment's section 6 becomes a treadmill.
+    """
+    recorded = reference_manifest.get("source_fingerprint")
+    scope = reference_manifest.get("fingerprint_scope", "source")
+    if scope == "reference":
+        return recorded == reference_source_fingerprint()
+    if scope == "source":
+        return recorded == relevant_source_fingerprint()
+    # An unrecognised scope is not a reason to accept the artifact.
+    return False
+
+
 def valid_reference_payload(mode: str, seed: int) -> dict[str, object] | None:
     result_path = RESULT_ROOT / "references" / f"{mode}-seed-{seed}.json"
     log_path = RESULT_ROOT / "references" / f"{mode}-seed-{seed}.log"
@@ -819,8 +877,7 @@ def valid_reference_payload(mode: str, seed: int) -> dict[str, object] | None:
         or state.get("result_sha256") != sha256_file(result_path)
         or state.get("log_sha256") != sha256_file(log_path)
         or state.get("manifest_sha256") != sha256_file(manifest)
-        or reference_manifest.get("source_fingerprint")
-        != relevant_source_fingerprint()
+        or not reference_fingerprint_matches(reference_manifest)
         or payload.get("mode") != mode
         or payload.get("seed") != seed
     ):

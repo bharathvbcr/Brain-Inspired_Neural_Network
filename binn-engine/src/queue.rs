@@ -269,7 +269,18 @@ impl TimingWheel {
     /// coarser multi-tick slot is recovered on cascade into level-0, where each
     /// current-window slot is a single absolute tick.
     fn schedule(&mut self, entry: Entry) {
-        let delta = entry.at - self.now;
+        // Fail closed and loud. `Tick` is unsigned, so a cursor that has
+        // overtaken this entry underflows here. In debug that panics; in
+        // release `overflow-checks` is off, so it would silently wrap to a
+        // huge delta, file the event at the wrong level, and reorder delivery.
+        // An explicit check makes that corruption impossible to pass silently
+        // regardless of profile.
+        let delta = entry.at.checked_sub(self.now).unwrap_or_else(|| {
+            panic!(
+                "TimingWheel cursor overtook a scheduled event: entry.at={} < now={}",
+                entry.at, self.now
+            )
+        });
         let level = level_for(delta);
         let shift = (level as u32) * SLOT_BITS;
         let slot = ((entry.at >> shift) as usize) & (SLOTS - 1);
@@ -317,11 +328,15 @@ impl TimingWheel {
             .min()
     }
 
-    /// Move `now` forward to the next tick that may hold a level-0 event,
-    /// cascading higher levels when a wheel window wraps.
+    /// Move `now` forward to the next tick that holds an event, cascading
+    /// coarser levels down as needed.
     ///
-    /// Empty coarser slots are skipped in O(LEVELS · SLOTS) = O(1) time so a
-    /// lone far-future event does not scan every intervening tick.
+    /// The cursor must never pass a still-scheduled entry: `schedule` computes
+    /// `entry.at - self.now` on an unsigned `Tick`, so an overtaking cursor
+    /// underflows (debug) or wraps to a garbage delta and silently misfiles the
+    /// event (release, where `overflow-checks` is off). Every step below is
+    /// therefore bounded by `earliest`, the authoritative minimum over all
+    /// entries.
     fn advance_cursor(&mut self) {
         let slot = (self.now & SLOT_MASK) as usize;
 
@@ -332,9 +347,15 @@ impl TimingWheel {
             return;
         }
 
-        // Exhausted this level-0 window: open the next window and cascade.
+        // Exhausted this level-0 window: open the next one — but only if no
+        // event falls inside the window we are about to skip over.
         let base = self.now & !SLOT_MASK;
-        self.now = base.saturating_add(SLOTS as u64);
+        let next_window = base.saturating_add(SLOTS as u64);
+        if self.earliest.is_some_and(|e| e < next_window) {
+            self.jump_to_earliest();
+            return;
+        }
+        self.now = next_window;
         self.cascade(1);
 
         // Events may already sit in level-0 for this window (scheduled earlier).
@@ -344,8 +365,40 @@ impl TimingWheel {
             return;
         }
 
-        // No level-0 work here — jump via coarser levels.
-        self.skip_empty_and_cascade();
+        // No level-0 work here — jump straight to the earliest scheduled tick.
+        self.jump_to_earliest();
+    }
+
+    /// Move `now` to the earliest still-scheduled tick and funnel that entry
+    /// down into level 0.
+    ///
+    /// This replaces a per-level forward slot scan that could not distinguish a
+    /// slot in the current wheel revolution from the same slot one revolution
+    /// later. `schedule` derives an entry's *level* from its delta but its
+    /// *slot* from the absolute tick, so a future entry can occupy a slot index
+    /// below the cursor's at the same level. The old scan read that as "level
+    /// empty", advanced `now` past the entry, and stranded it — the cursor
+    /// ended up ahead of a live event and the queue then delivered events out
+    /// of order (silently, in release).
+    ///
+    /// `earliest` is exact — `insert` folds each new tick into it and
+    /// `pop_earliest` refreshes it from `scan_earliest` — so jumping to it
+    /// lands on the true next event and cannot overshoot.
+    fn jump_to_earliest(&mut self) {
+        let Some(target) = self.earliest else {
+            return;
+        };
+        debug_assert!(
+            target >= self.now,
+            "earliest ({target}) is behind the cursor ({})",
+            self.now
+        );
+        self.now = target;
+        // Coarse to fine: the entry at `target` re-schedules with `delta == 0`,
+        // so each cascade walks it down exactly one level into level 0.
+        for level in (1..LEVELS).rev() {
+            self.cascade(level);
+        }
     }
 
     fn next_occupied_level0(&self, from_slot: usize) -> Option<usize> {
@@ -362,39 +415,6 @@ impl TimingWheel {
             }
         }
         None
-    }
-
-    /// Scan coarser levels for the next non-empty slot, jump `now` there, and
-    /// cascade that slot (and coarser wraps) into lower levels.
-    fn skip_empty_and_cascade(&mut self) {
-        for level in 1..LEVELS {
-            let shift = (level as u32) * SLOT_BITS;
-            let slot_span = 1u64 << shift;
-            let start_slot = ((self.now >> shift) as usize) & (SLOTS - 1);
-
-            // Top level spans the full `u64` timeline (shift+SLOT_BITS == 64).
-            let (wheel_base, wheel_span) = if shift + SLOT_BITS >= Tick::BITS {
-                (0u64, None)
-            } else {
-                let span = slot_span << SLOT_BITS;
-                (self.now & !(span - 1), Some(span))
-            };
-
-            for s in start_slot..SLOTS {
-                // Equivalent to `!self.levels[level][s].is_empty()` by the
-                // occupancy invariant, without touching the bucket header.
-                if self.slot_occupied(level, s) {
-                    self.now = wheel_base.saturating_add((s as u64).saturating_mul(slot_span));
-                    self.cascade(level);
-                    return;
-                }
-            }
-
-            match wheel_span {
-                Some(span) => self.now = wheel_base.saturating_add(span),
-                None => break, // top level fully scanned
-            }
-        }
     }
 
     /// Cascade slot for `now` at `level` down into lower levels.
@@ -691,6 +711,109 @@ mod tests {
                         }
                         None => now = 0,
                     }
+                }
+            }
+
+            loop {
+                let w = wheel.pop_earliest();
+                let r = refer.pop_earliest();
+                prop_assert_eq!(&w, &r);
+                if w.is_none() {
+                    break;
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Cursor-monotonicity safety net
+    //
+    // `prop_parity_vs_heap` above draws insert offsets from `0u8..200`, so a
+    // whole run stays under ~40k ticks and every entry lives at level 0 or 1.
+    // That is below the first wheel-window wrap, so it structurally cannot
+    // exercise `skip_empty_and_cascade`'s forward-only slot scan. These tests
+    // cover the regime it misses: ticks large enough that an entry's slot index
+    // at some level wraps below the cursor's slot index at that same level.
+    // ---------------------------------------------------------------------
+
+    /// The cursor must never advance past the earliest still-scheduled tick.
+    ///
+    /// This is the invariant `schedule` depends on: it computes
+    /// `entry.at - self.now` as an unsigned subtraction, so a cursor that
+    /// overtakes a live entry underflows (debug) or wraps to a garbage level
+    /// (release, where `overflow-checks` is off).
+    #[test]
+    fn cursor_never_overtakes_live_event() {
+        let mut wheel = TimingWheel::new();
+        // `at` sits above `now` but its level-3 slot index (8) is far below
+        // the cursor's level-3 slot index (252), so a forward-only scan of
+        // level 3 skips it and declares the level exhausted.
+        let now_seed: Tick = 4_229_946_473;
+        let target: Tick = 4_432_430_104;
+        // A far-future keeper so the queue never empties; draining it fully
+        // would reset the cursor to 0 and mask the defect.
+        let keeper: Tick = 5_000_000_000_000;
+        wheel.insert(now_seed, Event::new(1));
+        wheel.insert(keeper, Event::new(3));
+
+        let (first, _) = wheel.pop_earliest().expect("first event");
+        assert_eq!(first, now_seed);
+        // Inserted *after* the cursor moved, so `delta` puts it at level 3 —
+        // slot 8 of the next level-3 window, while the cursor sits at slot 252
+        // of the current one.
+        wheel.insert(target, Event::new(2));
+        assert!(
+            wheel.now() <= target,
+            "cursor overtook a live event: now={} but earliest scheduled at={}",
+            wheel.now(),
+            target
+        );
+        let (second, ev) = wheel.pop_earliest().expect("second event");
+        assert_eq!(
+            second, target,
+            "events delivered out of order: got tick {second} before {target}"
+        );
+        assert_eq!(ev, Event::new(2));
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        /// Same parity property as `prop_parity_vs_heap`, but with offsets
+        /// spanning multiple wheel windows so cascade and cursor-skip paths
+        /// actually run.
+        #[test]
+        fn prop_parity_vs_heap_large_ticks(
+            ops in proptest::collection::vec(
+                prop_oneof![
+                    (0u64..3_000_000_000u64, any::<u64>())
+                        .prop_map(|(offset, id)| (true, offset, id)),
+                    Just((false, 0u64, 0u64)),
+                ],
+                0..120,
+            )
+        ) {
+            let mut wheel = TimingWheel::new();
+            let mut refer = RefQueue::new();
+
+            for (is_insert, offset, id) in ops {
+                if is_insert {
+                    let at = wheel.now().saturating_add(offset);
+                    let ev = Event::new(id);
+                    wheel.insert(at, ev);
+                    refer.insert(at, ev);
+                } else {
+                    let w = wheel.pop_earliest();
+                    let r = refer.pop_earliest();
+                    prop_assert_eq!(w, r);
+                }
+                if let Some(min) = wheel.scan_earliest_naive() {
+                    prop_assert!(
+                        wheel.now() <= min,
+                        "cursor {} overtook earliest live tick {}",
+                        wheel.now(),
+                        min
+                    );
                 }
             }
 

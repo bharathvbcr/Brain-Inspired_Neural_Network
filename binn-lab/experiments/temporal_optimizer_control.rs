@@ -217,18 +217,39 @@ fn main() -> ExitCode {
     let n_test = if quick { 40 } else { 200 };
     let hidden = if quick { 16 } else { 64 };
     let budgets: Vec<Budget> = if quick {
-        vec![Budget { n_train: 100, epochs: 5 }]
+        vec![Budget {
+            n_train: 100,
+            epochs: 5,
+        }]
     } else if wide {
         vec![
-            Budget { n_train: 200, epochs: 20 },
-            Budget { n_train: 1000, epochs: 100 },
-            Budget { n_train: 5000, epochs: 200 },
+            Budget {
+                n_train: 200,
+                epochs: 20,
+            },
+            Budget {
+                n_train: 1000,
+                epochs: 100,
+            },
+            Budget {
+                n_train: 5000,
+                epochs: 200,
+            },
         ]
     } else {
         vec![
-            Budget { n_train: 200, epochs: 20 },
-            Budget { n_train: 1000, epochs: 20 },
-            Budget { n_train: 1000, epochs: 100 },
+            Budget {
+                n_train: 200,
+                epochs: 20,
+            },
+            Budget {
+                n_train: 1000,
+                epochs: 20,
+            },
+            Budget {
+                n_train: 1000,
+                epochs: 100,
+            },
         ]
     };
     let lrs: Vec<f32> = if quick {
@@ -252,6 +273,9 @@ fn main() -> ExitCode {
     for accessibility in [RateAccessibility::Accessible, RateAccessibility::Immune] {
         for arm in [Arm::FeedbackSgd, Arm::BpttSgd, Arm::BpttAdam] {
             for budget in &budgets {
+                // Both arms of the `if` must yield the same type, so the
+                // single-element branch has to be a `Vec` too.
+                #[allow(clippy::useless_vec)]
                 let arm_lrs: Vec<f32> = if arm.uses_lr() {
                     lrs.clone()
                 } else {
@@ -260,7 +284,9 @@ fn main() -> ExitCode {
                 for &lr in &arm_lrs {
                     let t0 = Instant::now();
                     let mut accs = Vec::with_capacity(n_seeds);
-                    let mut curve_acc = vec![0.0f32; CHECKPOINTS];
+                    // Fixed length (`CHECKPOINTS` is a const) and only ever indexed
+                    // and iterated, so an array is a drop-in with identical arithmetic.
+                    let mut curve_acc = [0.0f32; CHECKPOINTS];
                     let mut step_total = 0.0f32;
                     let mut mod_total = 0.0f32;
 
@@ -297,6 +323,7 @@ fn main() -> ExitCode {
                         // Train in chunks so the learning curve is observable.
                         let chunk = (budget.epochs / CHECKPOINTS).max(1);
                         let mut diagnostics = Vec::new();
+                        #[allow(clippy::needless_range_loop)]
                         for c in 0..CHECKPOINTS {
                             let mut d = match arm {
                                 Arm::FeedbackSgd => {

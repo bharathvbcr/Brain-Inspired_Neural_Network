@@ -808,6 +808,42 @@ pub fn train_learned_feedback(
     }
 }
 
+/// Feedback-alignment treatment trained with **Adam**, matching [`train_bptt`].
+///
+/// # Why this exists
+///
+/// [`train_learned_feedback`] and [`train_bptt_sgd`] are an optimiser-matched
+/// pair under plain SGD. That pairing is only useful where SGD can train the
+/// architecture at all. On the matched `CoincidenceTask` stack it cannot: at
+/// depth >= 2 the SGD ceiling sits at chance for every step size on the
+/// registered ladder while the Adam ceiling reaches 0.90+, so an SGD-matched
+/// comparison measures the optimiser's failure and nothing else.
+///
+/// This is the same pair at the optimiser that works: identical update rule,
+/// identical hyper-parameters, differing **only** in whether the gradients are
+/// true or feedback-projected. Forward execution is unchanged — feedback affects
+/// updates only, exactly as in [`train_learned_feedback`].
+pub fn train_learned_feedback_adam(
+    model: &mut SharedTemporalNet,
+    feedback: &mut [Vec<f32>],
+    train: &[DenseTemporalExample],
+    epochs: usize,
+    feedback_lr: f32,
+) -> Vec<StepDiagnostics> {
+    assert!(!train.is_empty(), "train_learned_feedback_adam needs data");
+    assert!((0.0..=1.0).contains(&feedback_lr));
+    let mut optimizer = Adam::new(model);
+    let mut diagnostics = Vec::with_capacity(epochs.saturating_mul(train.len()));
+    for _ in 0..epochs {
+        for example in train {
+            let gradients = model.feedback_gradients(example, feedback);
+            diagnostics.push(optimizer.update(model, &gradients));
+            align_feedback(model, feedback, feedback_lr);
+        }
+    }
+    diagnostics
+}
+
 fn align_feedback(model: &SharedTemporalNet, feedback: &mut [Vec<f32>], lr: f32) {
     assert_eq!(feedback.len(), model.layers.len());
     for layer_index in (0..model.layers.len()).rev() {
@@ -894,6 +930,104 @@ mod tests {
             n_in: 3,
             label,
         }
+    }
+
+    /// The Adam feedback treatment differs from the Adam ceiling in the credit
+    /// pathway and in nothing else.
+    ///
+    /// Registered in `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md` section
+    /// 7a. Both must move the parameters, and they must move them **differently**
+    /// — if the two agreed bit-for-bit, `deep-snn-scaling` v136 would be comparing
+    /// an arm against itself and reporting a gap of exactly zero as a result.
+    #[test]
+    fn the_adam_feedback_treatment_is_not_secretly_the_adam_ceiling() {
+        let train: Vec<DenseTemporalExample> = (0..3).map(example).collect();
+        let widths = [5usize, 4];
+
+        let mut treatment = SharedTemporalNet::new(3, 4, 3, &widths, 0.8, 0.5, 2.0, 11);
+        let start = treatment.parameter_fingerprint();
+        let mut feedback = random_feedback(&treatment, 11);
+        train_learned_feedback_adam(&mut treatment, &mut feedback, &train, 3, 0.01);
+
+        let mut ceiling = SharedTemporalNet::new(3, 4, 3, &widths, 0.8, 0.5, 2.0, 11);
+        assert_eq!(
+            start,
+            ceiling.parameter_fingerprint(),
+            "the two arms must start from the same parameters"
+        );
+        train_bptt(&mut ceiling, &train, 3);
+
+        assert_ne!(
+            start,
+            treatment.parameter_fingerprint(),
+            "the feedback treatment did not move the parameters at all"
+        );
+        assert_ne!(
+            start,
+            ceiling.parameter_fingerprint(),
+            "the ceiling did not move the parameters at all"
+        );
+        assert_ne!(
+            treatment.parameter_fingerprint(),
+            ceiling.parameter_fingerprint(),
+            "feedback-projected and true gradients produced identical parameters; \
+             the treatment is not projecting through the feedback matrix"
+        );
+    }
+
+    /// Adam is what makes the deep arms trainable at all, so the treatment must
+    /// really be using it rather than falling back to plain SGD.
+    ///
+    /// The tell is Adam's normalisation: the first step's magnitude is set by the
+    /// optimiser, not by the gradient's scale. Plain SGD at the same nominal rate
+    /// would leave a step proportional to the gradient.
+    #[test]
+    fn the_adam_feedback_treatment_takes_adam_sized_steps() {
+        let train: Vec<DenseTemporalExample> = (0..2).map(example).collect();
+        let widths = [4usize, 4];
+        let mut model = SharedTemporalNet::new(3, 4, 3, &widths, 0.8, 0.5, 2.0, 5);
+        let mut feedback = random_feedback(&model, 5);
+        let diagnostics = train_learned_feedback_adam(&mut model, &mut feedback, &train, 1, 0.01);
+
+        assert_eq!(
+            diagnostics.len(),
+            train.len(),
+            "one diagnostic per example, so a caller can see the realised steps"
+        );
+        // Adam's first update is +/- lr per parameter, up to the epsilon and the
+        // bias correction. A step far from that is not Adam.
+        let first = diagnostics[0].readout_step_rms;
+        assert!(
+            first.is_finite() && first > ADAM_LR * 0.5 && first < ADAM_LR * 2.0,
+            "first readout step RMS {first:.3e} is not Adam-sized (lr = {ADAM_LR:.0e})"
+        );
+    }
+
+    /// Forward execution must not read the feedback matrices. If it did, the
+    /// treatment and the ceiling would not share a forward graph and the whole
+    /// comparison would be confounded.
+    #[test]
+    fn feedback_training_leaves_the_forward_graph_shared() {
+        let train: Vec<DenseTemporalExample> = (0..2).map(example).collect();
+        let widths = [4usize];
+        let mut model = SharedTemporalNet::new(3, 4, 3, &widths, 0.8, 0.5, 2.0, 3);
+        let mut feedback = random_feedback(&model, 3);
+        train_learned_feedback_adam(&mut model, &mut feedback, &train, 2, 0.01);
+
+        // Same parameters, evaluated twice, with the feedback matrices scrambled
+        // in between. The forward must not notice.
+        let before = model.forward(&train[0]).logits;
+        for matrix in feedback.iter_mut() {
+            for value in matrix.iter_mut() {
+                *value = -*value * 7.0;
+            }
+        }
+        let after = model.forward(&train[0]).logits;
+        assert_eq!(
+            before.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            after.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            "the forward changed when only the feedback matrices did"
+        );
     }
 
     fn finite_difference_check(widths: &[usize]) {

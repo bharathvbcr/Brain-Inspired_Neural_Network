@@ -18,7 +18,7 @@ use binn_learn::{PostSynapticCredit, ThreeFactor};
 use crate::eprop_true_config::{EpropTrueArm, EpropTrueConfig, EPROP_TRUE_PROTOCOL_VERSION};
 use crate::runner::{
     boost_readout_incoming, build_sparse_assembly, clear_eligibility, edge_index, freeze_trials,
-    run_positive_control, FrozenSplit,
+    mean, mean_var, run_positive_control, FrozenSplit,
 };
 
 pub const TRUE_SURROGATE_EPROP_REFERENCE: &str = "TRUE_SURROGATE_DERIVATIVE_EPROP_REFERENCE";
@@ -530,27 +530,6 @@ fn output_error(trace: &TrialTrace) -> [f32; 2] {
 
 fn sigmoid(x: f32) -> f32 {
     1.0 / (1.0 + (-x).exp())
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    let mean = mean(values);
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|value| (*value - mean).powi(2))
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 #[cfg(test)]

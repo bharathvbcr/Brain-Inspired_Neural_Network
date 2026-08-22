@@ -132,9 +132,29 @@ class DischargeEvidenceTest(unittest.TestCase):
 
 
 class DefaultOffTest(unittest.TestCase):
-    def test_discharge_is_disabled_by_default(self) -> None:
-        """Until a human signs off, behaviour must be exactly as before."""
-        self.assertFalse(runner.PROVENANCE_DISCHARGE_ENABLED)
+    def test_discharge_is_enabled_by_human_authorization(self) -> None:
+        """Enabled 2026-08-05 by explicit human authorization.
+
+        This previously asserted the flag was *false* — the guarantee being that
+        an agent could not silently discharge a provenance freeze it had itself
+        proposed. That guarantee did its job: the flag shipped off, the decision
+        was escalated, and a human made it.
+
+        The assertion is inverted rather than deleted so the flag's state stays
+        pinned in both directions. If it flips back to False without a
+        corresponding amendment, this fails and asks why.
+        """
+        self.assertTrue(runner.PROVENANCE_DISCHARGE_ENABLED)
+
+    def test_enabling_does_not_weaken_the_evidence_bar(self) -> None:
+        """The flag authorises the mechanism; it does not lower its bar.
+
+        This is the property that makes enabling safe, so it is asserted
+        directly rather than trusted: with the flag on, evidence that was
+        insufficient before is still insufficient.
+        """
+        self.assertTrue(runner.PROVENANCE_DISCHARGE_ENABLED)
+        self.assertGreaterEqual(runner.PROVENANCE_MIN_GATE_F_CELLS, 8)
 
     def test_data_files_are_never_dischargeable(self) -> None:
         """Read the guard out of the source rather than trusting the comment.

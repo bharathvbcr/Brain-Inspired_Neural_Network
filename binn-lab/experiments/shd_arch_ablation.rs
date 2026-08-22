@@ -40,7 +40,7 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, ShdSample, SHD_CHANCE};
-use binn_lab::guards::{wilson_interval, Verdict, Z_95};
+use binn_lab::guards::{wilson_interval, CeilingHealth, Verdict, Z_95};
 use binn_learn::{
     shuffle_labels, AlifEval, ModulatorScale, ShdAlifArm, ShdAlifConfig, ShdAlifRule, ShdExample,
     MODULATOR_PARITY_TOLERANCE,
@@ -371,6 +371,10 @@ fn main() -> ExitCode {
         adaptive: false,
         tau_a: binn_learn::DEFAULT_TAU_A,
         beta_a: binn_learn::DEFAULT_BETA_A,
+        // The v141/v142 ablation is the two-axis recurrent x adaptive grid it
+        // was registered as. The frozen-attention axis is a separate protocol
+        // with its own preregistration and must not silently enter this one.
+        attention: None,
     };
 
     // ---- Grid, in H1-critical order ----
@@ -633,11 +637,11 @@ fn render(
             inversions.push_str(&format!(
                 "| {} | {md:.4} | {me:.4} | {ratio:.2} | {} |\n",
                 arch.label(),
-                if me + 1e-6 < md {
-                    "INVERTED — ceiling below treatment"
-                } else {
-                    "ok"
-                },
+                // 2026-08-21: was a bare `me + 1e-6 < md` inversion test, which
+                // reports "ok" when the e-prop ceiling is at chance and DFA is
+                // below it. `CeilingHealth` tests the reference against
+                // `SHD_CHANCE` first.
+                CeilingHealth::evaluate(me, md, SHD_CHANCE).label(),
             ));
         }
     }

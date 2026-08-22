@@ -16,7 +16,7 @@ use binn_learn::{
 };
 
 use crate::c3_v2_config::{C3V2Arm, C3V2Config, C3_V2_PROTOCOL_VERSION};
-use crate::runner::clear_eligibility;
+use crate::runner::{clear_eligibility, mean_var};
 
 pub const C3_V2_MATCHED_GRADIENT_REFERENCE: &str =
     "C3_V2_MATCHED_FORWARD_ORACLE_SURROGATE_GRADIENT_REFERENCE";
@@ -704,22 +704,6 @@ fn softmax(values: &[f32]) -> Vec<f32> {
     let exp: Vec<f32> = values.iter().map(|value| (*value - max).exp()).collect();
     let sum = exp.iter().sum::<f32>().max(f32::MIN_POSITIVE);
     exp.into_iter().map(|value| value / sum).collect()
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    if values.is_empty() {
-        return (0.0, 0.0);
-    }
-    let mean = values.iter().sum::<f32>() / values.len() as f32;
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|value| (*value - mean).powi(2))
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 fn opt_depth(depth: Option<usize>) -> String {

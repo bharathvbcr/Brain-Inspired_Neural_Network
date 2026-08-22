@@ -13,6 +13,7 @@ use binn_areas::Hub;
 use binn_core::Rng;
 
 use crate::r2_config::R2Config;
+use crate::runner::mean;
 
 /// One point on the scaling curve.
 #[derive(Clone, Debug, PartialEq)]
@@ -213,14 +214,6 @@ impl R2Runner {
              ```\n",
         );
         md
-    }
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
     }
 }
 

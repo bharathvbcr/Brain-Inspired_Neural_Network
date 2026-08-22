@@ -1,7 +1,26 @@
-//! SHD Multi-Seed Scientific Sweep Binary (Suite 4).
+//! Multi-seed local-rule sweep on **synthetic** frames (Suite 4).
 //!
-//! Evaluates local feedback alignment vs broadcast vs e-prop ceiling on
-//! multi-class temporal audio digits (Spiking Heidelberg Digits).
+//! # This binary does not touch SHD
+//!
+//! Despite its name, it never loads the Spiking Heidelberg Digits corpus.
+//! [`generate_synthetic_frames`] fabricates its own data: 5 classes, 24 input
+//! channels, 16 timesteps, 100 train / 50 test examples per seed. Real SHD is
+//! 700 channels and 20 classes over thousands of utterances, and the loader for
+//! it is `binn-data`, which this file does not import.
+//!
+//! The synthetic task is also **trivially separable and order-free**. A label
+//! `l` fires only in channels `{3l, 3l+1, 3l+2}`, which are disjoint for every
+//! class at `n_in = 24`, so per-channel spike counts alone determine the label
+//! and the timestep at which each spike lands is irrelevant. Any classifier that
+//! can read a rate solves it.
+//!
+//! Consequently **no accuracy from this binary is evidence about SHD, about
+//! temporal credit assignment, or about locality**, and the report says so.
+//! Retained as an exploratory smoke test of the five `Shd*` arm constructors.
+//! See `DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`.
+//!
+//! Evaluates local feedback alignment vs broadcast vs e-prop ceiling on that
+//! synthetic task.
 
 use std::env;
 use std::fs;
@@ -15,9 +34,14 @@ use binn_learn::{
 };
 
 const PROTOCOL_VERSION: u64 = 135;
-const EXPERIMENT_NAME: &str = "shd-scientific-sweep";
+const EXPERIMENT_NAME: &str = "shd-scientific-sweep (SYNTHETIC DATA)";
 
-fn generate_shd_toy_data(
+/// Fabricate the synthetic frames this binary trains on.
+///
+/// Not SHD, and not a stand-in for it. Each example fires `t/3` spikes in the
+/// three channels reserved for its label, so the classes are linearly separable
+/// from channel counts and carry no temporal structure.
+fn generate_synthetic_frames(
     n: usize,
     n_in: usize,
     t: usize,
@@ -136,8 +160,8 @@ fn main() -> ExitCode {
 
     for s_idx in 0..n_seeds {
         let seed = master_seed ^ ((s_idx as u64) * 0x1000_0005_u64);
-        let train = generate_shd_toy_data(100, n_in, t_frames, n_classes, seed);
-        let test = generate_shd_toy_data(50, n_in, t_frames, n_classes, seed ^ 0x9999);
+        let train = generate_synthetic_frames(100, n_in, t_frames, n_classes, seed);
+        let test = generate_synthetic_frames(50, n_in, t_frames, n_classes, seed ^ 0x9999);
 
         let mut bcast = ShdBroadcastPm1::new(&train[0], cfg, seed);
         let r_bcast = bcast.train_and_evaluate(epochs, &train, &test);
@@ -180,11 +204,18 @@ fn main() -> ExitCode {
     let chance = 1.0 / n_classes as f32;
 
     let summary = format!(
-        "# SHD Multi-Seed Scientific Sweep Report\n\n\
+        "# Multi-Seed Local-Rule Sweep Report (SYNTHETIC DATA)\n\n\
+        > **This report is not about SHD.** No Spiking Heidelberg Digits sample \
+        was loaded. The data are fabricated by `generate_synthetic_frames`: \
+        {n_classes} classes, {n_in} channels, {t_frames} timesteps, 100 train / \
+        50 test per seed, with each label firing only in its own three reserved \
+        channels. The task is linearly separable from per-channel spike counts \
+        and contains no temporal structure, so nothing below is evidence about \
+        SHD, temporal credit assignment, or locality.\n\n\
         **Protocol Version:** {PROTOCOL_VERSION}  \n\
         **Experiment:** {EXPERIMENT_NAME}  \n\
         **Schedule:** {} (n={n_seeds}, classes={n_classes})  \n\n\
-        ## SHD Accuracy Summary (Mean ± SE vs Chance={chance:.4})\n\n\
+        ## Accuracy Summary (Mean ± SE vs Chance={chance:.4})\n\n\
         | Arm | Mean Accuracy | SE | Beats Chance ({chance:.2})? |\n\
         |---|---:|---:|---|\n\
         | Broadcast ±1 Three-Factor | {m_bcast:.4} | {se_bcast:.4} | {} |\n\
@@ -212,9 +243,9 @@ fn main() -> ExitCode {
             "FAIL"
         },
         if m_learned > chance + 0.05 {
-            "PASS — Learns multi-class SHD audio digits!"
+            "above chance on the synthetic task — not an SHD result"
         } else {
-            "FAIL"
+            "at or below chance on the synthetic task"
         },
     );
 

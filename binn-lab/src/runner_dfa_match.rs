@@ -7,14 +7,13 @@
 //!
 //! Does not reopen protocol-v2 or mutate protocol-v4 `c1-match-*`.
 
-use binn_data::Sample;
 use binn_learn::{
-    GradientExample, MatchedBroadcastErr, MatchedDfa, MatchedGradient, DEFAULT_MATCHED_BETA,
+    MatchedBroadcastErr, MatchedDfa, MatchedGradient, DEFAULT_MATCHED_BETA,
     MATCHED_BROADCAST_ERR_LABEL, MATCHED_DFA_LABEL, MATCHED_GRADIENT_LABEL, REFERENCE_SEQUENCE_LEN,
 };
 
 use crate::dfa_match_config::{DfaMatchConfig, C1_DFA_CHANCE_BASELINE};
-use crate::runner::{freeze_trials, GateG2Verdict};
+use crate::runner::{freeze_trials, mean_var, samples_to_gradient_examples, GateG2Verdict};
 use crate::runner_match::gap_closed_matched;
 
 /// Per-seed accuracies and gap_closed_dfa (DFA vs gradient).
@@ -326,45 +325,6 @@ fn decide_verdict(
     } else {
         GateG2Verdict::Fail
     }
-}
-
-fn samples_to_gradient_examples(trials: &[(Vec<Sample>, u32)]) -> Vec<GradientExample> {
-    trials
-        .iter()
-        .map(|(sequence, label)| {
-            let mut x1 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            let mut x2 = [0.0f32; REFERENCE_SEQUENCE_LEN];
-            for (t, sample) in sequence.iter().enumerate().take(REFERENCE_SEQUENCE_LEN) {
-                x1[t] = sample.values[0];
-                x2[t] = sample.values[1];
-            }
-            (x1, x2, *label as f32)
-        })
-        .collect()
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
-}
-
-fn mean_var(values: &[f32]) -> (f32, f32) {
-    let mean = mean(values);
-    if values.len() < 2 {
-        return (mean, 0.0);
-    }
-    let variance = values
-        .iter()
-        .map(|v| {
-            let d = *v - mean;
-            d * d
-        })
-        .sum::<f32>()
-        / (values.len() - 1) as f32;
-    (mean, variance)
 }
 
 #[cfg(test)]

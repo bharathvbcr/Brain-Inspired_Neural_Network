@@ -13,14 +13,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use binn_lab::guards::{gap_closed_clamped, gap_closed_exceeds_ceiling, Verdict};
+use binn_lab::guards::{gap_closed_clamped, gap_closed_exceeds_ceiling, CeilingHealth, Verdict};
 use binn_lab::{freeze_trials, samples_to_gradient_examples, Config};
 use binn_learn::{
     MatchedGradient, MatchedRlFlat, MatchedRlGraded, MatchedRlLearnedFb, MatchedRlReinforceFb,
     MatchedRlRpe, DEFAULT_MATCHED_BETA,
 };
 
-const PROTOCOL_VERSION: u64 = 131;
+const PROTOCOL_VERSION: u64 = 132;
 const TRACK_B_EXPERIMENT: &str = "track-b-rescue";
 
 /// Preregistered accuracy floor.
@@ -243,9 +243,17 @@ fn main() -> ExitCode {
     let gap_lfb_m = mean(&gap_lfb.values);
     let gap_lfb_lcb = gap_lfb_m - 1.96 * std_error(&gap_lfb.values);
 
-    // A ceiling that loses to its own treatment invalidates the comparison.
+    // 2026-08-21: this was `exceeded_ceiling > 0` alone, which is blind to a
+    // reference that never learned. A gradient reference sitting at chance makes
+    // every seed `unidentifiable`, leaves `exceeded_ceiling` at zero, and used to
+    // yield an empty gap series scored as `mean = 0.0` — reported as a FAIL, as
+    // though a gap had been measured and found wanting. `CeilingHealth` tests the
+    // reference against chance first, so a dead reference invalidates the harness
+    // instead of silently failing the arm.
+    let health_rpe = CeilingHealth::evaluate(m_grad, m_rpe, DENSE_CHANCE);
+    let health_lfb = CeilingHealth::evaluate(m_grad, m_lfb, DENSE_CHANCE);
     let ceiling_inverted = gap_rpe.exceeded_ceiling > 0 || gap_lfb.exceeded_ceiling > 0;
-    let harness_valid = !ceiling_inverted;
+    let harness_valid = !ceiling_inverted && health_rpe.is_usable() && health_lfb.is_usable();
 
     let v_flat = Verdict::evaluate_mean(
         m_flat,

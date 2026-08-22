@@ -128,6 +128,10 @@ where
     // order, so the f32 results are bit-identical.
     let mut since_boundary = 1usize;
     let mut chunk_idx = 0usize;
+    // Indexing is deliberate: see the comment above. An iterator rewrite would
+    // reassociate `combine`, and bit-identical f32 output is what the
+    // `--config-hash` replay property rests on.
+    #[allow(clippy::needless_range_loop)]
     for i in 1..n {
         // At the top of iteration `i`, `since_boundary == i - last_boundary`,
         // so this fires exactly when `i % chunk_size == 0`.

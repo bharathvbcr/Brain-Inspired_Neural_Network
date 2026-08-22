@@ -23,6 +23,7 @@ enable-r2 = []
 
 [dependencies]
 binn-data = { workspace = true }
+rayon = { workspace = true }
 binn-learn = { workspace = true }
 binn-areas = { workspace = true }
 binn-engine = { workspace = true }
@@ -106,12 +107,24 @@ name = "shd-arch-ablation"
 path = "experiments/shd_arch_ablation.rs"
 
 [[bin]]
+name = "shd-frozen-attention"
+path = "experiments/shd_frozen_attention.rs"
+
+[[bin]]
+name = "shd-depth-scaling"
+path = "experiments/shd_depth_scaling.rs"
+
+[[bin]]
 name = "temporal-optimizer-control"
 path = "experiments/temporal_optimizer_control.rs"
 
 [[bin]]
 name = "ei-inhibition-sweep"
 path = "experiments/ei_inhibition_sweep.rs"
+
+[[bin]]
+name = "a6-ceiling-health"
+path = "experiments/a6_ceiling_health.rs"
 
 [[bin]]
 name = "multi-channel-neuromod"

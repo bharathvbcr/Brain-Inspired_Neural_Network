@@ -13,6 +13,7 @@ use binn_core::Rng;
 
 use crate::logging::{TraceArea, TraceProjection, TraceRecorder};
 use crate::r1_config::R1Config;
+use crate::runner::mean;
 
 /// Per-`n_areas` outcome (mean over seeds).
 #[derive(Clone, Debug, PartialEq)]
@@ -258,14 +259,6 @@ struct PointOutcome {
     additive: f32,
     nnz: usize,
     locality: f32,
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        0.0
-    } else {
-        values.iter().sum::<f32>() / values.len() as f32
-    }
 }
 
 fn run_r1_point(config: &R1Config, seed: u64, n_areas: usize) -> PointOutcome {

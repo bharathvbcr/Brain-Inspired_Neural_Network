@@ -155,7 +155,14 @@ gradient entries; one reaches a gradient norm of 7.36e29). See
 `MEASUREMENT_2026-08-03_RECURRENT_ARM_STABILITY.md` §3.6.2.
 
 H2 is **unmeasured** — not failed, not refuted. The blocker is an instrument
-defect at that width, not evidence about recurrence.
+defect, not evidence about recurrence.
+
+**Retried at h256 and still NOT RUN.** `AMENDMENT_2026-08-03_H2_AT_H256.md`
+moved the width to h256, which had measured clean at e20. At the campaign budget
+e100 it is not: 2 of 12 `rec+alif` cells abort (seed 5170002, steps 374 and 727).
+The amendment's stopping rule required reporting NOT RUN rather than evaluating
+the 10 survivors, and that was honoured. The e20 evidence covered 640 of the
+3200 optimizer steps a campaign cell runs — see §7 of that amendment.
 
 ## 5. Reversal, and a post-hoc prediction that held
 

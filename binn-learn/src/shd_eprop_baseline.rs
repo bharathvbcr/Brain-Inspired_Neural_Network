@@ -20,7 +20,7 @@ use binn_core::Rng;
 use binn_engine::{DEFAULT_TAU_M, THETA_REST, V_RESET};
 
 use crate::credit::{CreditSignal, LearnedReinforceFeedback, ReinforceFeedback};
-use crate::matched_deep_gradient::ModulatorScale;
+use crate::matched_deep_gradient::{rescale_rms_to, ModulatorScale};
 
 /// Init scale for the readout matrix, shared by every arm.
 ///
@@ -85,11 +85,38 @@ struct ShdArch {
     bout: Vec<f32>, // n_classes
 }
 
+/// Input-weight scale that leaves the hidden layer spiking at initialisation.
+///
+/// `0.35` left it silent; see the note in [`ShdArch::new`] and
+/// `PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`.
+const SILENCE_FREE_INPUT_SCALE: f32 = 2.8;
+
 impl ShdArch {
     fn new(n_in: usize, t: usize, n_classes: usize, hidden: usize, beta: f32, seed: u64) -> Self {
         assert!(n_in >= 1 && t >= 1 && n_classes >= 2 && hidden >= 1);
         let mut rng = Rng::new(seed ^ 0x54D0_A4C4_0000_00F1);
-        let in_scale = 0.35f32 / (n_in as f32).sqrt();
+        // 2026-08-22 repair, registered in
+        // `PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`.
+        //
+        // This was `0.35 / sqrt(n_in)`, which leaves the hidden layer **below
+        // threshold**: mean firing rate 0.00000000 at initialisation and still
+        // 0.00000000 after 60 epochs. Every local arm in this module was
+        // therefore a constant predictor - `wout` never moves because the rate
+        // it multiplies is zero, and the logits are pure bias, bit-identical
+        // across classes.
+        //
+        // Only `ShdSuperSpikeCeiling` escaped, by growing `sum|win|` 2.2x
+        // (52.6 -> 115.5) until it crossed threshold. The local rules grew it
+        // 1.08x and never did: no spikes gives vanishing eligibility, which
+        // gives no weight growth, which gives no spikes.
+        //
+        // The multiplier puts the initial firing rate mid-band in the activity
+        // window this workspace already uses (`[0.001, 0.500]`): measured
+        // 0.087 on the reference fixture, against 0.020 at 6x and 0.454 at 16x,
+        // with 24x saturating at 0.81. It changes only the operating point -
+        // no rule, threshold, surrogate, readout or optimiser is touched, and
+        // every arm shares it, so none is advantaged.
+        let in_scale = SILENCE_FREE_INPUT_SCALE / (n_in as f32).sqrt();
         let out_scale = shd_out_scale(hidden);
         let win: Vec<f32> = (0..hidden * n_in)
             .map(|_| (rng.next_f32() * 2.0 - 1.0) * in_scale)
@@ -489,6 +516,8 @@ impl ShdRlLearnedFb {
 pub struct ShdEpropCeiling {
     arch: ShdArch,
     lr: f32,
+    /// Whether the transport matrix is rescaled to [`shd_out_scale`] before use.
+    normalise_transport: bool,
     modulator: ModulatorScale,
 }
 
@@ -497,8 +526,22 @@ impl ShdEpropCeiling {
         Self {
             arch: ShdArch::new(ex.n_in, ex.t, cfg.n_classes, cfg.hidden, cfg.beta, seed),
             lr: cfg.lr,
+            normalise_transport: true,
             modulator: ModulatorScale::new(),
         }
+    }
+
+    /// Transport through the raw, un-rescaled `wout`.
+    ///
+    /// This is the pre-2026-08-22 rule. It is kept so the scale pathology stays
+    /// demonstrable — see
+    /// `defect_raw_transport_outgrows_dfa_feedback_once_the_network_spikes` — and
+    /// mirrors [`crate::MatchedDeepGradient::with_raw_transport`]. Do not report a
+    /// ceiling built this way against [`ShdDfa`] without also reporting
+    /// [`Self::modulator_scale`].
+    pub fn with_raw_transport(mut self) -> Self {
+        self.normalise_transport = false;
+        self
     }
 
     /// Realised RMS of the hidden-layer modulator; compare with
@@ -539,7 +582,24 @@ impl ShdEpropCeiling {
         // Snapshot the transport matrix BEFORE the readout update: the hidden
         // update must use the `wout` that produced these logits, not the
         // post-update one.
-        let wout_snapshot = self.arch.wout.clone();
+        let mut wout_snapshot = self.arch.wout.clone();
+
+        // Scale parity, registered in
+        // `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md`.
+        //
+        // `ShdDfa` transports through a **frozen** matrix at `shd_out_scale`,
+        // this arm through `wout`, which is **trained**. Parity was established
+        // at initialisation and then drifted as `wout` grew: measured at 5.08
+        // against a 3.5 tolerance. That is a difference in effective learning
+        // rate, not in credit-assignment quality, and it is exactly the
+        // pathology this module's header warns about.
+        //
+        // Rescaling to the DFA feedback's own scale removes that drift and
+        // nothing else. The modulator stays `Sum_k wout[k,i]*delta_k` in
+        // direction and stays data-dependent; only the matrix norm is pinned.
+        if self.normalise_transport {
+            rescale_rms_to(&mut wout_snapshot, shd_out_scale(h));
+        }
 
         for k in 0..c {
             for i in 0..h {
@@ -864,10 +924,97 @@ mod tests {
         }
     }
 
-    /// After training, the two arms' realised hidden modulators must remain
-    /// within [`MODULATOR_PARITY_TOLERANCE`] of each other.
+    /// After training, the two arms' realised hidden modulators stay within
+    /// [`MODULATOR_PARITY_TOLERANCE`] of each other.
+    ///
+    /// **This guard was vacuous until 2026-08-22, then failed, then was repaired.**
+    ///
+    /// While the hidden layer was silent both modulators were driven by the same
+    /// sub-threshold surrogate values and the ratio was **1.03** — the check could
+    /// not fail whatever the rules did. Repairing the initialisation
+    /// (`PREREG_2026-08-22_SILENT_INITIALISATION_REPAIR.md`) made it capable of
+    /// failing for the first time, and it failed immediately at **5.08**.
+    ///
+    /// The cause was real and always there: e-prop transports `wout`, which is
+    /// trained, while DFA's feedback is frozen, so the two step at different rates
+    /// once the arms actually learn. `ShdEpropCeiling` now rescales the transport
+    /// matrix to [`shd_out_scale`] — the frozen feedback's own scale — under
+    /// `PREREG_2026-08-22_DEEP_PATH_AND_TRANSPORT_SCALE.md`, criterion E-1.
+    ///
+    /// **The tolerance was not moved.** It is the same 3.5 the guard failed against.
     #[test]
-    fn dfa_and_eprop_modulator_scales_stay_comparable() {
+    fn repaired_transport_scale_keeps_the_two_arms_comparable() {
+        let (dfa, ceil) = parity_fixture(false);
+        let ratio = ModulatorScale::ratio(&dfa, &ceil);
+        assert!(
+            ratio <= MODULATOR_PARITY_TOLERANCE,
+            "hidden-modulator RMS ratio is {ratio:.2}, outside the \
+             {MODULATOR_PARITY_TOLERANCE} tolerance: DFA={:.3e}, e-prop={:.3e}",
+            dfa.rms(),
+            ceil.rms(),
+        );
+    }
+
+    /// The parity guard above is **not** vacuous: the same measurement on the
+    /// un-rescaled rule still violates the same tolerance.
+    ///
+    /// Registered as criterion E-2. Without this, rescaling could have satisfied
+    /// E-1 by making the ratio identically 1 by construction, which would be a
+    /// check that cannot fail — the failure mode this workspace keeps finding.
+    #[test]
+    fn defect_raw_transport_outgrows_dfa_feedback_once_the_network_spikes() {
+        let (dfa, raw) = parity_fixture(true);
+        let ratio = ModulatorScale::ratio(&dfa, &raw);
+        assert!(
+            ratio > MODULATOR_PARITY_TOLERANCE,
+            "raw transport now scores {ratio:.2}, inside the \
+             {MODULATOR_PARITY_TOLERANCE} tolerance. The parity guard can no \
+             longer fail and is worthless; find out why before trusting it.",
+        );
+    }
+
+    /// The rescale reaches exactly one arm.
+    ///
+    /// Registered as criterion E-3. `ShdBroadcastPm1`, `ShdRlReinforceFb` and
+    /// `ShdSuperSpikeCeiling` do not transport through `wout` and must be
+    /// numerically untouched by this repair. Structural argument alone is not
+    /// enough — this asserts it against the source, so a later edit that reuses
+    /// the primitive in another arm fails here instead of silently moving that
+    /// arm's numbers.
+    #[test]
+    fn the_transport_rescale_reaches_only_the_eprop_ceiling() {
+        let whole = include_str!("shd_eprop_baseline.rs");
+        // Scan production code only. The test module quotes the symbol itself,
+        // and counting those would make this pass for the wrong reason.
+        let src = whole
+            .split_once("\n#[cfg(test)]\n")
+            .expect("this module has a test section")
+            .0;
+        let call_sites: Vec<&str> = src
+            .lines()
+            .filter(|l| l.contains("rescale_rms_to(") && !l.trim_start().starts_with("//"))
+            .collect();
+        assert_eq!(
+            call_sites.len(),
+            1,
+            "the transport rescale must have exactly one call site, found {call_sites:#?}"
+        );
+
+        // That call must sit inside `impl ShdEpropCeiling`.
+        let call_at = src.find("rescale_rms_to(").expect("call site");
+        let impl_at = src.find("impl ShdEpropCeiling {").expect("impl block");
+        let next_impl = src[impl_at + 1..]
+            .find("\nimpl ")
+            .map(|o| impl_at + 1 + o)
+            .unwrap_or(src.len());
+        assert!(
+            impl_at < call_at && call_at < next_impl,
+            "the rescale escaped `impl ShdEpropCeiling`"
+        );
+    }
+
+    /// Shared fixture for the two parity tests, so they differ in exactly one bit.
+    fn parity_fixture(raw: bool) -> (ModulatorScale, ModulatorScale) {
         let n_in = 24;
         let t = 12;
         let n_classes = 5;
@@ -883,17 +1030,11 @@ mod tests {
         let mut dfa = ShdDfa::new(&train[0], cfg, 0xD1A0_0002);
         dfa.train_and_evaluate(cfg.epochs, &train, &test);
         let mut ceil = ShdEpropCeiling::new(&train[0], cfg, 0xD1A0_0002);
+        if raw {
+            ceil = ceil.with_raw_transport();
+        }
         ceil.train_and_evaluate(cfg.epochs, &train, &test);
-
-        let ratio = ModulatorScale::ratio(&dfa.modulator_scale(), &ceil.modulator_scale());
-        assert!(
-            ratio <= MODULATOR_PARITY_TOLERANCE,
-            "hidden-modulator RMS ratio {ratio:.2} exceeds tolerance \
-             {MODULATOR_PARITY_TOLERANCE}: DFA={:.3e}, e-prop={:.3e}. \
-             A ceiling stepping at a different rate than its treatment is not a ceiling.",
-            dfa.modulator_scale().rms(),
-            ceil.modulator_scale().rms(),
-        );
+        (dfa.modulator_scale(), ceil.modulator_scale())
     }
 
     /// The e-prop hidden update must transport through the pre-update readout.
@@ -990,5 +1131,232 @@ mod tests {
         assert_eq!(r.label, SHD_RL_REINFORCE_FB_LABEL);
         assert!(r.accuracy.is_finite());
         assert!(r.loss.is_finite());
+    }
+
+    // ---- characterization of a known defect, 2026-08-22 --------------------
+    //
+    // `shd-scientific-sweep` reported the e-prop ceiling at 0.2140 against a
+    // chance of 0.2000. These localise that and **pin the broken behaviour**.
+    // They assert the defect, not a fix: there is no fix, and a green suite must
+    // not imply one. A repair makes them fail, which is the intended signal.
+    //
+    // See `FINDING_2026-08-22_SHD_EPROP_CEILING_IS_A_CONSTANT_PREDICTOR.md`.
+
+    fn disjoint_fixture(
+        n: usize,
+        n_in: usize,
+        t: usize,
+        classes: usize,
+        seed: u64,
+    ) -> Vec<ShdExample> {
+        let mut rng = Rng::new(seed);
+        (0..n)
+            .map(|_| {
+                let label = rng.gen_index(classes) as u32;
+                let mut frames = vec![0.0f32; t * n_in];
+                for _ in 0..(t / 3).max(1) {
+                    let tt = rng.gen_index(t);
+                    let c = (label as usize * 3 + rng.gen_index(3)) % n_in;
+                    frames[tt * n_in + c] = 1.0;
+                }
+                ShdExample {
+                    frames,
+                    t,
+                    n_in,
+                    label,
+                }
+            })
+            .collect()
+    }
+
+    fn diag_cfg(classes: usize) -> ShdTrainConfig {
+        ShdTrainConfig {
+            hidden: 24,
+            n_classes: classes,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 60,
+        }
+    }
+
+    /// **Repaired 2026-08-22.** Was a constant predictor at every configuration;
+    /// now uses its whole output layer.
+    #[test]
+    fn repaired_the_eprop_ceiling_uses_more_than_one_class() {
+        for (classes, seed) in [(5usize, 11u64), (5, 99), (4, 11)] {
+            let train = toy_data(120, 24, 16, classes, seed);
+            let test = toy_data(60, 24, 16, classes, seed + 1);
+            let mut eprop = ShdEpropCeiling::new(&train[0], diag_cfg(classes), 7);
+            eprop.train_and_evaluate(60, &train, &test);
+            let preds = eprop.arch.predictions(&test);
+            let mut distinct = preds.clone();
+            distinct.sort_unstable();
+            distinct.dedup();
+            assert!(
+                distinct.len() > 1,
+                "classes {classes} seed {seed}: the ceiling collapsed back to \
+                 {} predicted class - the silent-initialisation repair has regressed",
+                distinct.len()
+            );
+        }
+    }
+
+    /// A working reference solves the same fixtures, so the forward pass and the
+    /// data are fine and the defect is in the local arm.
+    #[test]
+    fn defect_is_localised_superspike_solves_the_same_fixtures() {
+        for build in [
+            toy_data as fn(usize, usize, usize, usize, u64) -> Vec<ShdExample>,
+            disjoint_fixture,
+        ] {
+            let train = build(120, 24, 16, 5, 11);
+            let test = build(60, 24, 16, 5, 12);
+            let acc = ShdSuperSpikeCeiling::new(&train[0], diag_cfg(5), 7)
+                .train_and_evaluate(60, &train, &test)
+                .accuracy;
+            assert!(acc > 0.99, "SuperSpike scored {acc}, expected ~1.0");
+        }
+    }
+
+    /// The modulator must stay non-zero and data-dependent after the repair.
+    ///
+    /// An earlier revision read this as evidence that the mechanism **differed**
+    /// from `MatchedDeepGradient`'s silence. That was wrong: the modulator is
+    /// non-zero below threshold because the surrogate derivative is, not because
+    /// anything spiked. Both defects were the same silent initialisation.
+    #[test]
+    fn repaired_the_modulator_stays_live_and_data_dependent() {
+        let mut scales = Vec::new();
+        for seed in [11u64, 99] {
+            let train = toy_data(120, 24, 16, 5, seed);
+            let test = toy_data(60, 24, 16, 5, seed + 1);
+            let mut eprop = ShdEpropCeiling::new(&train[0], diag_cfg(5), 7);
+            eprop.train_and_evaluate(60, &train, &test);
+            let rms = eprop.modulator_scale().rms();
+            assert!(
+                rms > 1e-3,
+                "modulator collapsed to {rms} - this is now the \
+                                 silence mechanism, not the readout one"
+            );
+            scales.push(rms);
+        }
+        assert_ne!(
+            scales[0].to_bits(),
+            scales[1].to_bits(),
+            "the modulator is identical on different data - it has stopped \
+             depending on the input and the diagnosis has changed"
+        );
+    }
+
+    /// **Repaired 2026-08-22.** Neither local arm used to escape the constant
+    /// predictor at any width; both now do.
+    ///
+    /// This closes the question left open in
+    /// `FINDING_2026-08-22_SHD_EPROP_CEILING_IS_A_CONSTANT_PREDICTOR.md` §3,
+    /// which declined to call `ShdDfa`'s collapse a defect because the sweep had
+    /// reported it at 1.0000 under a different configuration. Width (16..128,
+    /// including the sweep's 64) and budget (1..60, spanning the sweep's 30) are
+    /// both ruled out.
+    ///
+    /// Asserts the defect, not a fix. A repair makes this fail, which is the
+    /// intended signal.
+    #[test]
+    fn repaired_both_local_arms_escape_the_constant_predictor() {
+        let (n_in, t, classes) = (24usize, 16usize, 5usize);
+        let train = disjoint_fixture(120, n_in, t, classes, 11);
+        let test = disjoint_fixture(60, n_in, t, classes, 12);
+
+        for hidden in [24usize, 64, 128] {
+            let cfg = ShdTrainConfig {
+                hidden,
+                n_classes: classes,
+                lr: 0.05,
+                beta: 5.0,
+                epochs: 60,
+            };
+            for label in ["dfa", "eprop"] {
+                let preds = if label == "dfa" {
+                    let mut arm = ShdDfa::new(&train[0], cfg, 7);
+                    arm.train_and_evaluate(60, &train, &test);
+                    arm.arch.predictions(&test)
+                } else {
+                    let mut arm = ShdEpropCeiling::new(&train[0], cfg, 7);
+                    arm.train_and_evaluate(60, &train, &test);
+                    arm.arch.predictions(&test)
+                };
+                let mut distinct = preds.clone();
+                distinct.sort_unstable();
+                distinct.dedup();
+                assert!(
+                    distinct.len() > 1,
+                    "{label} at hidden {hidden} collapsed to {} predicted class - \
+                     the silent-initialisation repair has regressed",
+                    distinct.len()
+                );
+            }
+        }
+    }
+
+    /// The same fixture is solved by a working reference, so the collapse above
+    /// is about the local arms and not about the task or the budget.
+    #[test]
+    fn defect_superspike_escapes_the_same_fixture_by_epoch_twenty() {
+        let train = disjoint_fixture(120, 24, 16, 5, 11);
+        let test = disjoint_fixture(60, 24, 16, 5, 12);
+        let cfg = ShdTrainConfig {
+            hidden: 64,
+            n_classes: 5,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 20,
+        };
+        let acc = ShdSuperSpikeCeiling::new(&train[0], cfg, 7)
+            .train_and_evaluate(20, &train, &test)
+            .accuracy;
+        assert!(
+            acc > 0.99,
+            "SuperSpike scored {acc} at 20 epochs, expected ~1.0"
+        );
+    }
+
+    /// Was the modulator-parity violation caused by the repair, or merely
+    /// revealed by it? Compare the ratio at the old scale and the new one.
+    #[test]
+    fn diagnostic_was_modulator_parity_masked_by_silence() {
+        let (n_in, t, classes) = (24usize, 12usize, 5usize);
+        let train = toy_data(60, n_in, t, classes, 1);
+        let test = toy_data(20, n_in, t, classes, 2);
+        let cfg = ShdTrainConfig {
+            hidden: 64,
+            n_classes: classes,
+            lr: 0.02,
+            beta: 5.0,
+            epochs: 5,
+        };
+        // `SILENCE_FREE_INPUT_SCALE / 2.8` recovers the original 0.35 exactly.
+        for (label, rescale) in [
+            ("old scale 0.35 (silent)", 0.35 / SILENCE_FREE_INPUT_SCALE),
+            ("new scale 2.8 (spiking)", 1.0f32),
+        ] {
+            let mut dfa = ShdDfa::new(&train[0], cfg, 0xD1A0_0002);
+            for w in dfa.arch.win.iter_mut() {
+                *w *= rescale;
+            }
+            dfa.train_and_evaluate(cfg.epochs, &train, &test);
+            let mut ceil = ShdEpropCeiling::new(&train[0], cfg, 0xD1A0_0002);
+            for w in ceil.arch.win.iter_mut() {
+                *w *= rescale;
+            }
+            ceil.train_and_evaluate(cfg.epochs, &train, &test);
+            let (a, b) = (dfa.modulator_scale(), ceil.modulator_scale());
+            let (r, _, _) = ceil.arch.forward(&test[0].frames);
+            println!(
+                "{label}: hidden rate {:.6}  DFA {:.3e}  e-prop {:.3e}  ratio {:.2}",
+                r.iter().sum::<f32>() / r.len() as f32,
+                a.rms(),
+                b.rms(),
+                ModulatorScale::ratio(&a, &b)
+            );
+        }
     }
 }

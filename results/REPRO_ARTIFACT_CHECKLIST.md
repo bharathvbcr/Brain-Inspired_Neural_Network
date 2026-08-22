@@ -1,5 +1,24 @@
 # BINN camera-ready reproducibility checklist
 
+> **CITATION WARNING (added 2026-08-07).** This document cites the
+> `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
+> matched-substrate result. That report is stale: the source is **v131**, and the
+> 130→131 bump is precisely the clamp-and-separation-gate fix for the defect the
+> row exhibits. Under current code the arm **cannot be reported as PASS**. Do not
+> cite it until `track-b-rescue` has been re-run. The DFA
+> (`c1-dfa-c8c4fe0899908b84`) and RL (`c1-rl-42eddc9c801308e9`) matched PASSes are
+> **not** affected by this defect; they ran through the clamped `runner.rs` path.
+> See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+> **RESOLVED 2026-08-19.** The re-run landed. At v131 the arm reports
+> **INVALID_HARNESS**, not PASS: the ceiling-inverted warning fires on 3 of 20
+> learned-FB seeds and the code refuses to emit a PASS while it is present.
+> The v130 PASS is **withdrawn**. See
+> `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md` and
+> `track_b_results_v131.md`.
+
+
+
 Workspace root for commands: `binn/` (crate workspace). Do not change G2 thresholds or reopen `c1-118207fbc3eaba53`.
 
 **Paper package index**
@@ -193,7 +212,17 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 | `c1-a49deeaedb495a09` | Temporal-PC FAIL |
 | `c1x-dfa-spike-true-dfa-a911e793e590b0ed` | Spiking DFA FAIL |
 | `c1-eventprop-5bb083d5e88d0ad2` | Discrete EventProp-style H2H FAIL (≠ continuous Wunderlich–Pehle) |
-| `track-b-rescue` | v130 schedule ID only (not `c1-*-<hex>`; demoted hash hygiene) |
+| `track-b-rescue` | **WITHDRAWN** under v131 (`INVALID_HARNESS` from ceiling-inverted warnings; `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`) |
+
+---
+
+## F2. SHD attention campaign artifacts
+
+| Campaign | Cells | Pinned binary | Role | Manifest |
+|---|---|---|---|---|
+| `shd_attention_campaign_v1/cells/` | 528 complete of 552 planned (24 diverged, 0 voided) | `22d97c51ab02` | Waves 1–7 (budget ladder, sample efficiency, width/geometry contrasts) plus the 36 `r1cal__` recalibration cells | `manifest.json` + `gates/` (per-instance) |
+| `shd_attention_campaign_v2/`, cells `w8*__` | 72 complete (0 voided) | `22d97c51ab02` | Wave 8: d32/L4 headline at e400 (0.8320), width & geometry scope | `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
+| `shd_attention_campaign_v2/`, cells `w9dim__` / `w9shf__` | 24 complete (0 voided) | `22d97c51ab02` | Wave 9: temporal order mechanism proof (M-1/M-2 +0.1337 shuffle drop) | same `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
 
 ---
 

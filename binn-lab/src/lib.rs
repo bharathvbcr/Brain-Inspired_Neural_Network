@@ -10,10 +10,11 @@ pub mod dfa_match_config;
 pub mod dfa_spike_config;
 pub mod eprop_true_config;
 pub mod eventprop_match_config;
+pub mod gradient_clip;
 pub mod guards;
-pub mod instrument_status;
 #[cfg(feature = "tables")]
 pub mod harvest;
+pub mod instrument_status;
 pub mod logging;
 pub mod mac_probe_config;
 pub mod match_config;
@@ -44,6 +45,7 @@ pub mod runner_r2_credit;
 pub mod runner_rl_match;
 pub mod runner_shd_cal;
 pub mod shd_cal_config;
+pub mod shd_dense;
 pub mod shd_sweep_runner;
 pub mod transfer_harness;
 
@@ -139,8 +141,9 @@ pub use rl_match_config::{
     C1_RL_PROTOCOL_VERSION,
 };
 pub use runner::{
-    freeze_trials, samples_to_gradient_examples, BudgetDisclosure, C1Report, ConditionLabel,
-    FrozenSplit, GateG2Verdict, MacProbeDiagnostics, PairedSummary, RunRecord, Runner, SeedResult,
+    freeze_trials, samples_to_dense_temporal_examples, samples_to_gradient_examples,
+    BudgetDisclosure, C1Report, ConditionLabel, FrozenSplit, GateG2Verdict, MacProbeDiagnostics,
+    PairedSummary, RunRecord, Runner, SeedResult,
 };
 pub use runner_c2::{C2Report, C2Runner, C2SeedResult, GateG3Verdict, OverlapIntervention};
 pub use runner_c3::{
@@ -186,6 +189,10 @@ pub use shd_cal_config::{
     C1_SHD_CAL_PROTOCOL_VERSION_V26, C1_SHD_CAL_SCIENTIFIC_HASH, C1_SHD_CAL_V26_SCIENTIFIC_HASH,
     C1_SHD_FULL_EXPERIMENT, C1_SHD_FULL_HASH_PREFIX, C1_SHD_FULL_PROTOCOL_VERSION,
     C1_SHD_FULL_SCIENTIFIC_HASH, C1_SHD_FULL_SMOKE_HASH,
+};
+pub use shd_dense::{
+    class_histogram, contract_alpha, contract_timesteps, framed_to_dense_temporal_example,
+    load_shd_dense_examples, majority_class_rate,
 };
 pub use shd_sweep_runner::{ShdSweepReport, ShdSweepResult};
 pub use transfer_harness::{

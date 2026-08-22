@@ -1,5 +1,24 @@
 # BINN — publishable claim freeze
 
+> **CITATION WARNING (added 2026-08-07).** This document cites the
+> `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
+> matched-substrate result. That report is stale: the source is **v131**, and the
+> 130→131 bump is precisely the clamp-and-separation-gate fix for the defect the
+> row exhibits. Under current code the arm **cannot be reported as PASS**. Do not
+> cite it until `track-b-rescue` has been re-run. The DFA
+> (`c1-dfa-c8c4fe0899908b84`) and RL (`c1-rl-42eddc9c801308e9`) matched PASSes are
+> **not** affected by this defect; they ran through the clamped `runner.rs` path.
+> See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+> **RESOLVED 2026-08-19.** The re-run landed. At v131 the arm reports
+> **INVALID_HARNESS**, not PASS: the ceiling-inverted warning fires on 3 of 20
+> learned-FB seeds and the code refuses to emit a PASS while it is present.
+> The v130 PASS is **withdrawn**. See
+> `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md` and
+> `track_b_results_v131.md`.
+
+
+
 Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet for research packaging.
 
 **Thesis (locked):**
@@ -13,19 +32,22 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 | Rank | Claim | Strength | Object under test |
 |---:|---|---|---|
 | **1 (lead)** | On an identical dense-LIF forward, **broadcast ±1 three-factor** (surrogate eligibility × ±1) does not clear the matched-arch gate vs SuperSpike BPTT | **Strongest / cleanest** | Rule topology only (±1 broadcast) |
-| **1b (contrast)** | On that same matched forward, graded DFA and REINFORCE×frozen-`B_i` **do** clear the gate | **Strong / clean** | Credit richness / locality |
+| **1b (contrast)** | On that same matched forward, graded DFA and REINFORCE×frozen-`B_i` **do** clear the gate (subject to A6 schedule context) | **Strong / clean** | Credit richness / locality |
+| **1c (neuromorphic)** | On SHD, a **time-axis attention readout** reaches **0.8320** at d32/L4 (12/12 ≥ 0.80, gain **+0.1258** over `ff+fixed`); **temporal order is the mechanism** (+0.1337 shuffle drop, 12/12 seeds; 96% of benefit order-dependent) | **Strong / measured (n=12)** | Temporal attention readout on LIF |
 | **2 (secondary)** | Under the coded C1 engine loop, local/dense three-factor miss `g2_min_*` while multi-epoch SurrogateLifReference on the same frozen splits succeeds | **Moderate — caveated** | Operationalized pipeline |
 | **2b (transfer)** | Live C1 opt-in `ReinforceFeedback` (v13) and gap-close suite (v14–v19) fail G2; structured `B` / capacity clear accuracy floor but not gap LCB > 0.5 | **Moderate — new hashes** | Live k-WTA transfer |
 | **3** | Exact-forward credit arms (`c1x-*`) fail G2-style bars on their separate hashes | Supporting methods notes | Exact-forward / hybrid credit |
 | **4** | Checklist-closure protocols (`c1-spike-*`, `c1-spike-s-*`, `c1-project-*`, `c1x-eprop-true-*`, `c3-bptt-*`) | Supporting integrity / methods | New hash families only |
 | **5** | 1-layer XOR / `xor_thresh`: broadcast ~chance, DFA solves (locality flip); mid-init depth does **not** show the same flip | Supporting task evidence | NumPy deep suite |
-| — | Biology, neuromorphic HW, impossibility, brain model, live transfer from matched PASS, “any broadcast fails,” continuous textbook EventProp equivalence | **Do not claim** | — |
+| — | Biology, neuromorphic HW, impossibility, brain model, live transfer from matched PASS, “any broadcast fails,” continuous textbook EventProp equivalence, depth collapse (v134 withdrawn), online learned FB v130 (v131 withdrawn) | **Do not claim** | — |
 
 ---
 
 ## 1. Primary claim — matched-arch broadcast ±1 three-factor insufficiency
 
 **May claim:** Holding the dense-LIF forward fixed (`MatchedArch::forward` / SurrogateLifReference substrate), swapping only the update rule — **broadcast ±1 three-factor** vs SuperSpike BPTT — the local arm fails the preregistered matched gate (gap LCB / accuracy floor). Mechanism label: **broadcast ±1 three-factor**, not “spiking failed,” and not a bare “broadcast credit topology” ban that would misread the 0.9863 graded contrast.
+
+**Caveat (A6 ceiling health):** The canonical 80-epoch schedule undertrains the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 at e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`). The gate comparison at e80 reflects *learning speed*; the coincidence task saturates at higher budgets and cannot support an asymptotic ceiling comparison.
 
 **Code:**
 
@@ -46,13 +68,13 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 ## 1b. Contrast claims — DFA / REINFORCE clear the matched gate
 
-**May claim:** On the same matched dense-LIF coincidence forward, replacing **broadcast ±1 three-factor** with (a) graded DFA or (b) directional REINFORCE × frozen per-neuron `B_i` clears the preregistered gate.
+**May claim:** On the same matched dense-LIF coincidence forward, replacing **broadcast ±1 three-factor** with (a) graded DFA or (b) directional REINFORCE × frozen per-neuron `B_i` clears the preregistered gate at the 80-epoch budget.
 
 | Arm | Hash | Verdict | Primary mean | Gap LCB | Note |
 |---|---|---|---:|---:|---|
 | Matched DFA (v5) | `c1-dfa-c8c4fe0899908b84` | **PASS** | 0.9387 | 0.6894 | [`c1_dfa.md`](c1_dfa.md) |
 | Matched RL `rl_reinforce_fb` (v12) | `c1-rl-42eddc9c801308e9` | **PASS** | 0.9200 | 0.6846 | [`c1_rl.md`](c1_rl.md) |
-| Matched RL Online Learned `B_i` (v130) | `track-b-rescue` *(schedule ID; not `c1-*-<hex>`)* | **PASS (matched)** | **1.0000** | **0.9988** | [`track_b_results.md`](track_b_results.md) — demoted hash hygiene |
+| Matched RL Online Learned `B_i` (v130) | `track-b-rescue` | **WITHDRAWN** | — | — | [`RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`](RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md); v131 reports `INVALID_HARNESS` |
 | Discrete EventProp-style H2H (v28) | `c1-eventprop-5bb083d5e88d0ad2` | **FAIL** | 0.5000 | 0.0000 | [`c1_eventprop.md`](c1_eventprop.md); ≠ continuous Wunderlich–Pehle |
 | Matched RL graded primary (v11) | `c1-rl-ef504db58916720d` | **FAIL** | 0.5900 | 0.0182 | archived; do not retune |
 
@@ -64,7 +86,23 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 ---
 
-## 1c. Discrete EventProp H2H (matched; FAIL)
+## 1c. SHD attention read-out & temporal order mechanism (Waves 1–9)
+
+**May claim:**
+1. **Headline accuracy:** On the SHD benchmark, a time-axis attention readout (`ff+fixed+attn`) reaches **0.8320** at `d32/L4` at `e400` (**12/12 seeds ≥ 0.80**, budget-stable |e400−e200|=0.0002, gain **+0.1258** over `ff+fixed` 0.7062; [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md)).
+2. **Mechanism (temporal order):** Bin-shuffling causes a **+0.1337** accuracy collapse on the attention arm in **12 of 12 seeds** (seed range +0.0967 to +0.1568), versus **+0.0128** for the plain arm (10× factor). Under shuffling, the attention advantage disappears (+0.1258 → +0.0049; **96% of readout benefit is order-dependent**; [`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md)).
+3. **Sample efficiency:** Attention readout reaches 98.1% of e400 accuracy by 10 epochs (bracketed at `(5, 10]`; [`SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md`](SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md)).
+
+**Scope limitations (must disclose):**
+- Measured at **h128 / `published-2ms` / `adjacent-sum-5`**.
+- Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`).
+- Width scaling inverts by h1024 (−0.1618 at h1024/L4).
+- Temporal-resolution mechanism (S-5) is **refuted** (fewer timesteps increased gain).
+- **Not calibration:** Criterion 5 (Python mirror) remains unmet.
+
+---
+
+## 1d. Discrete EventProp H2H (matched; FAIL)
 
 **May claim:** Under protocol v28 hash `c1-eventprop-5bb083d5e88d0ad2`, a **discrete** EventProp-style spike-triggered adjoint on the matched dense-LIF forward **FAIL**s the preregistered gate (mean **0.5000**, gap LCB **0.0000**) while SuperSpike BPTT reaches **0.9150**.
 
@@ -166,6 +204,11 @@ Do **not** claim:
 14. **Appendix G3 / G4 / hybrid H0 as reopening G2** — post-G2 harvest only; G4 NO-GO does not license remassaging the kill-gate.
 15. **Hybrid T=2.0 collapse ≡ live v21 (T=1)** — separate protocols; do not equate.
 16. **Overnight SHD p27 / mac-probe ≡ proto-135 SHD sweep ≡ p29 full SuperSpike** — distinct protocols (20-way chance 0.05 capped e-prop vs 5-class chance 0.20 vs full-corpus SuperSpike BPTT `c1-shd-full-*`); do not mix.
+17. **Online learned feedback alignment v130 PASS** — withdrawn under v131 (`INVALID_HARNESS` due to ceiling-inverted warnings; `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`).
+18. **Depth collapse / deep SNN scaling** — withdrawn under v134 (`INVALID_HARNESS`; all depth-matched gradient ceilings at chance; `RESULT_2026-08-20_DEEP_SNN_V134_CEILING_IS_AT_CHANCE.md`).
+19. **`shd-scientific-sweep` claims** — withdrawn (synthetic 24-channel / 16-timestep data; never loaded SHD; `DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`).
+20. **Temporal-resolution mechanism for SHD attention** — refuted by S-5 (fewer timesteps increased rather than decreased gain; only temporal *order* is supported via shuffle inversion M-1/M-2).
+21. **SHD instrument calibration for attention** — criterion 5 (Python mirror) unmet; uncalibrated.
 
 ---
 
@@ -178,12 +221,15 @@ Do **not** claim:
 | Natural hidden spiking during C1 integrate | **yes under `c1-spike-*` / `c1-spike-s-*`** (INVALID_HARNESS on PC); **no** under canonical v2 |
 | Assembly Calculus `project` on C1 | **yes under `c1-project-*` (G2 FAIL)**; **no** under canonical v2 |
 | Trial-isolated `last_spike` | **yes under `c1-iso` / spike/project**; **no** under canonical v2 |
-| Matched DFA / RL reinforce_fb PASS | **yes** (`c1-dfa-*`, `c1-rl-*` v12) |
+| Matched DFA / RL reinforce_fb PASS | **yes** (`c1-dfa-*`, `c1-rl-*` v12, subject to A6 schedule context) |
+| Matched RL online-learned FB PASS | **no** (v130 withdrawn; v131 INVALID_HARNESS) |
 | Live RFB / gap-close G2 PASS | **no** (v13–v19 FAIL) |
 | Live DFA / soft-WTA / finth / cont-B G2 PASS | **no** (v20–v24 FAIL) |
 | v131 live-transfer-rescue = live Engine | **no** (matched-only; misnamed) |
 | Discrete EventProp matched H2H PASS | **no** (`c1-eventprop-5bb083d5e88d0ad2` FAIL) |
 | Matched undertrain rescues 3F | **no** (v22 FAIL @ chance) |
+| SHD attention read-out headline | **yes** (d32/L4 reaches 0.8320 @ e400; 12/12 seeds ≥ 0.80) |
+| SHD attention temporal-order mechanism | **yes** (M-1/M-2: +0.1337 shuffle drop; 12/12 seeds) |
 | Brain model | **no** |
 
 New-protocol rows are closed with **new hashes**; they do not reinterpret v2 FAIL.

@@ -144,7 +144,11 @@ fn channel_totals(sample: &MatchedShdSample) -> Vec<f32> {
 }
 
 fn occupied(sample: &MatchedShdSample) -> usize {
-    sample.frames.iter().filter(|frame| !frame.is_empty()).count()
+    sample
+        .frames
+        .iter()
+        .filter(|frame| !frame.is_empty())
+        .count()
 }
 
 /// Rebuild `frames` from `(bin, channel, count)` triples, restoring the framing
@@ -229,7 +233,9 @@ pub fn apply_temporal(
             // permutation.
             let mut permutations: Vec<Vec<usize>> = Vec::with_capacity(sample.n_inputs);
             for channel in 0..sample.n_inputs {
-                let mut rng = PortableRng::new(seed ^ ((channel as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)));
+                let mut rng = PortableRng::new(
+                    seed ^ ((channel as u64 + 1).wrapping_mul(0x9E37_79B9_7F4A_7C15)),
+                );
                 let mut permutation: Vec<usize> = (0..steps).collect();
                 rng.shuffle(&mut permutation);
                 permutations.push(permutation);
@@ -379,7 +385,12 @@ mod tests {
             frame.dedup_by_key(|entry| entry.0);
             frames.push(frame);
         }
-        MatchedShdSample { label: 3, frames, n_inputs: 20, dt_ms: 10.0 }
+        MatchedShdSample {
+            label: 3,
+            frames,
+            n_inputs: 20,
+            dt_ms: 10.0,
+        }
     }
 
     /// PREREG GATE 5.1. Every condition must preserve per-channel totals exactly.
@@ -389,9 +400,15 @@ mod tests {
             let original = sample();
             let before = channel_totals(&original);
             let mut manipulated = original.clone();
-            apply_temporal(&mut manipulated, condition, 77).expect(condition.label());
+            apply_temporal(&mut manipulated, condition, 77)
+                .unwrap_or_else(|e| panic!("{}: {e}", condition.label()));
             let after = channel_totals(&manipulated);
-            assert_eq!(before, after, "condition {} changed counts", condition.label());
+            assert_eq!(
+                before,
+                after,
+                "condition {} changed counts",
+                condition.label()
+            );
         }
     }
 
@@ -447,7 +464,10 @@ mod tests {
             .iter()
             .filter(|frame| !frame.is_empty() && !original_bins.contains(frame))
             .count();
-        assert!(novel > 0, "channel-shuffled should create bins that never co-occurred");
+        assert!(
+            novel > 0,
+            "channel-shuffled should create bins that never co-occurred"
+        );
     }
 
     #[test]
@@ -464,14 +484,20 @@ mod tests {
     #[test]
     fn default_audit_is_the_identity_of_the_merge_fold() {
         let empty = TemporalAudit::default();
-        assert!(empty.counts_preserved, "default must be the conjunction identity");
+        assert!(
+            empty.counts_preserved,
+            "default must be the conjunction identity"
+        );
         assert_eq!(empty.samples, 0);
 
         let mut folded = TemporalAudit::default();
         let mut manipulated = sample();
         let single = apply_temporal(&mut manipulated, TemporalCondition::BinShuffled, 1).unwrap();
         folded.merge(&single);
-        assert_eq!(folded, single, "folding one audit into the default must be a no-op");
+        assert_eq!(
+            folded, single,
+            "folding one audit into the default must be a no-op"
+        );
     }
 
     #[test]
@@ -479,7 +505,8 @@ mod tests {
         let mut total = TemporalAudit::default();
         for seed in 0..4 {
             let mut manipulated = sample();
-            let audit = apply_temporal(&mut manipulated, TemporalCondition::BinShuffled, seed).unwrap();
+            let audit =
+                apply_temporal(&mut manipulated, TemporalCondition::BinShuffled, seed).unwrap();
             total.merge(&audit);
         }
         assert_eq!(total.samples, 4);

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # GC6: no unsafe without a documented invariant (doc comment immediately above).
 # Clippy also runs with -D warnings in CI.
+#
+# Scope is BINN-owned source only. `patches/` holds vendored crates pulled in
+# via [patch.crates-io]; BINN does not author them and annotating a third-party
+# crate would be a fork, not a fix. Their 30 `unsafe` sites were drowning the
+# real signal, which is that BINN itself contains no `unsafe` at all.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -32,7 +37,7 @@ while IFS= read -r hit; do
       fail=1
       ;;
   esac
-done < <(rg -n --glob '*.rs' -e '\bunsafe\b' . || true)
+done < <(rg -n --glob '*.rs' --glob '!patches/**' -e '\bunsafe\b' . || true)
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

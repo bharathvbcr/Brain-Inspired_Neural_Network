@@ -38,11 +38,11 @@
   "files": {
     "cargo_lock": {
       "path": "/Users/bharath/Code/parameter_golf/binn/Cargo.lock",
-      "sha256": "2333ed502ce68b8e6eaf90c068231553323fa67f15611b397411b89e71aaf396"
+      "sha256": "5f51775720e260887e66cd615cc5a8614538ce145e7373f8040937c57e888533"
     },
     "rust_binary": {
       "path": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
-      "sha256": "4c8b3414a7a1dca175852eae11a5a6d21a3a4ed209ad31635d3c9a03e2f4164f"
+      "sha256": "4de5c977151e24c6958065ae284f2417e9faf0bb28dd5e30a43dcc6984190194"
     },
     "test_events": {
       "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/events/test.events",
@@ -75,6 +75,29 @@
     "weight_decay": 1e-05
   },
   "matrix_cells": 432,
+  "provenance_chain": [
+    {
+      "amendment": "AMENDMENT_2026-08-03_PROVENANCE_DISCHARGE_BY_BIT_IDENTITY.md",
+      "discharged_by": "gate-f-rust bit-identity",
+      "from_rust_binary": "4c8b3414a7a1dca175852eae11a5a6d21a3a4ed209ad31635d3c9a03e2f4164f",
+      "from_source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+      "gate_f_cell_count": 10,
+      "gate_f_cells": [
+        "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+        "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+        "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+        "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+        "rust__fixed-t100__channels-700__h128__e20__s5170001",
+        "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
+        "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
+        "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
+        "rust__published-10ms__adjacent-sum-5__h256__e20__s5170001",
+        "rust__published-10ms__channels-700__h128__e20__s5170001"
+      ],
+      "to_rust_binary": "4de5c977151e24c6958065ae284f2417e9faf0bb28dd5e30a43dcc6984190194",
+      "to_source_fingerprint": "6f4aa2d1f1baece2241b49069884f832bd4ee4a57d8344c650fb007043f48a73"
+    }
+  ],
   "reference": {
     "clean_exposure": {
       "checkpoint_selected_on": "none-final-epoch",
@@ -100,7 +123,7 @@
     5170002,
     5170003
   ],
-  "source_fingerprint": "64923d64655d86eeba334c5fac03ba32627f06336a511cdccb3e195b48e53456",
+  "source_fingerprint": "6f4aa2d1f1baece2241b49069884f832bd4ee4a57d8344c650fb007043f48a73",
   "supersedes": {
     "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3",
     "reason": "historical finalizer matched current and best accuracy on each epoch line; v3 reference training artifacts remain immutable",

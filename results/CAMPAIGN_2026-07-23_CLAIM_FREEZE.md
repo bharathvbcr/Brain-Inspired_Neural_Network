@@ -1,5 +1,24 @@
 # Campaign claim freeze
 
+> **CITATION WARNING (added 2026-08-07).** This document cites the
+> `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
+> matched-substrate result. That report is stale: the source is **v131**, and the
+> 130→131 bump is precisely the clamp-and-separation-gate fix for the defect the
+> row exhibits. Under current code the arm **cannot be reported as PASS**. Do not
+> cite it until `track-b-rescue` has been re-run. The DFA
+> (`c1-dfa-c8c4fe0899908b84`) and RL (`c1-rl-42eddc9c801308e9`) matched PASSes are
+> **not** affected by this defect; they ran through the clamped `runner.rs` path.
+> See `AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md` and
+> `TODO_2026-08-07_OPEN_WORK.md` §1.
+> **RESOLVED 2026-08-19.** The re-run landed. At v131 the arm reports
+> **INVALID_HARNESS**, not PASS: the ceiling-inverted warning fires on 3 of 20
+> learned-FB seeds and the code refuses to emit a PASS while it is present.
+> The v130 PASS is **withdrawn**. See
+> `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md` and
+> `track_b_results_v131.md`.
+
+
+
 Numbers only from this campaign's on-disk notes. Do not invent.  
 Updated 2026-07-24: EventProp FAIL packed; v131 matched-only honesty; track-b hash demotion; SHD/mac appendix labels.
 
@@ -8,7 +27,7 @@ Updated 2026-07-24: EventProp FAIL packed; v131 matched-only honesty; track-b ha
 | Matched broadcast (v4) | `c1-match-5dc6822e71229e9e` | **FAIL** | 0.5000 | 0.0000 |
 | Matched DFA (v5) | `c1-dfa-c8c4fe0899908b84` | **PASS** | 0.9387 | 0.6894 |
 | Matched RL reinforce_fb (v12) | `c1-rl-42eddc9c801308e9` | **PASS** | 0.9200 | 0.6846 |
-| Online Learned `B_i` (v130) | `track-b-rescue` *(schedule ID; not `c1-*-<hex>`)* | **PASS (matched)** | 1.0000 | 0.9988 |
+| Online Learned `B_i` (v130) | `track-b-rescue` *(schedule ID; not `c1-*-<hex>`)* | **WITHDRAWN** | — | — |
 | Discrete EventProp H2H (v28) | `c1-eventprop-5bb083d5e88d0ad2` | **FAIL** | 0.5000 | 0.0000 |
 | Live ReinforceFeedback (v13) | `c1-660401d74db3c88d` | **FAIL** | 0.4900 | 0.0737 |
 | RFB × epoch (v14) | `c1-714c115e14a3eeed` | **FAIL** | 0.4838 | −0.0100 |
@@ -32,7 +51,7 @@ Updated 2026-07-24: EventProp FAIL packed; v131 matched-only honesty; track-b ha
 
 | ID | Status |
 |---|---|
-| v130 `track-b-rescue` | Matched online-FB PASS on dense-LIF; **demoted** from config-hash class (schedule/experiment name only). |
+| v130 `track-b-rescue` | **WITHDRAWN** under v131 (`INVALID_HARNESS` from ceiling-inverted warnings; `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`). |
 | v131 `live-transfer-rescue` | **Matched-only** schedule contrast (misnamed). **Not** live Engine / k-WTA. **Not** camera-ready live-transfer PASS. Live transfer = v13–v24 FAIL. |
 | EventProp | Discrete H2H **FAIL**; ≠ continuous Wunderlich–Pehle. |
 
@@ -56,7 +75,7 @@ Updated 2026-07-24: EventProp FAIL packed; v131 matched-only honesty; track-b ha
 ## Locked reading
 
 1. **Primary publishable:** broadcast three-factor fails matched dense-LIF gate.
-2. DFA / REINFORCE×`B_i` / online learned-`B_i` (matched) clear matched gate; live k-WTA transfer fails (v13–v24). Structured `B` (v15), structured×capacity (v17), eligibility×REINFORCE (v18), and structured×teach (v19) clear the accuracy floor but not gap LCB > 0.5.
+2. DFA / REINFORCE×`B_i` clear matched gate; online learned-`B_i` v130 is **withdrawn** (v131 `INVALID_HARNESS`); live k-WTA transfer fails (v13–v24). Structured `B` (v15), structured×capacity (v17), eligibility×REINFORCE (v18), and structured×teach (v19) clear the accuracy floor but not gap LCB > 0.5.
 3. Discrete EventProp-style H2H **FAIL**s (`c1-eventprop-5bb083d5e88d0ad2`); disclose discrete ≠ continuous EventProp.
 4. Capacity alone raises local above 0.65 but gap vs dense/grad stays closed — descriptive footnote only.
 5. Temporal-PC and isolation do not rescue G2.
