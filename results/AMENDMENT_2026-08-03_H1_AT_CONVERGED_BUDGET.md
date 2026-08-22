@@ -170,3 +170,21 @@ opposite of the concern this extension was run to rule out.
 
 **Both geometries are now measured at convergence**, so the ceiling claim's
 scope qualifier narrows from "one contract, one geometry" to "one contract".
+
+> **Correction, 2026-08-22 — the sentence above is withdrawn.** The numbers in
+> this section all reproduce exactly from the cells; this conclusion does not.
+> `channels-700` is measured at **one budget and one width**, so both of its
+> axes are still open, and `PREREG_2026-08-04_SHD_GEOMETRY_AT_CONVERGENCE.md`
+> section 6 forbids the word "convergence" for this geometry until its Stage 2
+> (6 cells at h512/e800 and h1024/e400) has run. **Zero of those 6 exist.**
+>
+> The claim also fails on the preregistration's own arithmetic: two doublings at
+> the maximum increment recorded here (+0.018551 each) give
+> `0.708628 + 0.037102 = 0.745730`, which is **above** `adjacent-sum-5`'s
+> 0.736896. Nothing measured excludes `channels-700` converging higher.
+>
+> The scope qualifier stays at "one contract, one geometry". This does not
+> affect G1, whose CI upper bound (0.718824) is far below its 0.80 threshold.
+> See `RESULT_2026-08-22_GEOMETRY_AT_CONVERGENCE.md`, which also records that
+> these same three cells **falsify G3** — registered the day after this
+> amendment was written, against this very data, and never checked against it.

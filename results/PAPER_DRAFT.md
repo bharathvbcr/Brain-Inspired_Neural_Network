@@ -12,8 +12,14 @@
 > `MatchedDeepGradient` collapses to silence, `ShdEpropCeiling` is a constant
 > predictor by a different mechanism. Neither is used above.
 >
-> Every number in this abstract reproduces from the archived cells — see
-> `scripts/record_checks.sh`. Full record:
+> `scripts/record_checks.sh` machine-checks the **SHD attention-campaign**
+> numbers — twelve of them, recomputed from the archived cells by
+> `scripts/verify_published_numbers.py` against the wave-8, wave-9, and d32/L4
+> headline result documents, plus four prose checks on this draft. The
+> matched-architecture numbers in this abstract are **not** among them: they are
+> attested by the on-disk hashed run records cited row-by-row in
+> [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md), not by that script.
+> Full record:
 > [`SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md`](SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md).
 
 *Camera-ready draft (prose). Numbers: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Claims: [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md). Figures: [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md).*
@@ -76,16 +82,16 @@ On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA re
 
 ### 3.5 SHD attention read-out and mechanism
 
-Across 600+ cells (n=12 per contrast, 0 voided), the time-axis attention readout establishes three findings on SHD:
+Across 600+ cells (n=12 per contrast, 0 voided), the time-axis attention readout establishes four findings on SHD:
 
-1. **Headline accuracy:** `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062).
-2. **Temporal order is the mechanism:** Under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0049; **96% of the readout benefit is contingent on temporal order**.
-3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs.
-4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). Temporal resolution (S-5) is refuted.
+1. **Headline accuracy:** `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062). ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md))
+2. **Temporal order is the mechanism:** Under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0049; **96% of the readout benefit is contingent on temporal order**. ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
+3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
+4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). Temporal resolution (S-5) is refuted. ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md))
 
 ---
 
-### 3.5 The reference is undertrained, and the task saturates
+### 3.6 The reference is undertrained, and the task saturates
 
 Both facts bear directly on every gap number above and neither is a footnote.
 
@@ -154,7 +160,7 @@ Continual forgetting (C2 / Gate G3 FAIL), multi-area scaling (R2 / Gate G4 **NO-
 
 ### 4.6 Neuromorphic benchmark scope and non-claims
 
-The SHD attention readout results are scoped to **h128 / `published-2ms` / `adjacent-sum-5`**. We do not claim calibration (criterion 5 Python mirror unmet). We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
+The SHD attention readout results are scoped to **h128 / `published-2ms` / `adjacent-sum-5`**. We do not claim calibration. The blocking gates are criteria 3 and 4 — `clean_reference` and `historical_reference` — and they are false for a **provenance** reason, not an accuracy one: the six third-party PyTorch reference artifacts record a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit has moved, while their recorded accuracies (clean 0.9390 / 0.9368 / 0.9371 against a 0.80 floor) already meet the requirement. Criterion 5, the Python mirror, is **not currently reachable**, because `matrix_authorized` conjoins those two gates ahead of it ([`FINDING_2026-08-21_CALIBRATION_GAP_IS_PROVENANCE_NOT_ACCURACY.md`](FINDING_2026-08-21_CALIBRATION_GAP_IS_PROVENANCE_NOT_ACCURACY.md)). We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
 
 The following suites are explicitly **withdrawn**:
 1. `track-b-rescue` v130 online learned FB PASS (withdrawn under v131 `INVALID_HARNESS`).
@@ -165,7 +171,7 @@ The following suites are explicitly **withdrawn**:
 
 ## 5. Reproducibility
 
-Scientific hashes and commands are listed in [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md) and [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Rebuild with `cargo test --locked --workspace` from `binn/`. Camera-ready citations must point at on-disk notes or exact `--config-hash` replays. Attention campaign artifacts are preserved under `results/shd_attention_campaign_v1/`, `v2/`, and `v2_w9/`.
+Scientific hashes and commands are listed in [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md) and [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Rebuild with `cargo test --locked --workspace` from `binn/`. Camera-ready citations must point at on-disk notes or exact `--config-hash` replays. Attention campaign artifacts are preserved under `results/shd_attention_campaign_v1/` (waves 1–7 plus `r1cal`) and `results/shd_attention_campaign_v2/` (wave 8 as `w8*__`, wave 9 as `w9dim__` / `w9shf__`).
 
 ---
 

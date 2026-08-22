@@ -222,7 +222,7 @@ exactly what it returned; and **the results bucket is never deleted**.
 
 The abstract was rewritten around what survived: the withdrawn v130 PASS is gone,
 the `live-transfer-rescue` numbers are gone, and **the A6 caveat is now a section
-of the body** (§3.5) rather than an omission — the 80-epoch schedule undertrains
+of the body** (§3.6) rather than an omission — the 80-epoch schedule undertrains
 every rule on it, the reference rises 0.9013 → 1.0000 by e640, `gap_closed` is not
 ceiling-normalised, and the ordering at the canonical budget is a statement about
 **learning speed**.

@@ -1,4 +1,4 @@
-# SHD attention campaign — what 516 cells established, and what they killed
+# SHD attention campaign — what 528 cells established, and what they killed
 
 > **SUPERSEDED 2026-08-22 by
 > [`SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md`](SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md).**
@@ -8,7 +8,9 @@
 > correct for the waves it covers; its *conclusions about scope* were written when
 > the scope was assumed rather than measured. Read the successor.
 
-**Cells:** 516 planned, 492 completed, 24 diverged, **0 voided**.
+**Cells:** 552 planned, 528 completed, 24 diverged, **0 voided** — the
+`shd_attention_campaign_v1/manifest.json` figures; this line previously read
+516/492, which excluded the 36 `r1cal` recalibration cells.
 **Backend:** rust on Linux/aarch64, **one pinned binary `22d97c51`** throughout,
 6 spot instances, ~$30.
 **Seeds:** n=12 on every confirmatory contrast.
@@ -122,7 +124,7 @@ calibration); anything at h1024 or `channels-700`.
 
 ## 6. Artifacts
 
-- `results/shd_attention_campaign_v1/` — 492 cells, 24 divergence logs, gates, plan, manifest sha256 (Waves 1–7).
-- `results/shd_attention_campaign_v2/` — 72 cells, manifest, scope measurements (Wave 8).
-- `results/shd_attention_campaign_v2_w9/` — 12 cells, mechanism validation runs (Wave 9).
+- `results/shd_attention_campaign_v1/` — 528 cells (waves 1–7 plus the 36 `r1cal` recalibration cells), 24 divergence logs, gates, plan, manifest sha256.
+- `results/shd_attention_campaign_v2/` — 96 cells in the manifest, of which 72 are the wave-8 scope measurements (`w8*__`).
+- `results/shd_attention_campaign_v2/`, cells named `w9dim__` / `w9shf__` — 24 cells, mechanism validation runs (Wave 9).
 - Pinned binary: `22d97c51ab02`.

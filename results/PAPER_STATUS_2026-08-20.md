@@ -128,16 +128,20 @@ decision, not a task.** No amount of compute changes it.
 | **A8 — LaTeX + figures** | not started; blocked on §4 above, not on data. |
 | **§6 audit debt** | ~8,000 unswept lines in `binn-engine` / `binn-areas` / `binn-core`. A scope call. |
 
-## 6. Campaigns — all complete as of 2026-08-22
+## 6. Campaigns — waves 1–9 complete as of 2026-08-22; wave 10 in flight
 
 | campaign | outcome |
 |---|---|
 | AWS wave 8 (72 cells) | **complete**, 0 failures. S-1 NOT SUPPORTED (`channels-700` 0.7864), S-2 SUPPORTED (+0.1090), S-3 NOT SUPPORTED (h1024 −0.1618), S-4 SUPPORTED (+0.1491), S-5 NOT SUPPORTED, S-6 SUPPORTED |
 | AWS wave 9 (24 cells) | **complete**, 0 failures. **M-1 SUPPORTED** (+0.1337, 12/12), **M-2 SUPPORTED**, M-3 descriptive (+0.0121, no verdict) |
+| AWS wave 10 (72 planned) | **in flight** as of 2026-08-22 — 8 cells landed, 24 claimed, four `c7g.16xlarge` still running. No wave-10 cell has been collected to local disk yet, so nothing here is evaluable ([`SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md`](SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md)) |
 | Azure (252 planned) | **stopped at 95** — operator deallocated, Azure credit exhausted; **not relaunchable**. AZ8-1/3/4 no data, AZ8-5 not evaluable, AZ8-2 NOT SUPPORTED, AZ8-6 **VOIDED** (6/12 degenerate) |
 
-Fleets torn down — AWS instances terminated, Azure nodes deallocated. AWS spend
-across all nine waves ≈ $65.
+Fleets torn down — the wave-1–9 AWS instances terminated, Azure nodes
+deallocated; the four wave-10 `c7g.16xlarge` instances are still running. AWS
+spend across all nine waves ≈ $65, **as of the end of wave 9**; with wave 10 the
+current total is ≈ $77 across ten waves
+([`SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md`](SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md)).
 
 **The strongest reproducibility evidence in the project came out of the Azure
 failure.** Its surviving cells were the expensive h1024/h512 arms — the ones AWS

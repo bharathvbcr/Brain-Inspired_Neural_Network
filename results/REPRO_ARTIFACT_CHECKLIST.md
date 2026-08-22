@@ -220,9 +220,9 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 
 | Campaign | Cells | Pinned binary | Role | Manifest |
 |---|---|---|---|---|
-| `shd_attention_campaign_v1/` | 492 complete (24 diverged, 0 voided) | `22d97c51ab02` | Waves 1–7: budget ladder, sample efficiency, width/geometry contrasts | `manifest.json` + `gates.json` |
-| `shd_attention_campaign_v2/` | 72 complete (0 voided) | `22d97c51ab02` | Wave 8: d32/L4 headline at e400 (0.8320), width & geometry scope | `manifest.json` |
-| `shd_attention_campaign_v2_w9/` | 12 complete (0 voided) | `22d97c51ab02` | Wave 9: temporal order mechanism proof (M-1/M-2 +0.1337 shuffle drop) | `runs.jsonl` |
+| `shd_attention_campaign_v1/cells/` | 528 complete of 552 planned (24 diverged, 0 voided) | `22d97c51ab02` | Waves 1–7 (budget ladder, sample efficiency, width/geometry contrasts) plus the 36 `r1cal__` recalibration cells | `manifest.json` + `gates/` (per-instance) |
+| `shd_attention_campaign_v2/`, cells `w8*__` | 72 complete (0 voided) | `22d97c51ab02` | Wave 8: d32/L4 headline at e400 (0.8320), width & geometry scope | `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
+| `shd_attention_campaign_v2/`, cells `w9dim__` / `w9shf__` | 24 complete (0 voided) | `22d97c51ab02` | Wave 9: temporal order mechanism proof (M-1/M-2 +0.1337 shuffle drop) | same `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
 
 ---
 
