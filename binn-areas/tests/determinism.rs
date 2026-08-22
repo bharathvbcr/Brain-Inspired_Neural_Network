@@ -251,15 +251,46 @@ fn u08_wiring_respects_fan_out_cap_at_many_area_scale() {
     assert!(conn.nnz() <= conn.nrows() * 64);
 }
 
+/// Long-range wiring stays local -- **and the graph has long-range edges to be
+/// local about**, which this gate did not check until 2026-08-22.
+///
+/// It ran at `p_inter = 0.001` and asserted `frac > 0.90`. At that setting every
+/// role produces **zero** inter-area edges, so the fraction is exactly 1.0 by
+/// construction and the assertion tested nothing -- it would have passed under a
+/// total inversion of the role modulation.
+///
+/// The cause is in `wiring.rs::degree_budget`: out-degree is `round(expected)`
+/// per cell rather than a Bernoulli draw per pair, so any `p_inter` whose
+/// expected remote degree falls below 0.5 rounds to zero. `p_inter` is
+/// documented as an "edge probability" and is not one in the realized model.
+///
+/// See `results/FINDING_2026-08-22_A_SWEEP_OF_BINN_PROPER.md` section 1.2.
 #[test]
 fn u08_wiring_yields_gt_90_percent_intra_area_events() {
     let areas = vec![0..120u32, 120..240, 240..360];
-    let prior = WiringPrior::new(0xB177_10C4, areas, 0.12, 0.001);
+    // The smallest setting on the model's own step function that produces
+    // long-range edges at all. Chosen by that rule and not by which value
+    // passes: the measured locality at the rungs above and below is pinned in
+    // `locality_falls_below_the_gate_at_a_denser_p_inter` and in the finding.
+    let prior = WiringPrior::new(0xB177_10C4, areas, 0.12, 0.0021);
     for (idx, role) in [AreaRole::Sensory, AreaRole::Association, AreaRole::Hub]
         .into_iter()
         .enumerate()
     {
         let conn = wire(role, Pos::new(idx), &prior);
+
+        // Refuse a vacuous pass. Without this the gate certifies locality on a
+        // graph with nothing non-local in it.
+        let inter: usize = conn
+            .edges()
+            .filter(|(pre, post)| prior.area_of(*pre) != prior.area_of(*post))
+            .count();
+        assert!(
+            inter > 0,
+            "role={role:?} produced no inter-area edges, so the locality \
+             fraction is 1.0 by construction and this gate tests nothing"
+        );
+
         let frac = intra_area_edge_fraction(&conn, &prior);
         assert!(
             frac > 0.90,
@@ -275,6 +306,33 @@ fn u08_wiring_yields_gt_90_percent_intra_area_events() {
             "intra-area event fraction {event_frac} <= 0.90 for role={role:?}"
         );
     }
+}
+
+/// The 0.90 locality claim is conditional on `p_inter`, and the gate above never
+/// said so because it could not discover it.
+///
+/// At `p_inter = 0.01` locality falls to 0.84-0.89 across the three roles --
+/// below the gate's own bar. That is a property of the model, not a defect, but
+/// leaving it unstated would let "wiring is >90% local" be read as unconditional.
+/// Pinned here so the scope travels with the claim.
+#[test]
+fn locality_falls_below_the_gate_at_a_denser_p_inter() {
+    let areas = vec![0..120u32, 120..240, 240..360];
+    let prior = WiringPrior::new(0xB177_10C4, areas, 0.12, 0.01);
+    let mut worst = 1.0f32;
+    for (idx, role) in [AreaRole::Sensory, AreaRole::Association, AreaRole::Hub]
+        .into_iter()
+        .enumerate()
+    {
+        let conn = wire(role, Pos::new(idx), &prior);
+        worst = worst.min(intra_area_edge_fraction(&conn, &prior));
+    }
+    assert!(
+        worst < 0.90,
+        "locality is {worst} at p_inter=0.01, at or above the 0.90 bar. If the \
+         wiring model changed, the scope statement in \
+         results/FINDING_2026-08-22_A_SWEEP_OF_BINN_PROPER.md must change with it"
+    );
 }
 
 // ─── GC3 · seed => identical wiring / assembly hash ─────────────────────────

@@ -78,11 +78,33 @@ pub fn matched_null(raster: &RestingRaster, kind: RestingNull, seed: u64) -> Res
     let mut out = vec![Vec::new(); ticks];
     match kind {
         RestingNull::RateMatched => {
+            // Redraw on a within-tick collision, so the null actually carries the
+            // rate it is named for.
+            //
+            // This used to push `total` unconditional draws and rely on the
+            // shared `dedup()` below, which deleted every collision: the null
+            // emitted fewer spikes than the raster it matched, by an amount that
+            // grew with density. Measured on this module's own fixture, it lost
+            // spikes for 52 of 64 seeds -- and seed 7, the one its test
+            // hardcoded, was one of the 12 that did not. The shortfall is
+            // visible in `results/u23_resting.md`, where RateMatched reads
+            // 0.0140 against an observed 0.0141 while both other nulls, which
+            // already redrew, read 0.0141.
+            //
+            // `ActivityMatched` below has always done this. The two arms now
+            // differ only in what they hold fixed, which is the point of having
+            // both.
             let total: usize = raster.spikes_by_tick.iter().map(Vec::len).sum();
-            for _ in 0..total {
+            let capacity = ticks.saturating_mul(raster.n_cells);
+            let target = total.min(capacity);
+            let mut placed = 0usize;
+            while placed < target {
                 let tick = rng.gen_index(ticks);
                 let cell = rng.gen_index(raster.n_cells) as CellId;
-                out[tick].push(cell);
+                if !out[tick].contains(&cell) {
+                    out[tick].push(cell);
+                    placed += 1;
+                }
             }
         }
         RestingNull::ActivityMatched => {
@@ -219,6 +241,23 @@ mod tests {
     fn nulls_preserve_their_registered_marginals() {
         let source = raster();
         let source_total: usize = source.spikes_by_tick.iter().map(Vec::len).sum();
+        // Every seed, not one. This assertion used to hold only for seed 7:
+        // `RateMatched` dropped spikes on within-tick collisions and lost them
+        // for 52 of the 64 seeds below.
+        for seed in 0..64u64 {
+            for kind in [
+                RestingNull::RateMatched,
+                RestingNull::ActivityMatched,
+                RestingNull::SpectrumMatched,
+            ] {
+                let null = matched_null(&source, kind, seed);
+                let total: usize = null.spikes_by_tick.iter().map(Vec::len).sum();
+                assert_eq!(
+                    total, source_total,
+                    "{kind:?} emitted {total} spikes against {source_total} at seed {seed}"
+                );
+            }
+        }
         for kind in [
             RestingNull::RateMatched,
             RestingNull::ActivityMatched,
