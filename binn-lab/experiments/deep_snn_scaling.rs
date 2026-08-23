@@ -66,7 +66,7 @@ use rayon::prelude::*;
 
 use binn_engine::{DEFAULT_TAU_M, THETA_REST};
 use binn_lab::guards::{CeilingHealth, Verdict};
-use binn_lab::{freeze_trials, samples_to_dense_temporal_examples, Config};
+use binn_lab::{freeze_trials, mean, samples_to_dense_temporal_examples, std_error, Config};
 use binn_learn::{
     random_feedback, train_bptt, train_bptt_sgd, train_learned_feedback,
     train_learned_feedback_adam, DenseTemporalExample, SharedTemporalNet, DEFAULT_MATCHED_BETA,
@@ -218,22 +218,6 @@ struct AdamArm {
     treatment: Vec<f32>,
     ceiling: Vec<f32>,
     treatment_modulator: Vec<f32>,
-}
-
-fn mean(vals: &[f32]) -> f32 {
-    if vals.is_empty() {
-        return 0.0;
-    }
-    vals.iter().sum::<f32>() / vals.len() as f32
-}
-
-fn std_error(vals: &[f32]) -> f32 {
-    if vals.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(vals);
-    let var = vals.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (vals.len() - 1) as f32;
-    (var / vals.len() as f32).sqrt()
 }
 
 fn main() -> ExitCode {

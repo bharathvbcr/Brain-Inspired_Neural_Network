@@ -5,7 +5,9 @@
 //! reference, seed, and schedule. The sole intervention is whether class
 //! identity is available in the per-channel count vector.
 
-use binn_lab::{temporal_order_to_dense_examples, temporal_order_to_shd_examples, write_report};
+use binn_lab::{
+    mean as mean_of, temporal_order_to_dense_examples, temporal_order_to_shd_examples, write_report,
+};
 use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -555,10 +557,16 @@ fn config_hash() -> String {
     format!("shortcut-access-v148-{hash:016x}")
 }
 
+/// Mean of an iterator, refusing an empty one.
+///
+/// The `assert!` is the difference from [`binn_lab::mean`], which returns `0.0`
+/// for an empty slice: this binary's authors chose to fail rather than report a
+/// mean of nothing. It is kept, and the arithmetic below it is not duplicated -
+/// for every non-empty input `mean_of` is the same single-pass `sum / len`.
 fn mean(values: impl Iterator<Item = f32>) -> f32 {
     let values: Vec<_> = values.collect();
     assert!(!values.is_empty());
-    values.iter().sum::<f32>() / values.len() as f32
+    mean_of(&values)
 }
 
 const fn yes_no(value: bool) -> &'static str {

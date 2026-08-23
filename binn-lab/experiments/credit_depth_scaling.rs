@@ -41,7 +41,9 @@ use binn_core::Rng;
 use binn_data::credit_depth::CreditDepthConfig;
 use binn_engine::{DEFAULT_TAU_M, THETA_REST};
 use binn_lab::guards::{CeilingHealth, Verdict};
-use binn_lab::{credit_depth_chance, credit_depth_examples, credit_depth_input_width};
+use binn_lab::{
+    credit_depth_chance, credit_depth_examples, credit_depth_input_width, mean, std_error,
+};
 use binn_learn::{
     random_feedback, train_bptt, train_learned_feedback_adam, DenseTemporalExample,
     SharedTemporalNet, DEFAULT_MATCHED_BETA, MAJORITY_PRED_MAX,
@@ -183,22 +185,6 @@ fn job_grid() -> Vec<Job> {
 struct Arm {
     treatment: Vec<ArmOutcome>,
     ceiling: Vec<ArmOutcome>,
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    values.iter().sum::<f32>() / values.len() as f32
-}
-
-fn std_error(values: &[f32]) -> f32 {
-    if values.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(values);
-    let var = values.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (values.len() - 1) as f32;
-    (var / values.len() as f32).sqrt()
 }
 
 fn accuracies(outcomes: &[ArmOutcome]) -> Vec<f32> {

@@ -1,6 +1,6 @@
 //! Protocol-v147 local temporal-eligibility mechanism diagnostic.
 
-use binn_lab::{temporal_order_to_dense_examples, write_report};
+use binn_lab::{mean_or_nan, temporal_order_to_dense_examples, write_report};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -326,9 +326,15 @@ fn scales_are_live(scale: ScaleSummary) -> bool {
     .all(|value| value.is_finite() && *value > 0.0)
 }
 
+/// Mean of an iterator; **NaN** for an empty one.
+///
+/// This had no empty guard at all, so an empty iterator fell out of `0.0 / 0.0`
+/// as NaN. That is [`binn_lab::mean_or_nan`]'s contract exactly, so the
+/// behaviour is unchanged and the choice is now stated rather than incidental -
+/// it is deliberately NOT `binn_lab::mean`, which would report `0.0`.
 fn mean(values: impl Iterator<Item = f32>) -> f32 {
     let values: Vec<f32> = values.collect();
-    values.iter().sum::<f32>() / values.len() as f32
+    mean_or_nan(&values)
 }
 
 fn protocol_hash() -> u64 {
