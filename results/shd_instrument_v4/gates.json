@@ -9,7 +9,8 @@
   "forward_parity": true,
   "fresh_process_replay": true,
   "gradient_parity": true,
-  "historical_reference": false,
-  "matrix_authorized": false,
+  "historical_mean_accuracy": 0.9498333333333333,
+  "historical_reference": true,
+  "matrix_authorized": true,
   "update_parity": true
 }

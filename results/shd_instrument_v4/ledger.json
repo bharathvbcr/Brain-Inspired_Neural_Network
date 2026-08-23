@@ -12613,16 +12613,22 @@
   "cells_failed": 0,
   "cells_total": 432,
   "gates": {
-    "clean_reference": false,
+    "clean_accuracies": [
+      0.9389628343621399,
+      0.9367766203703705,
+      0.9371463477366255
+    ],
+    "clean_reference": true,
     "data_parity": true,
     "forward_parity": true,
     "fresh_process_replay": true,
     "gradient_parity": true,
-    "historical_reference": false,
-    "matrix_authorized": false,
+    "historical_mean_accuracy": 0.9498333333333333,
+    "historical_reference": true,
+    "matrix_authorized": true,
     "update_parity": true
   },
-  "harness_status": "PENDING_PREREQUISITES",
+  "harness_status": "VALID",
   "mechanical_status": "IN_PROGRESS",
   "schema": "shd-instrument-v1",
   "scientific_status": "UNCALIBRATED"
