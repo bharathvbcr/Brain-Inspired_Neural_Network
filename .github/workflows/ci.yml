@@ -36,5 +36,13 @@ jobs:
       - name: Cargo test
         run: cargo test --locked --workspace
 
+      # The step above runs at opt-level 0. Every scientific cell is produced by
+      # a release build, and `positional_code`'s sin/cos pair is merged into a
+      # combined libcall at opt-level >= 2, so the attention arms hash
+      # differently between the two profiles. Without this, a change that moved
+      # only the optimised side would pass CI and alter every future cell.
+      - name: Kernel in both profiles
+        run: ./scripts/check_kernel_profiles.sh
+
       - name: GC1–GC7 guardrails
         run: ./scripts/gc_checks.sh
