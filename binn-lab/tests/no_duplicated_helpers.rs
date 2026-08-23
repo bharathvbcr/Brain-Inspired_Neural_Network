@@ -29,11 +29,21 @@
 //! the canonical function on the empty input, which is the only place these
 //! functions have ever disagreed.
 //!
-//! It cannot see a duplicate under a **different name**: `mean_or_nan` is a
+//! It cannot see a duplicate under a **different name**. `mean_or_nan` is a
 //! separate function from `mean` on purpose, and the three `sigmoid` variants
-//! are three distinct numerics that must not be merged. `binn_lab` exports
-//! neither `sigmoid` nor a second `mean`, so neither is in scope here — and
-//! that is the correct outcome, not an oversight.
+//! are three distinct numerics that must not be merged; `binn_lab` exports
+//! neither `sigmoid` nor a second `mean`, so neither is reachable by this check
+//! — and that is the correct outcome, not an oversight.
+//!
+//! Be precise about which of those two is out of scope, because it is easy to
+//! over-claim here. **`sigmoid` is structurally out of scope**: `binn_lab` does
+//! not export it, so no local `sigmoid` can ever collide. **`mean_or_nan` is
+//! not** — it is exported from `lib.rs` and imported by six experiments, so a
+//! local re-declaration of that name would be caught, which is right. And the
+//! two deliberate local `mean` wrappers are likewise **in scope and
+//! allow-listed**, not exempt by pattern. That is the stronger arrangement: a
+//! future edit to either has to walk past a written justification rather than
+//! silently fail to match.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
