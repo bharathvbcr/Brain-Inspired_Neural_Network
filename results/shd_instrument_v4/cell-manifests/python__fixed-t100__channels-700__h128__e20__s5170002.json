@@ -1,0 +1,32 @@
+{
+  "backend": "python",
+  "contract": "fixed-t100",
+  "core_manifest_sha256": "f5dfb04af8f761f0bf33a15a5da7af687e8134c8c3a7424eeec13060f178d240",
+  "datasets": {
+    "test": "9d7088793af81d574b447dc72c6044a192db25e73b6b0a24a66e1306b266fb5a",
+    "train": "81730543032bb41d0aef048c2e541374a004199f2ebf0e9cae98389c980acab7"
+  },
+  "epochs": 20,
+  "exposure": {
+    "checkpoint_selected_on": "none-final-epoch",
+    "final_test_reads": 1,
+    "test_reads_during_training": 0,
+    "train_reads": 20,
+    "validation_reads": 0
+  },
+  "geometry": "channels-700",
+  "hidden": 128,
+  "id": "python__fixed-t100__channels-700__h128__e20__s5170002",
+  "orders": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n8156-e100-s5170002.orders",
+    "sha256": "a97b7f68bc2de7b38cb65066240f995ef78de5c01c7485416ebaad5da27095d3"
+  },
+  "replay_identity": "python__fixed-t100__channels-700__h128__e20__s5170002:e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a:f5dfb04af8f761f0bf33a15a5da7af687e8134c8c3a7424eeec13060f178d240",
+  "schema": "shd-cal-cell-manifest-v1",
+  "seed": 5170002,
+  "source_fingerprint": "e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a",
+  "weights": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n700-h128-s5170002.weights",
+    "sha256": "9b355631ec5d49d044e0658f2ca31f1e29aab67a382af2f57af927094a081d6d"
+  }
+}
