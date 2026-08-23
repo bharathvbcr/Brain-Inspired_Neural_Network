@@ -23,7 +23,10 @@ run() {
   echo
 }
 
-run "campaign tooling invariants" python3 scripts/test_campaign_tooling.py
+# Was: one named test file of six. Discovery instead, so a wave that adds an
+# analyser and a test for it is covered the day it lands rather than whenever
+# someone remembers to extend this line.
+run "every discovered python test" bash scripts/run_python_tests.sh
 run "published numbers reproduce from cells" python3 scripts/verify_published_numbers.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 

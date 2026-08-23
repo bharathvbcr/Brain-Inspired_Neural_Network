@@ -84,23 +84,20 @@ def relative_error(expected: np.ndarray, observed: np.ndarray) -> float:
     return float(numerator / denominator)
 
 
-def parse_cell_id(cell_id: str) -> dict[str, object]:
-    backend, contract, geometry, hidden, epochs, seed = cell_id.split("__")
-    return {
-        "backend": backend,
-        "contract": contract,
-        "geometry": geometry,
-        "hidden": int(hidden.removeprefix("h")),
-        "epochs": int(epochs.removeprefix("e")),
-        "seed": int(seed.removeprefix("s")),
-    }
-
-
-def initialization_paths(spec: dict[str, object]) -> tuple[Path, Path]:
-    n_inputs = 700 if spec["geometry"] == "channels-700" else 140
-    weights = RESULT_ROOT / "initialization" / f"n{n_inputs}-h{spec['hidden']}-s{spec['seed']}.weights"
-    orders = RESULT_ROOT / "initialization" / f"n8156-e100-s{spec['seed']}.orders"
-    return weights, orders
+# Both parsers live in `gate_f_rust`, which is the one that gets extended.
+#
+# This file carried byte-equivalent copies until 2026-08-23, when `gate_f_rust`
+# grew optional arm and `d<dim>l<layers>` components so Gate F could express a
+# cell on something other than `ff+fixed`. The copy here did not, and a rust id
+# with those components raised an unpacking `ValueError` from `split("__")`
+# **before** reaching the "gate-f regresses the python arm" message below - an
+# obscure failure standing in for a clear one. Importing removes the drift
+# rather than re-synchronising it.
+#
+# For a python spec the behaviour is unchanged: `initialization_paths` appends
+# an arm only when one is present and is not the default, and a python spec
+# carries no `arm` key at all.
+from gate_f_rust import initialization_paths, parse_cell_id  # noqa: E402,F401
 
 
 def gate_f_cell(cell_id: str) -> dict[str, object]:

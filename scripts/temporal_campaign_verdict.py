@@ -39,6 +39,17 @@ T_CRITICAL = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571}
 
 
 def mean(xs: list[float]) -> float:
+    """Arithmetic mean; **raises** on an empty sequence rather than returning a number.
+
+    Every caller here is guaranteed non-empty by `load`, which refuses a partial
+    arm. If that guarantee ever breaks, a bare `sum(xs) / len(xs)` raises
+    `ZeroDivisionError` from inside a verdict line, which says nothing about
+    which arm was empty. `analyse_wave11.mean` deliberately returns NaN instead,
+    because its report tolerates an empty condition; the two are pinned as
+    different in `test_campaign_tooling.py`. Do not converge them.
+    """
+    if not xs:
+        raise ValueError("mean of no values: an arm reached a verdict line empty")
     return sum(xs) / len(xs)
 
 
