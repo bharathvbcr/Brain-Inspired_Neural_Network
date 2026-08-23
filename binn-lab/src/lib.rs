@@ -6,6 +6,7 @@ pub mod c3_config;
 pub mod c3_v2_config;
 pub mod config;
 pub mod credit_config;
+pub mod credit_depth_dense;
 pub mod dfa_match_config;
 pub mod dfa_spike_config;
 pub mod eprop_true_config;
@@ -78,6 +79,9 @@ pub use credit_config::{
     CREDIT_ISOLATION_CALIBRATED_HASH_PREFIX, CREDIT_ISOLATION_CALIBRATED_PROTOCOL_OFFSET,
     CREDIT_ISOLATION_EXPERIMENT_PREFIX, CREDIT_ISOLATION_HASH_PREFIX,
     CREDIT_ISOLATION_PROTOCOL_OFFSET, CREDIT_MATCHED_PROTOCOL_VERSION, CREDIT_RPE_PROTOCOL_VERSION,
+};
+pub use credit_depth_dense::{
+    credit_depth_chance, credit_depth_examples, credit_depth_input_width,
 };
 pub use dfa_match_config::{
     DfaMatchConfig, C1_DFA_CHANCE_BASELINE, C1_DFA_EXPERIMENT, C1_DFA_HASH_PREFIX,
