@@ -219,7 +219,11 @@ def main() -> int:
     if voided:
         w("## Voided cells\n")
         for cid, why in voided:
-            w(f"- `{cid[:60]}`: {why}")
+            # The distinguishing part of a cell id is its tail - scale and seed -
+            # so truncating the head renders every line identically. Keep the
+            # tail. Display only; no verdict reads this list.
+            short = cid.replace("__h128__e400__published-2ms__adjacent-sum-5", "")
+            w(f"- `{short}`: {why}")
 
     text = "\n".join(lines)
     if args.out == "-":
