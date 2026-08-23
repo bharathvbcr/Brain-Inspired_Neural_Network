@@ -245,6 +245,18 @@ mod tests {
         let winners = k_wta(&scores, 5);
         assert!(winners.len() <= 5);
         assert_eq!(winners.len(), 5);
+        // Which cells win, not just how many. `k_wta` returns `min(k, finite)`
+        // structurally, so the two length assertions above hold for any
+        // selection at all -- including the k *lowest* scores. Scores here are
+        // `i as f32`, so the winners are cells 15..19; the emission order is
+        // ascending cell id, not descending score, because the final
+        // `sort_unstable_by_key` above pins a deterministic order rather than a
+        // ranking.
+        assert_eq!(
+            winners,
+            [15, 16, 17, 18, 19],
+            "k-WTA did not select the highest-scoring cells"
+        );
     }
 
     #[test]
