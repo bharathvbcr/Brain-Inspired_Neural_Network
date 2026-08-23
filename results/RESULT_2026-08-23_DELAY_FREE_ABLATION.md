@@ -44,13 +44,40 @@ residual decomposes the other way round:
 | step | accuracy | gap | attributable to |
 |---|---:|---:|---|
 | instrument, attention arm converged (d32/L4/e400) | 0.8320 | | |
-| **delay-free reference** | **0.9042** | **0.0722** | two hidden layers, dropout 0.4, augmentation, stateful synapses — **four untested causes** |
+| **delay-free reference** | **0.9042** | **0.0722** | see the correction below — **not the four causes originally named** |
 | full reference | 0.9390 | 0.0348 | **delays** |
 
 **The non-delay differences are worth roughly twice what delays are worth.** And
 they are four things the instrument could adopt without implementing DCLS at all
 — which makes them the cheaper and more informative next targets, the opposite of
 what the record's framing implied.
+
+> **Correction, 2026-08-23, before running the follow-up.** This document named
+> four causes for the 0.0722: two hidden layers, dropout 0.4, augmentation, and
+> stateful synapses. **Two of them do not exist.** Reading the effective config
+> rather than inferring from a file's presence and a tau constant:
+>
+> ```
+> stateful_synapse    False      <- I claimed the reference used them
+> augment             False      <- I claimed the reference used them
+> ```
+>
+> I inferred "augmentation" from `augmentations.py` being in the repository and
+> "stateful synapses" from `stateful_synapse_tau = 10.0` being set. Both are
+> switched off. The constant is initialised and unused; the module is shipped and
+> not enabled.
+>
+> That is the same error this record keeps catching in others' work — a claim
+> about what code does, taken from what code contains. It cost nothing here only
+> because it was caught before the follow-up ran.
+>
+> **The real differences, read from the effective config:** two hidden layers
+> against one; dropout 0.4 against none; 256 hidden units against the headline
+> arm's 128; a one-cycle schedule with weight decay 1e-5; 150 epochs against 400;
+> `published-10ms` binning against the headline's `published-2ms`; and a
+> non-spiking summed readout (`loss = sum`, `output_v_threshold = 1e9`) against
+> the instrument's rate readout. Seven, not four, and only the first two were
+> named correctly.
 
 ## 4. What this changes
 
