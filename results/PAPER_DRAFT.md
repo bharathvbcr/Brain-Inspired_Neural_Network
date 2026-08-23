@@ -86,12 +86,21 @@ On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA re
 
 ### 3.5 SHD attention read-out and mechanism
 
-Across 600+ cells (n=12 per contrast, 0 voided), the time-axis attention readout establishes four findings on SHD:
+Across 700+ cells (n=12 per contrast, 0 voided), the time-axis attention read-out establishes five findings on SHD:
 
 1. **Headline accuracy:** `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062). ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md))
 2. **Temporal order is the mechanism:** Under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0049; **96% of the readout benefit is contingent on temporal order**. ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
 3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
-4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). Temporal resolution (S-5) is refuted. ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md))
+4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md))
+5. **Temporal resolution is an axis, and the gain falls as bins get finer.** The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
+
+   | contract | bin | `ff+fixed` | d32/L4 | gain | gain > 0 | ≥ 0.80 |
+   |---|---:|---:|---:|---:|---:|---:|
+   | `fixed-t100` | 14.0 ms | 0.6672 | 0.8599 | **+0.1927** | 12/12 | 12/12 |
+   | `fixed-t250` | 5.6 ms | 0.6844 | 0.8594 | **+0.1751** | 12/12 | 12/12 |
+   | `fixed-t500` | 2.8 ms | 0.7069 | 0.8543 | **+0.1474** | 12/12 | 12/12 |
+
+   gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks with finer resolution** — the opposite of the direction S-5 predicted, on the axis S-5 could not isolate. The baseline drifts +0.0397 across the same ladder, inside the 0.05 confound bar, so this is a property of the read-out and not of the substrate beneath it. All three rungs clear the 0.80 gate at 12/12, the coarsest most comfortably. ([`RESULT_2026-08-22_W10_RESOLUTION_LADDER.md`](RESULT_2026-08-22_W10_RESOLUTION_LADDER.md))
 
 ---
 

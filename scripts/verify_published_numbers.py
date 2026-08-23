@@ -160,6 +160,23 @@ def main() -> int:
           f"{'headline seeds >= 0.80':<46} computed {n_gate}/12       published 12/12")
     results.append(n_gate == 12)
 
+    # ---- wave 10: the resolution ladder, on a family that isolates it ------
+    W10 = "RESULT_2026-08-22_W10_RESOLUTION_LADDER.md"
+    ladder = {}
+    for rung in ("fixed-t100", "fixed-t250", "fixed-t500"):
+        attn = acc(V2, f"w10con__ff-fixed-attn__h128__e400__{rung}__adjacent-sum-5__d32l4")
+        rate = acc(V2, f"w10con__ff-fixed__h128__e400__{rung}__adjacent-sum-5")
+        ladder[rung] = (avg(attn), avg(rate))
+        results.append(check(f"C-1 {rung} gain", avg(attn) - avg(rate),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check("C-2 gain(t500) - gain(t100)",
+                         (ladder["fixed-t500"][0] - ladder["fixed-t500"][1])
+                         - (ladder["fixed-t100"][0] - ladder["fixed-t100"][1]),
+                         published(W10, r"gain\(t500\) − gain\(t100\) = \*\*([+-−]?\d\.\d+)\*\*")))
+    results.append(check("C-3 baseline drift across the ladder",
+                         ladder["fixed-t500"][1] - ladder["fixed-t100"][1],
+                         published(W10, r"`ff\+fixed` t500 − t100 = \*\*([+-]?\d\.\d+)\*\*")))
+
     # ---- wave 12: adaptation x attention, scale 1.0 ------------------------
     W12 = "RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md"
     alif = acc(V2, f"w12ada__ff-alif__h128__e400__{ANCHOR}")
@@ -216,6 +233,11 @@ def main() -> int:
         # sentence an editing pass shortens away, and each is what stops the
         # recurrent result reading larger than it is.
         "that the read-out is not causal": "not causal",
+        # S-5 was refuted and wave 10 replaced it. The draft must say both, or a
+        # reader takes "resolution is refuted" for "resolution does not matter",
+        # which is the opposite of what fixed-tN measured.
+        "that S-5 is withdrawn rather than merely refuted": "refuted and is withdrawn",
+        "the direction the gain moves with resolution": "shrinks with finer resolution",
         "the headroom normalisation of the recurrent gain": "1.34",
         "that the recurrent substrate does not win": "does not win",
         "that ten pairs is the registered minimum": "the registered minimum",
