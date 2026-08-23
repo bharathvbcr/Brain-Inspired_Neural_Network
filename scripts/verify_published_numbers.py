@@ -57,6 +57,48 @@ def check(label: str, computed: float, claimed: float, tol: float = 5e-5) -> boo
     return ok
 
 
+def acc_present(root: Path, stem: str) -> dict[int, float]:
+    """Accuracies keyed by seed, for arms where a cell may legitimately be absent.
+
+    `acc` above refuses a missing cell, which is right for the waves whose arms
+    are complete by construction. Waves 13 and 14 measure arms that diverge, so
+    absence is data there and this returns what exists.
+
+    A cell that failed the validity gate is **not** an accuracy: wave 13's
+    `rec+fixed` cells were emitted while saturating, and counting them would
+    inflate both the completion counts and any mean taken over them. The gate
+    comes from `cell_validity`, its single owner - the independence this file
+    needs is from the ANALYSER'S ARITHMETIC, which is what gets transcribed into
+    the paper, not from the validity rule.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from cell_validity import validity_problems
+
+    out = {}
+    for seed in SEEDS:
+        path = root / f"{stem}__s{seed}.json"
+        if not path.is_file():
+            continue
+        cell = json.loads(path.read_text())
+        if validity_problems(cell):
+            continue
+        out[seed] = cell["accuracy"]
+    return out
+
+
+def paired_gain(treatment: dict[int, float], control: dict[int, float]) -> tuple[float, int]:
+    """Mean of `treatment - control` over seeds present in BOTH, and how many.
+
+    Written here rather than imported: pooling instead of intersecting is the
+    failure mode this cross-check exists to catch in the analyser, so it must
+    not share the analyser's implementation of it.
+    """
+    shared = sorted(set(treatment) & set(control))
+    if not shared:
+        raise SystemExit("no seed completed in both arms")
+    return sum(treatment[s] - control[s] for s in shared) / len(shared), len(shared)
+
+
 def main() -> int:
     print("Recomputing published numbers from cells (independent implementation)\n")
     results = []
@@ -118,6 +160,43 @@ def main() -> int:
           f"{'headline seeds >= 0.80':<46} computed {n_gate}/12       published 12/12")
     results.append(n_gate == 12)
 
+    # ---- wave 12: adaptation x attention, scale 1.0 ------------------------
+    W12 = "RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md"
+    alif = acc(V2, f"w12ada__ff-alif__h128__e400__{ANCHOR}")
+    alif_attn = acc(V2, f"w12ada__ff-alif-attn__h128__e400__{ANCHOR}__d32l4")
+    results.append(check("A-2 ff+alif gain", avg(alif_attn) - avg(alif),
+                         published(W12, r"gain \*\*([+-]?\d\.\d+)\*\*\s*\n?\(bar")))
+    results.append(check("A-1 difference of gains",
+                         (avg(alif_attn) - avg(alif)) - gain,
+                         published(W12, r"gains is \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check("A-3 ff+alif mean", avg(alif),
+                         published(W12, r"`ff\+alif` reaches\s*\n?\*\*(0\.\d+)\*\*")))
+
+    # ---- wave 13: completion, not accuracy --------------------------------
+    W13 = "RESULT_2026-08-23_W13_RECURRENT_STABILITY.md"
+    rec04 = acc_present(V2, f"w13rec__rec-alif__h128__e400__{ANCHOR}__ss0.4")
+    results.append(check("R-1 rec+alif ss0.4 completions", float(len(rec04)),
+                         published(W13, r"\| `rec\+alif` \| \*\*0\.4\*\* \| \*\*(\d+)/12\*\*")))
+
+    # ---- wave 14: paired over the intersection, scale 0.4 -----------------
+    W14 = "RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md"
+    rec_attn = acc_present(V2, f"w14sub__rec-alif-attn__h128__e400__{ANCHOR}__d32l4__ss0.4")
+    ff04 = acc_present(V2, f"w14sub__ff-fixed__h128__e400__{ANCHOR}__ss0.4")
+    ff04_attn = acc_present(V2, f"w14sub__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__ss0.4")
+
+    rec_gain, rec_pairs = paired_gain(rec_attn, rec04)
+    ff_gain, ff_pairs = paired_gain(ff04_attn, ff04)
+    results.append(check(f"M-1 rec+alif paired gain (n={rec_pairs})", rec_gain,
+                         published(W14, r"\| `rec\+alif` \| 10 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check(f"ff+fixed paired gain at 0.4 (n={ff_pairs})", ff_gain,
+                         published(W14, r"\| `ff\+fixed` \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check("M-2 difference of gains", rec_gain - ff_gain,
+                         published(W14, r"difference \*\*([+-]?\d\.\d+)\*\* against a two-sided bar")))
+    results.append(check("M-4 ff+fixed mean at scale 0.4",
+                         sum(ff04[k] for k in sorted(set(ff04) & set(ff04_attn)))
+                         / len(set(ff04) & set(ff04_attn)),
+                         published(W14, r"at scale 0\.4 is \*\*(0\.\d+)\*\*")))
+
     # ---- the paper draft must not resurrect a withdrawn claim ---------------
     print("\n  paper draft:")
     draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
@@ -133,6 +212,13 @@ def main() -> int:
     required = {
         "the A6 undertraining caveat": "The reference is undertrained, and the task saturates",
         "the saturation consequence": "learning speed",
+        # The four load-bearing caveats on section 3.7. Each is the kind of
+        # sentence an editing pass shortens away, and each is what stops the
+        # recurrent result reading larger than it is.
+        "that the read-out is not causal": "not causal",
+        "the headroom normalisation of the recurrent gain": "1.34",
+        "that the recurrent substrate does not win": "does not win",
+        "that ten pairs is the registered minimum": "the registered minimum",
     }
     for label, needle in required.items():
         ok = needle in draft
