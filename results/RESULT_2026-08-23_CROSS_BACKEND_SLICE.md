@@ -89,6 +89,16 @@ that the other 115 cells would buy nothing further.
 
 ## 6. Recommendation
 
+> **Correction, 2026-08-23.** The framing below is wrong and is superseded by
+> `FINDING_2026-08-23_THE_MATRIX_GRID_EXCLUDES_ITS_OWN_GATE.md`. The instrument
+> does **not** top out at 0.72 — that is the ceiling of the matrix grid, which
+> contains no e400, no h1024 and no attention read-out. The instrument reaches
+> **0.8821**, and 140 recorded cells carry `CELL_PASS` at or above the 0.80 floor.
+>
+> The recommendation itself stands, and for a stronger reason: the matrix grid
+> excludes every configuration that clears its own gate, so no additional cell of
+> any kind can make `matrix_verdict` return `CALIBRATED`.
+
 **Do not run the remaining 115 cells.** They cost ~2.5 days and cannot change
 `matrix_verdict`, because every group they would complete fails the same 0.80
 floor that all 317 existing cells fail.
