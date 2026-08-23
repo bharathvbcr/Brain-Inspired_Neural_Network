@@ -24,6 +24,18 @@ so 0.0348 is roughly sixteen times the seed spread and is resolvable. Wall time
 2.48 h against the delays run's 5.53 h — DCLS is where the compute went, which is
 a small independent confirmation the mode actually changed.
 
+> **Refinement, 2026-08-23.** `model_type = 'snn'` is **not** "no temporal
+> kernel". `clean_main.py` instantiates `SnnDelays` unconditionally, and its
+> constructor builds `Dcls1d(..., dilated_kernel_size = max_delay)` in every mode.
+> What `'snn'` changes is `lr_pos = 0`, `sigInit = 0` and `DCLSversion = 'max'` —
+> the delay **positions stop being learned**, at a kernel that is still 25 taps
+> wide.
+>
+> So the 0.0348 is the value of **learning** the delays, not the value of having a
+> temporal kernel at all. A reference with no temporal kernel whatsoever was not
+> run and would be a different, larger change. The number stands; what it measures
+> is narrower than "delays".
+
 ## 2. My prediction was wrong
 
 I registered **0.75–0.85**, reasoning that delays should matter substantially. The
