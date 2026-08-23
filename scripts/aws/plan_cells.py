@@ -396,6 +396,44 @@ def wave13_recurrent_stability():
     return cells
 
 
+def wave14_recurrent_measurement():
+    """W14 - the recurrent half of the substitution test, at wave 13's operating point.
+
+    Registered in `results/PREREG_2026-08-23_RECURRENT_MEASUREMENT.md`.
+
+    Wave 12 refuted substitution on the adaptation axis: attention's gain is
+    +0.1258 on `ff+fixed` and +0.1285 on `ff+alif`, a difference of +0.0027 that
+    is positive in 6 of 12 seeds. The recurrence axis was deferred because no
+    recurrent arm could complete a 12-seed arm at the anchor budget.
+
+    Wave 13 found the operating point: `rec+alif` at **surrogate scale 0.4**
+    completes 11 of 12 at h128 / `published-2ms` / `adjacent-sum-5` / e400.
+
+    **Every arm here runs at scale 0.4**, including the feed-forward pair. That
+    is the whole reason `ff+fixed` and `ff+fixed+attn` are regenerated rather
+    than reused: the 24 archived anchor controls ran at the registered default
+    of 1.0, and comparing a gain measured at 0.4 against one measured at 1.0
+    would confound the substrate with the scale - which is the confound this
+    wave exists to avoid, not to introduce.
+
+    `rec+alif` itself is **not** generated. Wave 13 ran exactly this
+    configuration - same arm, width, budget, contract, geometry, scale, seeds
+    and binary - and the instrument is deterministic, so re-running it would
+    produce byte-identical cells. The eleven completing cells are reused and the
+    twelfth is recorded as diverged.
+
+    36 new cells, 12 reused.
+    """
+    cells = []
+    for seed in SEEDS:
+        cells.append(cell("w14sub", "rec+alif+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+        cells.append(cell("w14sub", "ff+fixed", 128, 400, seed, surrogate_scale=0.4))
+        cells.append(cell("w14sub", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -410,6 +448,7 @@ WAVES = {
     "w11": wave11_recurrent_unclipped,
     "w12": wave12_adaptation_by_attention,
     "w13": wave13_recurrent_stability,
+    "w14": wave14_recurrent_measurement,
 }
 
 
