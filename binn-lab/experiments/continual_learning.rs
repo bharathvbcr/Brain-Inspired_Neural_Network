@@ -37,7 +37,8 @@ fn main() -> ExitCode {
 
     let mut learned_fb =
         MatchedRlLearnedFb::new(hidden, 0.05, 0.0, 0.01, DEFAULT_MATCHED_BETA, master_seed);
-    let mut bptt = MatchedGradient::new(hidden, 0.05, DEFAULT_MATCHED_BETA, master_seed);
+    let mut bptt =
+        MatchedGradient::new_feedforward(hidden, 0.05, DEFAULT_MATCHED_BETA, master_seed);
 
     for t_idx in 0..n_tasks {
         let train_data = samples_to_gradient_examples(&splits[t_idx].train);

@@ -171,7 +171,7 @@ fn main() -> ExitCode {
         let mut lfb = MatchedRlLearnedFb::new(hidden, 0.05, 0.0, 0.01, DEFAULT_MATCHED_BETA, seed);
         let r_lfb = lfb.train_and_evaluate(epochs, &train_data, &test_data);
 
-        let mut grad = MatchedGradient::new(hidden, 0.05, DEFAULT_MATCHED_BETA, seed);
+        let mut grad = MatchedGradient::new_feedforward(hidden, 0.05, DEFAULT_MATCHED_BETA, seed);
         let r_grad = grad.train_and_evaluate(epochs, &train_data, &test_data);
 
         results.push(TrackBResult {

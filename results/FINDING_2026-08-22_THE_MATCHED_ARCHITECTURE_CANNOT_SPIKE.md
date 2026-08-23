@@ -1,5 +1,22 @@
 # Finding — the matched architecture cannot spike, and the guard that would say so is not wired to it
 
+> ## AMENDED 2026-08-23 — §3's objection was right and its prediction was wrong.
+>
+> The forward is repaired (`RESULT_2026-08-23_MATCHED_ARCH_REPAIR.md`): every
+> hidden layer now sits inside the activity band and the ceiling on the same
+> graph reaches 1.0000. **The local arm still scores exactly 0.5000 with zero
+> variance across seeds, and the published numbers do not move.**
+>
+> So `MATCHED_ARCH_DFA_CONTROL.md`'s conclusion — *"the FAIL is the rule, not the
+> path"* — is correct. What §3 below identified correctly is that the evidence
+> for it was missing: a silent path and a failing rule produced the same 0.5000
+> and nothing distinguished them. That is now settled, and it settled the other
+> way from what §3 implied.
+>
+> §1 and §2 stand as measured. §3's reading of what the number meant is
+> superseded.
+
+
 **Found:** 2026-08-22, sweeping the ~6,400 lines of `binn-learn` reference
 implementations that `FINDING_2026-08-22_A_SWEEP_OF_BINN_PROPER.md` §6 recorded as
 the largest unswept gap. It was the right place to look.
