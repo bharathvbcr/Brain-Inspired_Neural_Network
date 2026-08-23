@@ -47,6 +47,27 @@ A kernel change that moved only the optimised side would pass `cargo test`, pass
 GC1–GC7, pass CI, pass `run_all.sh` — and silently alter every cell produced
 afterwards.
 
+### And it has happened, in `binn-lab`, on a reported number
+
+`lower_95` in `a6_ceiling_health` guarded `values.len() == 1` but not zero, then
+divided by `values.len() - 1`. On an empty slice that subtraction **panics under
+debug and wraps to `usize::MAX` under release**, which drives the variance to
+zero and falls out of the final `sqrt` as NaN. Same input, two answers, decided
+by the build profile — on a figure the binary reports as a confidence bound.
+Fixed in `c6e67c6`, which made empty an explicit NaN and took the spread from
+`binn_lab::std_error`.
+
+Credit for finding it belongs to another session, not to this document; it is
+cited here because it is the first confirmed historical instance of the class,
+it is in one of the two crates the check below covers, and it shows the class is
+not confined to float libcalls in the kernel — an unguarded `usize` subtraction
+does it just as well.
+
+To be exact about what the check would have done: it runs the suite in both
+profiles, so it catches a profile-dependent path **wherever a test exercises
+it**. It would have caught this one only once a test called `lower_95(&[])`. It
+is a gate on the profile, not a search for untested paths.
+
 ## 3. How this produced a wrong claim
 
 On 2026-08-22 I measured `every_attention_arm_forward_and_backward_is_bit_pinned`
