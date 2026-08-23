@@ -58,12 +58,43 @@ LENGTH_EQ = re.compile(r"assert_eq!\s*\(\s*[^,]*\.len\(\)\s*,")
 NUMBER = re.compile(r"\b\d+(?:\.\d+)?\b")
 ASSERT_EQ_ARGS = re.compile(r"assert_eq!\s*\((.+)\)\s*;?\s*$")
 
-# Each detector is calibrated against a real instance in this repository. If a
-# detector stops seeing its own instance, its output is not evidence and the run
-# says so rather than printing a clean list.
-CALIBRATION_CASE = "trains_at_every_depth_without_panicking"
-LENGTH_CALIBRATION = "multi_channel_neuromodulator_computes_combined_signal"
-TAUTOLOGY_CALIBRATION = "broadcast_modulators_preserve_legacy_scalar"
+# Each detector is calibrated against a fixture carried here, not against a live
+# test in the repository.
+#
+# It used to name three real tests. That coupled the tool to the repository's
+# defect inventory the wrong way round: on 2026-08-23 two of those tests were
+# strengthened - which is the outcome this scanner exists to cause - and the
+# scanner responded with CALIBRATION FAILED and refused to report. A tool that
+# breaks when you fix what it found teaches you to stop fixing things.
+#
+# The fixtures below can never be "fixed away", so calibration stays meaningful
+# for as long as the detectors do. Each is deliberately the weakest form of its
+# own shape.
+CALIBRATION_FIXTURE = """
+    #[test]
+    fn calibration_no_strong_assertion() {
+        let r = thing_under_test();
+        assert!(r.value.is_finite());
+        assert!((0.0..=1.0).contains(&r.value));
+    }
+
+    #[test]
+    fn calibration_length_only() {
+        let out = thing_under_test();
+        assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn calibration_tautological_eq() {
+        let m = thing_under_test();
+        assert_eq!(m.for_post(999), m.for_post(0));
+    }
+"""
+#: Not a real path. Anything attributed to it is dropped before reporting.
+CALIBRATION_FIXTURE_PATH = "<calibration fixture>"
+CALIBRATION_CASE = "calibration_no_strong_assertion"
+LENGTH_CALIBRATION = "calibration_length_only"
+TAUTOLOGY_CALIBRATION = "calibration_tautological_eq"
 
 
 def split_two_args(text: str) -> tuple[str, str] | None:
@@ -139,22 +170,34 @@ def main() -> int:
     rows, tautologies = [], []
     seen = {CALIBRATION_CASE: False, LENGTH_CALIBRATION: False,
             TAUTOLOGY_CALIBRATION: False}
-    for path in sorted(pathlib.Path(args.root).rglob("*.rs")):
-        if "/target/" in str(path) or "/patches/" in str(path):
-            continue
-        for name, body in test_bodies(path.read_text(errors="replace")):
+
+    def sources():
+        """The fixture first, then the tree. The fixture is not a real path, so
+        anything it contributes to `rows` or `tautologies` is dropped below."""
+        yield CALIBRATION_FIXTURE_PATH, CALIBRATION_FIXTURE
+        for path in sorted(pathlib.Path(args.root).rglob("*.rs")):
+            if "/target/" in str(path) or "/patches/" in str(path):
+                continue
+            yield str(path), path.read_text(errors="replace")
+
+    for path, text in sources():
+        for name, body in test_bodies(text):
             asserts = [line.strip() for line in body.splitlines() if "assert" in line]
             for assertion in asserts:
                 if is_tautological_eq(assertion):
-                    tautologies.append((str(path), name, assertion))
+                    tautologies.append((path, name, assertion))
                     if name in seen:
                         seen[name] = True
             if not asserts or any(strong(a) for a in asserts):
                 continue
             if all(weak(a) for a in asserts):
-                rows.append((str(path), name, len(asserts)))
+                rows.append((path, name, len(asserts)))
                 if name in seen:
                     seen[name] = True
+
+    # The fixture is calibration, not a finding.
+    rows = [r for r in rows if r[0] != CALIBRATION_FIXTURE_PATH]
+    tautologies = [t for t in tautologies if t[0] != CALIBRATION_FIXTURE_PATH]
 
     missed = [case for case, found in seen.items() if not found]
     if missed:
