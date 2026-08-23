@@ -91,6 +91,14 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let mut quick = false;
     let mut out: Option<PathBuf> = None;
+    // Shifts the seed index, and nothing else.
+    //
+    // Registered in `results/PREREG_2026-08-23_TRACK_B_REREAD.md` section 3. The
+    // repaired instrument was run on `s_idx 0..20` before the reading rule was
+    // written down, so that block is exploratory and decides nothing. `--seed-offset
+    // 20` continues the same lineage onto a disjoint block whose outcome was not
+    // known when the expectation was registered, and that block carries the verdict.
+    let mut seed_offset: usize = 0;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -103,8 +111,16 @@ fn main() -> ExitCode {
                 };
                 out = Some(PathBuf::from(value));
             }
+            "--seed-offset" => {
+                i += 1;
+                let Some(value) = args.get(i).and_then(|v| v.parse::<usize>().ok()) else {
+                    eprintln!("--seed-offset requires a non-negative integer");
+                    return ExitCode::from(2);
+                };
+                seed_offset = value;
+            }
             "-h" | "--help" => {
-                println!("Usage: cargo run --release -p binn-lab --bin track-b-rescue [-- --quick] [--out PATH]");
+                println!("Usage: cargo run --release -p binn-lab --bin track-b-rescue [-- --quick] [--out PATH] [--seed-offset N]");
                 return ExitCode::SUCCESS;
             }
             other => {
@@ -150,7 +166,8 @@ fn main() -> ExitCode {
     base_cfg.bptt_epochs = epochs;
 
     let mut results = Vec::new();
-    for s_idx in 0..n_seeds {
+    for block_idx in 0..n_seeds {
+        let s_idx = block_idx + seed_offset;
         let seed = master_seed ^ ((s_idx as u64) * 0x1000_0005_u64);
         let split = freeze_trials(&base_cfg, seed);
         let train_data = samples_to_gradient_examples(&split.train);
@@ -185,7 +202,7 @@ fn main() -> ExitCode {
         });
 
         println!("Seed {:2}/{}: Flat={:.4} | Graded={:.4} | RFB={:.4} | RPE={:.4} | LearnedFB={:.4} | Grad={:.4}",
-            s_idx + 1, n_seeds,
+            block_idx + 1, n_seeds,
             r_flat.accuracy, r_graded.accuracy, r_fb.accuracy,
             r_rpe.accuracy, r_lfb.accuracy, r_grad.accuracy);
     }
@@ -324,7 +341,7 @@ fn main() -> ExitCode {
         "# Track B Rescue Experiment Report\n\n\
         **Protocol Version:** {PROTOCOL_VERSION}  \n\
         **Experiment ID:** {TRACK_B_EXPERIMENT} (schedule name; not a `c1-*-<hex>` config hash)  \n\
-        **Schedule:** {} (n={n_seeds})  \n\
+        **Schedule:** {} (n={n_seeds}, seed block s_idx {seed_offset}..{})  \n\
         **Substrate:** matched dense-LIF — G2-numeric thresholds only (not live Engine G2)  \n\n\
         **Gap-closed:** clamped to `[0, 1]` via `binn_lab::guards::gap_closed_clamped`, \
         identical to the C1 runner. Seeds whose reference is within \
@@ -346,6 +363,7 @@ fn main() -> ExitCode {
         - E1.3 Online Learned FB: **{}**\n\
         - Matched dense-LIF schedule only — **not** live Engine G2.\n",
         if quick { "QUICK / PILOT" } else { "FULL SCIENTIFIC" },
+        seed_offset + n_seeds,
         v_flat.label(),
         v_graded.label(),
         v_fb.label(),
