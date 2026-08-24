@@ -155,7 +155,7 @@ superseded: the divergence is **Apple libm vs glibc, not the ISA**. See
 
 | | intact | bin-shuffled |
 |---|---:|---:|
-| d32/L4 gain over `ff+fixed` | **+0.1258** | **+0.0049** |
+| d32/L4 gain over `ff+fixed` | **+0.1258** | **+0.0050** |
 
 96% of the read-out's advantage is contingent on temporal order, 12/12 seeds. The
 paper may claim **order**; it may not claim **resolution** (S-5 failed).

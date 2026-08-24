@@ -144,6 +144,13 @@ def main() -> int:
     results.append(check("M-3 d64 - d32 at h128", avg(d64) - avg(intact),
                          published(W9, r"\*\*mean\(d64/L4\) − mean\(d32/L4\) = ([+-]?\d\.\d+)\*\*")))
 
+    results.append(check("d32/L4 under bin-shuffling", avg(shuf),
+                         published(W9, r"\| \*\*d32/L4\*\* \*\(the headline\)\* \| \*\*0\.\d+\*\* \| \*\*(0\.\d+)\*\*")))
+    results.append(check("ff+fixed under bin-shuffling", avg(ctl_shuf),
+                         published(W9, r"\| `ff\+fixed` \| 0\.\d+ \| (0\.\d+) \|")))
+    results.append(check("residual gain under shuffling", avg(shuf) - avg(ctl_shuf),
+                         published(W9, r"\| gain of d32/L4 over `ff\+fixed` \| \*\*[+-]?\d\.\d+\*\* \| \*\*([+-]?\d\.\d+)\*\*")))
+
     # The headline gain, quoted in four separate documents.
     gain = avg(intact) - avg(ctl)
     results.append(check("headline gain over ff+fixed", gain,
@@ -160,6 +167,29 @@ def main() -> int:
           f"{'headline seeds >= 0.80':<46} computed {n_gate}/12       published 12/12")
     results.append(n_gate == 12)
 
+    # ---- wave 7: the sample-efficiency number the PAPER cites ---------------
+    #
+    # 3.5 item 3 quotes "98.1% of e400 accuracy by 10 epochs (0.7337)". Nothing
+    # recomputed it until now, which made it the only number in the SHD sections
+    # of the draft resting on transcription alone.
+    W7 = "RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md"
+    e10_attn = acc(V1, f"w7flr__ff-fixed-attn__h128__e10__{ANCHOR}__d32l1")
+    e10_rate = acc(V1, f"w7flr__ff-fixed__h128__e10__{ANCHOR}")
+    e5_attn = acc(V1, f"w7flr__ff-fixed-attn__h128__e5__{ANCHOR}__d32l1")
+    results.append(check("W7 e10 attention mean", avg(e10_attn),
+                         published(W7, r"\| 10 \| 0\.\d+ \| (0\.\d+) \|")))
+    results.append(check("W7 e10 gain over the rate arm", avg(e10_attn) - avg(e10_rate),
+                         published(W7, r"\| 10 \| 0\.\d+ \| 0\.\d+ \| ([+-]?\d\.\d+) \|")))
+    # The percentage the paper quotes: e10 attention against the d32/L1 arm at
+    # convergence, which is wave 1's `w1` cell, not the d32/L4 headline.
+    l1_converged = acc(V1, f"w1__ff-fixed-attn__h128__e400__{ANCHOR}__d32l1")
+    results.append(check("W7 e10 as a fraction of e400 (%)",
+                         100.0 * avg(e10_attn) / avg(l1_converged),
+                         published(W7, r"\| 10 \| 0\.\d+ \| 0\.\d+ \| [+-]?\d\.\d+ \| \*\*(\d+\.\d)%\*\*"),
+                         tol=0.05))
+    results.append(check("W7 e5 attention mean", avg(e5_attn),
+                         published(W7, r"\| 5 \| 0\.\d+ \| (0\.\d+) \|")))
+
     # ---- wave 10: the resolution ladder, on a family that isolates it ------
     W10 = "RESULT_2026-08-22_W10_RESOLUTION_LADDER.md"
     ladder = {}
@@ -167,6 +197,10 @@ def main() -> int:
         attn = acc(V2, f"w10con__ff-fixed-attn__h128__e400__{rung}__adjacent-sum-5__d32l4")
         rate = acc(V2, f"w10con__ff-fixed__h128__e400__{rung}__adjacent-sum-5")
         ladder[rung] = (avg(attn), avg(rate))
+        results.append(check(f"{rung} rate-readout mean", avg(rate),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| (0\.\d+) \|")))
+        results.append(check(f"{rung} d32/L4 mean", avg(attn),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| 0\.\d+ \| (0\.\d+) \|")))
         results.append(check(f"C-1 {rung} gain", avg(attn) - avg(rate),
                              published(W10, rf"\| `{rung}` \| [\d.]+ \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
     results.append(check("C-2 gain(t500) - gain(t100)",
@@ -207,6 +241,20 @@ def main() -> int:
                          published(W14, r"\| `rec\+alif` \| 10 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
     results.append(check(f"ff+fixed paired gain at 0.4 (n={ff_pairs})", ff_gain,
                          published(W14, r"\| `ff\+fixed` \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    def paired_mean(values: dict[int, float], other: dict[int, float]) -> float:
+        shared = sorted(set(values) & set(other))
+        return sum(values[k] for k in shared) / len(shared)
+
+    for label, arm, partner, pat in (
+        ("rec+alif paired mean", rec04, rec_attn,
+         r"\| `rec\+alif` \| 10 \| (0\.\d+) \|"),
+        ("rec+alif+attn paired mean", rec_attn, rec04,
+         r"\| `rec\+alif` \| 10 \| 0\.\d+ \| (0\.\d+) \|"),
+        ("ff+fixed+attn paired mean at 0.4", ff04_attn, ff04,
+         r"\| `ff\+fixed` \| 12 \| 0\.\d+ \| (0\.\d+) \|"),
+    ):
+        results.append(check(label, paired_mean(arm, partner), published(W14, pat)))
+
     results.append(check("M-2 difference of gains", rec_gain - ff_gain,
                          published(W14, r"difference \*\*([+-]?\d\.\d+)\*\* against a two-sided bar")))
     results.append(check("M-4 ff+fixed mean at scale 0.4",
