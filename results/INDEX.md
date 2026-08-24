@@ -2,13 +2,13 @@
 
 # Record index
 
-295 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+298 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 33 | 0 |
-| Results | 30 | 2 |
-| Findings | 12 | 0 |
+| Preregistrations | 34 | 0 |
+| Results | 31 | 2 |
+| Findings | 13 | 0 |
 | Measurements | 8 | 0 |
 | Amendments | 13 | 1 |
 | Defects | 5 | 0 |
@@ -53,6 +53,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-24 | [PREREG_2026-08-24_BATCHNORM_ABLATION.md](PREREG_2026-08-24_BATCHNORM_ABLATION.md) | Preregistration — batchnorm, the last untested item on the list |
 | 2026-08-23 | [PREREG_2026-08-23_TRACK_B_REREAD.md](PREREG_2026-08-23_TRACK_B_REREAD.md) | Preregistration — re-reading track-b under the corrected instrument |
 | 2026-08-23 | [PREREG_2026-08-23_RECURRENT_STABILITY.md](PREREG_2026-08-23_RECURRENT_STABILITY.md) | Preregistration — can the recurrent arms complete at the anchor budget at all? |
 | 2026-08-23 | [PREREG_2026-08-23_RECURRENT_MEASUREMENT.md](PREREG_2026-08-23_RECURRENT_MEASUREMENT.md) | Preregistration — does attention substitute for recurrence, at the operating point? |
@@ -93,6 +94,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-24 | [RESULT_2026-08-24_READOUT_ABLATION.md](RESULT_2026-08-24_READOUT_ABLATION.md) | Result — the readout is exonerated, and the enumeration is still incomplete |
 | 2026-08-23 | [RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md](RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md) | Wave 14 — attention does not substitute for recurrence; it compounds with it |
 | 2026-08-23 | [RESULT_2026-08-23_W13_RECURRENT_STABILITY.md](RESULT_2026-08-23_W13_RECURRENT_STABILITY.md) | Wave 13 — there is an operating point, and adaptation is what makes it one |
 | 2026-08-23 | [RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md](RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md) | Wave 12 — the read-out's advantage is not a stand-in for threshold adaptation |
@@ -132,6 +134,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-24 | [FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md](FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md) | Finding — the reference is a temporal-convolutional SNN and the instrument is a pointwise one |
 | 2026-08-23 | [FINDING_2026-08-23_THE_SUITE_NEVER_TESTED_THE_SHIPPING_PROFILE.md](FINDING_2026-08-23_THE_SUITE_NEVER_TESTED_THE_SHIPPING_PROFILE.md) | The suite has never tested the profile that produces the results |
 | 2026-08-23 | [FINDING_2026-08-23_THE_REFERENCE_REPRODUCES_BIT_EXACTLY.md](FINDING_2026-08-23_THE_REFERENCE_REPRODUCES_BIT_EXACTLY.md) | Finding — the archived reference was genuine, and reproduces bit-exactly a month later |
 | 2026-08-23 | [FINDING_2026-08-23_THE_MATRIX_GRID_EXCLUDES_ITS_OWN_GATE.md](FINDING_2026-08-23_THE_MATRIX_GRID_EXCLUDES_ITS_OWN_GATE.md) | Finding — the instrument does not top out at 0.72, and the matrix grid excludes every configuration that passes |
