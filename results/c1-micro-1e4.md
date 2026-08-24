@@ -1,6 +1,6 @@
 # Micro isolate N=1e4 stress note
 
-Companion to [`c1_mac_probe.md`](../c1_mac_probe.md).
+Companion to [`c1_mac_probe.md`](c1_mac_probe.md).
 
 | Field | Value |
 |---|---|

@@ -27,6 +27,11 @@ run() {
 # analyser and a test for it is covered the day it lands rather than whenever
 # someone remembers to extend this line.
 run "every discovered python test" bash scripts/run_python_tests.sh
+# The record is a citation graph, and "read this only through the document that
+# retired it" is only a rule if the link goes there.
+run "every internal record link resolves" python3 scripts/check_record_links.py
+# A stale index reports a state that has moved, which is worse than none.
+run "the record index is current" python3 scripts/build_results_index.py --check
 run "published numbers reproduce from cells" python3 scripts/verify_published_numbers.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 
