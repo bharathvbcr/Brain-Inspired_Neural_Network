@@ -29,6 +29,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import signal
 import subprocess
 import sys
 import time
@@ -46,6 +48,31 @@ ROOT = Path(__file__).resolve().parent.parent
 RESULT_ROOT = ROOT / "results" / "shd_instrument_v4"
 EVENT_ROOT = ROOT / "data" / "shd" / "events"
 DEFAULT_BINARY = ROOT / "target" / "release" / "shd-instrument"
+
+# How long a cell may run before the gate gives up on it.
+#
+# Gate F previously ran the instrument with no timeout at all, so a hung child
+# hung the gate — the same shape that left GC4 blocked for two days. A budget is
+# derived per cell from what that cell actually took when it was recorded,
+# rather than fixed, because the recorded cells span 33s to 3646s and one
+# constant cannot fit both ends.
+#
+# The factor is deliberately loose. Two observations of the same cell on this
+# machine came in at 10.6s and 60.8s — a 5.7x spread from load alone — so
+# anything under about 10x would kill legitimate work, and killing a cell
+# halfway through a multi-day `--all` sweep is worse than the hang it prevents.
+# 20x leaves headroom over the worst spread seen and still turns "forever" into
+# a bounded, reported outcome.
+TIMEOUT_FACTOR = 20.0
+#: Floor for cells recorded fast enough that the factor alone is too tight to
+#: absorb a cold page cache or a first-touch of the event files.
+TIMEOUT_FLOOR_S = 900.0
+
+
+def cell_timeout(recorded: dict[str, object], factor: float, floor: float) -> float:
+    """The budget for one cell, from its own recorded wall clock."""
+    was = float(recorded.get("wall_secs") or 0.0)
+    return max(floor, was * factor)
 
 # Every field the cell schema reports as a measurement. `wall_secs` is excluded
 # because it is a timing, not a result; the status fields are derived from these.
@@ -149,45 +176,130 @@ def initialization_paths(spec: dict[str, object]) -> tuple[Path, Path]:
     return weights, orders
 
 
-def regress_cell(cell_id: str, binary: Path) -> dict[str, object]:
+def _unrunnable(cell_id: str, status: str, detail: str, started: float,
+                timeout_s: float | None = None) -> dict[str, object]:
+    """A cell the gate could not judge.
+
+    Deliberately not shaped like a comparison result: no `mismatches` key to be
+    read as empty, and a status no caller can confuse with BIT_IDENTICAL. A
+    check that could not run must never report what a check that ran and passed
+    reports.
+    """
+    return {
+        "cell": cell_id,
+        "status": status,
+        "detail": detail,
+        "wall_secs": round(time.monotonic() - started, 3),
+        "timeout_s": timeout_s,
+        "compared_traces": [],
+    }
+
+
+def run_cell(command: list[str], timeout_s: float) -> subprocess.CompletedProcess:
+    """Run the instrument under a hard budget, leaving nothing behind.
+
+    `start_new_session` puts the child in its own process group so the kill on
+    timeout reaches anything it spawned; `subprocess.run(timeout=...)` signals
+    only the direct child, which would leave a grandchild holding the pipes and
+    the wait would block again — reproducing the hang inside the fix for it.
+    """
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        start_new_session=True,
+    ) as child:
+        try:
+            out, err = child.communicate(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(child.pid), signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                child.kill()
+            # Reap, but do not wait forever for a process that ignored SIGKILL:
+            # an unbounded second wait is the same defect one layer down.
+            try:
+                out, err = child.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                out, err = "", "child survived SIGKILL; pipes abandoned"
+            raise subprocess.TimeoutExpired(command, timeout_s, output=out, stderr=err)
+        return subprocess.CompletedProcess(command, child.returncode, out, err)
+
+
+def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
+                 floor: float = TIMEOUT_FLOOR_S) -> dict[str, object]:
+    started = time.monotonic()
     recorded_path = RESULT_ROOT / "cells" / f"{cell_id}.json"
     if not recorded_path.is_file():
-        raise FileNotFoundError(f"no completed cell to regress against: {cell_id}")
-    spec = parse_cell_id(cell_id)
+        return _unrunnable(cell_id, "ERROR",
+                           f"no completed cell to regress against: {cell_id}", started)
+    try:
+        spec = parse_cell_id(cell_id)
+    except ValueError as exc:
+        return _unrunnable(cell_id, "ERROR", str(exc), started)
     if spec["backend"] != "rust":
-        raise ValueError("this gate regresses the rust arm; use gates_ef.py for python")
-    recorded = json.loads(recorded_path.read_text())
+        return _unrunnable(cell_id, "ERROR",
+                           "this gate regresses the rust arm; use gates_ef.py for python",
+                           started)
+    try:
+        recorded = json.loads(recorded_path.read_text())
+    except json.JSONDecodeError as exc:
+        return _unrunnable(cell_id, "ERROR", f"recorded cell is not readable json: {exc}", started)
     weights, orders = initialization_paths(spec)
     for path in (weights, orders):
         if not path.is_file():
-            raise FileNotFoundError(f"missing initialization artifact: {path}")
+            return _unrunnable(cell_id, "ERROR", f"missing initialization artifact: {path}", started)
 
     output = RESULT_ROOT / "gate-f-rust" / f"{cell_id}.json"
     output.parent.mkdir(parents=True, exist_ok=True)
-    started = time.monotonic()
-    completed = subprocess.run(
-        [
-            str(binary), "train-cell",
-            "--train-events", str(EVENT_ROOT / "train.events"),
-            "--test-events", str(EVENT_ROOT / "test.events"),
-            "--contract", str(spec["contract"]),
-            "--geometry", str(spec["geometry"]),
-            "--weights", str(weights),
-            "--orders", str(orders),
-            "--epochs", str(spec["epochs"]),
-            "--out", str(output),
-            # Passed even though the weight file already carries the arm: the
-            # instrument cross-checks the two and refuses a disagreement, so
-            # naming it here turns a mismatched artifact into an error instead
-            # of a silently different cell.
-            *(["--arm", str(spec["arm"])] if spec.get("arm", DEFAULT_ARM) != DEFAULT_ARM else []),
-        ],
-        capture_output=True,
-        text=True,
-    )
+    # Delete the previous observation before running. Otherwise an instrument
+    # that exits 0 without writing leaves the last run's file in place, and the
+    # gate compares that — reporting BIT_IDENTICAL for a run that produced
+    # nothing at all.
+    output.unlink(missing_ok=True)
+
+    timeout_s = cell_timeout(recorded, factor, floor)
+    command = [
+        str(binary), "train-cell",
+        "--train-events", str(EVENT_ROOT / "train.events"),
+        "--test-events", str(EVENT_ROOT / "test.events"),
+        "--contract", str(spec["contract"]),
+        "--geometry", str(spec["geometry"]),
+        "--weights", str(weights),
+        "--orders", str(orders),
+        "--epochs", str(spec["epochs"]),
+        "--out", str(output),
+        # Passed even though the weight file already carries the arm: the
+        # instrument cross-checks the two and refuses a disagreement, so
+        # naming it here turns a mismatched artifact into an error instead
+        # of a silently different cell.
+        *(["--arm", str(spec["arm"])] if spec.get("arm", DEFAULT_ARM) != DEFAULT_ARM else []),
+    ]
+    try:
+        completed = run_cell(command, timeout_s)
+    except subprocess.TimeoutExpired:
+        return _unrunnable(
+            cell_id, "TIMEOUT",
+            f"exceeded {timeout_s:.0f}s (recorded at "
+            f"{float(recorded.get('wall_secs') or 0.0):.0f}s)",
+            started, timeout_s)
+    except OSError as exc:
+        return _unrunnable(cell_id, "ERROR", f"could not start the instrument: {exc}",
+                           started, timeout_s)
     if completed.returncode != 0:
-        raise RuntimeError(f"cell run failed:\n{completed.stdout}\n{completed.stderr}")
-    observed = json.loads(output.read_text())
+        return _unrunnable(cell_id, "ERROR",
+                           f"cell run failed (exit {completed.returncode}):\n"
+                           f"{completed.stdout}\n{completed.stderr}", started, timeout_s)
+    if not output.is_file():
+        return _unrunnable(cell_id, "ERROR",
+                           "the instrument exited 0 without writing its cell", started, timeout_s)
+    try:
+        observed = json.loads(output.read_text())
+    except json.JSONDecodeError as exc:
+        return _unrunnable(cell_id, "ERROR", f"the written cell is not readable json: {exc}",
+                           started, timeout_s)
 
     mismatches: dict[str, object] = {}
     for field in COMPARED_FIELDS:
@@ -204,6 +316,7 @@ def regress_cell(cell_id: str, binary: Path) -> dict[str, object]:
         "status": "BIT_IDENTICAL" if not mismatches else "REGRESSION",
         "mismatches": mismatches,
         "wall_secs": round(time.monotonic() - started, 3),
+        "timeout_s": timeout_s,
         "compared_traces": [t for t in COMPARED_TRACES if recorded.get(t) and observed.get(t)],
     }
 
@@ -217,6 +330,50 @@ def recorded_rust_cells() -> list[tuple[float, str]]:
     return rows
 
 
+#: Exit codes. A regression and a cell the gate could not run are different
+#: facts about the kernel and must not share a code: one says the kernel
+#: changed, the other says nobody knows.
+EXIT_PASS = 0
+EXIT_REGRESSION = 1
+EXIT_UNRUNNABLE = 3
+
+RAN = ("BIT_IDENTICAL", "REGRESSION")
+
+
+def write_report(binary: Path, binary_sha: str, results: list[dict[str, object]],
+                 note: str | None = None) -> tuple[Path, int, int]:
+    regressions = sum(r["status"] == "REGRESSION" for r in results)
+    unrunnable = sum(r["status"] not in RAN for r in results)
+    if regressions:
+        status = "FAIL"
+    elif unrunnable:
+        status = "INCOMPLETE"
+    else:
+        status = "PASS"
+    payload = {
+        "binary": str(binary),
+        "binary_sha256": binary_sha,
+        "cells": len(results),
+        "compared": sum(r["status"] in RAN for r in results),
+        "failures": regressions,
+        "unrunnable": unrunnable,
+        "status": status,
+        "results": results,
+    }
+    if note:
+        payload["note"] = note
+    out = RESULT_ROOT / "gate-f-rust"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "report.json").write_text(json.dumps(payload, indent=2) + "\n")
+    # `report.json` is the latest invocation only, so a later narrow run would
+    # otherwise silently destroy the evidence a wider earlier run produced —
+    # which is exactly the kind of quiet record loss this harness exists to
+    # prevent. Every run is also appended here, keyed by binary hash.
+    with (out / "runs.jsonl").open("a") as history:
+        history.write(json.dumps(payload) + "\n")
+    return out / "report.json", regressions, unrunnable
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -225,7 +382,17 @@ def main(argv=None) -> int:
     parser.add_argument("--cheapest", type=int, help="regress the N fastest recorded cells")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
+    parser.add_argument(
+        "--timeout-factor", type=float, default=TIMEOUT_FACTOR,
+        help=f"multiple of each cell's recorded wall clock (default {TIMEOUT_FACTOR:g})")
+    parser.add_argument(
+        "--timeout-floor", type=float, default=TIMEOUT_FLOOR_S,
+        help=f"lower bound on any cell's budget, seconds (default {TIMEOUT_FLOOR_S:g})")
     args = parser.parse_args(argv)
+
+    if args.timeout_factor <= 0 or args.timeout_floor <= 0:
+        parser.error("timeout factor and floor must be positive; there is no "
+                     "spelling of this gate that waits forever")
 
     cells = list(args.cell)
     if args.cheapest:
@@ -248,19 +415,40 @@ def main(argv=None) -> int:
 
     print(f"binary: {args.binary}")
     print(f"sha256: {binary_sha_before}")
-    print(f"cells:  {len(cells)}\n")
-    results = []
-    for cell_id in cells:
-        result = regress_cell(cell_id, args.binary)
-        results.append(result)
-        marker = "  ok " if result["status"] == "BIT_IDENTICAL" else " FAIL"
-        traces = f" +{len(result['compared_traces'])} traces" if result["compared_traces"] else ""
-        print(f"[{marker}] {cell_id}  ({result['wall_secs']:.0f}s){traces}")
-        for field, delta in result["mismatches"].items():
-            print(f"           {field}: recorded={delta['recorded']} observed={delta['observed']}")
+    print(f"cells:  {len(cells)}")
+    print(f"budget: max({args.timeout_floor:.0f}s, {args.timeout_factor:g}x "
+          f"each cell's recorded wall clock)\n")
+    results: list[dict[str, object]] = []
+    note = None
+    try:
+        for cell_id in cells:
+            result = regress_cell(cell_id, args.binary,
+                                  args.timeout_factor, args.timeout_floor)
+            results.append(result)
+            marker = {"BIT_IDENTICAL": "  ok ", "REGRESSION": " FAIL"}.get(
+                result["status"], " ????")
+            traces = (f" +{len(result['compared_traces'])} traces"
+                      if result["compared_traces"] else "")
+            print(f"[{marker}] {cell_id}  ({result['wall_secs']:.0f}s){traces}")
+            if result["status"] not in RAN:
+                print(f"           {result['status']}: {result['detail']}")
+            for field, delta in result.get("mismatches", {}).items():
+                print(f"           {field}: recorded={delta['recorded']} "
+                      f"observed={delta['observed']}")
+    except KeyboardInterrupt:
+        # Still write what was learned. Losing the verdicts for the cells that
+        # did run, because a later one was interrupted, is the record loss the
+        # history file exists to prevent.
+        note = (f"interrupted after {len(results)} of {len(cells)} cells; "
+                "the remainder were never attempted")
+        print(f"\ninterrupted — recording {len(results)} of {len(cells)} cells")
 
     binary_sha_after = sha256_file(args.binary)
     if binary_sha_after != binary_sha_before:
+        # Record before raising: these results are unattributable, and a report
+        # that says so is worth more than no report.
+        write_report(args.binary, binary_sha_before, results,
+                     note="binary changed mid-run; results span two kernels")
         raise RuntimeError(
             "the binary changed while the gate was running:\n"
             f"  before {binary_sha_before}\n  after  {binary_sha_after}\n"
@@ -268,28 +456,21 @@ def main(argv=None) -> int:
             "Re-run the gate without rebuilding."
         )
 
-    failures = sum(r["status"] != "BIT_IDENTICAL" for r in results)
-    payload = {
-        "binary": str(args.binary),
-        "binary_sha256": binary_sha_before,
-        "cells": len(results),
-        "failures": failures,
-        "status": "PASS" if failures == 0 else "FAIL",
-        "results": results,
-    }
-    report = RESULT_ROOT / "gate-f-rust" / "report.json"
-    report.parent.mkdir(parents=True, exist_ok=True)
-    report.write_text(json.dumps(payload, indent=2) + "\n")
-    # `report.json` is the latest invocation only, so a later narrow run would
-    # otherwise silently destroy the evidence a wider earlier run produced —
-    # which is exactly the kind of quiet record loss this harness exists to
-    # prevent. Every run is also appended here, keyed by binary hash.
-    with (RESULT_ROOT / "gate-f-rust" / "runs.jsonl").open("a") as history:
-        history.write(json.dumps(payload) + "\n")
-    print(f"\n{len(results) - failures}/{len(results)} bit-identical -> "
-          f"{'PASS' if failures == 0 else 'FAIL'}")
+    report, regressions, unrunnable = write_report(
+        args.binary, binary_sha_before, results, note)
+    compared = len(results) - unrunnable
+    print(f"\n{compared - regressions}/{compared} bit-identical", end="")
+    if unrunnable:
+        print(f", {unrunnable} could not run", end="")
+    if note:
+        print(f", {len(cells) - len(results)} never attempted", end="")
+    print(f" -> {'PASS' if not (regressions or unrunnable or note) else 'FAIL'}")
     print(f"report: {report}")
-    return 1 if failures else 0
+    if regressions:
+        return EXIT_REGRESSION
+    if unrunnable or note:
+        return EXIT_UNRUNNABLE
+    return EXIT_PASS
 
 
 if __name__ == "__main__":

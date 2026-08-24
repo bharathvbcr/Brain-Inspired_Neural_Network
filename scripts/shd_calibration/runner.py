@@ -341,6 +341,13 @@ def gate_f_discharge(binary_sha: str) -> dict[str, object] | None:
             continue
         if record.get("status") != "PASS" or record.get("failures") != 0:
             continue
+        # Defence in depth on the provenance path. `PASS` already implies
+        # nothing went unjudged, but a cell the gate could not run is not
+        # evidence about the kernel, and this must not depend on how a
+        # later version of the gate happens to compute its status. Records
+        # written before the key existed default to 0 and are unaffected.
+        if record.get("unrunnable", 0) != 0:
+            continue
         cells = [str(item.get("cell", "")) for item in record.get("results", [])]
         if len(cells) < PROVENANCE_MIN_GATE_F_CELLS:
             continue

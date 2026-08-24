@@ -2,56 +2,65 @@
   "binary": "/Users/bharath/Code/research/BINN/target/release/shd-instrument",
   "binary_sha256": "2497562c171008ba0d9dd272fd147ac00722caee7b458231f0282500563bfb90",
   "cells": 10,
+  "compared": 10,
   "failures": 0,
+  "unrunnable": 0,
   "status": "PASS",
   "results": [
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 69.666,
+      "wall_secs": 9.324,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 60.184,
+      "wall_secs": 9.924,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 60.902,
+      "wall_secs": 9.449,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 42.12,
+      "wall_secs": 12.729,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 37.615,
+      "wall_secs": 12.904,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 37.428,
+      "wall_secs": 10.799,
+      "timeout_s": 900.0,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001__ff-alif",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 44.475,
+      "wall_secs": 11.448,
+      "timeout_s": 1098.18238,
       "compared_traces": [
         "epoch_mean_loss",
         "epoch_mean_gradient_norm",
@@ -62,21 +71,24 @@
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 57.79,
+      "wall_secs": 14.774,
+      "timeout_s": 1138.28266,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 51.723,
+      "wall_secs": 11.77,
+      "timeout_s": 1158.97994,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 61.429,
+      "wall_secs": 11.732,
+      "timeout_s": 1159.39084,
       "compared_traces": []
     }
   ]
