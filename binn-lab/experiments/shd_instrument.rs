@@ -13,6 +13,7 @@ use binn_lab::{authorize_campaign, CampaignKind};
 use rayon::prelude::*;
 
 use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
+use binn_lab::timestamp::{iso8601_utc, unix_seconds};
 use binn_learn::shd_attention::{AttentionConfig, AttentionParams};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
@@ -973,6 +974,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         }
         None => String::new(),
     };
+    let emitted = unix_seconds();
     let result = format!(
         "{{\"schema\":\"shd-cal-cell-v1\",\"backend\":\"rust\",\"arm\":\"{}\",\"contract\":\"{}\",\
          \"geometry\":\"{}\",\"hidden\":{},\"epochs\":{},\"n_train\":{},\"n_test\":{},\
@@ -980,7 +982,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
          \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
-         \"scientific_status\":\"{}\",\"wall_secs\":{:.6}{}{}}}\n",
+         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}}}\n",
         weights.arm.label(),
         contract.id(),
         geometry.id(),
@@ -1018,6 +1020,15 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         tail_improvement,
         if scientific { "CELL_PASS" } else { "CELL_FAIL" },
         started.elapsed().as_secs_f64(),
+        // WHEN the cell was produced. `wall_secs` above is a duration and says
+        // nothing about when, so until these two existed the ordering that
+        // carries the campaign's epistemic weight - rule registered before data
+        // - could not be checked from the artefact at all, only from S3 upload
+        // times and git. Never a measurement: it differs on every run by
+        // construction and is excluded from Gate F's explicit field list, which
+        // `binn-lab/tests/timestamp_is_not_compared.rs` pins.
+        emitted,
+        iso8601_utc(emitted),
         attention_fields,
         provenance_fields,
     );

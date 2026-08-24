@@ -48,6 +48,7 @@ pub mod runner_shd_cal;
 pub mod shd_cal_config;
 pub mod shd_dense;
 pub mod shd_sweep_runner;
+pub mod timestamp;
 pub mod transfer_harness;
 
 pub use c2_config::{C2Config, C2_EXPERIMENT, C2_HASH_PREFIX, C2_PROTOCOL_VERSION};
