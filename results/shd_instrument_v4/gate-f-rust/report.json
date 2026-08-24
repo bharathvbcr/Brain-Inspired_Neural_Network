@@ -1,64 +1,82 @@
 {
-  "binary": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
-  "binary_sha256": "b32fe35ecbbce536e8a2f1a3732cc2ff4b03098a8d05c64bfbb24bfd862f4e7e",
-  "cells": 8,
+  "binary": "/Users/bharath/Code/research/BINN/target/release/shd-instrument",
+  "binary_sha256": "2497562c171008ba0d9dd272fd147ac00722caee7b458231f0282500563bfb90",
+  "cells": 10,
   "failures": 0,
   "status": "PASS",
   "results": [
     {
-      "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+      "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 10.759,
+      "wall_secs": 69.666,
       "compared_traces": []
     },
     {
       "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 11.094,
+      "wall_secs": 60.184,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+      "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.374,
+      "wall_secs": 60.902,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+      "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170003",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 15.257,
+      "wall_secs": 42.12,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__channels-700__h128__e20__s5170001",
+      "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170001",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 23.454,
+      "wall_secs": 37.615,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__channels-700__h128__e20__s5170002",
+      "cell": "rust__published-10ms__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 23.106,
+      "wall_secs": 37.428,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__channels-700__h256__e20__s5170001",
+      "cell": "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001__ff-alif",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 38.106,
+      "wall_secs": 44.475,
+      "compared_traces": [
+        "epoch_mean_loss",
+        "epoch_mean_gradient_norm",
+        "epoch_max_gradient_norm"
+      ]
+    },
+    {
+      "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170001",
+      "status": "BIT_IDENTICAL",
+      "mismatches": {},
+      "wall_secs": 57.79,
       "compared_traces": []
     },
     {
-      "cell": "rust__fixed-t100__channels-700__h256__e20__s5170002",
+      "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170002",
       "status": "BIT_IDENTICAL",
       "mismatches": {},
-      "wall_secs": 38.882,
+      "wall_secs": 51.723,
+      "compared_traces": []
+    },
+    {
+      "cell": "rust__fixed-t250__adjacent-sum-5__h128__e20__s5170003",
+      "status": "BIT_IDENTICAL",
+      "mismatches": {},
+      "wall_secs": 61.429,
       "compared_traces": []
     }
   ]
