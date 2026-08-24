@@ -1,7 +1,9 @@
 # Wave 14 — attention does not substitute for recurrence; it compounds with it
 
-**Registered:** `PREREG_2026-08-23_RECURRENT_MEASUREMENT.md` (`0f338e4`);
-analyser frozen at `da13bd0`, both before the first cell existed.
+**Registered:** `PREREG_2026-08-23_RECURRENT_MEASUREMENT.md` (`0f338e4`),
+**08:23 UTC, before any cell existed.** The analyser was committed at `da13bd0`,
+**08:52 UTC — 22 minutes after the first cell landed at 08:30.** See §8; the
+earlier wording of this line said both preceded the data, and that was wrong.
 **Ran:** 2026-08-23, 4 × `c7g.16xlarge` spot, pinned binary `22d97c51ab02`.
 **Status:** complete — 35/36 new cells emitted, one diverged, nothing retried,
 no threshold moved. Fleet torn down.
@@ -139,9 +141,35 @@ current source reproduces behaviourally on aarch64/glibc. `rec+alif` reused from
 wave 13 rather than re-run — identical spec, deterministic instrument — and each
 reused cell content-checked against the configuration it must be.
 
-Verdicts computed once, from a settled wave, by an analyser frozen before the
-first cell landed and mutation-tested against both of its own failure modes:
-pooling instead of pairing, and a gate that reports instead of blocking.
+Verdicts computed once, from a settled wave, by an analyser mutation-tested
+against both of its own failure modes: pooling instead of pairing, and a gate
+that reports instead of blocking.
+
+> **Correction, 2026-08-23.** This document, the analyser's docstring and the
+> commit that added it all said the analyser was *frozen before the first cell
+> landed*. It was not. Measured from the artefacts rather than from memory:
+>
+> | | wave 12 | wave 13 | wave 14 |
+> |---|---|---|---|
+> | prereg committed | 18:03 | 01:04 | **08:23** |
+> | analyser committed | 18:06 | 01:06 | **08:52** |
+> | first cell uploaded | 18:12 | 01:41 | **08:30** |
+>
+> Waves 12 and 13 are as claimed. Wave 14's analyser was committed **22 minutes
+> after** its first cell, with twelve `ff+fixed` control cells already in the
+> bucket.
+>
+> What is unaffected: every threshold was fixed in the prereg at 08:23, before
+> any cell, and `test_the_registered_bars_are_the_ones_in_the_prereg` pins that
+> the analyser carries those and no others. M-0's gate, M-1's and M-2's bars and
+> the pairing rule are all registered text, so no bar was chosen with knowledge
+> of a result. What existed when the analyser was written was a **count** — 12
+> of 36 done, all of them the control arm — and no accuracy from it was read.
+>
+> What is affected is the claim. "Frozen before the first cell" is a stronger
+> statement than "thresholds registered before the first cell", and only the
+> second one is true here. The distinction is the whole point of freezing, so it
+> is corrected rather than explained away.
 
 The wave-14 plan was not archived to the campaign directory at launch. It was
 regenerated from `plan_cells.py` and verified **sha256-identical** to the plan

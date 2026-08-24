@@ -2,7 +2,13 @@
 """Wave 14 verdicts, exactly as registered in
 `results/PREREG_2026-08-23_RECURRENT_MEASUREMENT.md`.
 
-Frozen before the first cell landed.
+Thresholds registered before any cell existed; this file committed after the
+control arm had landed. **Not** "frozen before the first cell" — see the
+correction in `RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md`
+§8. The registered bars are in `PREREG_2026-08-23_RECURRENT_MEASUREMENT.md`,
+committed at 08:23 UTC against a first cell at 08:30, and
+`test_the_registered_bars_are_the_ones_in_the_prereg` pins that this file
+carries those and no others.
 
 Two things make this analyser different from waves 8–12, and both are places a
 silent bug would change a verdict rather than crash:
