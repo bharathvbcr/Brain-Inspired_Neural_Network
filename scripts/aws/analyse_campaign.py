@@ -204,11 +204,25 @@ def main() -> int:
                   f"gain(shuffled) {statistics.mean(dshuf):+.4f} = {g:+.4f}  (>= 0.02)")
             print(f"        verdict: {'MEMORY, not just capacity' if g >= 0.02 else 'NOT SUPPORTED'}")
 
-        tails = [c["tail_loss_improvement"] for k in (Bk, E) for c in by_arm.get(k, {}).values()]
+        # `.get` rather than `[...]`: a cell predating this telemetry raised a
+        # bare KeyError mid-report. A cell that carries `null` was not assessed
+        # and is counted separately — dropping it silently would let an
+        # unassessed cell read as a converged one.
+        raw = [c.get("tail_loss_improvement") for k in (Bk, E)
+               for c in by_arm.get(k, {}).values()]
+        tails = [t for t in raw if isinstance(t, (int, float)) and math.isfinite(t)]
+        unassessed = len(raw) - len(tails)
         if tails:
             worst = min(tails)
-            print(f"  W1-4  worst tail_loss_improvement = {worst:+.4f}  (> -0.02)")
+            print(f"  W1-4  worst tail_loss_improvement = {worst:+.4f}  (> -0.02) "
+                  f"over {len(tails)} cell(s)")
+            if unassessed:
+                print(f"        {unassessed} cell(s) carry no tail measurement and "
+                      "are excluded; convergence is unknown for them.")
             print(f"        verdict: {'CONVERGED' if worst > -0.02 else 'UNDERTRAINED'}")
+        elif raw:
+            print(f"  W1-4  NOT EVALUABLE: none of {len(raw)} cell(s) carry a "
+                  "tail measurement.")
             if worst <= -0.02:
                 print("        W1-1 is therefore reported as UNTESTED, per the prereg's")
                 print("        named outcome: the accuracy is a budget artefact.")
