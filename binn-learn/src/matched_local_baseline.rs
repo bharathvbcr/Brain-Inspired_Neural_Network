@@ -62,6 +62,34 @@ pub const MATCHED_GRADIENT_LABEL: &str = "MATCHED_ARCH_GRADIENT_CEILING";
 /// Stable label for the matched-local (production-rule) arm.
 pub const MATCHED_LOCAL_LABEL: &str = "MATCHED_ARCH_LOCAL_THREE_FACTOR";
 
+/// Input-weight initialisation scale, shared by every arm in this family.
+///
+/// Raised from `0.5` on 2026-08-23 under
+/// `results/PREREG_2026-08-23_MATCHED_ARCH_REPAIR.md`. At `0.5` the largest
+/// membrane two adjacent unit impulses could reach was `alpha*0.5 + 0.5 =
+/// 0.952419` against a threshold of `1.0`: the hidden layer **could not emit a
+/// spike at any seed**, so the rate readout saw zeros and the logit was a bias
+/// with no input dependence. Measured before the repair: 0 spikes in 400
+/// forwards, max membrane 0.974568.
+///
+/// The value is the smallest rung of a doubling ladder from `0.5` whose initial
+/// mean firing rate lies inside `[ACTIVITY_MIN, ACTIVITY_MAX]` at widths 16, 64
+/// and 256 across 50 seeds. **Accuracy was not an input to the choice.** See
+/// `matched_input_scale_is_the_smallest_rung_inside_the_activity_band`, which
+/// re-runs that selection against the real constructor.
+///
+/// # What the repair costs
+///
+/// At `0.5` a single channel contributed at most 0.5 and two coincident channels
+/// at most 1.0, so the architecture was built as a **coincidence detector** —
+/// the right shape for `CoincidenceTask`. That selectivity does not survive:
+/// measured at the chosen scale, the initial firing rate is 0.050 on coincident
+/// input and 0.059 on split input, so single channels now cross threshold on
+/// their own. The arm can still separate the classes by rate, but it is no
+/// longer detecting coincidence per se, and any reading of these arms as
+/// coincidence detection is now wrong.
+pub const MATCHED_INPUT_SCALE: f32 = 2.0;
+
 /// Default surrogate steepness `β` for `σ'(u) = 1/(1 + β|u−θ|)²`.
 pub const DEFAULT_MATCHED_BETA: f32 = 5.0;
 
@@ -106,10 +134,19 @@ impl MatchedArch {
     }
 
     fn with_options(hidden: usize, beta: f32, seed: u64, recurrent: bool) -> Self {
+        Self::with_scales(hidden, beta, seed, recurrent, MATCHED_INPUT_SCALE)
+    }
+
+    pub(crate) fn with_scales(
+        hidden: usize,
+        beta: f32,
+        seed: u64,
+        recurrent: bool,
+        in_scale: f32,
+    ) -> Self {
         assert!(hidden >= 1, "matched arch needs ≥1 hidden unit");
         assert!(beta > 0.0, "surrogate beta must be positive");
         let mut rng = Rng::new(seed ^ 0x5171_0000_00F1);
-        let in_scale = 0.5f32;
         let rec_scale = 0.3f32 / (hidden as f32).sqrt();
         let out_scale = 0.2f32;
         let win: Vec<f32> = (0..hidden * N_IN)
@@ -471,6 +508,83 @@ mod tests {
             out.push((x1, x2, y));
         }
         out
+    }
+
+    /// Re-runs the activity-band selection registered in
+    /// `results/PREREG_2026-08-23_MATCHED_ARCH_REPAIR.md` section 1 against the
+    /// real constructor.
+    ///
+    /// Asserts two things, not one: that the shipped scale qualifies, and that
+    /// **every smaller rung does not**. Without the second half this would pass
+    /// for any sufficiently large value, which is the same as not pinning the
+    /// choice.
+    #[test]
+    fn matched_input_scale_is_the_smallest_rung_inside_the_activity_band() {
+        let qualifies = |scale: f32| {
+            let mut lo = f32::INFINITY;
+            let mut hi = 0.0f32;
+            for &hidden in &[16usize, 64, 256] {
+                for seed in 0..50u64 {
+                    let arch =
+                        MatchedArch::with_scales(hidden, DEFAULT_MATCHED_BETA, seed, true, scale);
+                    let mut spikes = 0.0f32;
+                    for case in 0..2 {
+                        let mut x1 = [0.0f32; T];
+                        let mut x2 = [0.0f32; T];
+                        x1[2] = 1.0;
+                        x2[if case == 0 { 2 } else { T - 1 }] = 1.0;
+                        spikes += arch.forward(&x1, &x2).rates.iter().sum::<f32>();
+                    }
+                    let rate = spikes / (2.0 * hidden as f32 * T as f32);
+                    lo = lo.min(rate);
+                    hi = hi.max(rate);
+                }
+            }
+            lo >= 0.001 && hi <= 0.500
+        };
+
+        assert!(
+            qualifies(MATCHED_INPUT_SCALE),
+            "the shipped input scale {MATCHED_INPUT_SCALE} leaves some layer \
+             outside the activity band at initialisation"
+        );
+        let mut rung = 0.5f32;
+        while rung < MATCHED_INPUT_SCALE {
+            assert!(
+                !qualifies(rung),
+                "rung {rung} also qualifies, so {MATCHED_INPUT_SCALE} is not the \
+                 smallest qualifying rung and the registered rule was not followed"
+            );
+            rung *= 2.0;
+        }
+        assert!(
+            (rung - MATCHED_INPUT_SCALE).abs() < 1e-6,
+            "{MATCHED_INPUT_SCALE} is not on the doubling ladder from 0.5"
+        );
+    }
+
+    /// The forward can spike at all.
+    ///
+    /// Before 2026-08-23 it could not, at any seed: `alpha*0.5 + 0.5 = 0.952419`
+    /// against a threshold of 1.0. 400 forwards produced zero spikes and a peak
+    /// membrane of 0.974568, so every arm in this family read a zero rate vector
+    /// and emitted a logit equal to its bias.
+    #[test]
+    fn the_matched_forward_is_not_silent() {
+        let mut total = 0.0f32;
+        for seed in 0..20u64 {
+            let arch = MatchedArch::new(64, DEFAULT_MATCHED_BETA, seed);
+            let mut x1 = [0.0f32; T];
+            let mut x2 = [0.0f32; T];
+            x1[2] = 1.0;
+            x2[2] = 1.0;
+            total += arch.forward(&x1, &x2).rates.iter().sum::<f32>();
+        }
+        assert!(
+            total > 0.0,
+            "the matched architecture emitted no spikes across 20 seeds; it is \
+             silent again and every arm built on it reports a bias, not a readout"
+        );
     }
 
     #[test]

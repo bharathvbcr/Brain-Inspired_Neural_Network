@@ -1138,16 +1138,21 @@ class SharedValidityOwnerTest(unittest.TestCase):
         problems = cell_validity.validity_problems(payload)
         self.assertTrue(any("non-finite" in p for p in problems), problems)
 
-    def test_every_recorded_campaign_cell_still_passes(self):
-        """The new checks must void nothing that was already published.
+    #: Waves whose registered outcome is a completion RATE, so a voided cell is
+    #: their measurement rather than a defect in them.
+    #:
+    #: Everything not listed here is expected to be wholly valid, which is the
+    #: right default: a new wave that deliberately produces voided cells fails
+    #: this test until its author adds it here and says why. Wave 13 is the
+    #: first such wave, and splitting it out was forced by this test failing
+    #: when it landed - it had conflated "no published verdict rests on a voided
+    #: cell" with "no cell in these directories is ever voided", and only the
+    #: first is the invariant worth having.
+    COMPLETION_RATE_WAVES = ("w13rec",)
 
-        A gate that retroactively invalidates the record is not a hardening,
-        it is a re-scoring, and it would need its own registration.
-        """
-        import cell_validity
+    def campaign_cells(self):
         roots = [ROOT / "results" / "shd_attention_campaign_v1" / "cells",
                  ROOT / "results" / "shd_attention_campaign_v2"]
-        checked = 0
         for root in roots:
             for path in sorted(root.glob("*.json")):
                 if path.name in ("manifest.json",) or path.name.startswith("plan"):
@@ -1155,10 +1160,48 @@ class SharedValidityOwnerTest(unittest.TestCase):
                 payload = json.loads(path.read_text())
                 if "accuracy" not in payload:
                     continue
-                self.assertEqual(cell_validity.validity_problems(payload), [],
-                                 f"{path.name} would now be voided")
-                checked += 1
+                yield path, payload
+
+    def test_every_recorded_campaign_cell_still_passes(self):
+        """The gate must void nothing a published verdict rests on.
+
+        A gate that retroactively invalidates the record is not a hardening,
+        it is a re-scoring, and it would need its own registration.
+        """
+        import cell_validity
+        checked = 0
+        for path, payload in self.campaign_cells():
+            wave = path.name.split("__", 1)[0]
+            if wave in self.COMPLETION_RATE_WAVES:
+                continue
+            self.assertEqual(cell_validity.validity_problems(payload), [],
+                             f"{path.name} would now be voided")
+            checked += 1
         self.assertGreater(checked, 600, f"only {checked} cells checked")
+
+    def test_wave_13_voided_exactly_the_cells_its_record_reports(self):
+        """Wave 13's voided cells ARE its measurement, so they are pinned here.
+
+        `RESULT_2026-08-23_W13_RECURRENT_STABILITY.md` reports ten voided cells,
+        every one `rec+fixed` and every one on saturation. If the gate ever
+        stopped voiding them the wave's completion table - and R-2's verdict -
+        would silently change.
+        """
+        import cell_validity
+        voided = []
+        for path, payload in self.campaign_cells():
+            if not path.name.startswith("w13rec"):
+                continue
+            problems = cell_validity.validity_problems(payload)
+            if problems:
+                voided.append((path.name, problems))
+        self.assertEqual(len(voided), 10, f"wave 13 voided {len(voided)}, not 10")
+        for name, problems in voided:
+            self.assertIn("rec-fixed", name, "a voided wave-13 cell that is not rec+fixed")
+            self.assertTrue(
+                all("saturated_fraction" in p for p in problems),
+                f"{name} voided for something other than saturation: {problems}",
+            )
 
     def test_a_clipped_cell_cannot_be_read_as_an_unclipped_one(self):
         import cell_validity
@@ -1167,6 +1210,58 @@ class SharedValidityOwnerTest(unittest.TestCase):
         self.assertTrue(any("clipping bound" in w
                             for w in cell_validity.stability_warnings(clipped)))
 
+
+
+
+
+
+class AnalyserMeanTest(unittest.TestCase):
+    """The three analyser `mean` copies, pinned as agreeing and as differing.
+
+    Sixteen copies of `mean` across the Rust experiment binaries agreed on every
+    non-empty input and disagreed only on the empty one, and which copy a binary
+    carried decided whether a report said `0.0000` or `NaN`. The same shape
+    exists here: three analysers define `mean`, and they part company on empty.
+
+    They are not converged, because the difference is deliberate —
+    `analyse_wave11`'s report tolerates an empty condition and says NaN, while
+    the other two are called only where `load` has already refused a partial arm
+    and should fail loudly if that ever stops being true. Pinning both directions
+    is what keeps "deliberate" from decaying into "drifted".
+    """
+
+    def copies(self):
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import analyse_wave8
+        import analyse_wave11
+        import temporal_campaign_verdict
+        return {
+            "analyse_wave8": analyse_wave8.mean,
+            "analyse_wave11": analyse_wave11.mean,
+            "temporal_campaign_verdict": temporal_campaign_verdict.mean,
+        }
+
+    def test_they_agree_exactly_on_every_non_empty_input(self):
+        copies = self.copies()
+        for values in ([0.5], [0.1, 0.2, 0.35], [0.0, 1.0], [0.7062] * 12):
+            results = {name: fn(values) for name, fn in copies.items()}
+            first = next(iter(results.values()))
+            for name, value in results.items():
+                self.assertEqual(
+                    value.hex() if isinstance(value, float) else value,
+                    first.hex() if isinstance(first, float) else first,
+                    f"{name} disagrees on {values}",
+                )
+
+    def test_they_differ_on_empty_and_that_is_deliberate(self):
+        copies = self.copies()
+        self.assertTrue(
+            copies["analyse_wave11"]([]) != copies["analyse_wave11"]([]),
+            "analyse_wave11.mean must return NaN for an empty condition",
+        )
+        for name in ("analyse_wave8", "temporal_campaign_verdict"):
+            with self.assertRaises(ValueError, msg=f"{name} must refuse an empty arm"):
+                copies[name]([])
 
 
 

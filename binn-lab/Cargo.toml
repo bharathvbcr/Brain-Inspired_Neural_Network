@@ -166,3 +166,7 @@ path = "experiments/shortcut_accessibility_contrast.rs"
 [[bin]]
 name = "shd-instrument"
 path = "experiments/shd_instrument.rs"
+
+[[bin]]
+name = "credit-depth-scaling"
+path = "experiments/credit_depth_scaling.rs"

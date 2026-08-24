@@ -5,7 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, ShdSample, SHD_CHANCE};
+use binn_data::{default_shd_dir, load_fixture, load_shd_split_capped, SHD_CHANCE};
+use binn_lab::{mean_or_nan, shd_sample_to_example};
 use binn_learn::{
     hierarchical_bootstrap, shuffle_labels, InputRateClassifier, InputRateConfig,
     PairedPredictions, ShdAlifArm, ShdAlifConfig, ShdAlifRule, ShdExample, ShdSuperSpikeCeiling,
@@ -191,8 +192,8 @@ fn run_comparison(
             split.test.len()
         ));
     }
-    let train: Vec<ShdExample> = split.train.iter().map(to_example).collect();
-    let test: Vec<ShdExample> = split.test.iter().map(to_example).collect();
+    let train: Vec<ShdExample> = split.train.iter().map(shd_sample_to_example).collect();
+    let test: Vec<ShdExample> = split.test.iter().map(shd_sample_to_example).collect();
     let labels: Vec<u32> = test.iter().map(|example| example.label).collect();
     let mut records = Vec::with_capacity(n_seeds);
 
@@ -282,7 +283,7 @@ fn run_comparison(
         .collect();
     let input_degenerate = degeneracy(&input_predictions, split.n_classes);
     let hidden_degenerate = degeneracy(&hidden_predictions, split.n_classes);
-    let shuffled_label_mean = mean(
+    let shuffled_label_mean = mean_or_nan(
         &records
             .iter()
             .map(|record| record.shuffled_label_accuracy)
@@ -334,13 +335,13 @@ fn run_comparison(
         } else {
             "official SHD"
         },
-        mean(
+        mean_or_nan(
             &records
                 .iter()
                 .map(|record| record.input_accuracy)
                 .collect::<Vec<_>>()
         ),
-        mean(
+        mean_or_nan(
             &records
                 .iter()
                 .map(|record| record.hidden_accuracy)
@@ -421,19 +422,6 @@ fn protocol_hash(
         hash = hash.wrapping_mul(0x100_0000_01b3);
     }
     hash
-}
-
-fn to_example(sample: &ShdSample) -> ShdExample {
-    ShdExample {
-        frames: sample.frames.clone(),
-        t: sample.t,
-        n_in: sample.n_in,
-        label: sample.label,
-    }
-}
-
-fn mean(values: &[f32]) -> f32 {
-    values.iter().sum::<f32>() / values.len() as f32
 }
 
 const fn yes_no(value: bool) -> &'static str {

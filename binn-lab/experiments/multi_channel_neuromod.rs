@@ -24,6 +24,7 @@ use std::process::ExitCode;
 
 use binn_core::Rng;
 use binn_lab::guards::Verdict;
+use binn_lab::mean;
 use binn_learn::{CreditSignal, MultiChannelNeuromodulator};
 
 const PROTOCOL_VERSION: u64 = 136;
@@ -35,13 +36,6 @@ const THETA: f32 = 1.0;
 const BETA: f32 = 5.0;
 /// Minimum fraction of seeds a property must hold on to be reported as supported.
 const PROPERTY_FLOOR: f32 = 0.95;
-
-fn mean(v: &[f32]) -> f32 {
-    if v.is_empty() {
-        return 0.0;
-    }
-    v.iter().sum::<f32>() / v.len() as f32
-}
 
 fn mean_abs(v: &[f32]) -> f32 {
     if v.is_empty() {

@@ -1,4 +1,4 @@
-# The attention kernel had no gate, and its pin had never passed
+# Gate F had no attention arm, and the attention pin was split by optimisation level
 
 **Date:** 2026-08-22
 **Branch:** `harden-before-cross-arch`, developed in an isolated worktree because
@@ -9,47 +9,116 @@ per-cell validity gate.
 
 ---
 
-## 1. The finding that stopped the line
+## 1. The finding that stopped the line — **corrected: the pin was profile-split, not broken**
 
-`every_attention_arm_forward_and_backward_is_bit_pinned` **fails at `HEAD`**, for
-all four attention arms. Measured in a clean worktree at `597aeba`, no
-working-tree edits, deterministic across repeated runs:
+> **Correction, 2026-08-22 (later the same day).** The measurement below is
+> real, but its conclusion is wrong, and so was the conclusion of the commit it
+> replaced. `every_attention_arm_forward_and_backward_is_bit_pinned` produces
+> **different hashes at different optimisation levels**. Same source, same
+> machine, only `-C opt-level` varying:
+>
+> | opt-level | 0 | 1 | 2 | 3 |
+> |---|---|---|---|---|
+> | side | unoptimised | unoptimised | optimised | optimised |
+>
+> LTO and `codegen-units` are not involved — the flip reproduces in the plain
+> test profile with only `-C opt-level` changed. So both pins were correct, each
+> for the profile it was taken under, and each looked broken from the other:
+>
+> | commit | `cargo test` | `cargo test --release` |
+> |---|---|---|
+> | `0cc0522` (pre-re-pin constants) | **pass** | **fail** |
+> | `7f908c7` (re-pinned constants) | **fail** | **pass** |
+>
+> This section measured under `--release` (see §9) and concluded the old
+> constants "match no committed state". They match it exactly at `-C
+> opt-level=0`. The claim that the pin "had never passed" is withdrawn: it
+> passed at `597aeba` and `0cc0522` in debug, which is where the three commit
+> messages asserting a clean suite were looking. Nobody captured hashes from an
+> uncommitted tree; there was no missing kernel revision.
+>
+> **The kernel never moved.** Three independent checks: `7f908c7`'s edit to
+> `shd_attention.rs` is +33 lines entirely inside `mod tests` and its
+> non-comment, non-constant diff to `shd_matched_arms.rs` is empty; no commit
+> since touches `shd_attention.rs`, `shd_matched_arms.rs` or `shd_matched.rs`;
+> and the `ff-fixed-attn` cell recorded by this very commit still reproduces
+> **1/1 bit-identical** under `scripts/gate_f_rust.py`.
+>
+> **The recorded corpus is unaffected.** `shd-instrument` is a release build, so
+> every recorded cell and every Gate F re-run sits on the optimised side — the
+> side currently pinned. Nothing in `results/` needs re-recording.
+>
+> **Repair.** The pin now records **both** sides and fails unless the output
+> matches one of them exactly, with a companion assertion that all four arms
+> land on the same side. Verified passing at opt-levels 0, 1, 2, 3 and
+> `--release`, and verified to still fail in both debug and release when the
+> attention kernel is deliberately perturbed.
+>
+> **Mechanism, identified the same day.** `positional_code` calls `.sin()` and
+> `.cos()` on the same argument. At opt-level >= 2 LLVM merges that pair into
+> Darwin's `__sincosf_stret`; at 0 and 1 it emits separate `sinf` and `cosf`.
+> Confirmed in the emitted assembly (`__sincosf_stret` present at O3, absent at
+> O0), and the two routines disagree by 1 ULP on 12 of this fixture's 120
+> phases — reproduced in a standalone C program calling both on the same `f32`
+> bit patterns, matching the Rust probe bit-for-bit. A stage-by-stage bisection
+> puts the first divergence in `z[0]`, the embedded input, while the spike train
+> hashes identically; it propagates from there. This is also why only the
+> attention read-out moves (`positional_code` is the only sin/cos in the arm
+> path) and why `--fp-contract=off` changed nothing — contraction was never
+> involved.
+>
+> **Linux is a third set of values — measured, not inferred.** The split is
+> Darwin-specific, and Linux shares neither side:
+>
+> | platform | opt-level | path taken | values |
+> |---|---|---|---|
+> | Darwin | 0–1 | separate `sinf`/`cosf` | unoptimised pin |
+> | Darwin | ≥2 | `__sincosf_stret` | optimised pin |
+> | glibc 2.41 | any | `sincosf` | **neither** |
+>
+> On glibc, `sincosf` agrees with separate `sinf`/`cosf` on all 120 phases, so
+> Linux has no opt-level split. But glibc's values are not Darwin's: across the
+> 40 positional rows, Linux differs from the unoptimised side in 8 and from the
+> optimised side in 4. Verified under Debian glibc 2.41 on **both** x86_64 and
+> aarch64, which agree with each other exactly — a libm difference, not an
+> architecture one. The harness was validated by first confirming the C
+> reproduction matches the Rust optimised side bit-for-bit on Darwin.
+>
+> Two consequences, both real. The pin **will fail on a Linux host**, matching
+> neither side — that is the pin working, and it needs a third *measured* side
+> before it runs in Linux CI. And attention-arm cells recorded on Linux cannot
+> be bit-identical to macOS-recorded ones at any optimisation level, so Gate F
+> comparisons of attention cells are meaningful only within one platform until
+> `positional_code` stops depending on the platform's libm — which changes
+> release numerics and is therefore a provenance event, not a cleanup.
+>
+> **What survives.** §3 is independent and stands: Gate F's corpus really was
+> 296 cells with every rust cell `ff+fixed`, `parse_cell_id` really had no field
+> for an arm, and `regress_cell` really did invoke `train-cell` without `--arm`.
+> The attention path genuinely had no recorded-cell gate. §2's independent
+> derivation also stands, and is what proved the kernel itself is sound.
 
-```
-test result: FAILED. 194 passed; 1 failed
-attention kernel output moved for ["ff+fixed+attn", "ff+alif+attn",
-                                   "rec+fixed+attn", "rec+alif+attn"]
-```
+Superseded text, retained so the error is auditable rather than erased:
 
-It also fails at `516e9c7`, `fcfadbd` and `a3dafd1` — **every commit in which it
-has existed.** `516e9c7` is the commit that introduced `shd_attention.rs`, so
-the module has no history before it, and no committed state produces the pinned
-hashes. They were captured from a working tree that was never committed.
+~~`every_attention_arm_forward_and_backward_is_bit_pinned` **fails at `HEAD`**,
+for all four attention arms. It also fails at `516e9c7`, `fcfadbd` and
+`a3dafd1` — every commit in which it has existed, so no committed state produces
+the pinned hashes; they were captured from a working tree that was never
+committed.~~
 
-Three commit messages over that span assert a clean suite; `597aeba` says "623
-tests pass, 0 fail", and `SUMMARY_2026-08-22_CAMPAIGN_AND_RECORD_REPAIR.md` §7
-says "56 `test result: ok`, 0 failures".
-
-Which entries had moved, against the current kernel:
-
-| arm | entries differing |
-|---|---|
-| `ff+fixed+attn`, `ff+alif+attn` | 3 and 6 — `grad_w_in` and the attention gradient |
-| `rec+fixed+attn`, `rec+alif+attn` | 2 through 6 — only membrane and spikes agreed |
-
-### Why it mattered more than one red test
+### Why Gate F's coverage gap still mattered
 
 Gate F is the only bit-identity gate against recorded cells. Its corpus is 296
 cells, 216 of them rust, and **every one is `ff+fixed`**. `parse_cell_id` splits
 a six-field id that has no place for an arm, and `regress_cell` invoked
 `train-cell` without `--arm`. So the gate could not express a cell on any other
-arm even in principle, and the one test that would have caught an
-attention-kernel change was the one that had never passed.
+arm even in principle.
 
 Waves 1–10 are not in question: every cell came from one binary, hash-verified
 per instance. What was unverified is whether **today's source still produces
 what that binary produced** on the attention path — which is exactly the
-comparability a new wave needs against the 96 reused controls.
+comparability a new wave needs against the 96 reused controls. That gap was
+real, and §3 closes it.
 
 ---
 
@@ -82,9 +151,10 @@ f32 central differencing to resolve; the worst relative deviation among those is
 absolute tolerance would accept a systematically wrong gradient on small entries,
 and an earlier version of this check would have.
 
-**Conclusion: the kernel is right and the pin was stale.** The constants are
-re-pinned, and the comment above them records that the old values match no
-committed state, which entries moved, and what each new one rests on.
+**Conclusion: the kernel is right.** That half held, and it is what settled the
+question — this derivation passes against the kernel on both sides of the
+optimisation split. The second half, "and the pin was stale", was wrong: the
+pin matched the kernel exactly, at `-C opt-level=0`. See the correction in §1.
 
 ---
 

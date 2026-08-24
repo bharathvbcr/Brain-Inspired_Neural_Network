@@ -28,6 +28,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use binn_core::Rng;
+use binn_lab::{mean, std_error};
 use binn_learn::{
     ShdBroadcastPm1, ShdDfa, ShdEpropCeiling, ShdExample, ShdRlLearnedFb, ShdRlReinforceFb,
     ShdTrainConfig,
@@ -66,22 +67,6 @@ fn generate_synthetic_frames(
             }
         })
         .collect()
-}
-
-fn mean(vals: &[f32]) -> f32 {
-    if vals.is_empty() {
-        return 0.0;
-    }
-    vals.iter().sum::<f32>() / vals.len() as f32
-}
-
-fn std_error(vals: &[f32]) -> f32 {
-    if vals.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(vals);
-    let var = vals.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (vals.len() - 1) as f32;
-    (var / vals.len() as f32).sqrt()
 }
 
 fn main() -> ExitCode {

@@ -107,26 +107,38 @@ with LCB −0.0048. Nobody has isolated why.
       0.0189 → 0.0127 while synchrony grows 0.1248 → 0.1336 and the ratio goes
       6.6× → 10.5×. Descriptive, **not registered**, and must not be leaned on
       until checked at a third budget.
-- [ ] **H2 relative question for the recurrent arm.** Now that the arm completes
-      at `--surrogate-scale 0.4`, ask whether recurrence degrades *less* under
-      shuffling than feed-forward does. Requires a matched `ff+fixed` baseline at
-      the same surrogate scale; that baseline is part of the measurement, not
-      optional. No absolute ceiling claim from this configuration.
-- [ ] **Recurrent numerical marginality.** 3/3 seeds complete with zero
-      non-finite events, but peaks span 3.08e10 to 3.93e33 against ~0.15 for a
-      healthy `ff+alif`. Per the registered stopping rule, **no smaller surrogate
-      scale will be tried**. If it matters enough to fix, the next intervention
-      is truncated BPTT.
+- [ ] **H2 relative question for the recurrent arm.** Ask whether recurrence
+      degrades *less* under shuffling than feed-forward does. **The blocking
+      dependency is now met:** this item required "a matched `ff+fixed` baseline
+      at the same surrogate scale", and wave 14 produced exactly that — 12/12
+      `ff+fixed` and 12/12 `ff+fixed+attn` at scale 0.4, with `ff+fixed` scoring
+      0.7088 against 0.7062 archived at the default, so the scale is not
+      distorting it (`RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md`).
+      What remains is the shuffled arm itself. No absolute ceiling claim from
+      this configuration.
+- [ ] **Recurrent numerical marginality.** Still open, but the evidence here is
+      superseded: this item cites 3 seeds at h512, and wave 13 measured it across
+      **48 cells** at the anchor width and budget
+      (`RESULT_2026-08-23_W13_RECURRENT_STABILITY.md`). What that adds is a
+      completion rate rather than an anecdote — `rec+alif` 11/12 at scale 0.4 and
+      8/12 at 1.0 — and a second failure mode: `rec+fixed` does not diverge at
+      0.4 at all, it **saturates**, ten cells voided with up to 52% of hidden
+      units pinned at maximum firing. Adaptation is what prevents that, so on
+      this substrate adaptation is stabilising. Per the registered stopping rule,
+      **no smaller surrogate scale will be tried**. If it matters enough to fix,
+      the next interventions in evidence order are per-sample gradient clipping
+      at a threshold from the recurrent arm's own distribution, then h64, then
+      truncated BPTT.
 
 ## 5. Provenance and verification
 
-- [ ] **Commit the record.** Preregistrations, amendments and cells are
-      uncommitted in a repo whose last commit predates most of this work. The
-      ordering that carries the epistemic weight — rule registered *before* run —
-      is attested by prose and mtimes only. mtimes are consistent (H1 amendment
-      14 min before the first new cell; convergence amendment 98 min before the
-      e800 cells) but are **not tamper-evident**. Cheapest credibility fix
-      available.
+- [x] **Commit the record.** *(2026-08-23.)* Done, and the premise this item
+      rested on is no longer true. The record was first committed in `a3dafd1`
+      and every preregistration, amendment, result and analyser since has been
+      committed before the data it governs existed — waves 12, 13 and 14 each
+      registered and had their analyser frozen in commits that precede their
+      first cell. The ordering that carries the epistemic weight is attested by
+      git history rather than by prose and mtimes.
 - [~] **Gate F to 13/13 on the current binary.** Currently 7 cells, 0 failures.
 - [!] **`matrix_authorized`.** False since 2026-08-03, with
       `historical_reference` and `clean_reference` also false. **Not closeable by

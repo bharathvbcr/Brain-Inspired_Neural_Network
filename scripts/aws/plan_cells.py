@@ -349,6 +349,91 @@ def wave12_adaptation_by_attention():
     return cells
 
 
+def wave13_recurrent_stability():
+    """W13 - can the recurrent arms complete at the anchor budget at all?
+
+    Registered in `results/PREREG_2026-08-23_RECURRENT_STABILITY.md`.
+
+    Wave 12 deferred the recurrent half of the substrate factorial because wave
+    11 completed 15 of 24 unclipped at h256/e100, and under the campaign's own
+    rule an arm with any diverged cell reports zero usable cells. This wave does
+    not attempt that measurement. It asks the prior question - **is there an
+    operating point at the anchor budget where these arms complete** - and its
+    registered outcome is a completion rate, not an accuracy.
+
+    Running the measurement instead would be spending a wave to re-learn wave
+    11. The evidence says so rather than intuition:
+
+      * Wave 11 removed the clip that diverged wave 4 and nine cells still died,
+        at optimizer steps 438-1035 against wave 4's median of ~176. Removing
+        the flag delayed the divergence rather than ending it.
+      * **No recurrent cell at h128 has ever run past e20.** The two that exist
+        already show the trouble: `rec+alif` completes with a peak gradient norm
+        of 1.166e11, and `rec+fixed` - never stress-tested before - records
+        **2 non-finite events**, which the validity gate voids. e400 is 12,800
+        optimizer steps against e20's ~640, twenty times deeper into the range
+        where wave 11's cells died.
+
+    So `rec+fixed` is not the stable alternative to `rec+alif`, and neither has
+    been shown to survive the budget the anchor requires.
+
+    Two arms x two surrogate scales x 12 seeds = 48 cells, at the anchor width,
+    contract, geometry and budget. No attention: it roughly quadruples the cost
+    and wave 11 showed `rec+alif+attn` diverges too, so it buys nothing until a
+    substrate completes on its own.
+
+    No clipping, on either lever. `--clip-grad-norm` is what diverged wave 4
+    (`FINDING_2026-08-22_WAVE4_KILLED_ITS_OWN_CELLS.md`), and `--clip-sample-grad-norm`
+    is untried at any threshold - introducing an untried parameter into the wave
+    that is meant to characterise the baseline would confound exactly the thing
+    being measured. It is named in the prereg as the next lever, not this one.
+    """
+    cells = []
+    for seed in SEEDS:
+        for arm in ("rec+fixed", "rec+alif"):
+            for scale in (1.0, 0.4):
+                cells.append(cell("w13rec", arm, 128, 400, seed, surrogate_scale=scale))
+    return cells
+
+
+def wave14_recurrent_measurement():
+    """W14 - the recurrent half of the substitution test, at wave 13's operating point.
+
+    Registered in `results/PREREG_2026-08-23_RECURRENT_MEASUREMENT.md`.
+
+    Wave 12 refuted substitution on the adaptation axis: attention's gain is
+    +0.1258 on `ff+fixed` and +0.1285 on `ff+alif`, a difference of +0.0027 that
+    is positive in 6 of 12 seeds. The recurrence axis was deferred because no
+    recurrent arm could complete a 12-seed arm at the anchor budget.
+
+    Wave 13 found the operating point: `rec+alif` at **surrogate scale 0.4**
+    completes 11 of 12 at h128 / `published-2ms` / `adjacent-sum-5` / e400.
+
+    **Every arm here runs at scale 0.4**, including the feed-forward pair. That
+    is the whole reason `ff+fixed` and `ff+fixed+attn` are regenerated rather
+    than reused: the 24 archived anchor controls ran at the registered default
+    of 1.0, and comparing a gain measured at 0.4 against one measured at 1.0
+    would confound the substrate with the scale - which is the confound this
+    wave exists to avoid, not to introduce.
+
+    `rec+alif` itself is **not** generated. Wave 13 ran exactly this
+    configuration - same arm, width, budget, contract, geometry, scale, seeds
+    and binary - and the instrument is deterministic, so re-running it would
+    produce byte-identical cells. The eleven completing cells are reused and the
+    twelfth is recorded as diverged.
+
+    36 new cells, 12 reused.
+    """
+    cells = []
+    for seed in SEEDS:
+        cells.append(cell("w14sub", "rec+alif+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+        cells.append(cell("w14sub", "ff+fixed", 128, 400, seed, surrogate_scale=0.4))
+        cells.append(cell("w14sub", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -362,6 +447,8 @@ WAVES = {
     "w10": wave10_resolution_ladder,
     "w11": wave11_recurrent_unclipped,
     "w12": wave12_adaptation_by_attention,
+    "w13": wave13_recurrent_stability,
+    "w14": wave14_recurrent_measurement,
 }
 
 

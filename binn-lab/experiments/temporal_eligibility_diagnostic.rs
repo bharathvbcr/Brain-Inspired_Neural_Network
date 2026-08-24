@@ -1,13 +1,13 @@
 //! Protocol-v147 local temporal-eligibility mechanism diagnostic.
 
+use binn_lab::{mean_or_nan, temporal_order_to_dense_examples, write_report};
 use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use binn_data::{
-    TemporalDifficulty, TemporalOrderExample, TemporalOrderSplit, TEMPORAL_DIFFICULTIES,
-    TEMPORAL_ORDER_N_CLASSES, TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
+    TemporalDifficulty, TemporalOrderSplit, TEMPORAL_DIFFICULTIES, TEMPORAL_ORDER_N_CLASSES,
+    TEMPORAL_ORDER_N_IN, TEMPORAL_ORDER_T,
 };
 use binn_learn::{
     random_feedback, train_bptt, train_feedback, DenseTemporalExample, SharedTemporalNet,
@@ -95,7 +95,7 @@ fn run() -> Result<(), String> {
 
     let difficulty = easiest_difficulty();
     let overfit_split = TemporalOrderSplit::generate(OVERFIT_TRAIN, 20, difficulty, OVERFIT_SEED)?;
-    let overfit_train = as_dense(&overfit_split.train);
+    let overfit_train = temporal_order_to_dense_examples(&overfit_split.train);
     let overfit_initial = new_model(OVERFIT_SEED);
     let overfit_feedback = random_feedback(&overfit_initial, OVERFIT_SEED);
     let mut overfit_model = overfit_initial.clone();
@@ -130,8 +130,8 @@ fn run() -> Result<(), String> {
     for seed_index in 0..DIAGNOSTIC_SEEDS {
         let seed = MASTER_SEED ^ (seed_index as u64).wrapping_mul(0x1000_00E7);
         let split = TemporalOrderSplit::generate(N_TRAIN, N_TEST, difficulty, seed)?;
-        let train = as_dense(&split.train);
-        let test = as_dense(&split.test);
+        let train = temporal_order_to_dense_examples(&split.train);
+        let test = temporal_order_to_dense_examples(&split.test);
         let initial = new_model(seed);
         let feedback = random_feedback(&initial, seed);
         let mut rfb = initial.clone();
@@ -283,18 +283,6 @@ fn easiest_difficulty() -> TemporalDifficulty {
     difficulty
 }
 
-fn as_dense(examples: &[TemporalOrderExample]) -> Vec<DenseTemporalExample> {
-    examples
-        .iter()
-        .map(|example| DenseTemporalExample {
-            frames: example.frames.clone(),
-            timesteps: TEMPORAL_ORDER_T,
-            n_in: TEMPORAL_ORDER_N_IN,
-            label: example.label,
-        })
-        .collect()
-}
-
 fn prediction_health(
     model: &SharedTemporalNet,
     examples: &[DenseTemporalExample],
@@ -338,9 +326,15 @@ fn scales_are_live(scale: ScaleSummary) -> bool {
     .all(|value| value.is_finite() && *value > 0.0)
 }
 
+/// Mean of an iterator; **NaN** for an empty one.
+///
+/// This had no empty guard at all, so an empty iterator fell out of `0.0 / 0.0`
+/// as NaN. That is [`binn_lab::mean_or_nan`]'s contract exactly, so the
+/// behaviour is unchanged and the choice is now stated rather than incidental -
+/// it is deliberately NOT `binn_lab::mean`, which would report `0.0`.
 fn mean(values: impl Iterator<Item = f32>) -> f32 {
     let values: Vec<f32> = values.collect();
-    values.iter().sum::<f32>() / values.len() as f32
+    mean_or_nan(&values)
 }
 
 fn protocol_hash() -> u64 {
@@ -365,13 +359,6 @@ fn protocol_hash() -> u64 {
     hash
 }
 
-fn write_report(path: &Path, report: &str) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    fs::write(path, report).map_err(|error| error.to_string())
-}
-
 const fn yes_no(value: bool) -> &'static str {
     if value {
         "yes"
@@ -394,7 +381,7 @@ mod tests {
     #[test]
     fn prediction_health_detects_class_collapse_without_mutation() {
         let split = TemporalOrderSplit::generate(40, 20, easiest_difficulty(), 7).unwrap();
-        let examples = as_dense(&split.test);
+        let examples = temporal_order_to_dense_examples(&split.test);
         let model = new_model(7);
         let before = model.parameter_fingerprint();
         let health = prediction_health(&model, &examples);

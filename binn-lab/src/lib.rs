@@ -6,6 +6,7 @@ pub mod c3_config;
 pub mod c3_v2_config;
 pub mod config;
 pub mod credit_config;
+pub mod credit_depth_dense;
 pub mod dfa_match_config;
 pub mod dfa_spike_config;
 pub mod eprop_true_config;
@@ -47,6 +48,7 @@ pub mod runner_shd_cal;
 pub mod shd_cal_config;
 pub mod shd_dense;
 pub mod shd_sweep_runner;
+pub mod timestamp;
 pub mod transfer_harness;
 
 pub use c2_config::{C2Config, C2_EXPERIMENT, C2_HASH_PREFIX, C2_PROTOCOL_VERSION};
@@ -79,6 +81,9 @@ pub use credit_config::{
     CREDIT_ISOLATION_EXPERIMENT_PREFIX, CREDIT_ISOLATION_HASH_PREFIX,
     CREDIT_ISOLATION_PROTOCOL_OFFSET, CREDIT_MATCHED_PROTOCOL_VERSION, CREDIT_RPE_PROTOCOL_VERSION,
 };
+pub use credit_depth_dense::{
+    credit_depth_chance, credit_depth_examples, credit_depth_input_width,
+};
 pub use dfa_match_config::{
     DfaMatchConfig, C1_DFA_CHANCE_BASELINE, C1_DFA_EXPERIMENT, C1_DFA_HASH_PREFIX,
     C1_DFA_PROTOCOL_VERSION,
@@ -103,9 +108,9 @@ pub use instrument_status::{
     authorize_campaign, CampaignKind, InstrumentState, SHD_INSTRUMENT_STATE,
 };
 pub use logging::{
-    json_escape, trace_export_seed, trace_out_path, EmitError, RunLog, StructuredLogger, TraceArea,
-    TraceEligEdge, TraceProjection, TraceRecorder, TraceScore, TraceWeightEdge, TRACE_OUT_ENV,
-    TRACE_SEED_ENV,
+    json_escape, trace_export_seed, trace_out_path, write_report, EmitError, RunLog,
+    StructuredLogger, TraceArea, TraceEligEdge, TraceProjection, TraceRecorder, TraceScore,
+    TraceWeightEdge, TRACE_OUT_ENV, TRACE_SEED_ENV,
 };
 pub use mac_probe_config::{
     effective_init_w, readout_boost_and_gain, scaled_k_wta, syn_matched_fan_out, MacProbeConfig,
@@ -141,9 +146,10 @@ pub use rl_match_config::{
     C1_RL_PROTOCOL_VERSION,
 };
 pub use runner::{
-    freeze_trials, samples_to_dense_temporal_examples, samples_to_gradient_examples,
-    BudgetDisclosure, C1Report, ConditionLabel, FrozenSplit, GateG2Verdict, MacProbeDiagnostics,
-    PairedSummary, RunRecord, Runner, SeedResult,
+    freeze_trials, mean, mean_or_nan, mean_var, samples_to_dense_temporal_examples,
+    samples_to_gradient_examples, std_error, temporal_order_to_dense_examples,
+    temporal_order_to_shd_examples, BudgetDisclosure, C1Report, ConditionLabel, FrozenSplit,
+    GateG2Verdict, MacProbeDiagnostics, PairedSummary, RunRecord, Runner, SeedResult,
 };
 pub use runner_c2::{C2Report, C2Runner, C2SeedResult, GateG3Verdict, OverlapIntervention};
 pub use runner_c3::{
@@ -192,7 +198,7 @@ pub use shd_cal_config::{
 };
 pub use shd_dense::{
     class_histogram, contract_alpha, contract_timesteps, framed_to_dense_temporal_example,
-    load_shd_dense_examples, majority_class_rate,
+    load_shd_dense_examples, majority_class_rate, shd_sample_to_example,
 };
 pub use shd_sweep_runner::{ShdSweepReport, ShdSweepResult};
 pub use transfer_harness::{

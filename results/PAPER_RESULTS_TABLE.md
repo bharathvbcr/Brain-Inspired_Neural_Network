@@ -114,7 +114,7 @@ Packaging note: [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md), [`MATC
 | `published-10ms` geometry | `ff+fixed+attn` | e400 | **0.8225** (gain +0.1491) | — | — | Wave 8 |
 | h1024 width scaling | `ff+fixed+attn` | e400 | **0.5768** (gain **−0.1618**) | — | — | Wave 8 (width inversion) |
 
-**Mechanism summary:** Attention readout advantage collapses from **+0.1258** (intact) to **+0.0049** (shuffled); **96% of the readout benefit is contingent on temporal order**.
+**Mechanism summary:** Attention readout advantage collapses from **+0.1258** (intact) to **+0.0050** (shuffled); **96% of the readout benefit is contingent on temporal order**.
 
 ---
 

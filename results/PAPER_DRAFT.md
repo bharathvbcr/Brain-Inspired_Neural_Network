@@ -56,7 +56,11 @@ The C1 harness encodes coincidence sequences with a latency encoder, integrates 
 
 ### 2.3 SHD attention readout
 
-On the Spiking Heidelberg Digits dataset, we evaluate a time-axis causal multi-head self-attention readout (`ff+fixed+attn`) over feedforward LIF hidden activations, comparing against a standard mean-rate readout (`ff+fixed`). The benchmark tests temporal structure preservation across depth ($L \in \{1, 2, 4\}$), width ($h \in \{128, 512, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), and temporal shuffling controls (`bin-shuffled`, `channel-shuffled`).
+On the Spiking Heidelberg Digits dataset, we evaluate a time-axis self-attention read-out (`+attn`) over LIF hidden activations, comparing against a standard mean-rate read-out. The read-out is **additive**: at $W_a = 0$ the arm reduces exactly to its non-attention counterpart, so any difference between them is attributable to the read-out and not to a perturbed spiking forward.
+
+Two properties of the block are stated explicitly because they bound what the result can mean. It is **not causal** — every timestep attends to every other, through a full $[T, T]$ row-softmax with no mask, so the arm consumes the whole utterance at inference. And it is **single-head**: one $q, k, v$ triple of shape $[d, d]$ per block, with depth supplied by stacking $L$ blocks rather than by splitting heads. Positional information is a fixed sinusoidal code over normalised position; without it, mean-pooled attention is permutation-invariant and the block would be blind to the order it exists to use. Every arm here is trained by the matched BPTT instrument, not by the local rule under test elsewhere in this paper; the read-out is a gradient reference, and no claim of locality is made for it.
+
+The benchmark tests temporal structure preservation across depth ($L \in \{1, 2, 4\}$), width ($h \in \{128, 512, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), temporal resolution at fixed window (`fixed-t100/t250/t500`), temporal shuffling controls (`bin-shuffled`, `channel-shuffled`), and — for the substitution question of §3.7 — the **spiking substrate itself**: $\{$feed-forward, recurrent$\} \times \{$fixed threshold, adaptive threshold$\}$, written `ff+fixed`, `ff+alif`, `rec+fixed`, `rec+alif`.
 
 ---
 
@@ -82,12 +86,21 @@ On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA re
 
 ### 3.5 SHD attention read-out and mechanism
 
-Across 600+ cells (n=12 per contrast, 0 voided), the time-axis attention readout establishes four findings on SHD:
+Across 700+ cells (n=12 per contrast, 0 voided), the time-axis attention read-out establishes five findings on SHD:
 
 1. **Headline accuracy:** `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062). ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md))
-2. **Temporal order is the mechanism:** Under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0049; **96% of the readout benefit is contingent on temporal order**. ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
+2. **Temporal order is the mechanism:** Under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0050; **96% of the readout benefit is contingent on temporal order**. ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
 3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
-4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). Temporal resolution (S-5) is refuted. ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md))
+4. **Scope limits:** Gain inverts at width h1024 (−0.1618 at L4). Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md))
+5. **Temporal resolution is an axis, and the gain falls as bins get finer.** The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
+
+   | contract | bin | `ff+fixed` | d32/L4 | gain | gain > 0 | ≥ 0.80 |
+   |---|---:|---:|---:|---:|---:|---:|
+   | `fixed-t100` | 14.0 ms | 0.6672 | 0.8599 | **+0.1927** | 12/12 | 12/12 |
+   | `fixed-t250` | 5.6 ms | 0.6844 | 0.8594 | **+0.1751** | 12/12 | 12/12 |
+   | `fixed-t500` | 2.8 ms | 0.7069 | 0.8543 | **+0.1474** | 12/12 | 12/12 |
+
+   gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks with finer resolution** — the opposite of the direction S-5 predicted, on the axis S-5 could not isolate. The baseline drifts +0.0397 across the same ladder, inside the 0.05 confound bar, so this is a property of the read-out and not of the substrate beneath it. All three rungs clear the 0.80 gate at 12/12, the coarsest most comfortably. ([`RESULT_2026-08-22_W10_RESOLUTION_LADDER.md`](RESULT_2026-08-22_W10_RESOLUTION_LADDER.md))
 
 ---
 
@@ -123,6 +136,37 @@ one where every arm reaches 1.0000.
 suite. Run on `aarch64-unknown-linux-gnu`; the absolute reference values are not
 directly comparable to the macOS-recorded ones, and the 0.90 → 1.00 effect is an
 order of magnitude larger than that drift.)*
+
+---
+
+### 3.7 The read-out does not substitute for temporal state in the substrate
+
+The +0.1258 of §3.5 has two readings the campaign could not separate, because every one of its 720 cells sat on a single substrate, `ff+fixed`: the read-out **adds** temporal structure no substrate of this kind represents, or it **substitutes** for the threshold adaptation and recurrence that `ff+fixed` happens not to have. ETLP's conclusion — that adaptation and a recurrent topology are what a spiking network needs for rich temporal structure — makes the second reading the live one. Three waves settle it.
+
+**Adaptation makes no difference to the gain, or to anything else.** At the anchor (h128, `published-2ms`, `adjacent-sum-5`, e400, d32/L4, n=12), attention's gain is **+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif`. The difference is **+0.0027** against a two-sided bar of 0.03, and is positive in **6 of 12** seeds — a coin flip. Adaptation alone does not help either: `ff+alif` reaches **0.7018** against `ff+fixed`'s 0.7062, better in **3 of 12** seeds, with **0 of 12** over the 0.80 gate. At this operating point threshold adaptation is inert. ([`RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md`](RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md))
+
+**The recurrent substrate is measurable only at one operating point, and finding it was its own wave.** `rec+alif` completes **11 of 12** at the anchor budget only at surrogate scale 0.4; at the registered default of 1.0 it completes 8 of 12. `rec+fixed` completes 12 of 24 across both scales and fails by a different mechanism — **saturation**, ten cells voided with up to 52% of hidden units pinned at maximum firing, none by divergence at scale 0.4. Adaptation is what prevents that, so on the recurrent substrate adaptation is *stabilising*, which is the opposite of the hypothesis that wave's own name asserted. ([`RESULT_2026-08-23_W13_RECURRENT_STABILITY.md`](RESULT_2026-08-23_W13_RECURRENT_STABILITY.md))
+
+**On the recurrent substrate the gain roughly doubles.** With every arm run at scale 0.4 so substrate and scale cannot be confounded, and paired over the seeds where both arms completed:
+
+| substrate | pairs | rate read-out | + attention d32/L4 | gain |
+|---|---:|---:|---:|---:|
+| `rec+alif` | 10 | 0.5262 | 0.7874 | **+0.2612** |
+| `ff+fixed` | 12 | 0.7088 | 0.8289 | **+0.1201** |
+
+The difference is **+0.1411** against a bar of 0.03, positive in **10 of 10** recurrent pairs. The scale is not doing the work: `ff+fixed` at 0.4 scores **0.7088** against **0.7062** archived at 1.0, a difference of +0.0026. ([`RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md`](RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md))
+
+**So substitution is refuted on both axes**, and the read-out's advantage is indifferent to adaptation and *larger* where the substrate is recurrent. Read with §3.5's shuffle result — 96% of the advantage contingent on temporal order — the claim the paper supports is about what the read-out consumes, not about a deficiency of one substrate.
+
+Four limits are load-bearing and are stated here rather than in a footnote.
+
+1. **The recurrent gain is measured from a lower base.** `rec+alif` starts 0.18 below `ff+fixed` and has 0.4738 of headroom against 0.2912. Normalising by headroom — post-hoc, not registered — the ratio falls from 2.2× to **1.34×**. The ordering survives; most of its apparent size does not.
+2. **The recurrent substrate does not win.** `rec+alif+attn` reaches 0.7874 against `ff+fixed+attn`'s 0.8289 at the same scale. Attention closes most of the gap the substrate gives away, and not all of it. No verdict is issued on that ordering.
+3. **The recurrent arms are numerically extreme**, with peak gradient norms to 4.9e32 against 1.13e8 for the largest cell anywhere else in the campaign, and the comparison rests on **ten pairs, the registered minimum**. The two arms lost different seeds; one further loss on either would have made the comparison unreportable.
+4. **Survivorship is reduced, not removed.** Pairing on seed compares the same trajectories rather than two differently filtered subsets, but the surviving recurrent pairs are those that did not diverge, and divergence is not random. The feed-forward comparison carries no such exposure at 12/12.
+
+
+---
 
 ## 4. Discussion and limitations
 

@@ -49,7 +49,10 @@ Destroy temporal order and **the read-out's entire advantage disappears**:
 
 | | intact | bin-shuffled |
 |---|---:|---:|
-| gain of d32/L4 over `ff+fixed` | **+0.1258** | **+0.0049** |
+| gain of d32/L4 over `ff+fixed` | **+0.1258** | **+0.0050** |
+
+> **Correction, 2026-08-23.** This figure was **+0.0049**, obtained by subtracting the two rounded means printed above it (0.6983 − 0.6934). Recomputed from the cells the difference is 0.004969, which is **+0.0050** at four decimal places. The measurement is unchanged and so is the conclusion — 1 − 0.0050/0.1258 is still 96% — but a number in the record must follow from the cells rather than from other rounded numbers. Found by extending `scripts/verify_published_numbers.py` to recompute the component means as well as the derived gains; the check is kept at its original tolerance rather than widened.
+
 
 Under shuffling the attention arm scores 0.6983 against the plain arm's 0.6934.
 **96% of the read-out's benefit is contingent on temporal order being intact.**

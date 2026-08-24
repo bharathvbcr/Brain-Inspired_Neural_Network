@@ -23,7 +23,22 @@ run() {
   echo
 }
 
-run "campaign tooling invariants" python3 scripts/test_campaign_tooling.py
+# Was: one named test file of six. Discovery instead, so a wave that adds an
+# analyser and a test for it is covered the day it lands rather than whenever
+# someone remembers to extend this line.
+run "every discovered python test" bash scripts/run_python_tests.sh
+# The record is a citation graph, and "read this only through the document that
+# retired it" is only a rule if the link goes there.
+run "every internal record link resolves" python3 scripts/check_record_links.py
+# A sweep rather than a curated list: it asks whether the cells can produce every
+# number in a wave result, and so can catch one nobody thought to name. It prints
+# its own coincidence rate; verify_published_numbers.py above is the strong check.
+run "every wave-result number is derivable" python3 scripts/check_every_number.py
+# The analyser is frozen so that IT is the authority. That only helps if what
+# gets published is what it said, and every verdict in a write-up is retyped.
+run "published verdicts match their analyser" python3 scripts/check_verdicts_transcribed.py
+# A stale index reports a state that has moved, which is worse than none.
+run "the record index is current" python3 scripts/build_results_index.py --check
 run "published numbers reproduce from cells" python3 scripts/verify_published_numbers.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 

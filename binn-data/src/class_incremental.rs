@@ -307,11 +307,44 @@ mod tests {
 
     #[test]
     fn stream_stores_no_raw_replay_buffer() {
-        let stream = ClassIncrementalStream::new(ClassIncConfig::quick(3));
-        // Only config + RNG + counters — no Vec<Sample> resident field.
-        let _ = stream.config_fingerprint();
-        assert_eq!(stream.probe_class(0).len(), stream.config().test_per_class);
-        assert_eq!(stream.probe_class(0).len(), stream.config().test_per_class);
+        // This test asserted only that `probe_class(0).len()` matched a config
+        // field -- twice, on identical lines -- which says nothing whatever
+        // about what the stream stores. It is named for a structural guarantee
+        // and now checks it two ways.
+        let small = ClassIncrementalStream::new(ClassIncConfig::quick(3));
+        let large = ClassIncrementalStream::new(ClassIncConfig::quick(20));
+
+        // 1. Resident size does not grow with the dataset. A retained
+        //    `Vec<Sample>` would make these differ, because `quick(20)` covers
+        //    many times the examples of `quick(3)`.
+        assert_eq!(
+            std::mem::size_of_val(&small),
+            std::mem::size_of_val(&large),
+            "stream size depends on the dataset; something is being retained"
+        );
+        assert_eq!(
+            std::mem::size_of::<ClassIncrementalStream>(),
+            std::mem::size_of::<ClassIncConfig>()
+                + std::mem::size_of::<Rng>()
+                + 2 * std::mem::size_of::<usize>(),
+            "the stream gained a field beyond config + RNG + two counters"
+        );
+
+        // 2. Probes are regenerated, not served from a buffer. A stored buffer
+        //    would survive advancing the stream; a regenerated probe is a pure
+        //    function of the class and config, so it must be reproducible from
+        //    a fresh stream.
+        let before = small.probe_class(0);
+        let fresh = ClassIncrementalStream::new(ClassIncConfig::quick(3)).probe_class(0);
+        assert_eq!(before.len(), small.config().test_per_class);
+        assert!(
+            !before.is_empty(),
+            "an empty probe would satisfy any comparison"
+        );
+        assert_eq!(
+            before, fresh,
+            "probe_class is not a pure function of class and config"
+        );
     }
 
     #[test]

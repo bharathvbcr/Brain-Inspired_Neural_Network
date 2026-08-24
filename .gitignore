@@ -95,3 +95,12 @@ results/**/reference-worktrees/
 # by scripts/shd_calibration/reference.py at the pinned REFERENCE_COMMIT.
 results/*/reference-cache/
 results/*/reference-worktrees/
+
+# Personal / non-research content — marketing copy and machine-local sync.
+# This repo is public; keep it to the scientific record. These files stay on
+# disk, they are just untracked.
+# NOTE: results/BLOG_*.md are NOT marketing. They are indexed in
+# results/INDEX.md and cited by RESULT_/PAPER_STATUS_ docs, so they stay tracked.
+*LinkedIn*
+sync_to_obsidian/
+*.draft.md

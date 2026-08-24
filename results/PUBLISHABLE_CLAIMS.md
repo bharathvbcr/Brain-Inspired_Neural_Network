@@ -90,7 +90,7 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 **May claim:**
 1. **Headline accuracy:** On the SHD benchmark, a time-axis attention readout (`ff+fixed+attn`) reaches **0.8320** at `d32/L4` at `e400` (**12/12 seeds ≥ 0.80**, budget-stable |e400−e200|=0.0002, gain **+0.1258** over `ff+fixed` 0.7062; [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md)).
-2. **Mechanism (temporal order):** Bin-shuffling causes a **+0.1337** accuracy collapse on the attention arm in **12 of 12 seeds** (seed range +0.0967 to +0.1568), versus **+0.0128** for the plain arm (10× factor). Under shuffling, the attention advantage disappears (+0.1258 → +0.0049; **96% of readout benefit is order-dependent**; [`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md)).
+2. **Mechanism (temporal order):** Bin-shuffling causes a **+0.1337** accuracy collapse on the attention arm in **12 of 12 seeds** (seed range +0.0967 to +0.1568), versus **+0.0128** for the plain arm (10× factor). Under shuffling, the attention advantage disappears (+0.1258 → +0.0050; **96% of readout benefit is order-dependent**; [`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md)).
 3. **Sample efficiency:** Attention readout reaches 98.1% of e400 accuracy by 10 epochs (bracketed at `(5, 10]`; [`SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md`](SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md)).
 
 **Scope limitations (must disclose):**

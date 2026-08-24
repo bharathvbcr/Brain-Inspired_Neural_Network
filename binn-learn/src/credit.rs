@@ -354,6 +354,36 @@ mod tests {
         let m = Modulators::new(0.5, 0.25, 2.0);
         assert!((m.for_post(0) - 1.5).abs() < 1e-6);
         assert_eq!(m.for_post(999), m.for_post(0));
+
+        // Post-independence is only a *constraint* if some implementation of
+        // the same trait can violate it. `PostSynapticCredit` does, which is
+        // what makes the line above a check rather than a restatement of
+        // `fn for_post(&self, _post: CellId)`.
+        let mut per_cell = PostSynapticCredit::zeros(2);
+        per_cell.set(0, 1.5);
+        per_cell.set(1, -0.5);
+        assert_ne!(
+            per_cell.for_post(999),
+            per_cell.for_post(0),
+            "the contrast case must vary by post, or the broadcast assertion \
+             above is vacuous"
+        );
+
+        // Each channel has to reach the scalar. A stub returning a constant, or
+        // an implementation that dropped a channel, satisfies the single point
+        // above and fails here.
+        let base = Modulators::new(0.5, 0.25, 2.0).for_post(0);
+        for (label, moved) in [
+            ("reward", Modulators::new(0.9, 0.25, 2.0)),
+            ("novelty", Modulators::new(0.5, 0.60, 2.0)),
+            ("attention", Modulators::new(0.5, 0.25, 3.0)),
+        ] {
+            assert_ne!(
+                moved.for_post(0),
+                base,
+                "the {label} channel does not reach the broadcast scalar"
+            );
+        }
     }
 
     #[test]
@@ -597,9 +627,79 @@ mod tests_extra {
     #[test]
     fn multi_channel_neuromodulator_computes_combined_signal() {
         let mod_system = MultiChannelNeuromodulator::new(4, 123, 0.01);
+        // `theta` is 1.0 and `v_soma[2]` sits exactly on it, so the ACh gate at
+        // cell 2 is exactly 1 and its channel must equal the dopamine term
+        // outright. That is the sharpest point available on the gate.
+        let (rpe, theta, beta) = (0.5_f32, 1.0_f32, 5.0_f32);
         let v_soma = vec![0.0, 0.5, 1.0, -0.5];
-        let sig = mod_system.compute_signal(1.0, 0.5, &v_soma, 1.0, 5.0);
+        let sig = mod_system.compute_signal(1.0, rpe, &v_soma, theta, beta);
         assert_eq!(sig.len(), 4);
+
+        // Length alone is satisfied by a block returning zeros. The identity
+        // below is what "combined" means, and it is exact: the same three terms
+        // in the same order the implementation adds them.
+        let parts = mod_system.components(rpe, &v_soma, theta, beta);
+        assert!(
+            (0..4).any(|i| parts.dopamine.for_post(i) != 0.0),
+            "fixture produced an all-zero dopamine term; every assertion below \
+             would hold trivially"
+        );
+        for i in 0..4u32 {
+            let expected = mod_system.da_weight * parts.dopamine.for_post(i)
+                + mod_system.ach_weight * parts.acetylcholine.for_post(i)
+                + mod_system.ne_weight * parts.noradrenaline.for_post(i);
+            assert_eq!(
+                sig.for_post(i).to_bits(),
+                expected.to_bits(),
+                "cell {i}: the combined signal is not the weighted sum of its \
+                 own channels"
+            );
+        }
+
+        // The documented channel semantics, each checkable exactly.
+        for i in 0..4u32 {
+            let da = parts.dopamine.for_post(i);
+            assert_eq!(
+                parts.noradrenaline.for_post(i).to_bits(),
+                (rpe.abs() * da).to_bits(),
+                "cell {i}: noradrenaline is not dopamine amplified by |rpe|"
+            );
+            if da != 0.0 {
+                // "All three channels preserve the sign of the directional
+                // dopamine term" - the module's own doc comment.
+                assert_eq!(
+                    parts.acetylcholine.for_post(i).signum(),
+                    da.signum(),
+                    "cell {i}: acetylcholine inverted the dopamine sign"
+                );
+                assert_eq!(
+                    parts.noradrenaline.for_post(i).signum(),
+                    da.signum(),
+                    "cell {i}: noradrenaline inverted the dopamine sign"
+                );
+                // ACh gates by proximity, so it can only attenuate.
+                assert!(
+                    parts.acetylcholine.for_post(i).abs() <= da.abs(),
+                    "cell {i}: the ACh gate amplified rather than gated"
+                );
+            }
+        }
+
+        // Cell 2 sits on the threshold: gate exactly 1, so ACh is dopamine.
+        assert_eq!(
+            parts.acetylcholine.for_post(2).to_bits(),
+            parts.dopamine.for_post(2).to_bits(),
+            "a cell exactly at threshold must pass the ACh gate unattenuated"
+        );
+        // And a cell far from it must be attenuated, or the gate is not gating.
+        let far = parts.acetylcholine.for_post(3).abs();
+        let far_da = parts.dopamine.for_post(3).abs();
+        if far_da != 0.0 {
+            assert!(
+                far < far_da,
+                "a cell 1.5 from threshold was not attenuated by the ACh gate"
+            );
+        }
     }
 
     #[test]

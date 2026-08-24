@@ -57,6 +57,48 @@ def check(label: str, computed: float, claimed: float, tol: float = 5e-5) -> boo
     return ok
 
 
+def acc_present(root: Path, stem: str) -> dict[int, float]:
+    """Accuracies keyed by seed, for arms where a cell may legitimately be absent.
+
+    `acc` above refuses a missing cell, which is right for the waves whose arms
+    are complete by construction. Waves 13 and 14 measure arms that diverge, so
+    absence is data there and this returns what exists.
+
+    A cell that failed the validity gate is **not** an accuracy: wave 13's
+    `rec+fixed` cells were emitted while saturating, and counting them would
+    inflate both the completion counts and any mean taken over them. The gate
+    comes from `cell_validity`, its single owner - the independence this file
+    needs is from the ANALYSER'S ARITHMETIC, which is what gets transcribed into
+    the paper, not from the validity rule.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from cell_validity import validity_problems
+
+    out = {}
+    for seed in SEEDS:
+        path = root / f"{stem}__s{seed}.json"
+        if not path.is_file():
+            continue
+        cell = json.loads(path.read_text())
+        if validity_problems(cell):
+            continue
+        out[seed] = cell["accuracy"]
+    return out
+
+
+def paired_gain(treatment: dict[int, float], control: dict[int, float]) -> tuple[float, int]:
+    """Mean of `treatment - control` over seeds present in BOTH, and how many.
+
+    Written here rather than imported: pooling instead of intersecting is the
+    failure mode this cross-check exists to catch in the analyser, so it must
+    not share the analyser's implementation of it.
+    """
+    shared = sorted(set(treatment) & set(control))
+    if not shared:
+        raise SystemExit("no seed completed in both arms")
+    return sum(treatment[s] - control[s] for s in shared) / len(shared), len(shared)
+
+
 def main() -> int:
     print("Recomputing published numbers from cells (independent implementation)\n")
     results = []
@@ -102,6 +144,13 @@ def main() -> int:
     results.append(check("M-3 d64 - d32 at h128", avg(d64) - avg(intact),
                          published(W9, r"\*\*mean\(d64/L4\) − mean\(d32/L4\) = ([+-]?\d\.\d+)\*\*")))
 
+    results.append(check("d32/L4 under bin-shuffling", avg(shuf),
+                         published(W9, r"\| \*\*d32/L4\*\* \*\(the headline\)\* \| \*\*0\.\d+\*\* \| \*\*(0\.\d+)\*\*")))
+    results.append(check("ff+fixed under bin-shuffling", avg(ctl_shuf),
+                         published(W9, r"\| `ff\+fixed` \| 0\.\d+ \| (0\.\d+) \|")))
+    results.append(check("residual gain under shuffling", avg(shuf) - avg(ctl_shuf),
+                         published(W9, r"\| gain of d32/L4 over `ff\+fixed` \| \*\*[+-]?\d\.\d+\*\* \| \*\*([+-]?\d\.\d+)\*\*")))
+
     # The headline gain, quoted in four separate documents.
     gain = avg(intact) - avg(ctl)
     results.append(check("headline gain over ff+fixed", gain,
@@ -118,6 +167,101 @@ def main() -> int:
           f"{'headline seeds >= 0.80':<46} computed {n_gate}/12       published 12/12")
     results.append(n_gate == 12)
 
+    # ---- wave 7: the sample-efficiency number the PAPER cites ---------------
+    #
+    # 3.5 item 3 quotes "98.1% of e400 accuracy by 10 epochs (0.7337)". Nothing
+    # recomputed it until now, which made it the only number in the SHD sections
+    # of the draft resting on transcription alone.
+    W7 = "RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md"
+    e10_attn = acc(V1, f"w7flr__ff-fixed-attn__h128__e10__{ANCHOR}__d32l1")
+    e10_rate = acc(V1, f"w7flr__ff-fixed__h128__e10__{ANCHOR}")
+    e5_attn = acc(V1, f"w7flr__ff-fixed-attn__h128__e5__{ANCHOR}__d32l1")
+    results.append(check("W7 e10 attention mean", avg(e10_attn),
+                         published(W7, r"\| 10 \| 0\.\d+ \| (0\.\d+) \|")))
+    results.append(check("W7 e10 gain over the rate arm", avg(e10_attn) - avg(e10_rate),
+                         published(W7, r"\| 10 \| 0\.\d+ \| 0\.\d+ \| ([+-]?\d\.\d+) \|")))
+    # The percentage the paper quotes: e10 attention against the d32/L1 arm at
+    # convergence, which is wave 1's `w1` cell, not the d32/L4 headline.
+    l1_converged = acc(V1, f"w1__ff-fixed-attn__h128__e400__{ANCHOR}__d32l1")
+    results.append(check("W7 e10 as a fraction of e400 (%)",
+                         100.0 * avg(e10_attn) / avg(l1_converged),
+                         published(W7, r"\| 10 \| 0\.\d+ \| 0\.\d+ \| [+-]?\d\.\d+ \| \*\*(\d+\.\d)%\*\*"),
+                         tol=0.05))
+    results.append(check("W7 e5 attention mean", avg(e5_attn),
+                         published(W7, r"\| 5 \| 0\.\d+ \| (0\.\d+) \|")))
+
+    # ---- wave 10: the resolution ladder, on a family that isolates it ------
+    W10 = "RESULT_2026-08-22_W10_RESOLUTION_LADDER.md"
+    ladder = {}
+    for rung in ("fixed-t100", "fixed-t250", "fixed-t500"):
+        attn = acc(V2, f"w10con__ff-fixed-attn__h128__e400__{rung}__adjacent-sum-5__d32l4")
+        rate = acc(V2, f"w10con__ff-fixed__h128__e400__{rung}__adjacent-sum-5")
+        ladder[rung] = (avg(attn), avg(rate))
+        results.append(check(f"{rung} rate-readout mean", avg(rate),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| (0\.\d+) \|")))
+        results.append(check(f"{rung} d32/L4 mean", avg(attn),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| 0\.\d+ \| (0\.\d+) \|")))
+        results.append(check(f"C-1 {rung} gain", avg(attn) - avg(rate),
+                             published(W10, rf"\| `{rung}` \| [\d.]+ \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check("C-2 gain(t500) - gain(t100)",
+                         (ladder["fixed-t500"][0] - ladder["fixed-t500"][1])
+                         - (ladder["fixed-t100"][0] - ladder["fixed-t100"][1]),
+                         published(W10, r"gain\(t500\) − gain\(t100\) = \*\*([+-−]?\d\.\d+)\*\*")))
+    results.append(check("C-3 baseline drift across the ladder",
+                         ladder["fixed-t500"][1] - ladder["fixed-t100"][1],
+                         published(W10, r"`ff\+fixed` t500 − t100 = \*\*([+-]?\d\.\d+)\*\*")))
+
+    # ---- wave 12: adaptation x attention, scale 1.0 ------------------------
+    W12 = "RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md"
+    alif = acc(V2, f"w12ada__ff-alif__h128__e400__{ANCHOR}")
+    alif_attn = acc(V2, f"w12ada__ff-alif-attn__h128__e400__{ANCHOR}__d32l4")
+    results.append(check("A-2 ff+alif gain", avg(alif_attn) - avg(alif),
+                         published(W12, r"gain \*\*([+-]?\d\.\d+)\*\*\s*\n?\(bar")))
+    results.append(check("A-1 difference of gains",
+                         (avg(alif_attn) - avg(alif)) - gain,
+                         published(W12, r"gains is \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check("A-3 ff+alif mean", avg(alif),
+                         published(W12, r"`ff\+alif` reaches\s*\n?\*\*(0\.\d+)\*\*")))
+
+    # ---- wave 13: completion, not accuracy --------------------------------
+    W13 = "RESULT_2026-08-23_W13_RECURRENT_STABILITY.md"
+    rec04 = acc_present(V2, f"w13rec__rec-alif__h128__e400__{ANCHOR}__ss0.4")
+    results.append(check("R-1 rec+alif ss0.4 completions", float(len(rec04)),
+                         published(W13, r"\| `rec\+alif` \| \*\*0\.4\*\* \| \*\*(\d+)/12\*\*")))
+
+    # ---- wave 14: paired over the intersection, scale 0.4 -----------------
+    W14 = "RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md"
+    rec_attn = acc_present(V2, f"w14sub__rec-alif-attn__h128__e400__{ANCHOR}__d32l4__ss0.4")
+    ff04 = acc_present(V2, f"w14sub__ff-fixed__h128__e400__{ANCHOR}__ss0.4")
+    ff04_attn = acc_present(V2, f"w14sub__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__ss0.4")
+
+    rec_gain, rec_pairs = paired_gain(rec_attn, rec04)
+    ff_gain, ff_pairs = paired_gain(ff04_attn, ff04)
+    results.append(check(f"M-1 rec+alif paired gain (n={rec_pairs})", rec_gain,
+                         published(W14, r"\| `rec\+alif` \| 10 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    results.append(check(f"ff+fixed paired gain at 0.4 (n={ff_pairs})", ff_gain,
+                         published(W14, r"\| `ff\+fixed` \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*")))
+    def paired_mean(values: dict[int, float], other: dict[int, float]) -> float:
+        shared = sorted(set(values) & set(other))
+        return sum(values[k] for k in shared) / len(shared)
+
+    for label, arm, partner, pat in (
+        ("rec+alif paired mean", rec04, rec_attn,
+         r"\| `rec\+alif` \| 10 \| (0\.\d+) \|"),
+        ("rec+alif+attn paired mean", rec_attn, rec04,
+         r"\| `rec\+alif` \| 10 \| 0\.\d+ \| (0\.\d+) \|"),
+        ("ff+fixed+attn paired mean at 0.4", ff04_attn, ff04,
+         r"\| `ff\+fixed` \| 12 \| 0\.\d+ \| (0\.\d+) \|"),
+    ):
+        results.append(check(label, paired_mean(arm, partner), published(W14, pat)))
+
+    results.append(check("M-2 difference of gains", rec_gain - ff_gain,
+                         published(W14, r"difference \*\*([+-]?\d\.\d+)\*\* against a two-sided bar")))
+    results.append(check("M-4 ff+fixed mean at scale 0.4",
+                         sum(ff04[k] for k in sorted(set(ff04) & set(ff04_attn)))
+                         / len(set(ff04) & set(ff04_attn)),
+                         published(W14, r"at scale 0\.4 is \*\*(0\.\d+)\*\*")))
+
     # ---- the paper draft must not resurrect a withdrawn claim ---------------
     print("\n  paper draft:")
     draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
@@ -133,6 +277,18 @@ def main() -> int:
     required = {
         "the A6 undertraining caveat": "The reference is undertrained, and the task saturates",
         "the saturation consequence": "learning speed",
+        # The four load-bearing caveats on section 3.7. Each is the kind of
+        # sentence an editing pass shortens away, and each is what stops the
+        # recurrent result reading larger than it is.
+        "that the read-out is not causal": "not causal",
+        # S-5 was refuted and wave 10 replaced it. The draft must say both, or a
+        # reader takes "resolution is refuted" for "resolution does not matter",
+        # which is the opposite of what fixed-tN measured.
+        "that S-5 is withdrawn rather than merely refuted": "refuted and is withdrawn",
+        "the direction the gain moves with resolution": "shrinks with finer resolution",
+        "the headroom normalisation of the recurrent gain": "1.34",
+        "that the recurrent substrate does not win": "does not win",
+        "that ten pairs is the registered minimum": "the registered minimum",
     }
     for label, needle in required.items():
         ok = needle in draft

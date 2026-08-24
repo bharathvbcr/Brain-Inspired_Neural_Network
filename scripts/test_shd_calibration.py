@@ -4,11 +4,20 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
 from pathlib import Path
 import unittest
 
-import numpy as np
+# `from scripts...` is an absolute package import, so the REPOSITORY ROOT has to
+# be importable - not `scripts/`, which is what running this file directly puts
+# on the path. Without this the file raises `No module named 'scripts'` and can
+# only be run as `python3 -m scripts.test_shd_calibration` from the root, which
+# is not how any gate invokes it. It was unreachable for that reason until
+# 2026-08-23, and unreachable because no gate ran it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import numpy as np  # noqa: E402
 
 from scripts.shd_calibration.data import (
     Contract,

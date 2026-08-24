@@ -52,6 +52,9 @@ step "cargo clippy -D warnings" cargo clippy --locked --workspace --all-targets 
 # ---- 3. Full test suite (unit + property + determinism + doc tests)
 step "cargo test workspace" cargo test --locked --workspace
 step "cargo doc tests" cargo test --locked --workspace --doc
+# The step above runs at opt-level 0. Every cell comes from a release build, and
+# the attention arms hash differently between the two - see the script.
+step "kernel in both profiles" ./scripts/check_kernel_profiles.sh
 
 # ---- 4. Global constraints GC1-GC7
 step "GC1-GC7 checks" ./scripts/gc_checks.sh

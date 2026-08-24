@@ -32,9 +32,24 @@
 use std::path::Path;
 
 use binn_data::{
-    frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEventContract,
+    frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEventContract, ShdSample,
 };
-use binn_learn::{DenseTemporalExample, MATCHED_PHYSICAL_TAU_MS};
+use binn_learn::{DenseTemporalExample, ShdExample, MATCHED_PHYSICAL_TAU_MS};
+
+/// One cached SHD sample in the form the SHD learning stack takes.
+///
+/// A field rename only: [`ShdSample`] and [`ShdExample`] carry the same flat
+/// `t * n_in` frame buffer, and the per-sample `t` / `n_in` are copied from the
+/// sample rather than re-derived, so a split framed under any contract converts
+/// without the caller restating its geometry.
+pub fn shd_sample_to_example(sample: &ShdSample) -> ShdExample {
+    ShdExample {
+        frames: sample.frames.clone(),
+        t: sample.t,
+        n_in: sample.n_in,
+        label: sample.label,
+    }
+}
 
 /// Membrane decay for one framing contract, `exp(-dt_ms / tau)`.
 ///

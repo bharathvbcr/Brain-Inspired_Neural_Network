@@ -1,5 +1,23 @@
 # Track B Rescue Experiment Report
 
+> ## SUPERSEDED 2026-08-23 by `RESULT_2026-08-23_TRACK_B_REREAD.md`.
+>
+> These numbers came from a gradient ceiling built with the wrong constructor —
+> recurrent, while every treatment arm is feedforward — over a shared forward
+> that could not emit a spike at any seed. Both are repaired
+> (`RESULT_2026-08-23_MATCHED_ARCH_REPAIR.md`).
+>
+> The harness warning below was right that something was wrong and wrong about
+> what: it blamed "a saturated task or an undertrained ceiling", and the
+> inversions came from the ceiling carrying a `hidden × hidden` matrix no arm had.
+> It was right about saturation, which the re-read confirms and makes the headline.
+>
+> Under a corrected instrument, on a disjoint seed block registered before it ran:
+> **0 of 20 inverted, E1.1 FAIL (0.5715), E1.3 PASS** — with E1.3, the ceiling and
+> a third arm all at exactly 1.0000, variance 0.000000. The PASS is real by the
+> registered rule and establishes nothing about credit assignment.
+
+
 **Protocol Version:** 132  
 **Experiment ID:** track-b-rescue (schedule name; not a `c1-*-<hex>` config hash)  
 **Schedule:** FULL SCIENTIFIC (n=20)  

@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use binn_lab::guards::{gap_closed_clamped, gap_closed_exceeds_ceiling, CeilingHealth, Verdict};
-use binn_lab::{freeze_trials, samples_to_gradient_examples, Config};
+use binn_lab::{freeze_trials, mean, samples_to_gradient_examples, std_error, Config};
 use binn_learn::{
     MatchedGradient, MatchedRlFlat, MatchedRlLearnedFb, MatchedRlReinforceFb, DEFAULT_MATCHED_BETA,
 };
@@ -50,22 +50,6 @@ struct TransferSeedResult {
     frozen_rfb_acc: f32,
     learned_rfb_acc: f32,
     gradient_acc: f32,
-}
-
-fn mean(vals: &[f32]) -> f32 {
-    if vals.is_empty() {
-        return 0.0;
-    }
-    vals.iter().sum::<f32>() / vals.len() as f32
-}
-
-fn std_error(vals: &[f32]) -> f32 {
-    if vals.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(vals);
-    let var = vals.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (vals.len() - 1) as f32;
-    (var / vals.len() as f32).sqrt()
 }
 
 fn main() -> ExitCode {
@@ -150,7 +134,7 @@ fn main() -> ExitCode {
             MatchedRlLearnedFb::new(hidden, 0.05, 0.0, 0.01, DEFAULT_MATCHED_BETA, seed);
         let r_learned = learned.train_and_evaluate(epochs, &train_data, &test_data);
 
-        let mut grad = MatchedGradient::new(hidden, 0.05, DEFAULT_MATCHED_BETA, seed);
+        let mut grad = MatchedGradient::new_feedforward(hidden, 0.05, DEFAULT_MATCHED_BETA, seed);
         let r_grad = grad.train_and_evaluate(epochs, &train_data, &test_data);
 
         results.push(TransferSeedResult {

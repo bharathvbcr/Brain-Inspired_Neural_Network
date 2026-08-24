@@ -45,8 +45,22 @@ criterion = "0.5"
 # crates in the workspace. Cross-crate inlining requires LTO.
 #
 # Cost: full workspace release builds get slower (single codegen unit + fat
-# LTO). Determinism is unaffected — rustc does not enable fast-math, so no
-# float reassociation or FMA contraction is introduced by these settings.
+# LTO). These settings introduce no float reassociation of their own — rustc
+# does not enable fast-math.
+#
+# They do NOT, however, make output identical across optimisation levels. The
+# SHD attention read-out produces different f32 results at `-C opt-level` 0/1
+# than at 2/3; the flip reproduces with only `-C opt-level` varying, so it is
+# not caused by LTO or `codegen-units`. The mechanism is LLVM merging the
+# `sin`/`cos` pair in `positional_code` into Darwin's `__sincosf_stret` at
+# opt-level >= 2, which differs from separate `sinf`/`cosf` by 1 ULP on some
+# phases. Measured 2026-08-22; see the pin
+# comment beside `every_attention_arm_forward_and_backward_is_bit_pinned` in
+# `binn-learn/src/shd_matched_arms.rs`. Compare bit-identity only between
+# builds at the same optimisation level — every recorded cell is `--release`.
+# Linux/glibc has no such split but produces a THIRD set of values (measured on
+# glibc 2.41, x86_64 and aarch64 alike), so attention-arm cells are comparable
+# only within one platform.
 [profile.release]
 lto = "fat"
 codegen-units = 1

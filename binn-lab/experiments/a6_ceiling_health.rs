@@ -69,7 +69,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::thread;
 
-use binn_lab::{freeze_trials, samples_to_gradient_examples, DfaMatchConfig, RlMatchConfig};
+use binn_lab::{
+    freeze_trials, mean_or_nan, samples_to_gradient_examples, DfaMatchConfig, RlMatchConfig,
+};
 use binn_learn::{
     GradientExample, MatchedBroadcastErr, MatchedDfa, MatchedGradient, MatchedRlFlat,
     MatchedRlGraded, MatchedRlReinforceFb, DEFAULT_MATCHED_BETA,
@@ -325,13 +327,6 @@ struct ArmRow {
     third: Option<f32>,
 }
 
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        return f32::NAN;
-    }
-    values.iter().sum::<f32>() / values.len() as f32
-}
-
 /// Standard error of the mean. Reported so a reader can tell an ordering flip
 /// from sampling noise instead of guessing.
 fn standard_error(values: &[f32]) -> f32 {
@@ -339,7 +334,7 @@ fn standard_error(values: &[f32]) -> f32 {
     if n < 2 {
         return f32::NAN;
     }
-    let m = mean(values);
+    let m = mean_or_nan(values);
     let variance = values.iter().map(|v| (v - m) * (v - m)).sum::<f32>() / (n - 1) as f32;
     (variance / n as f32).sqrt()
 }
@@ -406,10 +401,10 @@ fn run_suite(
     });
     let arm_rows: Vec<ArmRow> = arm_rows.into_iter().map(|r| r.expect("arm row")).collect();
     let arms = ArmRow {
-        arm: mean(&arm_rows.iter().map(|r| r.arm).collect::<Vec<_>>()),
-        control: mean(&arm_rows.iter().map(|r| r.control).collect::<Vec<_>>()),
+        arm: mean_or_nan(&arm_rows.iter().map(|r| r.arm).collect::<Vec<_>>()),
+        control: mean_or_nan(&arm_rows.iter().map(|r| r.control).collect::<Vec<_>>()),
         third: if arm_rows.iter().all(|r| r.third.is_some()) {
-            Some(mean(
+            Some(mean_or_nan(
                 &arm_rows
                     .iter()
                     .map(|r| r.third.expect("third arm"))
@@ -442,7 +437,7 @@ fn run_suite(
         .enumerate()
         .map(|(b, budget)| {
             let values = per_budget.get(&b).cloned().unwrap_or_default();
-            (*budget, mean(&values), standard_error(&values))
+            (*budget, mean_or_nan(&values), standard_error(&values))
         })
         .collect();
 

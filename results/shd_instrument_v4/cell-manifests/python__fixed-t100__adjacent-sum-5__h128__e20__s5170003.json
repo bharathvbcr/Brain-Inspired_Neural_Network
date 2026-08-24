@@ -1,0 +1,32 @@
+{
+  "backend": "python",
+  "contract": "fixed-t100",
+  "core_manifest_sha256": "f5dfb04af8f761f0bf33a15a5da7af687e8134c8c3a7424eeec13060f178d240",
+  "datasets": {
+    "test": "9d7088793af81d574b447dc72c6044a192db25e73b6b0a24a66e1306b266fb5a",
+    "train": "81730543032bb41d0aef048c2e541374a004199f2ebf0e9cae98389c980acab7"
+  },
+  "epochs": 20,
+  "exposure": {
+    "checkpoint_selected_on": "none-final-epoch",
+    "final_test_reads": 1,
+    "test_reads_during_training": 0,
+    "train_reads": 20,
+    "validation_reads": 0
+  },
+  "geometry": "adjacent-sum-5",
+  "hidden": 128,
+  "id": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170003",
+  "orders": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n8156-e100-s5170003.orders",
+    "sha256": "20de8b16b289ad152bc498e319dbc0fe45b677aea4f34d7e676a2dd7d9df8139"
+  },
+  "replay_identity": "python__fixed-t100__adjacent-sum-5__h128__e20__s5170003:e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a:f5dfb04af8f761f0bf33a15a5da7af687e8134c8c3a7424eeec13060f178d240",
+  "schema": "shd-cal-cell-manifest-v1",
+  "seed": 5170003,
+  "source_fingerprint": "e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a",
+  "weights": {
+    "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v4/initialization/n140-h128-s5170003.weights",
+    "sha256": "d4a3c9994567ffa9e1617150466894342f62dbf6ebb872e1ded2c67a752e4e9b"
+  }
+}

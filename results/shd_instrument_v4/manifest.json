@@ -42,7 +42,7 @@
     },
     "rust_binary": {
       "path": "/Users/bharath/Code/parameter_golf/binn/target/release/shd-instrument",
-      "sha256": "4de5c977151e24c6958065ae284f2417e9faf0bb28dd5e30a43dcc6984190194"
+      "sha256": "b32fe35ecbbce536e8a2f1a3732cc2ff4b03098a8d05c64bfbb24bfd862f4e7e"
     },
     "test_events": {
       "path": "/Users/bharath/Code/parameter_golf/binn/data/shd/events/test.events",
@@ -96,6 +96,25 @@
       ],
       "to_rust_binary": "4de5c977151e24c6958065ae284f2417e9faf0bb28dd5e30a43dcc6984190194",
       "to_source_fingerprint": "6f4aa2d1f1baece2241b49069884f832bd4ee4a57d8344c650fb007043f48a73"
+    },
+    {
+      "amendment": "AMENDMENT_2026-08-03_PROVENANCE_DISCHARGE_BY_BIT_IDENTITY.md",
+      "discharged_by": "gate-f-rust bit-identity",
+      "from_rust_binary": "4de5c977151e24c6958065ae284f2417e9faf0bb28dd5e30a43dcc6984190194",
+      "from_source_fingerprint": "6f4aa2d1f1baece2241b49069884f832bd4ee4a57d8344c650fb007043f48a73",
+      "gate_f_cell_count": 8,
+      "gate_f_cells": [
+        "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001",
+        "rust__fixed-t100__adjacent-sum-5__h128__e20__s5170002",
+        "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170001",
+        "rust__fixed-t100__adjacent-sum-5__h256__e20__s5170002",
+        "rust__fixed-t100__channels-700__h128__e20__s5170001",
+        "rust__fixed-t100__channels-700__h128__e20__s5170002",
+        "rust__fixed-t100__channels-700__h256__e20__s5170001",
+        "rust__fixed-t100__channels-700__h256__e20__s5170002"
+      ],
+      "to_rust_binary": "b32fe35ecbbce536e8a2f1a3732cc2ff4b03098a8d05c64bfbb24bfd862f4e7e",
+      "to_source_fingerprint": "e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a"
     }
   ],
   "reference": {
@@ -123,7 +142,7 @@
     5170002,
     5170003
   ],
-  "source_fingerprint": "6f4aa2d1f1baece2241b49069884f832bd4ee4a57d8344c650fb007043f48a73",
+  "source_fingerprint": "e86727a7af71611f27286a7501edbee10bf3ccc672dce507f5abe813e0dd375a",
   "supersedes": {
     "path": "/Users/bharath/Code/parameter_golf/binn/results/shd_instrument_v3",
     "reason": "historical finalizer matched current and best accuracy on each epoch line; v3 reference training artifacts remain immutable",

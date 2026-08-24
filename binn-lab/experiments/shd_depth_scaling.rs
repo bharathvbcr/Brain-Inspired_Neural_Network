@@ -89,7 +89,7 @@ use binn_engine::THETA_REST;
 use binn_lab::guards::{CeilingHealth, Verdict};
 use binn_lab::{
     authorize_campaign, class_histogram, contract_alpha, contract_timesteps,
-    load_shd_dense_examples, majority_class_rate, CampaignKind,
+    load_shd_dense_examples, majority_class_rate, mean, std_error, CampaignKind,
 };
 use binn_learn::shd_alif::{ACTIVITY_MAX, ACTIVITY_MIN};
 use binn_learn::{
@@ -287,22 +287,6 @@ struct DepthArm {
     modulator: Vec<Vec<f32>>,
     treatment_distinct: Vec<usize>,
     ceiling_distinct: Vec<usize>,
-}
-
-fn mean(values: &[f32]) -> f32 {
-    if values.is_empty() {
-        return 0.0;
-    }
-    values.iter().sum::<f32>() / values.len() as f32
-}
-
-fn std_error(values: &[f32]) -> f32 {
-    if values.len() <= 1 {
-        return 0.0;
-    }
-    let m = mean(values);
-    let var = values.iter().map(|v| (v - m).powi(2)).sum::<f32>() / (values.len() - 1) as f32;
-    (var / values.len() as f32).sqrt()
 }
 
 /// Column-wise mean of a ragged-free matrix of per-layer values.

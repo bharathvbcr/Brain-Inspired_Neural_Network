@@ -540,10 +540,52 @@ mod tests {
         for depth in 1..=4 {
             let layers = vec![16usize; depth];
             let mut g = MatchedDeepGradient::new(&layers, 0.05, 0.0, 5.0, 11);
+
+            // The stack has the depth that was asked for. A constructor that
+            // ignored `layers` would satisfy every accuracy bound below.
+            assert_eq!(
+                g.depth(),
+                depth,
+                "constructor did not honour the layer spec"
+            );
+            assert_eq!(
+                g.w_hh.len(),
+                depth - 1,
+                "wrong number of hidden-to-hidden blocks"
+            );
+
+            let before = weight_bits(&g);
             let r = g.train_and_evaluate(5, &train, &test);
             assert!(r.accuracy.is_finite());
             assert!((0.0..=1.0).contains(&r.accuracy));
+            assert!(r.loss.is_finite(), "depth {depth}: non-finite loss");
+
+            // The assertions above are all satisfied by a `train_and_evaluate`
+            // that returns a constant and touches nothing. This one is not: it
+            // is deliberately about the parameters moving, not about the arm
+            // learning, because depths 2-4 are a known residual that sits at
+            // chance and is pinned elsewhere. A smoke test may be a smoke test;
+            // it may not be satisfied by doing no work.
+            let after = weight_bits(&g);
+            assert_ne!(
+                before, after,
+                "depth {depth}: five epochs left every parameter untouched"
+            );
         }
+    }
+
+    /// Bit pattern of every learnable parameter, for "did training move
+    /// anything" comparisons. Bits rather than values so a NaN that appeared
+    /// during training registers as a change instead of comparing unequal to
+    /// itself and hiding one.
+    fn weight_bits(g: &MatchedDeepGradient) -> Vec<u32> {
+        let mut bits: Vec<u32> = g.w_in.iter().map(|v| v.to_bits()).collect();
+        for block in &g.w_hh {
+            bits.extend(block.iter().map(|v| v.to_bits()));
+        }
+        bits.extend(g.w_out.iter().map(|v| v.to_bits()));
+        bits.push(g.by.to_bits());
+        bits
     }
 
     /// The exact SHD pathology, reproduced and detected.
