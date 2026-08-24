@@ -33,9 +33,15 @@ while IFS= read -r hit; do
   rest="${hit#*:}"
   lineno="${rest%%:*}"
   src_line="$(sed -n "${lineno}p" "$f")"
-  # Skip comment-only mentions of the word unsafe.
-  case "$src_line" in
-    *//*) continue ;;
+  # Skip comment-only mentions of the word unsafe. Strip the comment part rather
+  # than discarding the whole line: matching `*//*` against the whole line
+  # skipped any line containing `//` anywhere, so appending a trailing comment
+  # to a real `unsafe` block hid it from the gate entirely. Verified: a planted
+  # `unsafe { }` passed GC6 with a trailing comment and failed without one.
+  code_part="${src_line%%//*}"
+  case "$code_part" in
+    *unsafe*) ;;
+    *) continue ;;
   esac
   prev=""
   i=$((lineno - 1))

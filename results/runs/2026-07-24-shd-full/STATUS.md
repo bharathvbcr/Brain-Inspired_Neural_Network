@@ -31,7 +31,7 @@ cargo run --locked --release -p binn-lab --bin c1 -- --shd-full \
 
 ## Path-proof smoke (DONE)
 
-Artifact: [`c1_shd_full_smoke.md`](c1_shd_full_smoke.md) · camp [`runs/2026-07-24-shd-full/c1_shd_full_smoke.md`](runs/2026-07-24-shd-full/c1_shd_full_smoke.md)
+Artifact: [`c1_shd_full_smoke.md`](c1_shd_full_smoke.md) · camp [`runs/2026-07-24-shd-full/c1_shd_full_smoke.md`](c1_shd_full_smoke.md)
 
 | arm | mean accuracy |
 |---|---:|
@@ -47,7 +47,7 @@ Artifact: [`c1_shd_full_smoke.md`](c1_shd_full_smoke.md) · camp [`runs/2026-07-
 
 ## Full official run (DONE — attempt 3)
 
-Artifact: [`results/c1_shd_full.md`](c1_shd_full.md) · camp [`runs/2026-07-24-shd-full/c1_shd_full.md`](runs/2026-07-24-shd-full/c1_shd_full.md)
+Artifact: [`results/c1_shd_full.md`](c1_shd_full.md) · camp [`runs/2026-07-24-shd-full/c1_shd_full.md`](c1_shd_full.md)
 
 | Field | Value |
 |---|---|
@@ -90,4 +90,4 @@ This is the **nearest feasible BPTT ceiling** at SHD scale in this hand-rolled c
 
 ## Convert path
 
-End-to-end Rust: `binn-data` feature `shd-convert` → `convert-shd`. `scripts/convert_shd.py` exits 2 with redirect. See [`data/shd/README.md`](../data/shd/README.md).
+End-to-end Rust: `binn-data` feature `shd-convert` → `convert-shd`. `scripts/convert_shd.py` exits 2 with redirect. See [`data/shd/README.md`](../../../data/shd/README.md).
