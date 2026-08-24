@@ -34,6 +34,9 @@ run "every internal record link resolves" python3 scripts/check_record_links.py
 # number in a wave result, and so can catch one nobody thought to name. It prints
 # its own coincidence rate; verify_published_numbers.py above is the strong check.
 run "every wave-result number is derivable" python3 scripts/check_every_number.py
+# The analyser is frozen so that IT is the authority. That only helps if what
+# gets published is what it said, and every verdict in a write-up is retyped.
+run "published verdicts match their analyser" python3 scripts/check_verdicts_transcribed.py
 # A stale index reports a state that has moved, which is worse than none.
 run "the record index is current" python3 scripts/build_results_index.py --check
 run "published numbers reproduce from cells" python3 scripts/verify_published_numbers.py
