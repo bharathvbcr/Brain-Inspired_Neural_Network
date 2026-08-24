@@ -207,7 +207,12 @@ def main() -> int:
             "output is not evidence of anything. Fix the patterns before reading on.",
             file=sys.stderr,
         )
-        return 0
+        # Exit 2, not 0. `record_checks.sh` gives this a gate slot, and exit 0
+        # there means "passed" — so the one state this tool defines as "my
+        # output means nothing" was reported as a clean run, under a heading
+        # that reads "checks that cannot fail". Findings still exit 0: this is
+        # a review aid, and only a broken *detector* is a failure.
+        return 2
 
     print(f"calibration ok ({len(seen)} detectors, each found its own instance)")
     if tautologies:

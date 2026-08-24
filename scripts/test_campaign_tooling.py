@@ -141,11 +141,16 @@ class ValidityGateTest(unittest.TestCase):
         which every real cell carries. Omitting them made the gate look
         satisfied on a payload the instrument never emits, and hid that two of
         the three copies of the gate were not checking them at all.
+
+        It then did the same thing again with `accuracy` — the field every
+        published number is computed from, and the one field no gate read. An
+        incomplete fixture does not merely fail to test a gate; it actively
+        conceals that the gate is missing.
         """
         return {"mechanical_status": "COMPLETE",
                 "non_finite_events": 0, "classes_predicted": 20,
                 "majority_prediction": 0.11, "silent_fraction": 0.02,
-                "saturated_fraction": 0.0,
+                "saturated_fraction": 0.0, "accuracy": 0.72,
                 "temporal_condition": "intact",
                 "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
 
@@ -1057,6 +1062,9 @@ class SharedValidityOwnerTest(unittest.TestCase):
         payload = {"mechanical_status": "COMPLETE", "non_finite_events": 0,
                    "classes_predicted": 20, "majority_prediction": 0.11,
                    "silent_fraction": 0.02, "saturated_fraction": 0.0,
+                   # Every real cell carries this; a fixture without it was not
+                   # a realistic cell, and the gate now reads it.
+                   "accuracy": 0.72,
                    "temporal_condition": "intact",
                    "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
         payload.update(override)
@@ -1436,6 +1444,95 @@ class ControlPlaneCallsAreBoundedTest(unittest.TestCase):
                 self.assertIn("did not answer", str(caught.exception))
             finally:
                 module.subprocess.run = original
+
+
+class AccuracyAndNonFiniteGateTest(unittest.TestCase):
+    """The gate must read the field every published number comes from.
+
+    `accuracy` was the one measurement `validity_problems` never looked at, so a
+    cell carrying NaN, null, 2.0 or the string "0.83" scored as valid. And every
+    other gate is a comparison, so NaN passed those too: comparisons against NaN
+    are false, and `json.loads` accepts the bare `NaN` token the Rust instrument
+    would emit for a 0/0 denominator. A cell whose diagnostics were entirely NaN
+    was indistinguishable from a clean one.
+    """
+
+    def setUp(self):
+        import cell_validity
+
+        self.gate = cell_validity
+        # A cell that the gate accepts, so a rejection below is attributable to
+        # the field under test and not to the fixture.
+        self.cell = {
+            "schema": "shd-cal-cell-v1",
+            "mechanical_status": "COMPLETE",
+            "non_finite_events": 0,
+            "classes_predicted": 20,
+            "majority_prediction": 0.10,
+            "silent_fraction": 0.0,
+            "saturated_fraction": 0.0,
+            "accuracy": 0.83,
+            "temporal_condition": "intact",
+        }
+        self.assertEqual(self.gate.validity_problems(self.cell), [],
+                         "the fixture must start valid or these checks prove nothing")
+
+    def test_accuracy_must_be_a_finite_number_in_range(self):
+        for bad in (float("nan"), float("inf"), -float("inf"), 2.0, -0.3, None,
+                    "0.83", True, [0.83]):
+            cell = dict(self.cell, accuracy=bad)
+            self.assertTrue(
+                self.gate.validity_problems(cell),
+                f"accuracy={bad!r} was accepted; every published number is "
+                "computed from this field",
+            )
+
+    def test_a_nan_diagnostic_cannot_pass_a_comparison_gate(self):
+        for field in ("majority_prediction", "silent_fraction",
+                      "saturated_fraction", "non_finite_events",
+                      "classes_predicted"):
+            cell = dict(self.cell, **{field: float("nan")})
+            problems = self.gate.validity_problems(cell)
+            self.assertTrue(problems, f"{field}=NaN passed the gate")
+            self.assertIn("not finite", " ".join(problems))
+
+    def test_the_bare_nan_token_really_does_parse(self):
+        # If this ever stops being true the gate above is guarding nothing, and
+        # the test should be retired rather than left as decoration.
+        value = json.loads('{"accuracy": NaN}')["accuracy"]
+        self.assertNotEqual(value, value, "json no longer yields NaN for the bare token")
+
+    def test_a_wholly_nan_cell_is_rejected(self):
+        cell = dict(self.cell)
+        for field in ("majority_prediction", "silent_fraction",
+                      "saturated_fraction", "accuracy"):
+            cell[field] = float("nan")
+        self.assertTrue(self.gate.validity_problems(cell))
+
+    def test_the_archived_corpus_is_unaffected(self):
+        """Hardening a gate must not re-score work that was already judged.
+
+        Measured when the check landed: 953 of 1671 archived cells valid, before
+        and after. A drop here means the change voided cells retroactively,
+        which is a different and much larger decision than closing a hole.
+        """
+        root = Path(__file__).resolve().parent.parent / "results"
+        valid = total = 0
+        for path in root.rglob("*.json"):
+            try:
+                cell = json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not (isinstance(cell, dict)
+                    and str(cell.get("schema", "")).startswith("shd-cal-cell")):
+                continue
+            total += 1
+            valid += not self.gate.validity_problems(cell)
+        self.assertGreater(total, 1000, "the corpus scan found almost nothing; "
+                                        "the root is wrong and this test is vacuous")
+        self.assertEqual(valid, 953,
+                         f"{valid} of {total} cells now valid, not 953 — the gate "
+                         "has re-scored the archived record")
 
 
 if __name__ == "__main__":

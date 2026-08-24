@@ -11,7 +11,23 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 fail=0
+# Run the search first and check how it ended. `|| true` on the pipeline
+# swallowed everything: ripgrep exits 1 for "searched, found nothing" and 2 for
+# "could not search", and a missing binary exits 127 — so `rg: command not
+# found` printed "GC6 PASS: no undocumented unsafe" after reading no files.
+set +e
+rg_hits="$(rg -n --glob '*.rs' --glob '!patches/**' -e '\bunsafe\b' . </dev/null)"
+rg_rc=$?
+set -e
+if [[ $rg_rc -gt 1 ]]; then
+  echo "GC6 CANNOT RUN: the search failed (rg exit $rg_rc). GC6 read nothing."
+  echo "Install ripgrep, or GC6 is not looking at any source at all."
+  exit 1
+fi
+
 while IFS= read -r hit; do
+  # A here-string over an empty variable still yields one empty line.
+  [[ -n "$hit" ]] || continue
   [[ -z "$hit" ]] && continue
   f="${hit%%:*}"
   rest="${hit#*:}"
@@ -37,7 +53,7 @@ while IFS= read -r hit; do
       fail=1
       ;;
   esac
-done < <(rg -n --glob '*.rs' --glob '!patches/**' -e '\bunsafe\b' . || true)
+done <<< "$rg_hits"
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

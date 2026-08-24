@@ -201,7 +201,11 @@ def check(s, piped):
 
 def scan(root):
     found = []
-    for path in sorted(pathlib.Path(root).glob("scripts/*.sh")):
+    # Recursive. This said `scripts/*.sh` and printed "no check can block on
+    # stdin" while never looking at scripts/aws or scripts/azure — including the
+    # campaign bootstrap that invokes Gate F. Claiming the tree while scanning
+    # one directory of it is the same defect this scanner exists to find.
+    for path in sorted(pathlib.Path(root).glob("scripts/**/*.sh")):
         for n, line in logical_lines(path.read_text()):
             seen = set()
             for seg, piped in segments(line):
@@ -281,6 +285,11 @@ def main() -> int:
         print("refusing to report: the scanner is not calibrated")
         return 2
     root = pathlib.Path(__file__).resolve().parent.parent
+    scanned = len(list(root.glob("scripts/**/*.sh")))
+    if scanned < 20:
+        print(f"refusing to report: found only {scanned} shell scripts; "
+              "the scan root is wrong and a clean result would mean nothing")
+        return 2
     unexplained = []
     for path, n, why, line in scan(root):
         rel = str(pathlib.Path(path).relative_to(root))
@@ -295,7 +304,7 @@ def main() -> int:
         print(f"{len(unexplained)} command(s) would block on stdin. Give each an "
               f"explicit path operand, or redirect its stdin from /dev/null.")
         return 1
-    print("no check can block on stdin")
+    print(f"no check can block on stdin ({scanned} shell scripts read)")
     return 0
 
 

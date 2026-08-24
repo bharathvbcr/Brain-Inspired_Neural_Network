@@ -66,6 +66,8 @@ the person reading, not with this file.
 
 from __future__ import annotations
 
+import math
+
 # Number of SHD classes. A cell that predicted fewer has collapsed.
 EXPECTED_CLASSES = 20
 # Above this share on one class, the readout is a constant predictor wearing an
@@ -97,6 +99,16 @@ def _number(cell: dict, field: str, problems: list[str]):
     value = cell[field]
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         problems.append(f"{field}={value!r} is not a number")
+        return None
+    # NaN and infinity must be rejected here rather than left to the callers.
+    # Every gate below is a comparison, and every comparison against NaN is
+    # false, so a NaN sails through `>= MAJORITY_MAX`, `> SILENT_MAX` and
+    # `> SATURATED_MAX` alike — a cell whose diagnostics are all NaN would be
+    # scored as a clean one. `json.loads` accepts the bare `NaN` token the Rust
+    # instrument would emit for a 0/0 denominator, so this is reachable without
+    # any parse error to warn of it.
+    if not math.isfinite(value):
+        problems.append(f"{field}={value!r} is not finite")
         return None
     return value
 
@@ -155,6 +167,15 @@ def validity_problems(cell: dict, spec: dict | None = None) -> list[str]:
     saturated = _number(cell, "saturated_fraction", problems)
     if saturated is not None and saturated > SATURATED_MAX:
         problems.append(f"saturated_fraction={saturated:.3f}")
+
+    # `accuracy` is the field every published number is derived from, and it
+    # was the one field no gate read. A cell could carry NaN, null, 2.0 or the
+    # string "0.83" and be scored as valid. Every cell that fails this today
+    # (317 of 1671 archived, all `null`) is already voided by
+    # `mechanical_status`, so this voids nothing that was previously scored.
+    accuracy = _number(cell, "accuracy", problems)
+    if accuracy is not None and not 0.0 <= accuracy <= 1.0:
+        problems.append(f"accuracy={accuracy} is outside [0, 1]")
 
     problems.extend(_temporal_problems(cell, spec))
     problems.extend(_gradient_problems(cell))

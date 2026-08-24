@@ -24,7 +24,20 @@ for f in "${TARGETS[@]}"; do
 done
 
 # Look for method definitions named train/fit on encoder/decoder modules.
-hits="$(rg -n -e '^\s*(pub\s+)?(fn|async\s+fn)\s+(train|fit)\b' "${TARGETS[@]}" </dev/null || true)"
+#
+# `|| true` alone was not enough. ripgrep exits 1 for "searched, found nothing"
+# and 2 for "could not search"; a missing binary exits 127. Swallowing all of
+# them made "rg: command not found" print PASS — and, worse, print the file
+# count of a search that never happened. Only exit 1 is a clean no-match.
+set +e
+hits="$(rg -n -e '^\s*(pub\s+)?(fn|async\s+fn)\s+(train|fit)\b' "${TARGETS[@]}" </dev/null)"
+rc=$?
+set -e
+if [[ $rc -gt 1 ]]; then
+  echo "GC4 CANNOT RUN: the search failed (rg exit $rc). GC4 read nothing."
+  echo "Install ripgrep, or GC4 is not watching these files at all."
+  exit 1
+fi
 if [[ -n "$hits" ]]; then
   echo "GC4 FAIL: Encoder/Decoder exposes train/fit before P4:"
   echo "$hits"
