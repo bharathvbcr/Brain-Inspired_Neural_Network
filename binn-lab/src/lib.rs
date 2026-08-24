@@ -1,5 +1,6 @@
 //! BINN L7 experiment harness (U13–U17): seeds, config hashing, logging, plots, C1–R2.
 
+pub mod bounded_command;
 pub mod c2_config;
 pub mod c3_bptt_config;
 pub mod c3_config;
