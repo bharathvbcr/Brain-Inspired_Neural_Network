@@ -25,11 +25,16 @@
 
 use std::io::Read;
 use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
 /// How often the child is checked for exit. Short enough that a fast child is
 /// not delayed noticeably, long enough not to spin a core while waiting.
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
+
+/// How long to wait for the child's output after it has exited or been killed.
+/// Only reached when something still holds the pipe's write end open.
+const OUTPUT_GRACE: Duration = Duration::from_secs(5);
 
 /// What a bounded run produced.
 #[derive(Debug)]
@@ -130,26 +135,26 @@ pub fn run_bounded(mut cmd: Command, budget: Duration) -> Result<BoundedOutput, 
     let mut out_pipe = child.stdout.take();
     let mut err_pipe = child.stderr.take();
 
-    let drain = |pipe: Option<std::process::ChildStdout>| {
+    // Collected over a channel rather than by joining the threads. `join()` is
+    // unbounded, and after a timeout the pipes may still be held open by a
+    // process that outlived the kill — so joining would block forever, which is
+    // the defect this whole module exists to prevent, one layer down. Measured:
+    // with the group kill mutated out, a joining version took 600s to return
+    // (the full lifetime of the surviving grandchild).
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> Receiver<String> {
+        let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
             let mut buf = String::new();
             if let Some(mut p) = pipe {
                 let _ = p.read_to_string(&mut buf);
             }
-            buf
-        })
-    };
-    let drain_err = |pipe: Option<std::process::ChildStderr>| {
-        std::thread::spawn(move || {
-            let mut buf = String::new();
-            if let Some(mut p) = pipe {
-                let _ = p.read_to_string(&mut buf);
-            }
-            buf
-        })
-    };
-    let out_thread = drain(out_pipe.take());
-    let err_thread = drain_err(err_pipe.take());
+            // The receiver may already have given up; that is not an error.
+            let _ = tx.send(buf);
+        });
+        rx
+    }
+    let out_rx = drain(out_pipe.take());
+    let err_rx = drain(err_pipe.take());
 
     let started = Instant::now();
     let status = loop {
@@ -169,8 +174,12 @@ pub fn run_bounded(mut cmd: Command, budget: Duration) -> Result<BoundedOutput, 
         std::thread::sleep(POLL_INTERVAL);
     };
 
-    let stdout = out_thread.join().unwrap_or_default();
-    let stderr = err_thread.join().unwrap_or_default();
+    // The child is gone by now, so its pipes should reach EOF at once. This
+    // grace is for the case where they do not: a survivor still holds the write
+    // end. Losing the output of a run that already failed is a far better
+    // outcome than never returning from it.
+    let stdout = out_rx.recv_timeout(OUTPUT_GRACE).unwrap_or_default();
+    let stderr = err_rx.recv_timeout(OUTPUT_GRACE).unwrap_or_default();
     match status {
         Some(status) => Ok(BoundedOutput {
             status,
@@ -233,26 +242,52 @@ mod tests {
         // Killing the direct child alone leaves a grandchild holding the write
         // end of the pipe, so the drain threads never see EOF and the join
         // blocks — the same hang, one level down.
-        let marker = "binn_bounded_command_grandchild_marker";
+        // Qualified by pid. `pgrep -f` searches the whole machine's process
+        // table, so a fixed marker makes this test fail whenever a second copy
+        // of it runs anywhere on the host — another `cargo test`, a CI matrix
+        // sharing a runner, a retry overlapping its own first attempt. Measured
+        // before this change: two concurrent copies failed 7 of 12 runs while
+        // `run_bounded` was behaving perfectly. `shd_matched.rs` and
+        // `transfer_bundle.rs` already qualify their temp paths this way.
+        let marker = format!("binn_bounded_grandchild_{}", std::process::id());
         let started = Instant::now();
         let _ = run_bounded(
-            sh(&format!("sh -c 'sleep 600 # {marker}' & sleep 600")),
+            // `: {marker}` is a second command, which matters: `sh -c` with a
+            // single simple command execs it directly, so `sh -c 'sleep 600 #
+            // {marker}'` becomes a bare `sleep 600` and the marker vanishes
+            // from the process table. Written that way, the only process
+            // carrying the marker was the *direct child* — so the pgrep half of
+            // this test could never have observed a surviving grandchild, and
+            // the mutation that removes the group kill was being caught only by
+            // the elapsed-time assertion above. Verified: with the second
+            // command present, killing the direct child alone leaves exactly
+            // one marker-bearing survivor.
+            sh(&format!("sh -c 'sleep 600; : {marker}' & sleep 600")),
             Duration::from_millis(300),
         );
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "the call did not return, so the grandchild held the pipes open"
         );
-        std::thread::sleep(Duration::from_millis(200));
-        let survivors = Command::new("pgrep")
-            .args(["-f", marker])
-            .output()
-            .map(|o| {
-                String::from_utf8_lossy(&o.stdout)
-                    .split_whitespace()
-                    .count()
-            })
-            .unwrap_or(0);
+        // Reaping a SIGKILLed orphan is asynchronous, so poll to a bound
+        // rather than sleeping a fixed amount tuned to this machine.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut survivors = usize::MAX;
+        while Instant::now() < deadline {
+            survivors = Command::new("pgrep")
+                .args(["-f", marker.as_str()])
+                .output()
+                .map(|o| {
+                    String::from_utf8_lossy(&o.stdout)
+                        .split_whitespace()
+                        .count()
+                })
+                .unwrap_or(0);
+            if survivors == 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
         assert_eq!(survivors, 0, "a grandchild survived the timeout");
     }
 
