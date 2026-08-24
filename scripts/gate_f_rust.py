@@ -63,6 +63,11 @@ DEFAULT_BINARY = ROOT / "target" / "release" / "shd-instrument"
 # halfway through a multi-day `--all` sweep is worse than the hang it prevents.
 # 20x leaves headroom over the worst spread seen and still turns "forever" into
 # a bounded, reported outcome.
+#: A recorded cell must still carry most of its measurements to be worth
+#: regressing against. Every archived cell carries all twelve; a cell below this
+#: has lost so much that "no mismatches" would mean "almost nothing compared".
+MIN_COMPARED_FIELDS = 10
+
 TIMEOUT_FACTOR = 20.0
 #: Floor for cells recorded fast enough that the factor alone is too tight to
 #: absorb a cold page cache or a first-touch of the event files.
@@ -302,11 +307,25 @@ def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
                            started, timeout_s)
 
     mismatches: dict[str, object] = {}
+    compared_fields: list[str] = []
     for field in COMPARED_FIELDS:
         if field not in recorded:
             continue
+        compared_fields.append(field)
         if repr(recorded[field]) != repr(observed.get(field)):
             mismatches[field] = {"recorded": recorded[field], "observed": observed.get(field)}
+    # A cell whose fields have all gone — schema drift, a truncated file — would
+    # otherwise leave `mismatches` empty and be reported BIT_IDENTICAL: a gate
+    # that passed because it compared nothing. `compared_traces` was already
+    # disclosed per cell; the fields, which are the actual measurements, were
+    # not, so there was no number in the report to notice this by.
+    if len(compared_fields) < MIN_COMPARED_FIELDS:
+        return _unrunnable(
+            cell_id, "ERROR",
+            f"only {len(compared_fields)} of {len(COMPARED_FIELDS)} measurements "
+            f"are present in the recorded cell (floor {MIN_COMPARED_FIELDS}); "
+            "there is not enough of it left to regress against",
+            started, timeout_s)
     for trace in COMPARED_TRACES:
         if recorded.get(trace) and observed.get(trace):
             if recorded[trace] != observed[trace]:
@@ -317,6 +336,7 @@ def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
         "mismatches": mismatches,
         "wall_secs": round(time.monotonic() - started, 3),
         "timeout_s": timeout_s,
+        "compared_fields": compared_fields,
         "compared_traces": [t for t in COMPARED_TRACES if recorded.get(t) and observed.get(t)],
     }
 

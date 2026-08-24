@@ -224,6 +224,33 @@ def a_stale_observation_cannot_be_mistaken_for_a_fresh_one(h):
 
 
 @harnessed
+def a_gutted_recorded_cell_cannot_pass_by_comparing_nothing(h):
+    """Schema drift must not read as agreement.
+
+    Every compared field was skipped when absent from the recorded cell, so a
+    cell that had lost them left `mismatches` empty and reported BIT_IDENTICAL.
+    `compared_traces` was disclosed per cell but the fields were not, so no
+    number in the report would have shown it.
+    """
+    stripped = {k: v for k, v in TRUTH.items()
+                if k not in ("accuracy", "mean_loss", "mean_gradient_norm",
+                             "mean_update_rms", "n_train")}
+    (h.dir / "cells" / f"{CELL}.json").write_text(json.dumps(stripped))
+    r = h.run("match")
+    assert r["status"] == "ERROR", (
+        f"a cell missing five of twelve measurements reported {r['status']}"
+    )
+    assert "measurements are present" in r["detail"], r
+
+
+@harnessed
+def a_healthy_cell_discloses_which_fields_were_compared(h):
+    r = h.run("match")
+    assert r["status"] == "BIT_IDENTICAL", r
+    assert len(r["compared_fields"]) == 12, r["compared_fields"]
+
+
+@harnessed
 def a_corrupt_observation_is_an_error(h):
     r = h.run("corrupt")
     assert r["status"] == "ERROR", r

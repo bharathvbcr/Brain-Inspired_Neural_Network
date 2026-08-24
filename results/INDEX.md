@@ -2,12 +2,12 @@
 
 # Record index
 
-298 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+299 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 34 | 0 |
-| Results | 31 | 2 |
+| Results | 32 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
 | Amendments | 13 | 1 |
@@ -95,6 +95,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-08-24 | [RESULT_2026-08-24_READOUT_ABLATION.md](RESULT_2026-08-24_READOUT_ABLATION.md) | Result — the readout is exonerated, and the enumeration is still incomplete |
+| 2026-08-24 | [RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md) | Result — every configurable difference is now measured, and together they do not explain the gap |
 | 2026-08-23 | [RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md](RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md) | Wave 14 — attention does not substitute for recurrence; it compounds with it |
 | 2026-08-23 | [RESULT_2026-08-23_W13_RECURRENT_STABILITY.md](RESULT_2026-08-23_W13_RECURRENT_STABILITY.md) | Wave 13 — there is an operating point, and adaptation is what makes it one |
 | 2026-08-23 | [RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md](RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md) | Wave 12 — the read-out's advantage is not a stand-in for threshold adaptation |

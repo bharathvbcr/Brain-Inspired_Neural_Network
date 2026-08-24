@@ -30,7 +30,25 @@ from pathlib import Path
 
 # Two-sided critical t at alpha = 0.01, by degrees of freedom. Hardcoded so the
 # analysis needs no scientific-stack dependency; df = n - 1 for a paired test.
-T_CRIT_001 = {5: 4.032, 7: 3.499, 9: 3.250, 11: 3.106, 15: 2.947, 19: 2.861}
+#
+# Complete for df 1..20. It used to hold only {5, 7, 9, 11, 15, 19} and fall back
+# to the *nearest* key, which snaps in whichever direction happens to be closer —
+# so df = 2 borrowed df = 5's 4.032 in place of its true 9.925, a bar 2.5x too
+# low. Mid-campaign that is the normal state, because the analysis pairs over
+# whatever seeds are on disk: three completed pairs was enough to print
+# "significant at alpha = 0.01" for a result the registered alpha rejects, with
+# the "INCOMPLETE: registered n = 12" note printed underneath as a caveat rather
+# than as a block.
+T_CRIT_001 = {
+    1: 63.657, 2: 9.925, 3: 5.841, 4: 4.604, 5: 4.032,
+    6: 3.707, 7: 3.499, 8: 3.355, 9: 3.250, 10: 3.169,
+    11: 3.106, 12: 3.055, 13: 3.012, 14: 2.977, 15: 2.947,
+    16: 2.921, 17: 2.898, 18: 2.878, 19: 2.861, 20: 2.845,
+}
+#: Above the table the critical value keeps falling toward 2.576, so the largest
+#: tabulated df is the conservative choice for any df beyond it — never the
+#: nearest, which can only ever be smaller than the truth.
+MAX_TABULATED_DF = max(T_CRIT_001)
 
 
 def paired_t(deltas: list[float]) -> tuple[float, float, bool]:
@@ -43,9 +61,10 @@ def paired_t(deltas: list[float]) -> tuple[float, float, bool]:
     if sd == 0.0:
         return (float("inf"), 0.0, mean != 0.0)
     t = mean / (sd / math.sqrt(n))
-    crit = T_CRIT_001.get(n - 1)
-    if crit is None:
-        crit = T_CRIT_001[min(T_CRIT_001, key=lambda d: abs(d - (n - 1)))]
+    # Never interpolate toward a smaller bar. Below the table there is nothing
+    # honest to fall back to, and df >= 1 always is, since n >= 2 here.
+    df = n - 1
+    crit = T_CRIT_001.get(df) or T_CRIT_001[MAX_TABULATED_DF]
     return (t, crit, abs(t) >= crit)
 
 

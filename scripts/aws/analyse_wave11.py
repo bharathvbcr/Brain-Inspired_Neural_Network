@@ -88,6 +88,21 @@ def usable(cell: dict) -> bool:
     return cell.get("non_finite_events", 1) == 0 and cell.get("accuracy") is not None
 
 
+def verdict(supported: bool, *buckets: list) -> str:
+    """SUPPORTED / NOT SUPPORTED / NOT EVALUABLE.
+
+    `mean` returns NaN on an empty list by design, and every bar here is a
+    comparison — so `abs(nan) >= EFFECT_BAR` is False and an empty bucket
+    printed **NOT SUPPORTED**: a scientific verdict issued over no data, in the
+    same token a refuted hypothesis gets. This file already draws that
+    distinction for the completion gate above; the per-hypothesis verdicts did
+    not. `analyse_wave14.py` records the same lesson in its own docstring.
+    """
+    if any(len(b) == 0 for b in buckets):
+        return "NOT EVALUABLE"
+    return "SUPPORTED" if supported else "NOT SUPPORTED"
+
+
 def mean(values: list[float]) -> float:
     return statistics.fmean(values) if values else float("nan")
 
@@ -134,10 +149,11 @@ def main() -> int:
     print()
 
     # T4-1
+    plain_cells = [c for c in good if c["arm"] == "rec+alif"]
     t41 = plain > CHANCE + CHANCE_MARGIN
     print(f"**T4-1** the arm produces usable cells above chance: mean "
-          f"{plain:.4f} against {CHANCE} + {CHANCE_MARGIN} -> "
-          f"**{'SUPPORTED' if t41 else 'NOT SUPPORTED'}**\n")
+          f"{plain:.4f} (n={len(plain_cells)}) against {CHANCE} + {CHANCE_MARGIN} "
+          f"-> **{verdict(t41, plain_cells)}**\n")
 
     # T4-2, paired by seed and surrogate scale.
     paired = []
@@ -154,7 +170,7 @@ def main() -> int:
     print(f"**T4-2** *(two-sided)* attention changes recurrent accuracy: "
           f"{delta:+.4f}, bar |{EFFECT_BAR}|; {agreeing}/{len(paired)} paired seeds "
           f"agree in sign, bar {SIGN_AGREEMENT} -> "
-          f"**{'SUPPORTED' if t42 else 'NOT SUPPORTED'}**")
+          f"**{verdict(t42, paired)}**")
     if t42:
         print(f"  - direction: **{'attention helps' if delta > 0 else 'attention hurts'}**")
     print()
@@ -167,9 +183,10 @@ def main() -> int:
     scale_delta = mean(by_scale[1.0]) - mean(by_scale[0.4])
     t43 = abs(scale_delta) >= EFFECT_BAR
     print(f"**T4-3** *(two-sided)* surrogate scale matters: ss1.0 "
-          f"{mean(by_scale[1.0]):.4f} − ss0.4 {mean(by_scale[0.4]):.4f} = "
+          f"{mean(by_scale[1.0]):.4f} (n={len(by_scale[1.0])}) − ss0.4 "
+          f"{mean(by_scale[0.4]):.4f} (n={len(by_scale[0.4])}) = "
           f"{scale_delta:+.4f}, bar |{EFFECT_BAR}| -> "
-          f"**{'SUPPORTED' if t43 else 'NOT SUPPORTED'}**\n")
+          f"**{verdict(t43, by_scale[1.0], by_scale[0.4])}**\n")
 
     aborted = PLANNED - len(good)
     if aborted:
