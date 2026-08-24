@@ -19,6 +19,7 @@ import contextlib
 import io
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import types
@@ -1363,6 +1364,78 @@ class Wave11AnalyserTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("**T4-2**", out)
         self.assertIn("NOT SUPPORTED", out)
+
+
+class ControlPlaneCallsAreBoundedTest(unittest.TestCase):
+    """No campaign call may wait forever.
+
+    GC4 sat at 0% CPU for two days on a read that never returned. The same
+    shape lived in every `scripts/aws` helper: `subprocess.run(["aws", ...])`
+    with no timeout, so a stalled connection would hang the campaign silently
+    and with no output to say why.
+    """
+
+    AWS_DIR = Path(__file__).resolve().parent / "aws"
+
+    #: `run_cell.py` runs the training itself, and is bounded by liveness rather
+    #: than by clock: the slowest planned cell runs 14 hours, and
+    #: `release_dead_claims.py` recovers an orphaned claim by asking the fleet
+    #: which cells are genuinely running. A wall-clock bound there would kill
+    #: real work to solve a problem that is already solved a better way.
+    EXEMPT = {"run_cell.py": "training run; recovered by release_dead_claims liveness"}
+
+    def source(self, name):
+        return (self.AWS_DIR / name).read_text()
+
+    def test_every_aws_cli_call_carries_a_timeout(self):
+        unbounded = []
+        for path in sorted(self.AWS_DIR.glob("*.py")):
+            if path.name in self.EXEMPT:
+                continue
+            text = path.read_text()
+            for match in re.finditer(r"subprocess\.run\(", text):
+                window = text[match.start():match.start() + 400]
+                head = window[: window.find(")\n") + 1] or window
+                if "timeout=" not in head:
+                    line = text[: match.start()].count("\n") + 1
+                    unbounded.append(f"{path.name}:{line}")
+        self.assertEqual(
+            unbounded, [],
+            f"these calls would wait forever: {unbounded}. Give each a timeout, "
+            "or add it to EXEMPT with the reason it is bounded some other way.",
+        )
+
+    def test_the_exemption_still_describes_a_real_file(self):
+        for name in self.EXEMPT:
+            self.assertTrue((self.AWS_DIR / name).is_file(),
+                            f"{name} is exempted but no longer exists; the "
+                            "exemption is now hiding nothing and should go")
+
+    def test_every_copy_of_the_budget_agrees(self):
+        found = {}
+        for path in sorted(self.AWS_DIR.glob("*.py")):
+            match = re.search(r"^AWS_TIMEOUT_S = (\d+)", path.read_text(), re.M)
+            if match:
+                found[path.name] = int(match.group(1))
+        self.assertGreaterEqual(len(found), 5, f"only {len(found)} helpers bound: {found}")
+        self.assertEqual(len(set(found.values())), 1,
+                         f"the copies disagree, so one of them is stale: {found}")
+
+    def test_a_wedged_call_raises_instead_of_hanging(self):
+        import importlib
+        for name in ("collect", "teardown", "release_dead_claims"):
+            module = importlib.import_module(name)
+
+            def wedged(*a, **kw):
+                raise subprocess.TimeoutExpired(["aws"], module.AWS_TIMEOUT_S)
+
+            original, module.subprocess.run = module.subprocess.run, wedged
+            try:
+                with self.assertRaises(SystemExit) as caught:
+                    module.aws("s3api", "list-objects-v2", "--bucket", "b")
+                self.assertIn("did not answer", str(caught.exception))
+            finally:
+                module.subprocess.run = original
 
 
 if __name__ == "__main__":

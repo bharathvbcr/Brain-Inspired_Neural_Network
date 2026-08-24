@@ -19,14 +19,36 @@ import json
 import subprocess
 
 
+#: Seconds any single `aws` control-plane call may take. These are describe /
+#: list / put calls against the AWS API, not training runs: one that has not
+#: answered in five minutes is wedged, not slow, and without a bound a stalled
+#: connection hangs the campaign silently — the shape that left GC4 blocked for
+#: two days.
+#:
+#: The constant is repeated in each `scripts/aws` helper rather than shared.
+#: A shared module would work (bootstrap.sh ships the whole tree as
+#: `source.tar.gz`), but `scripts/test_campaign_tooling.py` fakes these calls by
+#: assigning `module.subprocess.run`, which only reaches a helper that calls
+#: subprocess itself. `test_campaign_tooling.py` pins that every copy agrees.
+AWS_TIMEOUT_S = 300
+
+
 def keys(bucket: str, prefix: str) -> set[str]:
     found: set[str] = set()
     token = None
-    while True:
+    # A paginator that keeps returning a token would otherwise spin forever.
+    # 10k pages is far past any real prefix and still terminates.
+    for _ in range(10_000):
         argv = ["aws", "s3api", "list-objects-v2", "--bucket", bucket, "--prefix", prefix]
         if token:
             argv += ["--starting-token", token]
-        out = subprocess.run(argv, capture_output=True, text=True)
+        try:
+            out = subprocess.run(argv, capture_output=True, text=True,
+                                 timeout=AWS_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise SystemExit(
+                f"list {prefix} did not answer in {AWS_TIMEOUT_S}s"
+            ) from None
         if out.returncode != 0:
             # A transient list failure must not look like "nothing is claimed",
             # which would hand the same cell to every worker at once.
@@ -37,6 +59,7 @@ def keys(bucket: str, prefix: str) -> set[str]:
         token = page.get("NextToken")
         if not token:
             return found
+    raise SystemExit(f"list {prefix} did not terminate after 10000 pages")
 
 
 # S3's two ways of saying "someone else got there first". Everything else that
@@ -60,10 +83,18 @@ def claim(bucket: str, cid: str) -> bool:
     So fail loudly. The worker loop already handles a non-zero exit by sleeping
     and retrying, which is the correct response to a credentials blip.
     """
-    out = subprocess.run(
-        ["aws", "s3api", "put-object", "--bucket", bucket,
-         "--key", f"claims/{cid}", "--if-none-match", "*"],
-        capture_output=True, text=True)
+    try:
+        out = subprocess.run(
+            ["aws", "s3api", "put-object", "--bucket", bucket,
+             "--key", f"claims/{cid}", "--if-none-match", "*"],
+            capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        # A wedged claim is not a lost race. Exiting sends the worker back
+        # through its retry sleep; hanging here would leave it holding nothing
+        # and doing nothing, indistinguishable from a machine that is busy.
+        raise SystemExit(
+            f"claim {cid} did not answer in {AWS_TIMEOUT_S}s"
+        ) from None
     if out.returncode == 0:
         return True
     stderr = out.stderr or ""

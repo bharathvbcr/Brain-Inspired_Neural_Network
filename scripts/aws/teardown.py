@@ -22,8 +22,29 @@ ROLE = "binn-campaign-worker"
 PROFILE = "binn-campaign-worker"
 
 
+#: Seconds any single `aws` control-plane call may take. These are describe /
+#: list / put calls against the AWS API, not training runs: one that has not
+#: answered in five minutes is wedged, not slow, and without a bound a stalled
+#: connection hangs the campaign silently — the shape that left GC4 blocked for
+#: two days.
+#:
+#: The constant is repeated in each `scripts/aws` helper rather than shared.
+#: A shared module would work (bootstrap.sh ships the whole tree as
+#: `source.tar.gz`), but `scripts/test_campaign_tooling.py` fakes these calls by
+#: assigning `module.subprocess.run`, which only reaches a helper that calls
+#: subprocess itself. `test_campaign_tooling.py` pins that every copy agrees.
+AWS_TIMEOUT_S = 300
+
+
 def aws(*argv, check=True):
-    out = subprocess.run(["aws", *argv], capture_output=True, text=True)
+    try:
+        out = subprocess.run(["aws", *argv], capture_output=True, text=True,
+                             timeout=AWS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"aws {' '.join(argv[:3])} did not answer in {AWS_TIMEOUT_S}s; "
+            "treating a wedged call as a failure rather than waiting"
+        ) from None
     if check and out.returncode != 0:
         raise SystemExit(f"aws {' '.join(argv[:3])} failed:\n{out.stderr.strip()}")
     return json.loads(out.stdout) if out.stdout.strip().startswith(("{", "[")) else out.stdout
