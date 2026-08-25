@@ -19,6 +19,7 @@ import contextlib
 import io
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import types
@@ -140,11 +141,16 @@ class ValidityGateTest(unittest.TestCase):
         which every real cell carries. Omitting them made the gate look
         satisfied on a payload the instrument never emits, and hid that two of
         the three copies of the gate were not checking them at all.
+
+        It then did the same thing again with `accuracy` — the field every
+        published number is computed from, and the one field no gate read. An
+        incomplete fixture does not merely fail to test a gate; it actively
+        conceals that the gate is missing.
         """
         return {"mechanical_status": "COMPLETE",
                 "non_finite_events": 0, "classes_predicted": 20,
                 "majority_prediction": 0.11, "silent_fraction": 0.02,
-                "saturated_fraction": 0.0,
+                "saturated_fraction": 0.0, "accuracy": 0.72,
                 "temporal_condition": "intact",
                 "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
 
@@ -1056,6 +1062,9 @@ class SharedValidityOwnerTest(unittest.TestCase):
         payload = {"mechanical_status": "COMPLETE", "non_finite_events": 0,
                    "classes_predicted": 20, "majority_prediction": 0.11,
                    "silent_fraction": 0.02, "saturated_fraction": 0.0,
+                   # Every real cell carries this; a fixture without it was not
+                   # a realistic cell, and the gate now reads it.
+                   "accuracy": 0.72,
                    "temporal_condition": "intact",
                    "epoch_max_gradient_norm": [0.4, 1.2, 0.9]}
         payload.update(override)
@@ -1363,6 +1372,167 @@ class Wave11AnalyserTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("**T4-2**", out)
         self.assertIn("NOT SUPPORTED", out)
+
+
+class ControlPlaneCallsAreBoundedTest(unittest.TestCase):
+    """No campaign call may wait forever.
+
+    GC4 sat at 0% CPU for two days on a read that never returned. The same
+    shape lived in every `scripts/aws` helper: `subprocess.run(["aws", ...])`
+    with no timeout, so a stalled connection would hang the campaign silently
+    and with no output to say why.
+    """
+
+    AWS_DIR = Path(__file__).resolve().parent / "aws"
+
+    #: `run_cell.py` runs the training itself, and is bounded by liveness rather
+    #: than by clock: the slowest planned cell runs 14 hours, and
+    #: `release_dead_claims.py` recovers an orphaned claim by asking the fleet
+    #: which cells are genuinely running. A wall-clock bound there would kill
+    #: real work to solve a problem that is already solved a better way.
+    EXEMPT = {"run_cell.py": "training run; recovered by release_dead_claims liveness"}
+
+    def source(self, name):
+        return (self.AWS_DIR / name).read_text()
+
+    def test_every_aws_cli_call_carries_a_timeout(self):
+        unbounded = []
+        for path in sorted(self.AWS_DIR.glob("*.py")):
+            if path.name in self.EXEMPT:
+                continue
+            text = path.read_text()
+            for match in re.finditer(r"subprocess\.run\(", text):
+                window = text[match.start():match.start() + 400]
+                head = window[: window.find(")\n") + 1] or window
+                if "timeout=" not in head:
+                    line = text[: match.start()].count("\n") + 1
+                    unbounded.append(f"{path.name}:{line}")
+        self.assertEqual(
+            unbounded, [],
+            f"these calls would wait forever: {unbounded}. Give each a timeout, "
+            "or add it to EXEMPT with the reason it is bounded some other way.",
+        )
+
+    def test_the_exemption_still_describes_a_real_file(self):
+        for name in self.EXEMPT:
+            self.assertTrue((self.AWS_DIR / name).is_file(),
+                            f"{name} is exempted but no longer exists; the "
+                            "exemption is now hiding nothing and should go")
+
+    def test_every_copy_of_the_budget_agrees(self):
+        found = {}
+        for path in sorted(self.AWS_DIR.glob("*.py")):
+            match = re.search(r"^AWS_TIMEOUT_S = (\d+)", path.read_text(), re.M)
+            if match:
+                found[path.name] = int(match.group(1))
+        self.assertGreaterEqual(len(found), 5, f"only {len(found)} helpers bound: {found}")
+        self.assertEqual(len(set(found.values())), 1,
+                         f"the copies disagree, so one of them is stale: {found}")
+
+    def test_a_wedged_call_raises_instead_of_hanging(self):
+        import importlib
+        for name in ("collect", "teardown", "release_dead_claims"):
+            module = importlib.import_module(name)
+
+            def wedged(*a, **kw):
+                raise subprocess.TimeoutExpired(["aws"], module.AWS_TIMEOUT_S)
+
+            original, module.subprocess.run = module.subprocess.run, wedged
+            try:
+                with self.assertRaises(SystemExit) as caught:
+                    module.aws("s3api", "list-objects-v2", "--bucket", "b")
+                self.assertIn("did not answer", str(caught.exception))
+            finally:
+                module.subprocess.run = original
+
+
+class AccuracyAndNonFiniteGateTest(unittest.TestCase):
+    """The gate must read the field every published number comes from.
+
+    `accuracy` was the one measurement `validity_problems` never looked at, so a
+    cell carrying NaN, null, 2.0 or the string "0.83" scored as valid. And every
+    other gate is a comparison, so NaN passed those too: comparisons against NaN
+    are false, and `json.loads` accepts the bare `NaN` token the Rust instrument
+    would emit for a 0/0 denominator. A cell whose diagnostics were entirely NaN
+    was indistinguishable from a clean one.
+    """
+
+    def setUp(self):
+        import cell_validity
+
+        self.gate = cell_validity
+        # A cell that the gate accepts, so a rejection below is attributable to
+        # the field under test and not to the fixture.
+        self.cell = {
+            "schema": "shd-cal-cell-v1",
+            "mechanical_status": "COMPLETE",
+            "non_finite_events": 0,
+            "classes_predicted": 20,
+            "majority_prediction": 0.10,
+            "silent_fraction": 0.0,
+            "saturated_fraction": 0.0,
+            "accuracy": 0.83,
+            "temporal_condition": "intact",
+        }
+        self.assertEqual(self.gate.validity_problems(self.cell), [],
+                         "the fixture must start valid or these checks prove nothing")
+
+    def test_accuracy_must_be_a_finite_number_in_range(self):
+        for bad in (float("nan"), float("inf"), -float("inf"), 2.0, -0.3, None,
+                    "0.83", True, [0.83]):
+            cell = dict(self.cell, accuracy=bad)
+            self.assertTrue(
+                self.gate.validity_problems(cell),
+                f"accuracy={bad!r} was accepted; every published number is "
+                "computed from this field",
+            )
+
+    def test_a_nan_diagnostic_cannot_pass_a_comparison_gate(self):
+        for field in ("majority_prediction", "silent_fraction",
+                      "saturated_fraction", "non_finite_events",
+                      "classes_predicted"):
+            cell = dict(self.cell, **{field: float("nan")})
+            problems = self.gate.validity_problems(cell)
+            self.assertTrue(problems, f"{field}=NaN passed the gate")
+            self.assertIn("not finite", " ".join(problems))
+
+    def test_the_bare_nan_token_really_does_parse(self):
+        # If this ever stops being true the gate above is guarding nothing, and
+        # the test should be retired rather than left as decoration.
+        value = json.loads('{"accuracy": NaN}')["accuracy"]
+        self.assertNotEqual(value, value, "json no longer yields NaN for the bare token")
+
+    def test_a_wholly_nan_cell_is_rejected(self):
+        cell = dict(self.cell)
+        for field in ("majority_prediction", "silent_fraction",
+                      "saturated_fraction", "accuracy"):
+            cell[field] = float("nan")
+        self.assertTrue(self.gate.validity_problems(cell))
+
+    def test_the_archived_corpus_is_unaffected(self):
+        """Hardening a gate must not re-score work that was already judged.
+
+        Measured when the check landed: 953 of 1671 archived cells valid, before
+        and after. A drop here means the change voided cells retroactively,
+        which is a different and much larger decision than closing a hole.
+        """
+        root = Path(__file__).resolve().parent.parent / "results"
+        valid = total = 0
+        for path in root.rglob("*.json"):
+            try:
+                cell = json.loads(path.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if not (isinstance(cell, dict)
+                    and str(cell.get("schema", "")).startswith("shd-cal-cell")):
+                continue
+            total += 1
+            valid += not self.gate.validity_problems(cell)
+        self.assertGreater(total, 1000, "the corpus scan found almost nothing; "
+                                        "the root is wrong and this test is vacuous")
+        self.assertEqual(valid, 953,
+                         f"{valid} of {total} cells now valid, not 953 — the gate "
+                         "has re-scored the archived record")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,30 @@
 # Defect — concurrent reference cells race on one git checkout, and two died silently
 
+> ## FIXED 2026-08-24. The lock is in, and it is at the caller.
+>
+> `runner.reference()` now wraps `ensure_checkout` and `prepare_seed_worktree` in
+> an exclusive `flock`, held across setup only and never across training.
+>
+> §3 said the fix had to wait because `reference.py` is in
+> `REFERENCE_SOURCE_PATHS` and editing it would invalidate all six calibration
+> artifacts. **That constraint still holds and the fix respects it**: the lock
+> lives in `runner.py`, which is in the broad `SOURCE_PATHS` only. Verified after
+> the change — the narrow fingerprint is unmoved at `50c0fe76…`, **6/6 reference
+> manifests still validate**, and all eight gates remain true.
+>
+> One test guards it: two threads through the lock, asserting their critical
+> sections are disjoint in time. Mutation-verified — a no-op lock reddens it.
+>
+> A second test asserting release-on-error was written and **deleted**: it passed
+> against a deliberately leaking implementation, because CPython closes the
+> handle on scope exit and that releases the flock regardless. It could not fail,
+> so it is gone rather than left green.
+>
+> §5's remaining items stand: the driver still counts artifacts rather than
+> reading exit codes, which is why the original failure went unnoticed for two
+> hours.
+
+
 **Found:** 2026-08-23, running the six-cell reference set registered in
 `PREREG_2026-08-22_REFERENCE_RERUN.md`.
 

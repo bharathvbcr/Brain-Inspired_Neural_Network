@@ -46,3 +46,16 @@ jobs:
 
       - name: GC1–GC7 guardrails
         run: ./scripts/gc_checks.sh
+
+      # GC4 once hung for two days on a ripgrep call with no path argument,
+      # which falls back to reading stdin. A check that never answers cannot be
+      # told from one that passed, so the shape is scanned for rather than
+      # remembered. The scanner refuses to report unless it first catches its
+      # own fixture.
+      - name: No check waits forever, or passes on silence
+        run: |
+          python3 scripts/check_no_stdin_hangs.py
+          python3 scripts/test_gc4_gate.py
+          python3 scripts/test_gate_f_timeout.py
+          python3 scripts/test_gate_f_discharge.py
+          python3 scripts/test_campaign_tooling.py

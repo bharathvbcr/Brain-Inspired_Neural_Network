@@ -16,6 +16,16 @@ pub const GRADIENT_REFERENCE_LABEL: &str = "BPTT_GRADIENT_REFERENCE";
 
 /// Sequence length for the coincidence temporal task.
 pub const REFERENCE_SEQUENCE_LEN: usize = 8;
+// Eight sites draw a distractor index with `while (t - t1).abs() <= 1 { t =
+// rng.gen_index(T); }`, all binding `T` to this constant. For T <= 2 no index
+// satisfies the condition at any `t1`, and for T == 3 none does when `t1 == 1`
+// — the loop then spins at 100% CPU forever. Editing this line to 3 would hang
+// eight code paths, one of which (`gen_dataset`) is not test-only. The bound is
+// asserted at compile time so the edit fails to build instead.
+const _: () = assert!(
+    REFERENCE_SEQUENCE_LEN >= 4,
+    "REFERENCE_SEQUENCE_LEN < 4 makes the distractor rejection loop non-terminating"
+);
 const T: usize = REFERENCE_SEQUENCE_LEN;
 /// Hidden units in the tiny recurrent net.
 const H: usize = 4;

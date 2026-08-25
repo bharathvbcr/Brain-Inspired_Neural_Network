@@ -79,7 +79,15 @@ if [[ -n "$HASH" ]]; then
   for f in "$FULL_LOG" "${OUT}/C1_replay_${HASH}.log"; do
     grep -E 'G2 verdict|^means:|normalized-gap-closed|positive_control' "$f" > "${f}.summary" || true
   done
-  if diff "${FULL_LOG}.summary" "${OUT}/C1_replay_${HASH}.log.summary"; then
+  # Both greps are `|| true`, so if the harness's log wording moves they match
+  # nothing and `diff` of two empty files succeeds — reporting the config-hash
+  # reproducibility claim as PASS having compared no lines at all.
+  summary_lines="$(wc -l < "${FULL_LOG}.summary" | tr -d ' ')"
+  if [[ "${summary_lines:-0}" -lt 1 ]]; then
+    echo "replay determinism CANNOT RUN: the run summary matched no lines."
+    echo "The grep patterns no longer match the harness output; nothing was compared."
+    NAMES+=("replay determinism"); RESULTS+=("FAIL")
+  elif diff "${FULL_LOG}.summary" "${OUT}/C1_replay_${HASH}.log.summary"; then
     NAMES+=("replay determinism"); RESULTS+=("PASS")
   else
     NAMES+=("replay determinism"); RESULTS+=("FAIL")
@@ -118,7 +126,7 @@ echo "================ RUN-ALL SUMMARY ================"
 FAILED=0
 for i in "${!NAMES[@]}"; do
   printf '%-32s %s\n' "${NAMES[$i]}" "${RESULTS[$i]}"
-  [[ "${RESULTS[$i]}" == "FAIL" ]] && FAILED=1
+  [[ "${RESULTS[$i]}" == "FAIL" || "${RESULTS[$i]}" == "SKIP" ]] && FAILED=1
 done
 echo "artifacts: ${OUT}/"
 grep -h 'G2 verdict' "${OUT}"/*.log 2>/dev/null | sort -u || true

@@ -35,8 +35,29 @@ TAR_EXCLUDE_DIRS = {"target", ".git", "data", "viz", "hybrid-results"}
 TAR_EXCLUDE_PREFIXES = (".venv", "results/shd_attention_pilot_v1")
 
 
+#: Seconds any single `aws` control-plane call may take. These are describe /
+#: list / put calls against the AWS API, not training runs: one that has not
+#: answered in five minutes is wedged, not slow, and without a bound a stalled
+#: connection hangs the campaign silently — the shape that left GC4 blocked for
+#: two days.
+#:
+#: The constant is repeated in each `scripts/aws` helper rather than shared.
+#: A shared module would work (bootstrap.sh ships the whole tree as
+#: `source.tar.gz`), but `scripts/test_campaign_tooling.py` fakes these calls by
+#: assigning `module.subprocess.run`, which only reaches a helper that calls
+#: subprocess itself. `test_campaign_tooling.py` pins that every copy agrees.
+AWS_TIMEOUT_S = 300
+
+
 def aws(*argv, check=True, parse=True):
-    out = subprocess.run(["aws", *argv], capture_output=True, text=True)
+    try:
+        out = subprocess.run(["aws", *argv], capture_output=True, text=True,
+                             timeout=AWS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"aws {' '.join(argv[:3])} did not answer in {AWS_TIMEOUT_S}s; "
+            "treating a wedged call as a failure rather than waiting"
+        ) from None
     if check and out.returncode != 0:
         raise SystemExit(f"aws {' '.join(argv[:3])} failed:\n{out.stderr.strip()}")
     if not parse:
@@ -208,9 +229,15 @@ def upload_inputs(bucket, args):
 
 def upload_plan(bucket, plan_path):
     """Publish the queue, and say so loudly when it is not the queue on disk."""
-    remote = subprocess.run(
-        ["aws", "s3", "cp", f"s3://{bucket}/input/cells.json", "-"],
-        capture_output=True, text=True)
+    try:
+        remote = subprocess.run(
+            ["aws", "s3", "cp", f"s3://{bucket}/input/cells.json", "-"],
+            capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"reading the published queue did not answer in {AWS_TIMEOUT_S}s; "
+            "refusing to replace a queue that could not be read"
+        ) from None
     if remote.returncode == 0:
         try:
             previous = {c["id"] for c in json.loads(remote.stdout)}

@@ -937,11 +937,20 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         if earlier.abs() > 0.0 {
             (later - earlier) / earlier
         } else {
-            0.0
+            // Not computable: the reference epoch loss is exactly zero.
+            f64::NAN
         }
     } else {
-        0.0
+        // Not computable: fewer epochs than the tail window needs.
+        f64::NAN
     };
+    // Emitted as `null` when it could not be computed, not as `0.0`. The doc
+    // comment above defines near-zero as *converged*, so a fabricated 0.0 was a
+    // vote of confidence from a measurement that was never taken — and because
+    // the consumer takes `min(tails)`, such a cell could never be the worst and
+    // so was structurally incapable of reporting UNDERTRAINED. No archived cell
+    // carries the fabricated value, so this changes no existing record.
+    let tail_improvement = json_scalar(tail_improvement);
     // Optional, and deliberately after every training step: persisting the
     // trained weights lets diagnostics such as `temporal-sensitivity` run
     // against a trained network instead of only the initialization. It writes a
@@ -981,7 +990,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"accuracy\":{:.9},\"classes_predicted\":{},\"majority_prediction\":{:.9},\
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
-         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{:.9},\"mechanical_status\":\"COMPLETE\",\
+         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
          \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}}}\n",
         weights.arm.label(),
         contract.id(),

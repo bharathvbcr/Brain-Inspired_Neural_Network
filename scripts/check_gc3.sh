@@ -15,6 +15,16 @@ checks=(
   "binn-learn surrogate_lif_baseline::tests::deterministic_same_seed"
   "binn-data same_seed_identical_encoding_hash"
   "binn-lab c1_same_seed_identical_seed_accuracies"
+  # binn-hybrid-lab carries four determinism tests that GC3 never confirmed had
+  # run, while the message below claimed "all stateful crates".
+  "binn-hybrid-lab benchmark::tests::feasibility_replay_is_deterministic"
+)
+
+#: Crates with no determinism fingerprint, and why. Named rather than omitted:
+#: the difference between "this crate has nothing to fingerprint" and "nobody
+#: added it to the list" is exactly what the old wording erased.
+declare -a EXEMPT=(
+  "binn-hybrid-learn no seeded state; every routine is a pure transform of its inputs"
 )
 
 for check in "${checks[@]}"; do
@@ -27,4 +37,20 @@ for check in "${checks[@]}"; do
     exit 1
   fi
 done
-echo "GC3 PASS: determinism fingerprints executed (>=1 test each) for all stateful crates"
+# An exemption that has stopped being true is worse than no exemption: it says a
+# crate was considered when it no longer is. Re-derive it rather than trust it.
+for entry in "${EXEMPT[@]}"; do
+  read -r package _reason <<<"$entry"
+  if [[ ! -d "$package" ]]; then
+    echo "GC3 CANNOT RUN: exempt crate ${package} no longer exists; fix the list."
+    exit 1
+  fi
+  if rg -q --glob "${package}/src/**/*.rs" -e 'fn .*determinis|determinis.*\(\)' . </dev/null 2>/dev/null; then
+    echo "GC3 FAIL: ${package} is on the exempt list but now has a determinism test."
+    echo "Add it to the checks above so the fingerprint is actually executed."
+    exit 1
+  fi
+done
+
+echo "GC3 PASS: determinism fingerprints executed (>=1 test each) for ${#checks[@]} \
+entries covering every crate except: ${EXEMPT[*]%% *}"

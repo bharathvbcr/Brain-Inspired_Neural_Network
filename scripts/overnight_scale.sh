@@ -65,10 +65,20 @@ run_isolate() {
   } > "${out_md}"
   # Kill checks from JSON fields when present.
   local rss nnz
-  rss=$(grep -oE '"peak_rss_bytes":[0-9]+' "${out_json}" | head -1 | cut -d: -f2 || echo 0)
-  nnz=$(grep -oE '"measured_nnz":[0-9]+' "${out_json}" | head -1 | cut -d: -f2 || echo 0)
-  echo "  measured_nnz=${nnz} peak_rss_bytes=${rss} wall_secs=${wall}"
-  if [[ -n "${rss}" && "${rss}" -gt "${RSS_KILL_BYTES}" ]]; then
+  rss=$(grep -oE '"peak_rss_bytes":[0-9]+' "${out_json}" | head -1 | cut -d: -f2 || echo "")
+  nnz=$(grep -oE '"measured_nnz":[0-9]+' "${out_json}" | head -1 | cut -d: -f2 || echo "")
+  echo "  measured_nnz=${nnz:-<absent>} peak_rss_bytes=${rss:-<absent>} wall_secs=${wall}"
+  # The `|| echo 0` here never fired: `grep` finding nothing still leaves `cut`
+  # exiting 0, so a missing field produced an EMPTY rss, and `[[ -n "" && ... ]]`
+  # short-circuited to false. The declared "OOM / RSS>48GB → stop ladder"
+  # criterion silently did not run whenever the field was absent or renamed.
+  # An unverifiable memory guard on an overnight job is precisely when to stop.
+  if [[ -z "${rss}" ]]; then
+    echo "KILL: peak_rss_bytes absent from ${out_json} — the RSS criterion could"
+    echo "      not be evaluated, which is not the same as passing it."
+    return 2
+  fi
+  if [[ "${rss}" -gt "${RSS_KILL_BYTES}" ]]; then
     echo "KILL: RSS ${rss} > 48GB"
     return 2
   fi
@@ -113,9 +123,26 @@ for n in 512 2000; do
     H1_PASS=0
     break
   fi
-  # Activity OOB check
+  # Activity OOB check. This was a comment, an assignment and an echo — `act`
+  # was never compared to anything, anywhere in the file, so the criterion named
+  # in the header ("activity OOB → stop ladder") did not exist.
+  #
+  # No scientific band was ever specified for it, and inventing one here would
+  # be worse than the gap. What is enforced is the mechanical bound: a sparsity
+  # is a fraction, so a value outside [0, 1] or absent is not a measurement.
   act=$(grep -oE '"activity_sparsity":[0-9.eE+-]+' "${CAMP}/${tag}.json" | head -1 | cut -d: -f2 || echo "")
-  echo "  activity_sparsity=${act}"
+  echo "  activity_sparsity=${act:-<absent>}"
+  if [[ -z "${act}" ]]; then
+    echo "H1 ladder stop at N=${n}: activity_sparsity absent — the activity"
+    echo "criterion could not be evaluated, which is not the same as passing it."
+    H1_PASS=0
+    break
+  fi
+  if ! awk -v a="${act}" 'BEGIN { exit !(a >= 0 && a <= 1) }'; then
+    echo "H1 ladder stop at N=${n}: activity_sparsity ${act} is outside [0, 1]"
+    H1_PASS=0
+    break
+  fi
 done
 
 # ---- Phase 3: H2 mode trio at Pass geometry (prefer N=2k syn-matched) ----

@@ -42,6 +42,12 @@ C4_GATE = 0.80
 C4_SEEDS = 9
 
 
+#: The cross-cloud falsification check must compare at least this many float
+#: values before it may report that the expectation held. A real pair of cells
+#: carries hundreds; anything near zero means schema drift, not agreement.
+MIN_CROSS_CLOUD_VALUES = 50
+
+
 def stem(arm: str, contract: str) -> str:
     tag = "ff-fixed-attn" if arm == "attn" else "ff-fixed"
     suffix = "__d32l4" if arm == "attn" else ""
@@ -150,19 +156,42 @@ def main() -> int:
         az_cells = [json.load(open(f"{az}__s{s}.json")) for s in SEEDS]
         vals = diff = 0
         for x, y in zip(aws_cells, az_cells):
-            for key in set(x) & set(y):
+            # Keys present on one side only are schema drift, not agreement.
+            # Iterating the intersection alone meant that two cells sharing no
+            # field names compared zero values and reported zero differences.
+            for key in set(x) | set(y):
                 if key == "wall_secs":
+                    continue
+                if key not in x or key not in y:
+                    vals += 1
+                    diff += 1
                     continue
                 vx, vy = x[key], y[key]
                 if isinstance(vx, float):
                     vals += 1
                     diff += vx != vy
                 elif isinstance(vx, list) and vx and isinstance(vx[0], float):
+                    # `zip` truncates to the shorter list while `len(vx)` counts
+                    # the longer, which inflated the coverage figure and hid the
+                    # tail of a truncated trace. A length mismatch is itself a
+                    # difference — a shorter trace is not a matching one.
+                    if not isinstance(vy, list) or len(vx) != len(vy):
+                        vals += max(len(vx), len(vy) if isinstance(vy, list) else 0)
+                        diff += abs(len(vx) - (len(vy) if isinstance(vy, list) else 0)) or 1
+                        continue
                     vals += len(vx)
                     diff += sum(1 for p, q in zip(vx, vy) if p != q)
         a(f"aarch64 (this wave) vs x86-64 (Azure `az8con` fixed-t250): "
           f"**{vals} float values, {diff} differing**.")
-        if diff:
+        if vals < MIN_CROSS_CLOUD_VALUES:
+            # The registered falsification check must not pass by comparing
+            # nothing. This is the test that licenses the reproducibility
+            # finding, so "could not run" has to be louder than "held".
+            a(f"\n> **CROSS-CLOUD CHECK DID NOT RUN.** Only {vals} float values "
+              f"were comparable (floor {MIN_CROSS_CLOUD_VALUES}). The "
+              "reproducibility finding is neither confirmed nor refuted here.")
+            voided.append(f"cross-cloud check compared only {vals} values")
+        elif diff:
             a("\n> **FINDING_2026-08-22_REPRODUCIBLE_ACROSS_ISA_UNDER_GLIBC.md IS "
               "WRONG OR INCOMPLETE.** Per prereg §5 it must be amended before any "
               "verdict above is reported.")
@@ -174,6 +203,15 @@ def main() -> int:
           "**Recorded as not run, not as passed.**")
 
     print("\n".join(out))
+    # Waves 8 and 12 both refuse here; wave 10 printed the banner above and then
+    # published every verdict anyway, returning 0. `accs` collects accuracies
+    # regardless of validity, so C-1..C-5 were means over cells the gate had
+    # rejected — a full, plausible verdict table behind a prose caveat, with a
+    # success exit code for anything reading the status.
+    if voided:
+        print(f"\n{len(voided)} cell(s) failed the validity gate; the verdicts "
+              "above are not reportable.")
+        return 1
     return 0
 
 

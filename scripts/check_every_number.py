@@ -48,7 +48,30 @@ CORPORA = [
 ]
 
 #: The wave results. Each rests on the cell corpora above and nothing else.
-DOCUMENTS = sorted((ROOT / "results").glob("RESULT_2026-08-2[0-3]_W*.md"))
+# Wave results, by wave number rather than by date. The pattern was
+# `RESULT_2026-08-2[0-3]_W*.md` — a four-day window that closed on 2026-08-24,
+# so every wave written afterwards fell silently outside it while the script
+# went on printing "every number in every wave result follows from the cells".
+# The old `if not DOCUMENTS` guard could never fire, because the twelve
+# documents inside the window match forever. `_W[0-9]` rather than `_W`,
+# because `_WITHDRAWN` and `_WITH_HEADROOM` are not waves.
+DOCUMENTS = sorted((ROOT / "results").glob("RESULT_*_W[0-9]*.md"))
+#: A count that must not silently shrink. A narrowed pattern or a moved
+#: directory would otherwise sweep fewer documents and still report success.
+MIN_DOCUMENTS = 13
+
+#: Wave documents whose numbers this sweep cannot derive, and why. Naming them
+#: is the point: the date window used to exclude W1 by accident, so the script
+#: claimed to have checked "every wave result" while never loading the cells
+#: behind one of them. A document listed here is reported as UNCHECKED on every
+#: run and is excluded from the closing claim — it is neither verified nor
+#: refuted, and must not be mistaken for either.
+UNCHECKED = {
+    "RESULT_2026-08-19_W1_ATTENTION_AT_CONVERGENCE.md":
+        "wave 1 predates both cell corpora in CORPORA; six of its numbers "
+        "(+0.0912, 0.0063, 0.0069, 0.7509, -0.2675, -0.5009) cannot be "
+        "derived from any cell on disk, so this sweep cannot judge them",
+}
 
 #: A four-decimal number, not preceded by `=` or a digit (so `|a−b|=0.0002` and
 #: version strings do not match) and not followed by `%`.
@@ -259,6 +282,9 @@ def main() -> int:
     print(f"coincidence rate: a random 4dp value in [0,1] would match one of "
           f"them {100 * power:.1f}% of the time, at tolerance {TOL}\n")
     for doc in DOCUMENTS:
+        if doc.name in UNCHECKED:
+            print(f"  [----] {doc.name[:64]:<64} UNCHECKED: {UNCHECKED[doc.name]}")
+            continue
         numbers = sorted({m.group(1) for m in NUMBER.finditer(doc.read_text())})
         bad = []
         for text in numbers:
@@ -276,16 +302,27 @@ def main() -> int:
         unexplained += [(doc.name, b) for b in bad]
 
     stale = [v for v, _ in ELSEWHERE if v not in seen_allowed]
-    print(f"\n{checked} numbers checked across {len(DOCUMENTS)} wave results")
+    # A named exclusion that no longer exists is an exclusion hiding nothing,
+    # and would let a document be dropped by a rename rather than by a decision.
+    missing = [n for n in UNCHECKED if not (ROOT / "results" / n).is_file()]
+    if missing:
+        print(f"STALE entries in UNCHECKED — these documents are gone: {missing}")
+    swept = len(DOCUMENTS) - len(UNCHECKED)
+    print(f"\n{checked} numbers checked across {swept} wave results")
+    if UNCHECKED:
+        print(f"{len(UNCHECKED)} wave result(s) this sweep cannot judge, "
+              f"listed above and excluded from the claim below")
     if stale:
         print(f"STALE entries in ELSEWHERE — no longer cited, delete them: {stale}")
     if unexplained:
         print(f"{len(unexplained)} number(s) the cells cannot produce:")
         for name, text in unexplained:
             print(f"  {name}: {text}")
-    if unexplained or stale:
+    if unexplained or stale or missing:
         return 1
-    print("every number in every wave result follows from the cells")
+    # The claim names what was actually swept. It used to say "every wave
+    # result" while a date window silently held one back.
+    print(f"every number in the {swept} swept wave results follows from the cells")
     return 0
 
 

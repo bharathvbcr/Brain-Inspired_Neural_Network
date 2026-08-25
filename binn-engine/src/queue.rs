@@ -652,6 +652,20 @@ mod tests {
 
     /// Insert+drain must stay roughly linear: 1e5 events must not cliff vs 1e3
     /// (sorted `VecDeque::insert` was ~quadratic in bucket occupancy).
+    ///
+    /// Timed as the *minimum* of several repetitions, not a single sample.
+    /// Scheduling noise is one-sided — it can only add time — and the two
+    /// measurements are not equally exposed to it: the 1e5 run occupies a
+    /// window three orders of magnitude longer than the 1e3 run, so under
+    /// `cargo test --workspace`, where every crate's test binary runs at once,
+    /// contention inflates the numerator alone. The one observed failure had a
+    /// perfectly ordinary small sample (887us, against a 808-1048us band) and a
+    /// large sample of 836ms against a 46-55ms band — 17x its usual value, from
+    /// code that measured ~48ms in nineteen other runs.
+    ///
+    /// The minimum tightens this rather than relaxing it. A real quadratic
+    /// cliff inflates *every* repetition, so it still trips the same unchanged
+    /// threshold; a single unlucky time slice no longer can.
     #[test]
     fn insert_throughput_no_quadratic_cliff() {
         fn fill_and_drain(n: usize) -> std::time::Duration {
@@ -664,13 +678,22 @@ mod tests {
             start.elapsed()
         }
 
-        let t_small = fill_and_drain(1_000);
-        let t_large = fill_and_drain(100_000);
+        fn best_of(n: usize, reps: usize) -> std::time::Duration {
+            (0..reps)
+                .map(|_| fill_and_drain(n))
+                .min()
+                .expect("REPS must be greater than zero")
+        }
+
+        const REPS: usize = 3;
+        let t_small = best_of(1_000, REPS);
+        let t_large = best_of(100_000, REPS);
         let ratio = t_large.as_secs_f64() / t_small.as_secs_f64().max(1e-9);
         // 100× more events: O(n) ⇒ ~100×; old O(n²/slots) ⇒ thousands×.
         assert!(
             ratio < 500.0,
-            "insert/drain cliff: 1e5/1e3 time ratio {ratio:.1} (small={t_small:?}, large={t_large:?})"
+            "insert/drain cliff: 1e5/1e3 time ratio {ratio:.1} \
+             (small={t_small:?}, large={t_large:?}, best of {REPS})"
         );
     }
 

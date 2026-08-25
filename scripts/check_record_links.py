@@ -36,7 +36,11 @@ EXTERNAL = ("http://", "https://", "mailto:", "#")
 def main() -> int:
     broken: list[tuple[str, str, str]] = []
     checked = 0
-    documents = sorted(RESULTS.glob("*.md"))
+    # Recursive. This was `*.md` — 300 of the 495 markdown files under results/,
+    # so everything in shd_attention_campaign_v2/, including all four
+    # VERDICTS_W*.md that the transcription check reads, went unchecked while
+    # the script printed "all resolve".
+    documents = sorted(RESULTS.rglob("*.md"))
     if len(documents) < 100:
         print(f"only {len(documents)} documents found in results/; the scan is "
               "not looking where it thinks it is", file=sys.stderr)

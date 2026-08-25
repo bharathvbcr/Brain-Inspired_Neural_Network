@@ -38,6 +38,17 @@ const AUDIT_MARKERS: &[&str] = &["guards::", "ReadoutAudit", "Degeneracy", "Ceil
 /// Remove an entry when it gains an audit. Do not add one without saying why in
 /// the commit that adds it.
 const KNOWN_UNAUDITED: &[&str] = &[
+    // Deliberate, and argued in the module's own header: it reports the raw
+    // reference-vs-arm ordering at each budget, and collapsing that column into
+    // `CeilingHealth::label()` would destroy the sensitivity curve the binary
+    // exists to produce. The swept references run 0.9013..1.0000 against a
+    // chance of 0.5, so no budget point approaches a dead reference. The header
+    // says the exemption expires if a future sweep lowers the budget toward
+    // chance. It appears here rather than being honoured from that comment,
+    // because a module that can exempt itself by writing prose is the same hole
+    // this test exists to close — it was in fact counted as *audited* until now,
+    // for naming `guards::CeilingHealth` while explaining that it does not use it.
+    "experiments/a6_ceiling_health.rs",
     "experiments/c3.rs",
     "experiments/continual_learning.rs",
     "experiments/credit_assignment.rs",
@@ -108,12 +119,71 @@ fn scanned_sources() -> Vec<(String, String)> {
     out
 }
 
+/// Source with comments removed.
+///
+/// Both scans below were raw substring searches over the whole file, so a
+/// module counted as audited because its *doc comment* named an audit type —
+/// including one whose comment named `guards::CeilingHealth` while explaining
+/// that it deliberately does not use it. A comment saying "we do not audit
+/// here" was read as "the audit is done". `gc1_scan.py` already strips comments
+/// before matching for exactly this reason.
+fn strip_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut in_string = false;
+    let mut block_depth = 0usize;
+    while let Some(c) = chars.next() {
+        if block_depth > 0 {
+            if c == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                block_depth -= 1;
+            } else if c == '/' && chars.peek() == Some(&'*') {
+                chars.next();
+                block_depth += 1;
+            }
+            continue;
+        }
+        if in_string {
+            out.push(c);
+            if c == '\\' {
+                if let Some(escaped) = chars.next() {
+                    out.push(escaped);
+                }
+            } else if c == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => {
+                in_string = true;
+                out.push(c);
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                block_depth += 1;
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn reports_accuracy(text: &str) -> bool {
-    text.contains("accuracy")
+    strip_comments(text).contains("accuracy")
 }
 
 fn has_audit(text: &str) -> bool {
-    AUDIT_MARKERS.iter().any(|marker| text.contains(marker))
+    let code = strip_comments(text);
+    AUDIT_MARKERS.iter().any(|marker| code.contains(marker))
 }
 
 #[test]

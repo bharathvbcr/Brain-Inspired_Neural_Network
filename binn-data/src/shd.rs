@@ -77,6 +77,7 @@ pub fn load_shd_split_capped(
     let train_path = dir.join("train.bin");
     let test_path = dir.join("test.bin");
     if train_path.is_file() && test_path.is_file() {
+        warn_if_axis_unverifiable(dir);
         let train = read_bin_capped(&train_path, max_train)?;
         let test = read_bin_capped(&test_path, max_test)?;
         let (n_in, t, n_classes) = dims_from(&train, &test)?;
@@ -95,6 +96,36 @@ pub fn load_shd_split_capped(
          See binn/data/shd/README.md for offline conversion; or use the CI fixture.",
         dir.display()
     ))
+}
+
+/// Say so when a cache cannot be shown to put both splits on one time axis.
+///
+/// The BINNSHD1 header carries only `(n, T, N_IN)`, so the time horizon a cache
+/// was binned against is not recoverable from the files. `convert-shd` used to
+/// derive that horizon *per split*, from a scan of the first 256 samples, and
+/// the two splits came out different: 1.167969s for train against 1.148438s for
+/// test on the shipped cache — 85.62 against 87.07 bins/s, so a spike at the
+/// same instant landed in a different bin depending on which split it came
+/// from. The converter now derives one horizon for both and records it in
+/// `binning.json`.
+///
+/// A cache without that file predates the fix and may carry the defect. This
+/// warns rather than refuses, because refusing would stop four experiments that
+/// are mid-flight on the existing cache; the point is that "not checked" must
+/// not read as "checked and fine".
+fn warn_if_axis_unverifiable(dir: &Path) {
+    if dir.join("binning.json").is_file() {
+        return;
+    }
+    if dir.join("FIXTURE").is_file() || dir.file_name().is_some_and(|n| n == "fixture") {
+        return;
+    }
+    eprintln!(
+        "warning: {} has no binning.json, so it cannot be shown that train and \
+         test share a time axis. Caches written before the shared-horizon fix \
+         binned the two splits separately. Re-run `convert-shd` to settle it.",
+        dir.display()
+    );
 }
 
 /// Load the repo CI fixture (tiny SHD-format bins).

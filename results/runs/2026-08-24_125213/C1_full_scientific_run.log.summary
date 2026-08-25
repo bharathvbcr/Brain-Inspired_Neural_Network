@@ -1,0 +1,4 @@
+G2 verdict: FAIL
+means: local=0.4912 dense-local=0.5000 gradient-reference=0.8938 eligibility-reference=1.0000
+normalized-gap-closed=0.0189  lower-95=-0.0048  |local-dense|=0.0262
+positive_control=0.9488  activity_sparsity=0.0156  required_n_seeds=20

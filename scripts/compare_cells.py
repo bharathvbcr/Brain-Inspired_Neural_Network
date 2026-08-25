@@ -18,6 +18,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gate_f_rust import COMPARED_FIELDS  # noqa: E402
+
 # `wall_secs` is a timing, not a result — a kernel optimisation is *supposed* to
 # move it. Everything else the cell reports is a measurement and must not move.
 IGNORED = {"wall_secs"}
@@ -27,6 +30,21 @@ def compare(before: Path, after: Path) -> list[str]:
     left = json.loads(before.read_text())
     right = json.loads(after.read_text())
     problems = []
+    # A floor on what was actually examined. Without it, two empty cells
+    # compared zero fields and reported "bit-identical" — and this is the only
+    # guard covering the three arms Gate F cannot reach, so "compared nothing"
+    # read as "the kernel did not move them". The required set is Gate F's own
+    # `COMPARED_FIELDS` rather than a second list, so the two cannot drift.
+    absent = [f for f in COMPARED_FIELDS
+              if f not in left or f not in right]
+    if absent:
+        problems.append(
+            f"CANNOT COMPARE: {len(absent)} measurement(s) absent from one or "
+            f"both cells ({', '.join(absent[:4])}"
+            f"{', ...' if len(absent) > 4 else ''}). Comparing what remains "
+            "would report agreement over fields that are not there."
+        )
+        return problems
     for key in sorted(set(left) | set(right)):
         if key in IGNORED:
             continue

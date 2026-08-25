@@ -141,6 +141,12 @@ def main() -> int:
                 w(f"| `{cell[:52]}` | no archived cell |")
                 continue
             differences, _ = compare(observed, record)
+            # The E-1 and E-4 loops count their failures; this one rendered
+            # `differences` into the table and discarded it, so a real archive
+            # disagreement — exactly what E-2 exists to detect — still ended at
+            # "**Every comparison is identical.**" with exit 0.
+            if differences:
+                failures += 1
             w(f"| `{cell[:52]}` | {'**DIFFERS** — ' + '; '.join(differences[:2]) if differences else 'identical'} |")
         w()
 

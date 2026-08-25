@@ -45,7 +45,16 @@ PAIRS = [
 
 VERDICT = "SUPPORTED|NOT SUPPORTED|NOT EVALUABLE"
 #: The analysers write `**X-1** … -> **VERDICT**`.
-GENERATED = re.compile(rf"\*\*([A-Z]-\d+[a-z]?)\*\*(.*?)(?:->|→)\s*\*\*({VERDICT})\*\*", re.S)
+# The middle group must not cross another hypothesis label. With a bare `(.*?)`
+# under re.S, a hypothesis the analyser reports *without* a verdict — "S-3b
+# (reported, no threshold)" — ran on until it found the next hypothesis's
+# `-> **VERDICT**` and took it as its own. That both invented a verdict for a
+# descriptive hypothesis and made the write-up look like it had failed to
+# restate one.
+GENERATED = re.compile(
+    rf"\*\*([A-Z]-\d+[a-z]?)\*\*((?:(?!\*\*[A-Z]-\d).)*?)(?:->|→)\s*\*\*({VERDICT})\*\*",
+    re.S,
+)
 #: A write-up states it either as a heading, `**X-1 — VERDICT`, or in a table.
 HAND_PROSE = re.compile(rf"\*\*([A-Z]-\d+[a-z]?)\s*[—–-]+\s*({VERDICT})")
 HAND_TABLE = re.compile(
@@ -58,10 +67,13 @@ def main() -> int:
 
     for generated_name, hand_name in PAIRS:
         generated_path, hand_path = CAMPAIGN / generated_name, ROOT / "results" / hand_name
-        for path in (generated_path, hand_path):
-            if not path.is_file():
-                problems.append(f"missing {path.relative_to(ROOT)}")
-        if problems:
+        # Scoped to this pair. Testing the global `problems` list meant one
+        # problem in the first document silently skipped every document after
+        # it, so a single missing file could reduce the check to one comparison.
+        pair_problems = [f"missing {p.relative_to(ROOT)}"
+                         for p in (generated_path, hand_path) if not p.is_file()]
+        if pair_problems:
+            problems.extend(pair_problems)
             continue
 
         generated = {k: v for k, _, v in GENERATED.findall(generated_path.read_text())}
@@ -85,11 +97,30 @@ def main() -> int:
         for hypothesis, said, wrote in wrong:
             problems.append(f"{hand_name}: {hypothesis} — analyser said "
                             f"{said!r}, the write-up says {wrote!r}")
-        if missing:
+        # A hypothesis the analyser ruled on, which the write-up *discusses* but
+        # whose verdict could not be parsed, is not a hypothesis stated as a
+        # trend — it is a verdict this check failed to read. Excusing both alike
+        # meant a verdict rewritten in unrecognised punctuation escaped
+        # comparison entirely, including one rewritten to its opposite: with
+        # `**R-1 — SUPPORTED**` respelled `R-1: NOT SUPPORTED`, this printed
+        # "all agree" and exited 0.
+        unparsed = [k for k in missing if re.search(rf"\b{re.escape(k)}\b", hand_text)]
+        silent = [k for k in missing if k not in unparsed]
+        for hypothesis in unparsed:
+            problems.append(
+                f"{hand_name}: {hypothesis} — the analyser issued "
+                f"{generated[hypothesis]!r} and the write-up discusses "
+                f"{hypothesis}, but no verdict there could be parsed. Either the "
+                "verdict is spelled in a form this check does not recognise, or "
+                "it was dropped; both need a human."
+            )
+        if unparsed:
+            print(f"         [FAIL] discussed but unparsable: {', '.join(unparsed)}")
+        if silent:
             # Not a failure: a hypothesis registered as descriptive has no
-            # verdict, and the write-up records it as a trend instead.
+            # verdict, and the write-up does not mention it at all.
             print(f"         not restated as a verdict (descriptive, or stated as "
-                  f"a trend): {', '.join(missing)}")
+                  f"a trend): {', '.join(silent)}")
 
     if compared < 10:
         print(f"\nonly {compared} verdicts compared; the patterns have stopped "
