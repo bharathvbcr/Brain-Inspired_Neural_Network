@@ -75,6 +75,23 @@ Removing 25 taps per synapse is not a config change; it is a different model. No
 run on this config can test it, and after four ablations that is still true. The
 distinction must not quietly become "we showed it was the kernel".
 
+**The two claims underneath it are now executable**, in
+`scripts/test_shd_calibration.py::ReferenceKernelInvariantTests`:
+
+1. every documented `model_type` — `snn_delays`, `snn_delays_lr0`, `snn` — yields
+   the same `max_delay`, so **no configuration removes the kernel**; and all three
+   `Dcls1d(` constructions in `snn_delays.py` sit outside any `model_type` branch,
+   so the model builds it unconditionally too;
+2. `max_delay` is distinct for each of `time_step ∈ {2, 5, 10}`, so **binning
+   cannot be varied without moving the kernel width**, with the shipped point
+   pinned at 25.
+
+Each is mutation-verified against the change that would make it false: adding a
+no-kernel mode, guarding a construction behind `model_type`, and decoupling
+`max_delay` from `time_step` each turn the corresponding test red. If upstream
+ever does any of those, the conclusion above stops being supported and the tests
+say so instead of the record quietly going stale.
+
 ## 5. My prediction record in this series
 
 | ablation | predicted | actual | |
