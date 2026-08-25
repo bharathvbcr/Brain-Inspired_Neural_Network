@@ -62,13 +62,63 @@ fn run(argv: Vec<String>) -> Result<(), String> {
         train_h5.display(),
         train_bin.display()
     );
-    let n_train = convert_split(&train_h5, &train_bin, args.t, args.n_in, args.max_train)?;
+    // One time axis for the whole dataset. Both splits are scanned in full
+    // before either is written, and the wider of the two horizons is used for
+    // both — otherwise a model is trained on one time base and evaluated on
+    // another, which is what the shipped caches actually did.
+    let train_horizon = split_horizon(&train_h5, args.max_train)?;
+    let test_horizon = split_horizon(&test_h5, args.max_test)?;
+    let raw_horizon = train_horizon.max(test_horizon);
+    let t_max = raw_horizon.clamp(T_MAX_FLOOR, T_MAX_CEILING);
+    println!(
+        "time horizon: train {train_horizon:.6}s, test {test_horizon:.6}s -> \
+         shared {t_max:.6}s ({:.2} bins/s)",
+        args.t as f64 / t_max
+    );
+    if (raw_horizon - t_max).abs() > f64::EPSILON {
+        println!(
+            "  NOTE: the observed horizon {raw_horizon:.6}s was clamped into \
+             [{T_MAX_FLOOR}, {T_MAX_CEILING}]; events past {t_max:.6}s fold into \
+             the final bin."
+        );
+    }
+    let n_train = convert_split(
+        &train_h5,
+        &train_bin,
+        args.t,
+        args.n_in,
+        args.max_train,
+        t_max,
+    )?;
     println!(
         "converting test:  {} → {}",
         test_h5.display(),
         test_bin.display()
     );
-    let n_test = convert_split(&test_h5, &test_bin, args.t, args.n_in, args.max_test)?;
+    let n_test = convert_split(&test_h5, &test_bin, args.t, args.n_in, args.max_test, t_max)?;
+
+    // The horizon is not recoverable from the cache: the BINNSHD1 header
+    // carries only (n, T, N_IN). Recording it beside the files is what lets a
+    // consumer tell whether two splits share a time axis at all.
+    let manifest = args.cache_dir.join("binning.json");
+    fs::write(
+        &manifest,
+        format!(
+            "{{\"schema\":\"binnshd-binning-v1\",\"t_bins\":{},\"n_in\":{},\
+             \"t_max_s\":{:.9},\"train_horizon_s\":{:.9},\"test_horizon_s\":{:.9},\
+             \"bins_per_s\":{:.9},\"n_train\":{},\"n_test\":{}}}\n",
+            args.t,
+            args.n_in,
+            t_max,
+            train_horizon,
+            test_horizon,
+            args.t as f64 / t_max,
+            n_train,
+            n_test
+        ),
+    )
+    .map_err(|e| format!("write {}: {e}", manifest.display()))?;
+    println!("wrote {}", manifest.display());
 
     let (nt, tt, nin) = verify_bin(&train_bin, args.n_in, args.t)?;
     let (ne, te, nie) = verify_bin(&test_bin, args.n_in, args.t)?;
@@ -270,12 +320,60 @@ fn gunzip(src_gz: &Path, dest_h5: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Bounds on the shared time horizon. SHD samples run around 1s; anything
+/// outside this is a corrupt time value rather than a longer recording.
+const T_MAX_FLOOR: f64 = 0.5;
+const T_MAX_CEILING: f64 = 1.5;
+
+/// Widest spike time across a split, opening the file for the scan alone.
+fn split_horizon(h5_path: &Path, max_samples: Option<usize>) -> Result<f64, String> {
+    let file = H5File::open(h5_path).map_err(|e| format!("open {}: {e}", h5_path.display()))?;
+    let n_all = file
+        .dataset("labels")
+        .map_err(|e| format!("labels: {e}"))?
+        .read_1d::<i64>()
+        .map_err(|e| format!("read labels: {e}"))?
+        .len();
+    let n = match max_samples {
+        Some(m) => n_all.min(m),
+        None => n_all,
+    };
+    if n == 0 {
+        return Err(format!("empty SHD split: {}", h5_path.display()));
+    }
+    let times_ds = file
+        .dataset("spikes/times")
+        .map_err(|e| format!("spikes/times: {e}"))?;
+    scan_time_horizon(&times_ds, n)
+}
+
+/// Widest spike time across every sample of a split, in seconds.
+///
+/// Every sample, not a capped prefix: a 256-sample scan makes the horizon
+/// depend on file order, and silently differ between two splits of the same
+/// dataset.
+fn scan_time_horizon(times_ds: &hdf5_metno::Dataset, n: usize) -> Result<f64, String> {
+    let mut widest = 0.0f64;
+    for i in 0..n {
+        let slice = times_ds
+            .read_slice_1d::<VarLenArray<f32>, _>(i..i + 1)
+            .map_err(|e| format!("times scan {i}: {e}"))?;
+        if let Some(arr) = slice.get(0) {
+            for &tm in arr.iter() {
+                widest = widest.max(f64::from(tm));
+            }
+        }
+    }
+    Ok(widest)
+}
+
 fn convert_split(
     h5_path: &Path,
     out_bin: &Path,
     t_bins: usize,
     n_in: usize,
     max_samples: Option<usize>,
+    t_max: f64,
 ) -> Result<usize, String> {
     let file = H5File::open(h5_path).map_err(|e| format!("open {}: {e}", h5_path.display()))?;
     let labels = file
@@ -299,20 +397,13 @@ fn convert_split(
         return Err("empty SHD split".into());
     }
 
-    // Global time horizon from a scan of times (or fixed 1.0s fallback).
-    let mut t_max = 1.0f64;
-    let scan_n = n.min(256);
-    for i in 0..scan_n {
-        let slice = times_ds
-            .read_slice_1d::<VarLenArray<f32>, _>(i..i + 1)
-            .map_err(|e| format!("times scan {i}: {e}"))?;
-        if let Some(arr) = slice.get(0) {
-            for &tm in arr.iter() {
-                t_max = t_max.max(f64::from(tm));
-            }
-        }
-    }
-    t_max = t_max.clamp(0.5, 1.5);
+    // The horizon is supplied by the caller, not derived here. Deriving it per
+    // split put train and test on *different* time axes: this function is
+    // called once per split, and each computed its own `t_max` from a scan of
+    // the first 256 samples. Measured on the shipped caches, train came out at
+    // 1.167969 s and test at 1.148438 s — 85.62 vs 87.07 bins/s, a 1.70%
+    // dilation of the test axis relative to train. A model trained on one time
+    // base was evaluated on another, and nothing recorded either number.
 
     if let Some(parent) = out_bin.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -430,4 +521,66 @@ fn read_u32(f: &mut File) -> Result<u32, String> {
     let mut b = [0u8; 4];
     f.read_exact(&mut b).map_err(|e| e.to_string())?;
     Ok(u32::from_le_bytes(b))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The defect this file was restructured to fix.
+    ///
+    /// `convert_split` is called once per split. It used to derive its own
+    /// `t_max` from a scan of the first 256 samples, so train and test landed
+    /// on different time axes — measured on the shipped caches, 1.167969s and
+    /// 1.148438s, i.e. 85.62 against 87.07 bins/s. A spike at the same instant
+    /// fell in a different bin depending on which split it came from.
+    #[test]
+    fn one_horizon_puts_the_same_instant_in_the_same_bin() {
+        let t_bins = 100;
+        let n_in = 4;
+        let times = [0.10_f32, 0.50, 0.90, 1.10];
+        let units = [0_u16, 1, 2, 3];
+
+        let shared = 1.167969_f64;
+        let train = spikes_to_frame(&times, &units, t_bins, n_in, shared);
+        let test = spikes_to_frame(&times, &units, t_bins, n_in, shared);
+        assert_eq!(train, test, "one horizon must bin both splits identically");
+
+        // And the failure it replaces: the two per-split horizons the shipped
+        // caches actually used disagree on where these spikes belong.
+        let old_test_horizon = 1.148438_f64;
+        let divergent = spikes_to_frame(&times, &units, t_bins, n_in, old_test_horizon);
+        assert_ne!(
+            train, divergent,
+            "these two horizons must disagree, or this test is not \
+             demonstrating the defect it describes"
+        );
+    }
+
+    /// The horizon scales the axis, so a wider horizon moves a spike earlier.
+    #[test]
+    fn a_wider_horizon_moves_a_spike_to_an_earlier_bin() {
+        let (t_bins, n_in) = (100, 1);
+        let times = [0.90_f32];
+        let units = [0_u16];
+        let narrow = spikes_to_frame(&times, &units, t_bins, n_in, 1.0);
+        let wide = spikes_to_frame(&times, &units, t_bins, n_in, 1.5);
+        let bin_of = |frame: &[f32]| frame.iter().position(|&v| v > 0.0).expect("one spike");
+        assert!(
+            bin_of(&wide) < bin_of(&narrow),
+            "a wider horizon compresses the axis: wide {} vs narrow {}",
+            bin_of(&wide),
+            bin_of(&narrow)
+        );
+    }
+
+    #[test]
+    fn events_past_the_horizon_fold_into_the_final_bin() {
+        // Documented rather than silently true: an event beyond `t_max` is
+        // clamped, not dropped, so the last bin is an OR of the whole tail.
+        let (t_bins, n_in) = (10, 1);
+        let frame = spikes_to_frame(&[5.0_f32], &[0_u16], t_bins, n_in, 1.0);
+        assert_eq!(frame[t_bins - 1], 1.0, "the tail folds into the last bin");
+        assert_eq!(frame[..t_bins - 1].iter().sum::<f32>(), 0.0);
+    }
 }

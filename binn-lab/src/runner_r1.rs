@@ -465,12 +465,57 @@ mod tests {
     }
 
     #[test]
-    fn hub_coupling_scores_nonzero() {
+    fn hub_coupling_scores_reflect_measured_coupling() {
+        // The previous version asserted `scores.len() == 4` and `all(> 0.0)`.
+        // Both hold by construction: the vector is built as
+        // `vec![0.0; hub.n_areas()]`, and every entry is clamped to a floor of
+        // 0.05 before returning. Deleting the entire edge-accumulation loop
+        // left every non-hub score at exactly 0.05 and the test still passed,
+        // so it could not tell a measured coupling from no measurement at all.
         let hub = Hub::with_central_hub(4, 8, 1);
         let csr = hub.compose_csr(7, 0.4, 0.08);
         let scores = hub_coupling_scores(&hub, &csr);
-        assert_eq!(scores.len(), 4);
-        assert!(scores.iter().all(|s| *s > 0.0));
+
+        assert_eq!(scores.len(), hub.n_areas());
+        assert_eq!(scores[hub.hub_index], 1.0, "the hub area is full coupling");
+        assert!(
+            scores.iter().all(|s| (0.05..=1.0).contains(s)),
+            "every score must land inside the clamp: {scores:?}"
+        );
+
+        // The load-bearing assertion: at least one area other than the hub must
+        // sit strictly above the floor, which is only possible if cross-area
+        // edges were actually counted.
+        let above_floor = scores
+            .iter()
+            .enumerate()
+            .filter(|(i, s)| *i != hub.hub_index && **s > 0.05)
+            .count();
+        assert!(
+            above_floor > 0,
+            "no non-hub area scored above the 0.05 floor, so no coupling was \
+             measured — the scores carry no information: {scores:?}"
+        );
+    }
+
+    #[test]
+    fn hub_coupling_scores_floor_means_no_coupling() {
+        // Pins the other side: with no edges to count, every non-hub area sits
+        // exactly on the floor. That is what makes "above the floor" in the
+        // test above evidence of measurement rather than of the clamp.
+        let hub = Hub::with_central_hub(4, 8, 1);
+        let empty = binn_core::Csr::from_adjacency(&vec![Vec::new(); hub.num_cells()]);
+        let scores = hub_coupling_scores(&hub, &empty);
+        for (index, score) in scores.iter().enumerate() {
+            if index == hub.hub_index {
+                assert_eq!(*score, 1.0);
+            } else {
+                assert_eq!(
+                    *score, 0.05,
+                    "area {index} without edges must be at the floor"
+                );
+            }
+        }
     }
 
     #[test]

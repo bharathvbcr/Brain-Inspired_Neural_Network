@@ -200,6 +200,10 @@ def determinism(
     payloads: list[dict] = []
     for repeat in range(repeats):
         output = directory / f"{cell_id}.run{repeat}.json"
+        # Remove the previous run's file first. Without this, a repeat that
+        # exits 0 without writing leaves the last invocation's output in place
+        # and it is hashed as though this run had produced it.
+        output.unlink(missing_ok=True)
         started = time.monotonic()
         if in_process:
             run_cell_once(cell_id, output, max_train, max_test)
@@ -220,6 +224,11 @@ def determinism(
                 raise RuntimeError(
                     f"repeat {repeat} failed:\n{completed.stdout}\n{completed.stderr}"
                 )
+        if not output.is_file():
+            raise RuntimeError(
+                f"repeat {repeat} exited successfully without writing {output.name}; "
+                "there is nothing to compare"
+            )
         raw = output.read_bytes()
         digests.append(hashlib.sha256(raw).hexdigest())
         payload = json.loads(raw)
@@ -230,11 +239,22 @@ def determinism(
             f"accuracy={payload['accuracy']!r}"
         )
 
+    # A determinism check needs at least two runs to compare. With `--repeats 1`
+    # the loop below iterated zero times, `mismatches` stayed empty, and the
+    # report said "DETERMINISTIC across 1 runs" having compared nothing.
+    if len(payloads) < 2:
+        raise ValueError(
+            f"determinism needs at least 2 repeats to compare; got {len(payloads)}. "
+            "One run cannot disagree with itself."
+        )
+
     # wall_secs legitimately varies, so identity is judged on everything else.
     reference = payloads[0]
     mismatches: dict[str, object] = {}
+    comparisons = 0
     for index, payload in enumerate(payloads[1:], start=1):
         for key in sorted(set(reference) | set(payload)):
+            comparisons += 1
             if repr(reference.get(key)) != repr(payload.get(key)):
                 mismatches[f"run0_vs_run{index}:{key}"] = {
                     "run0": reference.get(key),
@@ -247,6 +267,7 @@ def determinism(
         "mode": "smoke" if smoke else "full",
         "fresh_process": not in_process,
         "result_sha256": digests,
+        "fields_compared": comparisons,
         "deterministic": not mismatches,
         "mismatches": mismatches,
     }
@@ -287,7 +308,10 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("gate-e")
     d_parser = subparsers.add_parser("determinism")
     d_parser.add_argument("--cell", type=str, required=True)
-    d_parser.add_argument("--repeats", type=int, default=2)
+    d_parser.add_argument(
+        "--repeats", type=int, default=2,
+        help="runs to compare; must be >= 2, since one run cannot disagree "
+             "with itself")
     d_parser.add_argument("--smoke", action="store_true",
                           help="capped split with synthesised orders; NOT a gate result")
     d_parser.add_argument("--in-process", action="store_true",
@@ -308,12 +332,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "determinism":
+        if args.repeats < 2:
+            parser.error(f"--repeats must be >= 2 (got {args.repeats}); one run "
+                         "cannot disagree with itself")
         report = determinism(args.cell, args.repeats, args.smoke, args.in_process)
         suffix = "-smoke" if args.smoke else ""
         out = RESULT_ROOT / f"determinism{suffix}" / "report.json"
         out.write_text(json.dumps(report, indent=2, sort_keys=True))
         if report["deterministic"]:
-            print(f"\nDETERMINISTIC across {args.repeats} runs "
+            print(f"\nDETERMINISTIC across {args.repeats} runs, "
+                  f"{report['fields_compared']} field comparisons "
                   f"({'fresh processes' if not args.in_process else 'in-process'}) -> {out}")
             if args.smoke:
                 print("SMOKE MODE: capped split and synthesised orders. "
@@ -326,6 +354,13 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.all_python:
         cells = sorted(p.stem for p in (RESULT_ROOT / "cells").glob("python__*.json"))
+        if not cells:
+            # `gate_f_rust.py` refuses here; this did not, so an empty corpus
+            # printed "Gate F: 0/0 bit-identical" and exited 0 — a gate that
+            # passed because there was nothing to regress.
+            print(f"no python cells under {RESULT_ROOT / 'cells'}; Gate F has "
+                  "nothing to regress and cannot pass", file=sys.stderr)
+            return 2
     else:
         cells = [args.cell]
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
+import re
 import tempfile
 from pathlib import Path
 import unittest
@@ -294,3 +295,122 @@ class ReferenceCheckoutLockTests(unittest.TestCase):
     #
     # The `finally` in `reference_checkout_lock` stays. It is defensive, not
     # load-bearing, and it costs nothing.
+
+
+class ReferenceKernelInvariantTests(unittest.TestCase):
+    """The two structural claims the ablation series rests on and no run can test.
+
+    `RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md` concludes
+    that the residual gap lives in the reference's 25-tap temporal kernel, on the
+    strength of two claims read out of the pinned upstream source:
+
+      1. the kernel is constructed in **every** `model_type`, so no configuration
+         removes it -- which is why the "delay-free" ablation still had it, and
+         why the conclusion is supported by elimination rather than measurement;
+      2. `time_step` cannot be varied on its own, because it also sets
+         `max_delay = 250 // time_step` and therefore the kernel width -- which is
+         why the binning difference was never ablated.
+
+    Both were prose. If upstream ever gains a genuine no-kernel mode, or decouples
+    the kernel from `time_step`, those claims become false and the conclusion
+    needs revisiting -- silently, because nothing would notice. These tests
+    notice.
+    """
+
+    #: The pinned upstream config, before `prepare_seed_worktree` rewrites it.
+    PINNED_CONFIG = (
+        "results/shd_instrument_v4/reference-cache/SNN-delays/best_config_SHD.py"
+    )
+    PINNED_MODEL = (
+        "results/shd_instrument_v4/reference-cache/SNN-delays/snn_delays.py"
+    )
+    #: Every mode `config.py` documents on its `model_type` line.
+    MODEL_TYPES = ("snn_delays", "snn_delays_lr0", "snn")
+
+    def pinned(self, relative: str) -> pathlib.Path:
+        path = ROOT / relative
+        if not path.is_file():
+            self.skipTest(
+                f"pinned upstream checkout absent ({relative}); it is gitignored "
+                "and created on demand by `setup-reference`. Run a reference cell "
+                "to materialise it -- these invariants are unverified until then."
+            )
+        return path
+
+    def config_with(self, **overrides: object):
+        """Exec the pinned config with class attributes overridden."""
+        source = self.pinned(self.PINNED_CONFIG).read_text()
+        for key, value in overrides.items():
+            pattern = rf"^(\s*){key}\s*=\s*[^\n#]+"
+            # Count the substitutions rather than comparing text: overriding a
+            # key with the value it already holds is a legitimate no-op that
+            # leaves the source identical, and an earlier version of this guard
+            # mistook that for a failed match.
+            source, count = re.subn(
+                pattern, rf"\g<1>{key} = {value!r}", source, count=1, flags=re.M
+            )
+            self.assertEqual(
+                count, 1, f"could not override {key}; the config's shape changed"
+            )
+        namespace: dict = {}
+        exec(compile(source, "pinned_config", "exec"), namespace)  # noqa: S102
+        return namespace["Config"]
+
+    def test_the_temporal_kernel_survives_every_model_type(self) -> None:
+        """No documented mode removes the kernel."""
+        widths = {}
+        for model_type in self.MODEL_TYPES:
+            config = self.config_with(model_type=model_type)
+            widths[model_type] = config.max_delay
+            self.assertGreaterEqual(
+                config.max_delay,
+                2,
+                f"model_type={model_type!r} gives max_delay={config.max_delay}, "
+                "which would be a genuine no-kernel mode. If upstream added one, "
+                "the delay-free ablation can finally be run properly and "
+                "RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md "
+                "section 4 must be revisited.",
+            )
+        self.assertEqual(
+            len(set(widths.values())),
+            1,
+            f"model_type changes the kernel width ({widths}); the ablation varied "
+            "more than it claimed",
+        )
+
+    def test_the_kernel_construction_is_not_guarded_by_model_type(self) -> None:
+        """Reading the config is not enough: the *model* must build it
+        unconditionally too. Three `Dcls1d(` constructions, none behind a
+        `model_type` branch."""
+        source = self.pinned(self.PINNED_MODEL).read_text()
+        lines = source.splitlines()
+        constructions = [i for i, line in enumerate(lines) if "Dcls1d(" in line]
+        self.assertGreaterEqual(
+            len(constructions), 3, "expected the input, hidden and output kernels"
+        )
+        for index in constructions:
+            window = "\n".join(lines[max(0, index - 6):index + 1])
+            self.assertNotIn(
+                "model_type",
+                window,
+                f"the Dcls1d at line {index + 1} sits under a model_type branch; "
+                "a mode that skips the kernel may now exist",
+            )
+
+    def test_time_step_cannot_be_varied_without_moving_the_kernel(self) -> None:
+        """The reason the binning difference was never ablated."""
+        observed = {}
+        for time_step in (2, 5, 10):
+            config = self.config_with(time_step=time_step)
+            observed[time_step] = config.max_delay
+        self.assertEqual(
+            len(set(observed.values())),
+            len(observed),
+            f"max_delay no longer tracks time_step ({observed}); if they have been "
+            "decoupled, the binning ablation is now a clean single variable and "
+            "should be run",
+        )
+        # Pin the shipped point too, so a change to the 250 ms span is caught.
+        self.assertEqual(
+            observed[10], 25, f"the shipped kernel width moved: {observed}"
+        )

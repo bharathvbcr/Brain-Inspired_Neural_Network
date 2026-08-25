@@ -1109,6 +1109,26 @@ mod tests {
             assert!(row.iter().all(|w| *w >= 0.0));
         }
         // Silent input is not a constant read-out: position still varies with t.
+        //
+        // This line used to be the comment above followed only by a finiteness
+        // check, so nothing here tested position at all. The row-sum and
+        // non-negativity assertions above are structural — the rows come from a
+        // softmax — and finiteness is satisfied by any implementation that
+        // returns numbers. Zeroing `positional_code`'s body left all four
+        // assertions holding, which is exactly the kernel
+        // `check_kernel_profiles.sh` exists to protect.
+        //
+        // With no input signal, position is the only thing that can distinguish
+        // one step from another, so the attention rows must not all be equal.
+        let rows: Vec<Vec<f32>> = (0..t)
+            .map(|step| cache.final_attention_row(step).to_vec())
+            .collect();
+        assert!(
+            !rows.windows(2).all(|pair| pair[0] == pair[1]),
+            "every attention row is identical on a silent trace, so the \
+             positional code contributes nothing: {:?}",
+            rows.first()
+        );
         let logits = attention_logits(&params, cache.pooled());
         assert!(logits.iter().all(|v| v.is_finite()));
     }
