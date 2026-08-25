@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 from dataclasses import asdict, dataclass
+import fcntl
 import hashlib
 import itertools
 import json
@@ -717,23 +719,66 @@ def prepare_reference_dataset() -> Path:
     return dataset_root
 
 
+@contextlib.contextmanager
+def reference_checkout_lock():
+    """Serialise the git operations that set a reference run up.
+
+    `ensure_checkout` runs `git checkout` and `prepare_seed_worktree` runs
+    `git worktree add`, both against the single shared clone under
+    `reference-cache`. Neither takes a lock, so concurrent cells contend on
+    `index.lock` and the losers die before training starts with "Another git
+    process seems to be running in this repository".
+
+    That is not hypothetical: on 2026-08-23 three historical cells were launched
+    together and two died in the same second, which went unnoticed for two hours
+    because the watcher was counting artifacts rather than reading exit codes.
+    See `DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md`.
+
+    The lock is held across setup only, never across training -- setup is
+    seconds and training is hours, so serialising setup costs nothing and
+    serialising training would cost everything.
+
+    The `finally` below is defensive rather than load-bearing: CPython closes
+    the handle when it leaves scope and closing an fd releases its flock, so the
+    lock is freed on an exception either way. A test asserting that release was
+    written, found to pass against a deliberately leaking version, and deleted.
+
+    It lives here rather than in `reference.py`, which is where the racing calls
+    are, because `reference.py` is in `REFERENCE_SOURCE_PATHS`. Editing it would
+    move the narrow reference fingerprint and invalidate all six calibration
+    artifacts, at 33 CPU-hours. `runner.py` is in the broad `SOURCE_PATHS` only,
+    which governs instrument cells and is dischargeable by Gate F.
+    """
+    lock_path = RESULT_ROOT / "reference-cache.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("w")
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        handle.close()
+
+
 def reference(mode: str, seed: int, python: Path) -> None:
     gates = load_gates()
     for gate in ("data_parity", "forward_parity", "gradient_parity", "update_parity"):
         if gates.get(gate) is not True:
             raise RuntimeError(f"reference blocked: prerequisite {gate} has not passed")
-    checkout = ensure_checkout(RESULT_ROOT / "reference-cache")
-    dataset_root = prepare_reference_dataset()
     result = RESULT_ROOT / "references" / f"{mode}-seed-{seed}.json"
     log = RESULT_ROOT / "references" / f"{mode}-seed-{seed}.log"
-    worktree = prepare_seed_worktree(
-        checkout,
-        RESULT_ROOT / "reference-worktrees",
-        seed,
-        dataset_root,
-        mode,
-        ROOT / "scripts/shd_calibration/reference_clean_main.py",
-    )
+    # Setup only. Training happens outside the lock; see the helper's docstring.
+    with reference_checkout_lock():
+        checkout = ensure_checkout(RESULT_ROOT / "reference-cache")
+        dataset_root = prepare_reference_dataset()
+        worktree = prepare_seed_worktree(
+            checkout,
+            RESULT_ROOT / "reference-worktrees",
+            seed,
+            dataset_root,
+            mode,
+            ROOT / "scripts/shd_calibration/reference_clean_main.py",
+        )
     freeze = subprocess.check_output(
         [str(python), "-m", "pip", "freeze"], text=True
     )

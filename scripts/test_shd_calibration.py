@@ -154,7 +154,16 @@ class ReferenceFingerprintScopeTests(unittest.TestCase):
         """The change is non-retroactive, asserted against the real artifacts
         rather than argued. All six fail on fingerprint and only on fingerprint;
         this pins that the narrowing did not quietly let them through."""
-        manifests = ROOT / "results/shd_instrument_v4/reference-manifests"
+        # The *archived* set. `reference-manifests/` held these until the
+        # 2026-08-23 re-run replaced its contents with six freshly-produced
+        # artifacts that legitimately declare `fingerprint_scope: reference`;
+        # this test kept reading that path and started asserting the opposite of
+        # what it means. The superseded artifacts are the ones that must stay
+        # rejected, and they live here.
+        manifests = ROOT / (
+            "results/shd_instrument_v4/references-superseded-2026-07-27"
+            "/reference-manifests"
+        )
         if not manifests.is_dir():
             self.skipTest("reference manifests are not present in this checkout")
         seen = 0
@@ -221,3 +230,67 @@ class ReferenceFingerprintScopeTests(unittest.TestCase):
                 ),
                 f"scope {scope!r} was accepted",
             )
+
+
+class ReferenceCheckoutLockTests(unittest.TestCase):
+    """The lock that stops concurrent reference cells racing on one git clone.
+
+    `ensure_checkout` and `prepare_seed_worktree` both operate on the single
+    shared clone under `reference-cache`. Without serialisation, concurrent cells
+    contend on `index.lock` and the losers die before training starts -- which is
+    exactly what happened on 2026-08-23, killing two of three historical cells in
+    the same second. See `DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md`.
+
+    A lock that does not actually exclude is worse than no lock, because it
+    retires the vigilance that would otherwise stagger the launches. So this
+    tests exclusion by observation, not by inspecting the code.
+    """
+
+    def test_two_holders_never_overlap(self) -> None:
+        """Run two threads through the lock and check the critical sections are
+        disjoint in time. A no-op lock interleaves them and fails this."""
+        import threading
+        import time
+
+        from scripts.shd_calibration.runner import reference_checkout_lock
+
+        intervals: list[tuple[float, float]] = []
+        errors: list[BaseException] = []
+        barrier = threading.Barrier(2)
+
+        def hold() -> None:
+            try:
+                barrier.wait(timeout=10)
+                with reference_checkout_lock():
+                    entered = time.monotonic()
+                    # Long enough that an unsynchronised pair reliably overlaps.
+                    time.sleep(0.25)
+                    intervals.append((entered, time.monotonic()))
+            except BaseException as exc:  # noqa: BLE001 - surfaced below
+                errors.append(exc)
+
+        threads = [threading.Thread(target=hold) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertEqual(errors, [], f"a holder raised: {errors}")
+        self.assertEqual(len(intervals), 2, "both holders must have run")
+        first, second = sorted(intervals)
+        self.assertLessEqual(
+            first[1],
+            second[0] + 1e-6,
+            "the two critical sections overlapped, so the lock does not exclude",
+        )
+
+    # There was a `test_the_lock_is_released_when_the_body_raises` here. It
+    # could not fail: CPython refcounting closes the file handle as soon as it
+    # leaves scope, and closing an fd releases its flock, so the lock is
+    # released whether or not the `finally` block runs. The test passed against
+    # a deliberately leaking implementation -- verified by mutation -- which
+    # makes it exactly the kind of check this workspace keeps finding and
+    # deleting. It is gone rather than left green.
+    #
+    # The `finally` in `reference_checkout_lock` stays. It is defensive, not
+    # load-bearing, and it costs nothing.
