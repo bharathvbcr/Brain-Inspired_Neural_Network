@@ -52,14 +52,14 @@ Companion: [`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) · [`PAPER_SKELETON.
 
 | Arm | Hash | Verdict | Primary mean | Contrast / ceiling | Gap LCB | Source |
 |---|---|---|---:|---:|---:|---|
-| Broadcast ±1 three-factor (v4) | `c1-match-5dc6822e71229e9e` | **FAIL** | 0.5000 | grad 0.8963 | **0.0000** | [`c1_match.md`](c1_match.md) |
-| DFA graded×fixed-B (v5) | `c1-dfa-c8c4fe0899908b84` | **PASS** | 0.9387 | grad 0.8963; broadcast-graded **0.9863** | **0.6894** | [`c1_dfa.md`](c1_dfa.md) |
-| RL `rl_reinforce_fb` (v12) | `c1-rl-42eddc9c801308e9` | **PASS** | 0.9200 | graded 0.5250; flat 0.5113; grad 0.8887 | **0.6846** | [`c1_rl.md`](c1_rl.md) |
+| Broadcast ±1 three-factor (v4) | `c1-match-6f6366f148fab635` ff · `c1-match-6f6000f148f7d30c` rec | **FAIL** both | 0.5000 ff · 0.5100 rec | grad **1.0000** | 0.0000 ff · −0.0192 rec | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
+| DFA graded×fixed-B (v5) | `c1-dfa-f79c01ea36fe27d7` ff · `c1-dfa-f7989bea36fb44ae` rec | **PASS** both | 0.9925 ff · 0.9875 rec | grad **1.0000**; broadcast-graded **0.9975** | 0.9689 ff · 0.9509 rec | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
+| RL `rl_reinforce_fb` (v12) | `c1-rl-d35e13c758e522f8` ff · `c1-rl-d36179c758e80621` rec | **PASS** both | 0.9950 ff · 0.9812 rec | graded 0.8787/0.9100; flat 0.7775/0.7962; grad **1.0000** | 0.9765 ff · 0.9079 rec | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
 | **RL Online Learned `B_i` (v130)** | `track-b-rescue` | **WITHDRAWN** | — | — | — | [`RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`](RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md) · v131 `INVALID_HARNESS` |
-| Discrete EventProp-style (v28) | `c1-eventprop-5bb083d5e88d0ad2` | **FAIL** | 0.5000 | SuperSpike **0.9150** | **0.0000** | [`c1_eventprop.md`](c1_eventprop.md) |
+| Discrete EventProp-style (v28) | `c1-eventprop-f1e841c29755b1c8` rec · `c1-eventprop-f1eba7c2975894f1` ff | **PASS** both *(was FAIL)* | 0.8900 rec · 0.9450 ff | SuperSpike **1.0000** | 0.6494 rec · 0.7911 ff | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
 | RL graded primary (v11, archived) | `c1-rl-ef504db58916720d` | **FAIL** | 0.5900 | — | 0.0182 | [`c1_rl_v11_graded_primary.md`](c1_rl_v11_graded_primary.md) |
 
-**Paper language (required MUST):** Lead negative is **broadcast ±1 three-factor** (±1 × surrogate eligibility), not “any broadcast rule” and not bare “broadcast credit topology.” On the DFA schedule, **broadcast-graded** also learns coincidence (**0.9863**) — disclose in text and in Figure M; do **not** use coincidence alone to claim “locality is required.” Locality flip evidence is **XOR** (Table D). Falsifier: matched ±1 clearing gap LCB under the same forward overturns the lead claim. Discrete EventProp H2H is **FAIL** (`c1-eventprop-5bb083d5e88d0ad2`); disclose discrete ≠ continuous Wunderlich–Pehle. SuperSpike is the matched ceiling. v131 is matched-only (not live transfer). **A6 ceiling health caveat:** The canonical 80-epoch schedule undertrains the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 at e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`); gap closed at e80 is a statement of *learning speed*.
+**Paper language (required MUST):** Lead negative is **±1 × surrogate eligibility** specifically — not “any broadcast rule”, not bare “broadcast credit topology”, and not “any ±1 rule”: `MatchedRlFlat` (±1 broadcast REINFORCE) reaches 0.7775/0.7962 while `MatchedLocal` sits at chance, so the two must be named by rule and never collapsed. Broadcast-**graded** reaches **0.9975** — disclose in text and in Figure M. **Every other rule tested now clears this gate against a reference at 1.0000**, so each PASS above reduces to “above 0.75” and **no ordering among the passing arms may be claimed**. Do not use coincidence alone to claim “locality is required”; locality flip evidence is **XOR** (Table D). Falsifier: matched ±1 clearing gap LCB under the same forward overturns the lead claim. **The discrete EventProp H2H FAIL is WITHDRAWN** — it PASSes on a forward that can spike (0.9450/0.8900), and the archived 0.5000 was a spike-adjoint method with no spikes to differentiate through; it remains discrete and no comparison to continuous Wunderlich–Pehle is claimed in either direction. SuperSpike is the matched ceiling. v131 is matched-only (not live transfer). **A6 ceiling health, now the binding limitation:** the reference reaches **1.0000 at the canonical 80-epoch budget itself**, so no budget separates the arms and no ceiling comparison on this task survives.
 
 **Gate:** gap LCB > 0.5 and primary mean ≥ 0.65; gradient mean ≥ 0.65 for harness validity.
 
@@ -150,7 +150,7 @@ Packaging note: [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md), [`MATC
 6. Not coincidence-only proof that credit locality is required (broadcast-graded **0.9863** also learns coincidence; use XOR for locality).  
 7. Not reopening `c1-118207fbc3eaba53` by threshold massage.  
 8. Not undertraining as the matched ±1 three-factor FAIL cause (v22).  
-9. Not EventProp “absent”; discrete H2H `c1-eventprop-5bb083d5e88d0ad2` is **FAIL** and ≠ continuous Wunderlich–Pehle.  
+9. Not EventProp “absent”, and no longer EventProp “fails”: the discrete H2H **PASSes** on the repaired forward (0.9450 ff / 0.8900 rec). The FAIL is withdrawn; it is still ≠ continuous Wunderlich–Pehle and no comparison to it is claimed.  
 10. Not equating hybrid T=2.0 collapse with live v21 (T=1).  
 11. Not treating appendix G3 / G4 / H0 as reopening G2.  
 12. Not mixing overnight SHD p27 (20-way capped e-prop) with proto-135 SHD sweep (5-class) or protocol-29 full-corpus SuperSpike (`c1-shd-full-*`).

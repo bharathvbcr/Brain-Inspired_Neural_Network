@@ -25,7 +25,17 @@ than crash, so each is stated:
     repository keeps finding.
 
     python3 scripts/aws/analyse_wave15.py --plan results/shd_attention_campaign_v2/plan_w15_17.json \\
-        --results results/shd_attention_campaign_v2 [--failures DIR] [--out FILE]
+        --results <dir of this wave's cells> [--failures DIR] [--out FILE]
+
+**Point `--results` at a staging directory while the campaign is in flight, not
+at `results/shd_attention_campaign_v2/`.** That corpus is baselined by
+`test_campaign_tooling.py::test_the_archived_corpus_is_unaffected`, which fires
+on any addition -- correctly, since its whole job is to make landing cells a
+deliberate act rather than a side effect of collecting them. Dropping 47
+in-flight cells into it turned the record gate red on a campaign that had not
+finished. Reused controls are read from the archives by absolute path
+regardless, so a staging directory analyses identically; land the cells once
+when the wave completes and re-freeze the baseline in the same commit.
 """
 
 from __future__ import annotations
