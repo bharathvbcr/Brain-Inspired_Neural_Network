@@ -440,6 +440,45 @@ class CollectAndTeardownTest(unittest.TestCase):
         finally:
             collect.subprocess.run = original
 
+    def test_progress_counts_only_cells_that_are_in_this_plan(self):
+        """A bucket holding seventeen waves must not report the new one as done.
+
+        Observed on 2026-08-25, two minutes after waves 15-17 launched: the
+        per-wave rows read 0, 0, 0 and the TOTAL line read `187/224 (83%)`,
+        because `done` is every result in the bucket and the bucket still held
+        every earlier wave. A progress line that can read 83% at 0% is worse
+        than none, since the number it prints is the one someone acts on.
+        """
+        import collect
+        plan = [{"id": "w99new__a", "wave": "w99new"},
+                {"id": "w99new__b", "wave": "w99new"}]
+        # One result from this plan, three carried over from earlier waves.
+        results = {"w99new__a.json", "w10con__x.json", "w10con__y.json",
+                   "w13rec__z.json"}
+
+        originals = (collect.keys, collect.aws, sys.argv)
+        collect.keys = lambda bucket, prefix: (
+            results if prefix == "results/" else set())
+        # The plan fetch returns the plan; the claims listing returns a page.
+        def fake_aws(*argv, **kw):
+            return {"Contents": []} if "list-objects-v2" in argv else plan
+
+        collect.aws = fake_aws
+        sys.argv = ["collect.py", "--bucket", "bkt"]
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                collect.main()
+        finally:
+            collect.keys, collect.aws, sys.argv = originals
+
+        out = buf.getvalue()
+        total_line = next(l for l in out.splitlines() if l.startswith("TOTAL"))
+        self.assertIn("(50%)", total_line,
+                      f"one of two planned cells is done, so 50%: {total_line!r}")
+        self.assertIn("from earlier plans", out,
+                      "the carried-over results must be reported, not hidden")
+
     def test_teardown_only_ever_targets_tagged_campaign_instances(self):
         """The blast radius is the whole point. The describe call must filter by
         the campaign tag, and terminate must receive exactly what it returned.

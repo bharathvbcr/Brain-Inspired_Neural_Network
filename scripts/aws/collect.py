@@ -175,8 +175,19 @@ def main() -> int:
     print(f"{'wave':<8}{'done':>7}{'planned':>9}")
     for wave in sorted(per_wave):
         print(f"{wave:<8}{done_wave[wave]:>7}{per_wave[wave]:>9}")
-    print(f"{'TOTAL':<8}{len(done):>7}{len(plan):>9}   "
-          f"({100 * len(done) / max(len(plan), 1):.0f}%)")
+    # `done` is every result in the bucket, which after seventeen waves is
+    # mostly other waves' work. Counting it against THIS plan reported
+    # "187/224 (83%)" for a campaign whose first cell had not finished -- the
+    # per-wave rows above said 0, 0, 0 at the same moment. A progress line that
+    # can read 83% at 0% is worse than no progress line, because the number it
+    # prints is the one someone acts on.
+    done_in_plan = done & planned
+    print(f"{'TOTAL':<8}{len(done_in_plan):>7}{len(plan):>9}   "
+          f"({100 * len(done_in_plan) / max(len(plan), 1):.0f}%)")
+    carried = len(done) - len(done_in_plan)
+    if carried:
+        print(f"{'':<8}{carried:>7} result(s) in the bucket from earlier plans, "
+              "not counted above")
     print(f"\nin flight: {len(in_flight)}  "
           f"(of which older than {args.orphan_age_mins} min, i.e. releasable: {len(orphaned)})")
     print(f"failed:                {len(failed)}")
