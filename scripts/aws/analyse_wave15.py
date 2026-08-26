@@ -250,6 +250,53 @@ def main() -> int:
                      "below its threshold, so the h1024 clipped arm measures clipping "
                      "and not the flag.")
 
+    # --- The clipped rate control: reporting only, no verdict depends on it ---
+    #
+    # Added 2026-08-26, and it changes NO verdict logic. H15-1's comparator is
+    # registered as "`ff+fixed` (unclipped, archived)" and stays exactly that.
+    #
+    # But the prereg planned twelve `ff+fixed` h1024 cells under the same clip,
+    # to "separate a change in the gain from a change in the control beneath
+    # it", and this analyser did not print them anywhere. A planned control
+    # whose result goes unreported is the defect this repository just spent a
+    # day removing from the Azure record, where 35 cells sat in five partially
+    # run arms that the write-up passed over in silence.
+    #
+    # The expectation, stated before these cells land: the h1024 rate arm's
+    # epoch-mean norms run ~1.0 with maxima ~1.2, so a 1000.0 threshold cannot
+    # bind and these must come back byte-identical to the archive -- the same
+    # prediction H15-4 makes for h512, and it must be checked rather than
+    # assumed, because assuming it is how the control stops being a control.
+    lines.extend(["", "## Clipped rate control (reporting only)", ""])
+    clipped_ctl = load(res, f"w15col__ff-fixed__h1024__e400__{anchor}__clip1000.0", SEEDS)
+    archived_ctl = load(ARCHIVE_V1, f"w3wid__ff-fixed__h1024__e400__{anchor}", SEEDS)
+    shared_ctl = sorted(set(clipped_ctl) & set(archived_ctl))
+    if not shared_ctl:
+        lines.append("No clipped rate-control cell has landed yet.")
+    else:
+        moved = [s for s in shared_ctl
+                 if byte_identical(clipped_ctl[s], archived_ctl[s])]
+        clipped_mean = statistics.fmean(clipped_ctl[s]["accuracy"] for s in shared_ctl)
+        archived_mean = statistics.fmean(archived_ctl[s]["accuracy"] for s in shared_ctl)
+        lines.extend([
+            f"| | clipped | archived unclipped | difference |", "|---|---:|---:|---:|",
+            f"| mean accuracy ({len(shared_ctl)} pairs) | {clipped_mean:.6f} "
+            f"| {archived_mean:.6f} | {clipped_mean - archived_mean:+.6f} |", "",
+        ])
+        if moved:
+            lines.append(
+                f"**The clip moved the control on {len(moved)} of {len(shared_ctl)} "
+                "cells.** H15-1's registered comparator is the unclipped archive and "
+                "does not change, but the clipped arm's gain can no longer be read as "
+                "a property of the treatment alone, and the difference above must be "
+                "carried beside it.")
+        else:
+            lines.append(
+                f"**Inert: {len(shared_ctl)}/{len(shared_ctl)} byte-identical to the "
+                "archive.** The clip cannot bind on the rate arm, so the clipped "
+                "treatment's gain over the unclipped archive is not confounded by the "
+                "control moving underneath it.")
+
     # --- H16: the ladder ----------------------------------------------------
     lines.extend(["", "## H16 — the width ladder at d32/L4", "",
                   "| width | pairs | rate | attention | gain | positive |",
