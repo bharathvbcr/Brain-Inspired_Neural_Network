@@ -45,7 +45,7 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 **Thesis (locked):**
 
-> **Broadcast ±1 three-factor** credit (surrogate eligibility × ±1 reward) fails a preregistered accuracy/gap bar on a matched dense-LIF coincidence forward; graded DFA and REINFORCE×frozen-`B` clear that same gate. On the DFA schedule, broadcast-*graded* also reaches 0.9863—disclose; lead FAIL is ±1 three-factor, not “any broadcast.” Locality evidence is XOR. The event-driven C1 / live k-WTA path fails its operationalized gate under broadcast and under live REINFORCE transfer (including structured-`B` / capacity / eligibility gap-close arms)—report as a substrate/pipeline transfer negative with integrity disclosed, not as a biological or Assembly-Calculus result.
+> **Broadcast ±1 three-factor** credit (surrogate eligibility × ±1 reward) fails a preregistered accuracy/gap bar on a matched dense-LIF coincidence forward, **on both forward graphs, at n=20** — and it is the **only** rule tested that does. Every other rule now clears the gate against a reference at 1.0000, so the task isolates one failure from a field it can no longer rank; disclose that, and do not read the passes as an ordering. Lead FAIL is ±1 three-factor, not “any broadcast.” Locality evidence is XOR. The event-driven C1 / live k-WTA path fails its operationalized gate under broadcast and under live REINFORCE transfer (including structured-`B` / capacity / eligibility gap-close arms)—report as a substrate/pipeline transfer negative with integrity disclosed, not as a biological or Assembly-Calculus result.
 
 ---
 
@@ -54,22 +54,24 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 | Rank | Claim | Strength | Object under test |
 |---:|---|---|---|
 | **1 (lead)** | On an identical dense-LIF forward, **broadcast ±1 three-factor** (surrogate eligibility × ±1) does not clear the matched-arch gate vs SuperSpike BPTT | **Strongest / cleanest** | Rule topology only (±1 broadcast) |
-| **1b (contrast)** | On that same matched forward, graded DFA and REINFORCE×frozen-`B_i` **do** clear the gate (subject to A6 schedule context) | **Strong / clean** | Credit richness / locality |
+| **1b (contrast)** | On the matched forward, graded DFA, REINFORCE×frozen-`B_i`, broadcast-graded **and a discrete spike-adjoint** all clear the gate — against a reference at 1.0000, so each pass reduces to “above 0.75” | **Weak — the task saturates; no ordering may be claimed** | Credit richness / locality |
 | **1c (neuromorphic)** | On SHD, a **time-axis attention readout** reaches **0.8320** at d32/L4 (12/12 ≥ 0.80, gain **+0.1258** over `ff+fixed`); **temporal order is the mechanism** (+0.1337 shuffle drop, 12/12 seeds; 96% of benefit order-dependent) | **Strong / measured (n=12)** | Temporal attention readout on LIF |
 | **2 (secondary)** | Under the coded C1 engine loop, local/dense three-factor miss `g2_min_*` while multi-epoch SurrogateLifReference on the same frozen splits succeeds | **Moderate — caveated** | Operationalized pipeline |
 | **2b (transfer)** | Live C1 opt-in `ReinforceFeedback` (v13) and gap-close suite (v14–v19) fail G2; structured `B` / capacity clear accuracy floor but not gap LCB > 0.5 | **Moderate — new hashes** | Live k-WTA transfer |
 | **3** | Exact-forward credit arms (`c1x-*`) fail G2-style bars on their separate hashes | Supporting methods notes | Exact-forward / hybrid credit |
 | **4** | Checklist-closure protocols (`c1-spike-*`, `c1-spike-s-*`, `c1-project-*`, `c1x-eprop-true-*`, `c3-bptt-*`) | Supporting integrity / methods | New hash families only |
 | **5** | 1-layer XOR / `xor_thresh`: broadcast ~chance, DFA solves (locality flip); mid-init depth does **not** show the same flip | Supporting task evidence | NumPy deep suite |
-| — | Biology, neuromorphic HW, impossibility, brain model, live transfer from matched PASS, “any broadcast fails,” continuous textbook EventProp equivalence, depth collapse (v134 withdrawn), online learned FB v130 (v131 withdrawn) | **Do not claim** | — |
+| — | Biology, neuromorphic HW, impossibility, brain model, live transfer from matched PASS, “any broadcast fails,” continuous textbook EventProp equivalence, depth collapse (v134 withdrawn), online learned FB v130 (v131 withdrawn), **the discrete spike-adjoint FAIL (withdrawn 2026-08-25: 0.5000 → 0.9450/0.8900 PASS)**, **the two RL broadcast contrasts as chance results (0.5250 → 0.9100, 0.5113 → 0.7962)**, **any ranking among the passing matched arms** | **Do not claim** | — |
 
 ---
 
 ## 1. Primary claim — matched-arch broadcast ±1 three-factor insufficiency
 
-**May claim:** Holding the dense-LIF forward fixed (`MatchedArch::forward` / SurrogateLifReference substrate), swapping only the update rule — **broadcast ±1 three-factor** vs SuperSpike BPTT — the local arm fails the preregistered matched gate (gap LCB / accuracy floor). Mechanism label: **broadcast ±1 three-factor**, not “spiking failed,” and not a bare “broadcast credit topology” ban that would misread the 0.9863 graded contrast.
+**May claim:** Holding the dense-LIF forward fixed and swapping only the update rule — **broadcast ±1 three-factor** vs SuperSpike BPTT — the local arm fails the preregistered matched gate on **both** the feed-forward and recurrent graphs (0.5000 and 0.5100, n=20, against a reference at 1.0000). Mechanism label: **broadcast ±1 three-factor**, not “spiking failed,” and not a bare “broadcast credit topology” ban that would misread the 0.9975 graded contrast.
 
-**Caveat (A6 ceiling health):** The canonical 80-epoch schedule undertrains the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 at e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`). The gate comparison at e80 reflects *learning speed*; the coincidence task saturates at higher budgets and cannot support an asymptotic ceiling comparison.
+**Must disclose alongside it:** every other rule tested clears this gate, and the reference sits at 1.0000 at the canonical budget, so `gap_closed` reduces each pass to “the arm scored above 0.75”. The claim that survives is *one rule fails a task the rest saturate* — which is narrower and better evidenced than a graded richness ordering, and the ordering **may not** be claimed.
+
+**Caveat (A6 ceiling health), now the binding limitation:** on the archived instrument the canonical 80-epoch schedule undertrained the reference (0.8963 / 0.9013 at e80, climbing to 1.0000 by e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`), so the e80 comparison read as *learning speed*. On the repaired instrument the reference reaches **1.0000 at e80 itself**, so there is no budget at which this task separates the arms and no ceiling comparison on it survives. Every matched claim in this sheet is bounded by that.
 
 **Code:**
 

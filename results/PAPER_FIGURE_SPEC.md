@@ -6,7 +6,7 @@ Use numbers only from [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md).
 
 ## Graphical abstract (required)
 
-**Message:** Same forward → broadcast ±1 three-factor fails; richer credit (DFA / REINFORCE×B) passes; live k-WTA transfer fails. Disclose broadcast-graded 0.9863 elsewhere (Figure M), not as a PASS that erases the lead FAIL.
+**Message:** Same forward → ±1 × surrogate eligibility fails; every other rule tested passes against a reference at 1.0000; live k-WTA transfer fails. Disclose broadcast-graded 0.9975 elsewhere (Figure M), not as a PASS that erases the lead FAIL — and do not draw the passes as an ordering.
 
 **Layout (left → right):**
 1. Dense-LIF coincidence forward (shared box)
@@ -26,12 +26,35 @@ Use numbers only from [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md).
 
 ### Panel A — Coincidence (matched dense-LIF), richness × addressability
 
+> **REDRAWN 2026-08-25.** The previous version of this panel was a graded
+> surface — 0.5000, 0.9200, 0.9387, 0.9863 — and invited the reading that
+> richness and addressability each buy accuracy. On the repaired instrument it
+> is **a cliff with one cell below it**, and the figure must show that instead.
+> Numbers are feed-forward / recurrent, n = 20 each
+> ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
+
 |  | Low addressability (broadcast) | High addressability (directed / local feedback) |
 |---|---|---|
-| **Low richness (±1 / flat)** | **Broadcast ±1 three-factor FAIL** — 0.5000 / gap LCB 0.0000 (`c1-match-5dc6822e71229e9e`) | **REINFORCE × frozen B PASS** — 0.9200 / gap LCB 0.6846 (`c1-rl-42eddc9c801308e9`) |
-| **High richness (graded)** | **Broadcast-graded** — **0.9863** on DFA schedule (`c1-dfa-c8c4fe0899908b84` contrast; disclose) | **Graded DFA PASS** — 0.9387 / gap LCB 0.6894 (`c1-dfa-c8c4fe0899908b84`) |
+| **Low richness (±1)** | **`MatchedLocal` ±1 × surrogate eligibility — FAIL, 0.5000 / 0.5100**<br>**`MatchedRlFlat` ±1 broadcast REINFORCE — 0.7775 / 0.7962** | **REINFORCE × frozen `B_i` — PASS, 0.9950 / 0.9812** |
+| **High richness (graded)** | **Broadcast-graded — 0.9975** (DFA schedule contrast) | **Graded DFA — PASS, 0.9925 / 0.9875** |
 
-Optional callout on gradient ceiling: SuperSpike BPTT 0.8963 (match/dfa) / 0.8887 (rl).
+Gradient ceiling callout, and it is now the point of the panel rather than an
+aside: **SuperSpike BPTT = 1.0000 in every suite, on both graphs.**
+
+**Two things this panel must not be allowed to say.**
+
+1. **It is not a graded surface.** Six of the seven arms sit between 0.78 and
+   1.00 against a ceiling of 1.0000; one sits at chance. Any visual encoding
+   that maps accuracy to a continuous ramp will manufacture an ordering the
+   task cannot support — with the reference at 1.0000 every pass reduces to
+   "above 0.75". Encode **pass / fail / at-chance**, not a gradient.
+2. **The low/low cell holds two different rules that disagree by 0.28.**
+   `MatchedLocal` (±1 × surrogate eligibility) is at chance; `MatchedRlFlat`
+   (±1 broadcast REINFORCE) reaches 0.78. Collapsing them into one "broadcast
+   ±1" cell is exactly the overreach the lead claim's wording exists to avoid,
+   and it would be a stronger version of the same error than the one the
+   0.9863 disclosure was added to prevent. **Both must be drawn, labelled by
+   rule and not by topology.**
 
 ### Panel B — XOR locality flip (supporting task)
 
@@ -44,7 +67,7 @@ Optional callout on gradient ceiling: SuperSpike BPTT 0.8963 (match/dfa) / 0.888
 Source: [`deep_xor_thresh.json`](deep_xor_thresh.json). Do **not** claim the same flip for mid-init depth locality (broadcast also solves there).
 
 **Caption (required wording):**  
-“Mechanism evidence for H\*: richness × addressability. The lead matched FAIL is **broadcast ±1 three-factor** (eligibility × ±1), not a ban on every broadcast scalar—broadcast-graded reaches **0.9863** on the coincidence DFA schedule. Locality / addressability as a necessary ingredient is the XOR flip (broadcast fails; DFA solves), not coincidence alone. Matched PASS still does not imply live muted-θ / k-WTA G2 PASS.”
+“Mechanism evidence for H\*: richness × addressability on a matched dense-LIF forward, n = 20 per cell. The lead matched FAIL is **±1 × surrogate eligibility** specifically — not a ban on every broadcast scalar (broadcast-graded reaches 0.9975) and not on every ±1 rule (±1 broadcast REINFORCE reaches 0.78). Against a SuperSpike BPTT reference at **1.0000**, every other rule tested clears the gate, so this panel shows **which single rule fails a task the rest saturate** and does not rank the rest. Locality / addressability as a necessary ingredient is the XOR flip (broadcast fails; DFA solves), not coincidence alone. Matched PASS still does not imply live muted-θ / k-WTA G2 PASS.”
 
 **Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figM_mechanism_richness_addressability.{png,pdf}`  
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.1 / §4.1.
