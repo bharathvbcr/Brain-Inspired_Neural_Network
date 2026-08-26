@@ -2,11 +2,11 @@
 
 # Record index
 
-299 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+301 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 34 | 0 |
+| Preregistrations | 36 | 0 |
 | Results | 32 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
@@ -53,6 +53,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-25 | [PREREG_2026-08-25_THE_H1024_COLLAPSE.md](PREREG_2026-08-25_THE_H1024_COLLAPSE.md) | Preregistration — the h1024 collapse, the width ladder, and the headline at n=32 |
+| 2026-08-25 | [PREREG_2026-08-25_MATCHED_ARCH_RERUN_ON_BOTH_FORWARDS.md](PREREG_2026-08-25_MATCHED_ARCH_RERUN_ON_BOTH_FORWARDS.md) | Preregistration — re-run every matched arm, on both forward graphs, under the ceiling guard |
 | 2026-08-24 | [PREREG_2026-08-24_BATCHNORM_ABLATION.md](PREREG_2026-08-24_BATCHNORM_ABLATION.md) | Preregistration — batchnorm, the last untested item on the list |
 | 2026-08-23 | [PREREG_2026-08-23_TRACK_B_REREAD.md](PREREG_2026-08-23_TRACK_B_REREAD.md) | Preregistration — re-reading track-b under the corrected instrument |
 | 2026-08-23 | [PREREG_2026-08-23_RECURRENT_STABILITY.md](PREREG_2026-08-23_RECURRENT_STABILITY.md) | Preregistration — can the recurrent arms complete at the anchor budget at all? |
