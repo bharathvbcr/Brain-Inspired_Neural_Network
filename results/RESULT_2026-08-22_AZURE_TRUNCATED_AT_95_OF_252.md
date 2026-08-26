@@ -152,3 +152,25 @@ complete.
 - **Verified:** the 6/12 degeneracy, per seed, against the preregistered gates.
 - **Not claimed:** any AZ8-6 effect size. The arm is void.
 - **Not claimed:** that AZ8-2 independently replicates AWS. It reproduces it.
+
+### Re-derivable from the repository, 2026-08-25
+
+When this document was written, the numbers above were checked against the
+campaign's blob container, which is no longer reachable — the subscription's
+credit is exhausted and the fleet is deallocated. The 95 per-cell results are
+now committed under
+[`azure-d32l4-scope-v1/results/`](azure-d32l4-scope-v1/results/), so every figure here is
+re-derivable without it.
+
+Re-derived from those files on 2026-08-25, all matching to the digits printed
+above: the 95-cell count and per-arm coverage; AZ8-2's two arm means
+(`0.73858952`, `0.57678151`), its `-0.16180801` gain and its 1/12 positive
+seeds; AZ8-6's raw mean `0.1278` and would-be `-0.6108`; and the six degenerate
+seeds, whose identities fall out of the prereg's validity gate — all 20 classes
+predicted, majority prediction below 0.30 — applied verbatim rather than
+restated. Those six are the only invalid cells among all 95. The `NO DATA`
+verdicts check as absences: zero cells at h128/e400/`published-2ms` for either
+AZ8-1 arm, and zero at `channels-700` for AZ8-3.
+
+The deallocation state of the four nodes is **not** re-derivable this way. It
+was observed against the live subscription and rests on `hosts/`.
