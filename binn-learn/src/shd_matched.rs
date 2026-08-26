@@ -256,6 +256,59 @@ pub fn surrogate_derivative_scaled(u_minus_threshold: f32, scale: f32) -> f32 {
     (alpha * 0.5) / (1.0 + scaled * scaled)
 }
 
+#[cfg(test)]
+mod surrogate_scale_shape {
+    use super::*;
+
+    /// The scale trades peak height for width at a FIXED integral.
+    ///
+    /// `AMENDMENT_2026-08-26_SURROGATE_SCALE_IS_THE_WRONG_LEVER_FOR_A_FEEDFORWARD_ARM.md`
+    /// rests on this, and it was a claim in prose until it was a test. Lowering
+    /// the scale does **not** reduce total gradient mass -- it lowers the
+    /// per-unit peak and broadens the band of units receiving any gradient, so
+    /// on a wide feed-forward layer it can raise the summed norm rather than
+    /// lower it. That is the opposite of what
+    /// `PREREG_2026-08-25_THE_H1024_COLLAPSE.md` §3 assumed when it called this
+    /// the lever that "reduces gradient magnitude at source".
+    #[test]
+    fn lowering_the_scale_trades_height_for_width_at_constant_area() {
+        fn area(scale: f32) -> f64 {
+            // Wide window, fine step: the tails are heavy (Lorentzian), so a
+            // narrow window would report the area shrinking with scale, which
+            // is the exact error this test exists to refute.
+            let (n, l) = (2_000_001, 400.0f64);
+            let step = 2.0 * l / (n - 1) as f64;
+            (0..n)
+                .map(|i| {
+                    let u = -l + step * i as f64;
+                    surrogate_derivative_scaled(u as f32, scale) as f64
+                })
+                .sum::<f64>()
+                * step
+        }
+        let mut previous_peak = f32::INFINITY;
+        for scale in [1.0f32, 0.5, 0.4, 0.25] {
+            let peak = surrogate_derivative_scaled(0.0, scale);
+            assert!(peak < previous_peak, "peak gain must fall with the scale");
+            previous_peak = peak;
+            assert!(
+                (area(scale) - 1.0).abs() < 0.02,
+                "scale {scale} moved the area to {}; the parameter is supposed to \
+                 reshape the surrogate, not add or remove gradient mass",
+                area(scale)
+            );
+        }
+        // The rung wave 13 found is exactly where the per-step gain reaches 1,
+        // which is why it stabilises a RECURRENT arm and implies nothing about
+        // a feed-forward one.
+        assert!(
+            (surrogate_derivative_scaled(0.0, 0.4) - 1.0).abs() < 1e-6,
+            "scale 0.4 is no longer the unit-gain rung; wave 13's rationale and \
+             the 2026-08-26 amendment both cite it as such"
+        );
+    }
+}
+
 pub fn loss_and_gradient(
     weights: &MatchedWeights,
     sample: &MatchedShdSample,
