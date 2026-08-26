@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 
 
 #: Seconds any single `aws` control-plane call may take. These are describe /
@@ -111,8 +112,37 @@ def main() -> int:
 
     done = {k[: -len(".json")] for k in keys(args.bucket, "results/") if k.endswith(".json")}
     held = keys(args.bucket, "claims/")
-    with open(args.plan) as handle:
-        plan = json.load(handle)
+
+    # The PUBLISHED queue, re-read on every claim -- not the copy `bootstrap.sh`
+    # downloaded at boot.
+    #
+    # Plan order IS the schedule: this loop takes the first unclaimed cell in
+    # plan order. `bootstrap.sh` fetches `cells.json` once at instance start and
+    # this read the local file, so republishing a reordered queue mid-campaign
+    # silently did nothing to the running fleet. On 2026-08-26 that happened:
+    # waves 15-17 were reordered shortest-first and republished twelve hours in,
+    # the operator watched w17 sit at 0/80 while the expensive w15 ran to 48/72,
+    # and the republish was a no-op. A queue change that appears to succeed and
+    # does not is worse than one that is refused, because it gets acted on.
+    #
+    # One extra S3 GET of a ~100 KB object per cell, against cells that run for
+    # hours. The local file remains the fallback for a fetch that fails, so a
+    # transient S3 error degrades to the boot-time order rather than stalling
+    # the worker.
+    plan = None
+    try:
+        fetched = subprocess.run(
+            ["aws", "s3", "cp", f"s3://{args.bucket}/input/cells.json", "-"],
+            capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+        if fetched.returncode == 0:
+            plan = json.loads(fetched.stdout)
+    except (subprocess.TimeoutExpired, ValueError):
+        plan = None
+    if plan is None:
+        print("claim_next: could not read the published queue, falling back to "
+              f"{args.plan} as fetched at boot", file=sys.stderr)
+        with open(args.plan) as handle:
+            plan = json.load(handle)
     for cell in plan:
         cid = cell["id"]
         if cid in done or cid in held:

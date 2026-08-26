@@ -268,6 +268,11 @@ class ClaimProtocolTest(unittest.TestCase):
                     "PutObject operation")
                 r.stdout = ""
                 return r
+            # The published queue, re-read per claim so a republished ordering
+            # reaches a running worker rather than only the next instance to boot.
+            if argv[1] == "s3" and argv[2] == "cp" and argv[3].endswith("/input/cells.json"):
+                r.stdout = json.dumps(self.plan)
+                return r
             raise AssertionError(f"unexpected call {argv}")
 
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as fh:
@@ -440,6 +445,78 @@ class CollectAndTeardownTest(unittest.TestCase):
         finally:
             collect.subprocess.run = original
 
+    def test_claim_next_reads_the_published_queue_not_the_boot_copy(self):
+        """A republished queue must reach a running worker.
+
+        `bootstrap.sh` fetches `cells.json` once at instance start. This read
+        that local copy, so reordering the queue mid-campaign and republishing
+        it was a no-op for every worker already running -- and it looked like it
+        had worked. On 2026-08-26 waves 15-17 were reordered shortest-first
+        twelve hours in; the fleet went on claiming longest-first from the boot
+        copy, and w17 sat at 0/80 while w15 ran to 48/72.
+        """
+        import claim_next
+        boot_order = [{"id": "expensive"}, {"id": "cheap"}]
+        published = [{"id": "cheap"}, {"id": "expensive"}]
+
+        def fake_run(argv, **kwargs):
+            class R:
+                returncode, stderr, stdout = 0, "", ""
+            r = R()
+            if "cp" in argv:                      # the queue fetch
+                r.stdout = json.dumps(published)
+            return r
+
+        with tempfile.TemporaryDirectory() as tmp:
+            boot = Path(tmp) / "cells.json"
+            boot.write_text(json.dumps(boot_order))
+            originals = (claim_next.subprocess.run, claim_next.keys, sys.argv)
+            claim_next.subprocess.run = fake_run
+            claim_next.keys = lambda bucket, prefix: set()
+            sys.argv = ["claim_next.py", "bkt", "--plan", str(boot)]
+            buf = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buf):
+                    claim_next.main()
+            finally:
+                claim_next.subprocess.run, claim_next.keys, sys.argv = originals
+
+        self.assertEqual(buf.getvalue().strip(), "cheap",
+                         "the worker claimed from the boot-time copy; a "
+                         "republished queue never reaches a running fleet")
+
+    def test_claim_next_falls_back_to_the_boot_copy_when_s3_is_unreachable(self):
+        """Degrade to the boot order rather than stalling the worker."""
+        import claim_next
+        boot_order = [{"id": "from-boot-copy"}]
+
+        def failing_run(argv, **kwargs):
+            class R:
+                returncode, stderr, stdout = 1, "network is unreachable", ""
+            return R()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            boot = Path(tmp) / "cells.json"
+            boot.write_text(json.dumps(boot_order))
+            originals = (claim_next.subprocess.run, claim_next.keys, sys.argv)
+            claim_next.subprocess.run = failing_run
+            claim_next.keys = lambda bucket, prefix: set()
+            sys.argv = ["claim_next.py", "bkt", "--plan", str(boot)]
+            buf, err = io.StringIO(), io.StringIO()
+            try:
+                with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+                    # The claim attempt also goes through `subprocess.run`, which
+                    # fails in this stub, so `claim()` exits by design. What is
+                    # under test is what happened BEFORE that: the queue fetch
+                    # failed, and the worker fell back to the boot copy and said
+                    # so instead of dying on an unreadable queue.
+                    with contextlib.suppress(SystemExit):
+                        claim_next.main()
+            finally:
+                claim_next.subprocess.run, claim_next.keys, sys.argv = originals
+
+        self.assertIn("falling back", err.getvalue())
+
     def test_progress_counts_only_cells_that_are_in_this_plan(self):
         """A bucket holding seventeen waves must not report the new one as done.
 
@@ -610,12 +687,19 @@ class ClaimConditionalPutTest(AwsScriptedTest):
         """
         listings = {"results/": list(done), "claims/": list(held)}
         codes = list(put_codes)
+        plan = self.plan
 
         def handler(argv):
             if argv[1:3] == ["s3api", "list-objects-v2"]:
                 prefix = argv[argv.index("--prefix") + 1]
                 body = {"Contents": [{"Key": prefix + k} for k in listings[prefix]]}
                 return 0, json.dumps(body), ""
+            # The published queue, re-read on every claim so that a republished
+            # ordering reaches a running worker. Serving it here rather than
+            # letting it fall through to the boot copy keeps these tests
+            # exercising the path the fleet actually takes.
+            if argv[1:3] == ["s3", "cp"] and argv[3].endswith("/input/cells.json"):
+                return 0, json.dumps(plan), ""
             if argv[1:3] == ["s3api", "put-object"]:
                 return (codes.pop(0) if codes else 1), "", put_stderr
             raise AssertionError(f"unexpected aws call: {argv}")
@@ -623,9 +707,11 @@ class ClaimConditionalPutTest(AwsScriptedTest):
         return handler
 
     def claim(self, handler, plan=None):
+        if plan is not None:
+            self.plan = plan          # the handler serves this as the published queue
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "cells.json"
-            path.write_text(json.dumps(self.plan if plan is None else plan))
+            path.write_text(json.dumps(self.plan))
             return self.drive(self.mod, handler,
                               ["claim_next.py", "bkt", "--plan", str(path)],
                               self.mod.main)
