@@ -487,6 +487,59 @@ impl CeilingHealth {
     }
 }
 
+/// The matched-architecture Gate G2 decision, with one owner.
+///
+/// # Why this exists
+///
+/// `runner_match.rs`, `runner_dfa_match.rs`, `runner_rl_match.rs` and
+/// `runner_eventprop_match.rs` each carried a byte-identical `decide_verdict`,
+/// differing only in the name of the treatment parameter. Four owners of one
+/// rule is the shape [`CeilingHealth`] was extracted to fix, and this is the
+/// same defect one layer up — so the same hole was in all four.
+///
+/// The hole: the only harness check was `reference < floor`, which fires when
+/// the reference is *weak*. Nothing fired when the treatment **exceeded** the
+/// reference that is supposed to bound it. `gap_closed` is clamped to `[0, 1]`
+/// downstream, so an inverted comparison arrives at the confidence bound
+/// already flattened to 1.0 and reads as a decisive PASS.
+///
+/// That is not hypothetical. `results/c1_dfa.md` reports the treatment at
+/// **0.9387** against its own ceiling at **0.8963**, and `results/c1_rl.md`
+/// **0.9200** against **0.8887**. Both are `PASS`. `CeilingHealth::evaluate`
+/// classifies the first pair as [`CeilingHealth::Inverted`] — *"do not
+/// interpret"* — and has done since 2026-08-21, in a unit test in this file
+/// that uses those exact two numbers as its worked example. The binary that
+/// produced them never called it.
+///
+/// Ceiling health is tested **first**, before the reference floor and before
+/// the pilot check, because a reference that cannot bound its treatment
+/// invalidates the comparison whatever the thresholds say.
+pub fn decide_matched_verdict(
+    reference_mean: f32,
+    treatment_mean: f32,
+    gap_lcb: f32,
+    chance: f32,
+    min_accuracy: f32,
+    min_gap_closed: f32,
+    pilot: bool,
+) -> crate::runner::GateG2Verdict {
+    use crate::runner::GateG2Verdict;
+    if !CeilingHealth::evaluate(reference_mean, treatment_mean, chance).is_usable() {
+        return GateG2Verdict::InvalidHarness;
+    }
+    if reference_mean < min_accuracy {
+        return GateG2Verdict::InvalidHarness;
+    }
+    if pilot {
+        return GateG2Verdict::Pilot;
+    }
+    if gap_lcb > min_gap_closed && treatment_mean >= min_accuracy {
+        GateG2Verdict::Pass
+    } else {
+        GateG2Verdict::Fail
+    }
+}
+
 /// Constructing a `Verdict` requires supplying the measurement and the
 /// preregistered threshold, so a verdict can never disagree with the number
 /// printed next to it.

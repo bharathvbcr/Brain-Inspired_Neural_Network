@@ -62,8 +62,8 @@ pub use matched_dfa_baseline::{
 };
 pub use matched_eventprop_baseline::{MatchedEventProp, MATCHED_EVENTPROP_LABEL};
 pub use matched_local_baseline::{
-    MatchedArch, MatchedGradient, MatchedLocal, DEFAULT_MATCHED_BETA, MATCHED_GRADIENT_LABEL,
-    MATCHED_LOCAL_LABEL,
+    MatchedArch, MatchedForward, MatchedGradient, MatchedLocal, DEFAULT_MATCHED_BETA,
+    MATCHED_GRADIENT_LABEL, MATCHED_LOCAL_LABEL,
 };
 pub use matched_mech_baseline::{
     run_mech_diagnostic, MechArmMetrics, MechDiagnosticReport, MECH_ARM_BROADCAST_PM1,

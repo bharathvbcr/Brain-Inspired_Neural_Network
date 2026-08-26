@@ -130,6 +130,13 @@ impl DfaMatchRunner {
             config.chance_baseline,
         ));
 
+        // The forward graph, recorded so a number can be read without opening
+        // the source. Two of these four suites have always run on the recurrent
+        // graph and two on the feed-forward one, and no report said which.
+        md.push_str(&format!(
+            "- forward graph: **{}**\n\n",
+            config.forward.label()
+        ));
         md.push_str("## Results\n\n");
         md.push_str(&format!(
             "| arm | mean accuracy | variance |\n\
@@ -240,11 +247,17 @@ fn run_seed(config: &DfaMatchConfig, seed: u64) -> DfaMatchSeedResult {
     };
     let epochs = config.base.bptt_epochs;
 
-    let mut gradient =
-        MatchedGradient::new_feedforward(config.base.n_hidden, config.base.bptt_lr, beta, seed);
+    let mut gradient = MatchedGradient::on(
+        config.forward,
+        config.base.n_hidden,
+        config.base.bptt_lr,
+        beta,
+        seed,
+    );
     let grad_report = gradient.train_and_evaluate(epochs, &train, &test);
 
-    let mut dfa = MatchedDfa::new(
+    let mut dfa = MatchedDfa::on(
+        config.forward,
         config.base.n_hidden,
         config.base.eta,
         config.base.lambda,
@@ -308,23 +321,26 @@ fn summarize(config: &DfaMatchConfig, seeds: &[DfaMatchSeedResult]) -> SummaryPa
     }
 }
 
+/// Delegates to the single owner in [`crate::guards::decide_matched_verdict`].
+///
+/// This was one of four byte-identical copies, and all four shared the same
+/// hole: they checked that the reference was not too *weak* and never that the
+/// treatment had exceeded it. See that function for what the hole let through.
 fn decide_verdict(
     config: &DfaMatchConfig,
     mean_dfa: f32,
     mean_gradient: f32,
     gap_lcb: f32,
 ) -> GateG2Verdict {
-    if mean_gradient < config.base.g2_min_accuracy {
-        return GateG2Verdict::InvalidHarness;
-    }
-    if config.quick || config.base.n_seeds < config.scientific_n_seeds {
-        return GateG2Verdict::Pilot;
-    }
-    if gap_lcb > config.base.g2_min_gap_closed && mean_dfa >= config.base.g2_min_accuracy {
-        GateG2Verdict::Pass
-    } else {
-        GateG2Verdict::Fail
-    }
+    crate::guards::decide_matched_verdict(
+        mean_gradient,
+        mean_dfa,
+        gap_lcb,
+        config.chance_baseline,
+        config.base.g2_min_accuracy,
+        config.base.g2_min_gap_closed,
+        config.quick || config.base.n_seeds < config.scientific_n_seeds,
+    )
 }
 
 #[cfg(test)]

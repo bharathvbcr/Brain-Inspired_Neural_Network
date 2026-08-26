@@ -845,16 +845,41 @@ fn summarize_arm(
     let test_updates_absent = seeds
         .iter()
         .all(|seed| seed.outcome(arm).test_weights_unchanged);
+    // This arm's own validity gates first — they are specific to the credit
+    // suite and the shared owner does not know about them.
     let verdict = if !positive_ok || !sparsity_ok || !parity.all_pass() || !test_updates_absent {
         GateG2Verdict::InvalidHarness
-    } else if config.quick || config.base.n_seeds < config.scientific_n_seeds {
-        GateG2Verdict::Pilot
-    } else if gap_closed_lower_95 > config.base.g2_min_gap_closed
-        && mean_accuracy >= config.base.g2_min_accuracy
-    {
-        GateG2Verdict::Pass
     } else {
-        GateG2Verdict::Fail
+        // Then the shared rule, which adds the check this block never had: the
+        // treatment exceeding the gradient reference that bounds it. `closed`
+        // is clamped to [0,1] above, so an inverted comparison reaches the
+        // confidence bound already flattened to 1.0 and reads as a clean PASS.
+        let gradient_mean = mean_var(
+            &seeds
+                .iter()
+                .map(|seed| seed.outcome(CreditArm::SurrogateGradient).accuracy)
+                .collect::<Vec<_>>(),
+        )
+        .0;
+        let dense_mean = mean_var(
+            &seeds
+                .iter()
+                .map(|seed| seed.outcome(CreditArm::DenseEpochMatched).accuracy)
+                .collect::<Vec<_>>(),
+        )
+        .0;
+        crate::guards::decide_matched_verdict(
+            gradient_mean,
+            mean_accuracy,
+            gap_closed_lower_95,
+            // The dense epoch-matched arm is this suite's floor, playing the
+            // role chance plays elsewhere: it is what "did not learn" means
+            // here, and `reference_gap` is already measured against it.
+            dense_mean,
+            config.base.g2_min_accuracy,
+            config.base.g2_min_gap_closed,
+            config.quick || config.base.n_seeds < config.scientific_n_seeds,
+        )
     };
     CreditArmSummary {
         arm,

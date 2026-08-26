@@ -31,7 +31,7 @@
 use binn_core::Rng;
 use binn_engine::THETA_REST;
 
-use crate::matched_local_baseline::{ForwardCache, MatchedArch};
+use crate::matched_local_baseline::{ForwardCache, MatchedArch, MatchedForward};
 use crate::{GradientExample, GradientReferenceReport, REFERENCE_SEQUENCE_LEN};
 
 const N_IN: usize = 2;
@@ -58,8 +58,22 @@ pub struct MatchedBroadcastErr {
 impl MatchedBroadcastErr {
     /// New broadcast graded-error arm sized to `hidden`.
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(MatchedForward::FeedForward, hidden, eta, lambda, beta, seed)
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             eta,
             lambda,
             rng: Rng::new(seed ^ 0xBC05_7012_0000_00F1),
@@ -110,10 +124,24 @@ pub struct MatchedDfa {
 impl MatchedDfa {
     /// New DFA arm. Feedback matrix is frozen at construction (`seed`-derived).
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(MatchedForward::FeedForward, hidden, eta, lambda, beta, seed)
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         let mut frng = Rng::new(seed ^ 0x00DF_A0C1_ED17);
         let feedback: Vec<f32> = (0..hidden).map(|_| frng.next_f32() * 2.0 - 1.0).collect();
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             eta,
             lambda,
             feedback,

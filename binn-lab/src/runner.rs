@@ -2822,12 +2822,25 @@ fn chance_normalized_gap_stats(seeds: &[SeedResult], confidence_z: f32) -> (f32,
     (mean, var, lcb)
 }
 
+/// Delegates to [`crate::guards::decide_matched_verdict`], which adds the check
+/// this function never had: the local arm exceeding the gradient reference that
+/// bounds it. `mean_gap_closed` is `(local - dense) / (gradient - dense)`
+/// clamped to `[0,1]`, so an inverted comparison reaches
+/// `gap_closed_lower_95` already flattened and reads as a decisive PASS.
+///
+/// `mean_dense` is this suite's floor and plays the role chance plays
+/// elsewhere: it is what "the reference did not learn" means here, and it is
+/// already the denominator's origin.
 fn gate_g2(summary: &PairedSummary, min_gap_closed: f32, min_accuracy: f32) -> GateG2Verdict {
-    if summary.gap_closed_lower_95 > min_gap_closed && summary.mean_local >= min_accuracy {
-        GateG2Verdict::Pass
-    } else {
-        GateG2Verdict::Fail
-    }
+    crate::guards::decide_matched_verdict(
+        summary.mean_gradient_reference,
+        summary.mean_local,
+        summary.gap_closed_lower_95,
+        summary.mean_dense,
+        min_accuracy,
+        min_gap_closed,
+        false,
+    )
 }
 
 fn decide_g2_verdict(
@@ -3184,6 +3197,37 @@ mod tests {
             summary.mean_gap_closed, 0.0,
             "weak reference gap must contribute closed = 0"
         );
+        // Was `Fail`. This fixture's reference (0.61) sits below its treatment
+        // (0.65) and barely above the dense floor (0.60), so the comparison is
+        // both dead and inverted — and `FAIL` is a scientific claim about the
+        // arm, which this data cannot support. `guards::decide_matched_verdict`
+        // now says so. The `closed = 0` mechanism above is unchanged and still
+        // asserted; what moved is only what a run on such a reference is
+        // allowed to conclude.
+        assert_eq!(
+            gate_g2(&summary, 0.5, 0.65),
+            GateG2Verdict::InvalidHarness,
+            "a reference that cannot bound its treatment must not yield a FAIL"
+        );
+    }
+
+    #[test]
+    fn a_healthy_reference_with_no_gap_closed_still_fails() {
+        // The companion to the test above, and the reason it is not weakened by
+        // the change: when the reference IS usable, a treatment that closes
+        // nothing must still read `FAIL` and not be excused as a bad harness.
+        let seed = SeedResult {
+            seed: 1,
+            local_assembly: 0.55,
+            dense_local: 0.50,
+            gradient_reference: 0.90, // healthy: well above dense, above the arm
+            eligibility_reference: 0.50,
+            activity_sparsity: 0.015,
+            dense_activity_sparsity: 0.015,
+            dense_matched: None,
+        };
+        let seeds = vec![seed; 20];
+        let summary = summarize_paired(&seeds, 1.96, 0.15);
         assert_eq!(gate_g2(&summary, 0.5, 0.65), GateG2Verdict::Fail);
     }
 

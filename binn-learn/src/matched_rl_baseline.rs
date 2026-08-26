@@ -32,7 +32,7 @@ use crate::credit::{
     reinforce_term, CreditSignal, LearnedReinforceFeedback, LearnedRpeCritic, ReinforceFeedback,
 };
 use crate::matched_local_baseline::{
-    ForwardCache, GradientExample, GradientReferenceReport, MatchedArch,
+    ForwardCache, GradientExample, GradientReferenceReport, MatchedArch, MatchedForward,
 };
 use crate::REFERENCE_SEQUENCE_LEN;
 use binn_core::Rng;
@@ -77,8 +77,22 @@ pub struct MatchedRlFlat {
 impl MatchedRlFlat {
     /// New flat-reward arm sized to `hidden`.
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(MatchedForward::FeedForward, hidden, eta, lambda, beta, seed)
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             eta,
             lambda,
             rng: Rng::new(seed ^ 0xF1A7_7012_0000_00F1),
@@ -125,8 +139,22 @@ pub struct MatchedRlGraded {
 impl MatchedRlGraded {
     /// New graded-reward arm sized to `hidden`.
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(MatchedForward::FeedForward, hidden, eta, lambda, beta, seed)
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             eta,
             lambda,
             rng: Rng::new(seed ^ 0x61AD_7012_0000_00F1),
@@ -174,9 +202,23 @@ pub struct MatchedRlReinforceFb {
 impl MatchedRlReinforceFb {
     /// New reinforce-fb arm sized to `hidden`.
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(MatchedForward::FeedForward, hidden, eta, lambda, beta, seed)
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         let fb = ReinforceFeedback::new(hidden, seed);
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             feedback: fb.weights().to_vec(),
             eta,
             lambda,
@@ -280,8 +322,31 @@ pub struct MatchedRlLearnedFb {
 
 impl MatchedRlLearnedFb {
     pub fn new(hidden: usize, eta: f32, lambda: f32, eta_b: f32, beta: f32, seed: u64) -> Self {
+        // Feed-forward is this arm's historical graph, preserved so no
+        // archived number moves. Name the graph through `on` instead.
+        Self::on(
+            MatchedForward::FeedForward,
+            hidden,
+            eta,
+            lambda,
+            eta_b,
+            beta,
+            seed,
+        )
+    }
+
+    /// This arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        eta_b: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             feedback: LearnedReinforceFeedback::new(hidden, seed, eta_b),
             eta,
             lambda,

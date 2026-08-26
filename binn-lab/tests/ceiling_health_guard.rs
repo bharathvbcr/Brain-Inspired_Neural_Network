@@ -106,6 +106,78 @@ fn every_ceiling_claim_goes_through_the_canonical_owner() {
     );
 }
 
+/// Every Gate G2 verdict compared against a reference must go through the owner.
+///
+/// # Why the guard above could not have caught this
+///
+/// That guard looks for *vocabulary*: a file that says "ceiling health" or
+/// "INVERTED" must reference `CeilingHealth`. Six sources decided a G2 verdict
+/// against a gradient reference and used none of those words, so the guard was
+/// silent on all six — including `runner_dfa_match.rs`, whose published output
+/// `results/c1_dfa.md` reports a treatment at 0.9387 against its own ceiling at
+/// 0.8963 and calls it `PASS`. `CeilingHealth::evaluate(0.8963, 0.9387, 0.5)`
+/// returns `Inverted`, and this crate has asserted exactly that since
+/// 2026-08-21 in `the_dfa_arm_exceeds_its_own_ceiling`.
+///
+/// A guard keyed on what a file *says* cannot see a file that says nothing.
+/// This one is keyed on what a file *does*: constructing `GateG2Verdict::Pass`
+/// is the act, and any source that performs it must obtain the verdict from
+/// the canonical owner.
+#[test]
+fn every_matched_g2_verdict_goes_through_the_canonical_owner() {
+    const OWNER: &str = "decide_matched_verdict";
+    // The act that requires the owner: returning a G2 verdict. Keyed on the
+    // signature rather than on `GateG2Verdict::Pass`, because after a source
+    // delegates correctly it no longer constructs the variant — so a marker on
+    // the construction would have gone quiet exactly when the fix landed, and
+    // the guard would have reported "nothing to check" as though it were
+    // "nothing wrong".
+    const ACT: &str = "-> GateG2Verdict";
+    const EXEMPT: &[(&str, &str)] = &[("guards.rs", "is the canonical owner")];
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut sources = collect_sources(&root.join("src"));
+    sources.extend(collect_sources(&root.join("experiments")));
+    assert!(
+        sources.len() > 20,
+        "found only {} sources under src/ and experiments/ - the guard would \
+         pass vacuously",
+        sources.len()
+    );
+
+    let mut violations = Vec::new();
+    let mut checked = 0usize;
+    for path in &sources {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let text = fs::read_to_string(path).expect("read source");
+        if !text.contains(ACT) || EXEMPT.iter().any(|(f, _)| *f == name) {
+            continue;
+        }
+        checked += 1;
+        if !text.contains(OWNER) {
+            violations.push(format!(
+                "{name}: decides a Gate G2 verdict without `guards::{OWNER}`.\n    \
+                 A local rule that only checks `reference < floor` is blind to the \
+                 treatment EXCEEDING its reference, and `gap_closed` is clamped to \
+                 [0,1] downstream so the inversion arrives as a clean PASS."
+            ));
+        }
+    }
+
+    // Refuse a vacuous pass: if the enum is renamed or the deciders move,
+    // finding nothing must not read as finding nothing wrong.
+    assert!(
+        checked >= 6,
+        "expected at least 6 sources to decide a G2 verdict, found {checked} - \
+         `{ACT}` has drifted and this guard covers nothing"
+    );
+    assert!(
+        violations.is_empty(),
+        "G2 verdicts bypassing the canonical owner:\n\n{}",
+        violations.join("\n\n")
+    );
+}
+
 /// The guard must be able to fail. A marker with no canonical reference is a
 /// violation; the same text with the reference is not.
 #[test]

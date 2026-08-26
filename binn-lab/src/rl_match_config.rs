@@ -9,7 +9,9 @@
 //! protocol-v10 `c1x-dfa-spike-*`. Does **not** reopen `c1-118207fbc3eaba53`.
 //! G2 thresholds unchanged.
 
+use crate::match_config::FORWARD_HASH_TAG;
 use crate::Config;
+use binn_learn::MatchedForward;
 
 /// Protocol version for the matched-architecture RL reinforce-fb primary recipe.
 pub const C1_RL_PROTOCOL_VERSION: u64 = 12;
@@ -26,6 +28,9 @@ pub const C1_RL_CHANCE_BASELINE: f32 = 0.5;
 /// Primary gated arm identity (mixed into the config hash).
 pub const C1_RL_PRIMARY_ARM: &str = "rl_reinforce_fb";
 
+/// The forward graph this suite has always run on, preserved as its default.
+pub const RLMATCHCONFIG_DEFAULT_FORWARD: MatchedForward = MatchedForward::FeedForward;
+
 /// Public config for the matched-architecture RL control.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RlMatchConfig {
@@ -41,6 +46,13 @@ pub struct RlMatchConfig {
     pub scientific_n_seeds: usize,
     /// Development-only schedule marker.
     pub quick: bool,
+    /// The forward graph the arm and its ceiling are both built on.
+    ///
+    /// Historically this suite's graph was `FeedForward`, chosen by which
+    /// constructor the runner happened to call and recorded nowhere. It is now
+    /// named so that a number can be read without consulting the source, and
+    /// so that the same arm can be run on the other graph.
+    pub forward: MatchedForward,
 }
 
 impl RlMatchConfig {
@@ -61,6 +73,7 @@ impl RlMatchConfig {
             primary_arm: C1_RL_PRIMARY_ARM,
             scientific_n_seeds: 20,
             quick: false,
+            forward: RLMATCHCONFIG_DEFAULT_FORWARD,
             base,
         }
     }
@@ -117,6 +130,15 @@ impl RlMatchConfig {
         mix(&mut h, self.chance_baseline.to_bits() as u64);
         mix(&mut h, self.scientific_n_seeds as u64);
         mix(&mut h, u64::from(self.quick));
+        // Mixed ONLY when it differs from the historical default, so that the
+        // archived `RlMatchConfig` hashes still resolve through `from_hash` and every
+        // citation of them still replays. A run on the other graph is a
+        // different experiment and gets a different hash, which is the point;
+        // a run on the same graph must keep the identity it was published under.
+        if self.forward != RLMATCHCONFIG_DEFAULT_FORWARD {
+            mix(&mut h, FORWARD_HASH_TAG);
+            mix(&mut h, u64::from(self.forward.is_recurrent()));
+        }
         h
     }
 

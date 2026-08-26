@@ -43,7 +43,7 @@ use binn_engine::{THETA_REST, V_RESET};
 
 pub use crate::bptt_baseline::{GradientExample, GradientReferenceReport, REFERENCE_SEQUENCE_LEN};
 pub use crate::matched_local_baseline::{
-    ForwardCache, MatchedArch, DEFAULT_MATCHED_BETA, MATCHED_GRADIENT_LABEL,
+    ForwardCache, MatchedArch, MatchedForward, DEFAULT_MATCHED_BETA, MATCHED_GRADIENT_LABEL,
 };
 
 const N_IN: usize = 2;
@@ -68,8 +68,14 @@ impl MatchedEventProp {
     /// New EventProp arm on the **recurrent** matched graph (same as SuperSpike
     /// matched-arch ceiling).
     pub fn new(hidden: usize, lr: f32, beta: f32, seed: u64) -> Self {
+        // Protocol v28's historical graph, preserved. See [`MatchedForward`].
+        Self::on(MatchedForward::Recurrent, hidden, lr, beta, seed)
+    }
+
+    /// The spike-adjoint arm on an explicitly named graph.
+    pub fn on(forward: MatchedForward, hidden: usize, lr: f32, beta: f32, seed: u64) -> Self {
         Self {
-            arch: MatchedArch::new(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             lr,
         }
     }

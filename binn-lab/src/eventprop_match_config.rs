@@ -6,7 +6,9 @@
 //! `c1-118207fbc3eaba53`, mutate `c1-match-5dc6822e71229e9e`, or remassage
 //! DFA/RL scientific hashes. G2 thresholds unchanged.
 
+use crate::match_config::FORWARD_HASH_TAG;
 use crate::Config;
+use binn_learn::MatchedForward;
 
 /// Protocol version for the matched EventProp head-to-head.
 pub const C1_EVENTPROP_PROTOCOL_VERSION: u64 = 28;
@@ -19,6 +21,9 @@ pub const C1_EVENTPROP_HASH_PREFIX: &str = "c1-eventprop-";
 
 /// Chance baseline used in `gap_closed_eventprop` (binary coincidence task).
 pub const C1_EVENTPROP_CHANCE_BASELINE: f32 = 0.5;
+
+/// The forward graph this suite has always run on, preserved as its default.
+pub const EVENTPROPMATCHCONFIG_DEFAULT_FORWARD: MatchedForward = MatchedForward::Recurrent;
 
 /// Public config for the matched EventProp control.
 #[derive(Clone, Debug, PartialEq)]
@@ -33,6 +38,13 @@ pub struct EventPropMatchConfig {
     pub scientific_n_seeds: usize,
     /// Development-only schedule marker.
     pub quick: bool,
+    /// The forward graph the arm and its ceiling are both built on.
+    ///
+    /// Historically this suite's graph was `Recurrent`, chosen by which
+    /// constructor the runner happened to call and recorded nowhere. It is now
+    /// named so that a number can be read without consulting the source, and
+    /// so that the same arm can be run on the other graph.
+    pub forward: MatchedForward,
 }
 
 impl EventPropMatchConfig {
@@ -49,6 +61,7 @@ impl EventPropMatchConfig {
             chance_baseline: C1_EVENTPROP_CHANCE_BASELINE,
             scientific_n_seeds: 20,
             quick: false,
+            forward: EVENTPROPMATCHCONFIG_DEFAULT_FORWARD,
             base,
         }
     }
@@ -102,6 +115,15 @@ impl EventPropMatchConfig {
         mix(&mut h, self.chance_baseline.to_bits() as u64);
         mix(&mut h, self.scientific_n_seeds as u64);
         mix(&mut h, u64::from(self.quick));
+        // Mixed ONLY when it differs from the historical default, so that the
+        // archived `EventPropMatchConfig` hashes still resolve through `from_hash` and every
+        // citation of them still replays. A run on the other graph is a
+        // different experiment and gets a different hash, which is the point;
+        // a run on the same graph must keep the identity it was published under.
+        if self.forward != EVENTPROPMATCHCONFIG_DEFAULT_FORWARD {
+            mix(&mut h, FORWARD_HASH_TAG);
+            mix(&mut h, u64::from(self.forward.is_recurrent()));
+        }
         h
     }
 

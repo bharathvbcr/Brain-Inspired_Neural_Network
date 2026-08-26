@@ -5,6 +5,7 @@
 //! `c1-118207fbc3eaba53`. Chance baseline for `gap_closed_matched` is 0.5.
 
 use crate::Config;
+use binn_learn::MatchedForward;
 
 /// Protocol version for the matched-architecture confound control.
 pub const C1_MATCH_PROTOCOL_VERSION: u64 = 4;
@@ -32,6 +33,13 @@ pub const C1_MATCH_HASH_PREFIX: &str = "c1-match-";
 /// Chance baseline used in `gap_closed_matched` (binary coincidence task).
 pub const C1_MATCH_CHANCE_BASELINE: f32 = 0.5;
 
+/// Domain separator mixed in beside a non-default forward, so that "ran on
+/// the other graph" cannot collide with some other single-bit difference.
+pub const FORWARD_HASH_TAG: u64 = 0xF0AD_5EED_0000_0001;
+
+/// The forward graph this suite has always run on, preserved as its default.
+pub const MATCHCONFIG_DEFAULT_FORWARD: MatchedForward = MatchedForward::Recurrent;
+
 /// Public config for the matched-architecture control.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MatchConfig {
@@ -45,6 +53,13 @@ pub struct MatchConfig {
     pub scientific_n_seeds: usize,
     /// Development-only schedule marker.
     pub quick: bool,
+    /// The forward graph the arm and its ceiling are both built on.
+    ///
+    /// Historically this suite's graph was `Recurrent`, chosen by which
+    /// constructor the runner happened to call and recorded nowhere. It is now
+    /// named so that a number can be read without consulting the source, and
+    /// so that the same arm can be run on the other graph.
+    pub forward: MatchedForward,
 }
 
 impl MatchConfig {
@@ -62,6 +77,7 @@ impl MatchConfig {
             chance_baseline: C1_MATCH_CHANCE_BASELINE,
             scientific_n_seeds: 20,
             quick: false,
+            forward: MATCHCONFIG_DEFAULT_FORWARD,
             base,
         }
     }
@@ -154,6 +170,15 @@ impl MatchConfig {
         mix(&mut h, self.chance_baseline.to_bits() as u64);
         mix(&mut h, self.scientific_n_seeds as u64);
         mix(&mut h, u64::from(self.quick));
+        // Mixed ONLY when it differs from the historical default, so that the
+        // archived `MatchConfig` hashes still resolve through `from_hash` and every
+        // citation of them still replays. A run on the other graph is a
+        // different experiment and gets a different hash, which is the point;
+        // a run on the same graph must keep the identity it was published under.
+        if self.forward != MATCHCONFIG_DEFAULT_FORWARD {
+            mix(&mut h, FORWARD_HASH_TAG);
+            mix(&mut h, u64::from(self.forward.is_recurrent()));
+        }
         h
     }
 

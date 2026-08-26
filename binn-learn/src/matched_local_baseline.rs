@@ -119,7 +119,57 @@ pub struct ForwardCache {
     pub(crate) logit: f32,
 }
 
+/// Which forward graph a matched arm and its ceiling are built on.
+///
+/// # Why this is a parameter rather than a convention
+///
+/// Every matched learner picked its own forward at construction and none of
+/// them said so in its report. `MatchedLocal` and `MatchedEventProp` build
+/// [`MatchedArch::new`] — **recurrent**, carrying a `hidden x hidden` matrix —
+/// while `MatchedDfa` and every `MatchedRl*` build
+/// [`MatchedArch::feedforward`], where that matrix is absent. Within each pair
+/// the arm and its ceiling agree, so nothing inverted and nothing warned.
+///
+/// Across pairs they do not agree, and the paper's central contrast is exactly
+/// a comparison across pairs: broadcast +/-1 fails, and graded DFA and
+/// REINFORCE x frozen `B_i` clear the same gate. That reads as one forward with
+/// the rule varied, and it is two forwards with the rule varied. The
+/// preregistration in `results/MATCHED_ARCH_RL_CONTROL.md` names
+/// `new_feedforward`; protocol v4 predates it and was never migrated.
+///
+/// Making it an argument turns a confound into an axis: every arm can be run on
+/// both graphs, and whether the forward matters becomes a measurement instead
+/// of an assumption. The historical default of each learner is preserved by its
+/// existing `new`, so no recorded number moves by accident.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatchedForward {
+    /// `wrec = 0`. The graph the DFA and REINFORCE arms have always used.
+    FeedForward,
+    /// A live `hidden x hidden` recurrent matrix. Protocol v4's graph.
+    Recurrent,
+}
+
+impl MatchedForward {
+    /// `true` when the graph carries a recurrent matrix.
+    pub const fn is_recurrent(self) -> bool {
+        matches!(self, MatchedForward::Recurrent)
+    }
+
+    /// The label that must appear beside any number measured on this graph.
+    pub const fn label(self) -> &'static str {
+        match self {
+            MatchedForward::FeedForward => "feedforward",
+            MatchedForward::Recurrent => "recurrent",
+        }
+    }
+}
+
 impl MatchedArch {
+    /// Fresh shared forward on an explicitly named graph.
+    pub fn on(forward: MatchedForward, hidden: usize, beta: f32, seed: u64) -> Self {
+        Self::with_options(hidden, beta, seed, forward.is_recurrent())
+    }
+
     /// Fresh shared forward with small deterministic weights from `seed`.
     ///
     /// Weight init mirrors [`crate::surrogate_lif_baseline::SurrogateLifReference`]
@@ -253,8 +303,13 @@ impl MatchedGradient {
 
     /// Ceiling arm on the feed-forward matched graph (protocol-v5 DFA recipe).
     pub fn new_feedforward(hidden: usize, lr: f32, beta: f32, seed: u64) -> Self {
+        Self::on(MatchedForward::FeedForward, hidden, lr, beta, seed)
+    }
+
+    /// Ceiling arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(forward: MatchedForward, hidden: usize, lr: f32, beta: f32, seed: u64) -> Self {
         Self {
-            arch: MatchedArch::feedforward(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             lr,
         }
     }
@@ -353,8 +408,23 @@ impl MatchedLocal {
     /// `eta` = three-factor learning rate, `lambda` = weight decay. The action
     /// sampler is seeded so runs are deterministic (GC3).
     pub fn new(hidden: usize, eta: f32, lambda: f32, beta: f32, seed: u64) -> Self {
+        // Recurrent is protocol v4's historical graph, preserved so that no
+        // archived number moves by accident. Every new comparison should name
+        // the graph through `on` instead.
+        Self::on(MatchedForward::Recurrent, hidden, eta, lambda, beta, seed)
+    }
+
+    /// The local arm on an explicitly named graph. See [`MatchedForward`].
+    pub fn on(
+        forward: MatchedForward,
+        hidden: usize,
+        eta: f32,
+        lambda: f32,
+        beta: f32,
+        seed: u64,
+    ) -> Self {
         Self {
-            arch: MatchedArch::new(hidden, beta, seed),
+            arch: MatchedArch::on(forward, hidden, beta, seed),
             eta,
             lambda,
             rng: Rng::new(seed ^ 0x3FAC_7012_0000_00F1),

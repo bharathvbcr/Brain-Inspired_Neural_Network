@@ -46,6 +46,7 @@ use binn_lab::{
     FOUNDATION_MICRO_NNZ_LO, FOUNDATION_MICRO_TARGET_NNZ, FOUNDATION_MICRO_WALL_SECS_PER_SEED,
     MAC_PROBE_FULL_C1_REFUSE_N, MAC_PROBE_K_WTA, MICRO_MAX_FAN_OUT,
 };
+use binn_learn::MatchedForward;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -57,6 +58,9 @@ fn main() -> ExitCode {
     let mut match_nnz: Option<usize> = None;
     let mut sensitivity: Option<String> = None;
     let mut matched_arch = false;
+    // The forward graph for every matched suite. `None` keeps each suite's
+    // historical default, so an unflagged run reproduces its archived hash.
+    let mut matched_forward: Option<MatchedForward> = None;
     let mut matched_dfa = false;
     let mut matched_rl = false;
     let mut matched_mech = false;
@@ -99,6 +103,19 @@ fn main() -> ExitCode {
         match args[i].as_str() {
             "--quick" => quick = true,
             "--matched-arch" => matched_arch = true,
+            "--matched-forward" => {
+                i += 1;
+                matched_forward = match args.get(i).map(String::as_str) {
+                    Some("feedforward") | Some("ff") => Some(MatchedForward::FeedForward),
+                    Some("recurrent") | Some("rec") => Some(MatchedForward::Recurrent),
+                    other => {
+                        eprintln!(
+                            "--matched-forward takes `feedforward` or `recurrent`, got {other:?}"
+                        );
+                        return ExitCode::from(2);
+                    }
+                };
+            }
             "--matched-dfa" | "--matched-arch-dfa" => matched_dfa = true,
             "--matched-rl" | "--matched-arch-rl" => matched_rl = true,
             "--matched-mech" | "--mech" | "--credit-mech" => matched_mech = true,
@@ -360,6 +377,7 @@ fn main() -> ExitCode {
             quick,
             hash.as_deref(),
             out,
+            matched_forward,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -384,6 +402,7 @@ fn main() -> ExitCode {
             quick,
             hash.as_deref(),
             out,
+            matched_forward,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -407,6 +426,7 @@ fn main() -> ExitCode {
             quick,
             hash.as_deref(),
             out,
+            matched_forward,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -454,6 +474,7 @@ fn main() -> ExitCode {
             quick,
             hash.as_deref(),
             out,
+            matched_forward,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -1349,6 +1370,7 @@ fn run_matched_arch(
     quick: bool,
     hash: Option<&str>,
     out: Option<PathBuf>,
+    forward: Option<MatchedForward>,
     conflicting_flag: bool,
     undertrain: bool,
 ) -> ExitCode {
@@ -1358,7 +1380,7 @@ fn run_matched_arch(
         );
         return ExitCode::from(2);
     }
-    let config = if let Some(h) = hash {
+    let mut config = if let Some(h) = hash {
         // Accept only c1-match-* presets; refuse v2/v3 C1 hashes.
         if let Some(c) = MatchConfig::from_hash(h) {
             c
@@ -1387,6 +1409,12 @@ fn run_matched_arch(
         MatchConfig::scientific()
     };
 
+    // Applied after the preset is resolved, so an explicit graph overrides the
+    // suite's historical default and moves the config hash with it. Omitting
+    // the flag reproduces the archived hash exactly.
+    if let Some(forward) = forward {
+        config.forward = forward;
+    }
     println!("C1-MATCH config hash: {}", config.hash_string());
     println!(
         "protocol version: {} (matched-architecture control)",
@@ -1440,6 +1468,7 @@ fn run_matched_dfa(
     quick: bool,
     hash: Option<&str>,
     out: Option<PathBuf>,
+    forward: Option<MatchedForward>,
     conflicting_flag: bool,
 ) -> ExitCode {
     if conflicting_flag {
@@ -1448,7 +1477,7 @@ fn run_matched_dfa(
         );
         return ExitCode::from(2);
     }
-    let config = if let Some(h) = hash {
+    let mut config = if let Some(h) = hash {
         if let Some(c) = DfaMatchConfig::from_hash(h) {
             c
         } else if MatchConfig::from_hash(h).is_some() || Config::from_hash(h).is_some() {
@@ -1470,6 +1499,12 @@ fn run_matched_dfa(
         DfaMatchConfig::scientific()
     };
 
+    // Applied after the preset is resolved, so an explicit graph overrides the
+    // suite's historical default and moves the config hash with it. Omitting
+    // the flag reproduces the archived hash exactly.
+    if let Some(forward) = forward {
+        config.forward = forward;
+    }
     println!("C1-DFA config hash: {}", config.hash_string());
     println!(
         "protocol version: {} (matched-architecture DFA recipe)",
@@ -1523,6 +1558,7 @@ fn run_matched_rl(
     quick: bool,
     hash: Option<&str>,
     out: Option<PathBuf>,
+    forward: Option<MatchedForward>,
     conflicting_flag: bool,
 ) -> ExitCode {
     if conflicting_flag {
@@ -1531,7 +1567,7 @@ fn run_matched_rl(
         );
         return ExitCode::from(2);
     }
-    let config = if let Some(h) = hash {
+    let mut config = if let Some(h) = hash {
         if let Some(c) = RlMatchConfig::from_hash(h) {
             c
         } else if DfaMatchConfig::from_hash(h).is_some()
@@ -1556,6 +1592,12 @@ fn run_matched_rl(
         RlMatchConfig::scientific()
     };
 
+    // Applied after the preset is resolved, so an explicit graph overrides the
+    // suite's historical default and moves the config hash with it. Omitting
+    // the flag reproduces the archived hash exactly.
+    if let Some(forward) = forward {
+        config.forward = forward;
+    }
     println!("C1-RL config hash: {}", config.hash_string());
     println!(
         "protocol version: {} (matched-architecture RL; primary={})",
@@ -1683,6 +1725,7 @@ fn run_matched_eventprop(
     quick: bool,
     hash: Option<&str>,
     out: Option<PathBuf>,
+    forward: Option<MatchedForward>,
     conflicting_flag: bool,
 ) -> ExitCode {
     if conflicting_flag {
@@ -1691,7 +1734,7 @@ fn run_matched_eventprop(
         );
         return ExitCode::from(2);
     }
-    let config = if let Some(h) = hash {
+    let mut config = if let Some(h) = hash {
         if let Some(c) = EventPropMatchConfig::from_hash(h) {
             c
         } else if MatchConfig::from_hash(h).is_some()
@@ -1716,6 +1759,12 @@ fn run_matched_eventprop(
         EventPropMatchConfig::scientific()
     };
 
+    // Applied after the preset is resolved, so an explicit graph overrides the
+    // suite's historical default and moves the config hash with it. Omitting
+    // the flag reproduces the archived hash exactly.
+    if let Some(forward) = forward {
+        config.forward = forward;
+    }
     println!("C1-EVENTPROP config hash: {}", config.hash_string());
     println!(
         "protocol version: {} (matched EventProp H2H; rule-only)",
@@ -1979,6 +2028,7 @@ fn print_help() {
          \n\
          Matched-architecture control (protocol v4; new c1-match-* hash):\n\
            c1 --matched-arch [--quick] [--out results/c1_match.md]\n\
+           c1 --matched-forward <feedforward|recurrent>  (any matched suite; omit for the suite default)\n\
            c1 --matched-arch --config-hash c1-match-<hex>\n\
          Refuse combo with --sensitivity / --isolation / v2–v3 --config-hash.\n\
          Does not reopen protocol-v2 kill-gate c1-118207fbc3eaba53.\n\

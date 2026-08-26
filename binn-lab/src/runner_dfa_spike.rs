@@ -677,17 +677,21 @@ fn decide_verdict(
     let sparsity_ok = (config.base.activity_sparsity_min..=config.base.activity_sparsity_max)
         .contains(&mean_activity_sparsity);
     let positive_ok = positive_control_mean >= config.base.g2_min_positive_control;
-    if !positive_ok || !sparsity_ok || mean_gradient < config.base.g2_min_accuracy {
+    // This arm's own validity gates first; the shared owner does not know them.
+    if !positive_ok || !sparsity_ok {
         return GateG2Verdict::InvalidHarness;
     }
-    if pilot {
-        return GateG2Verdict::Pilot;
-    }
-    if gap_lcb > config.base.g2_min_gap_closed && mean_dfa >= config.base.g2_min_accuracy {
-        GateG2Verdict::Pass
-    } else {
-        GateG2Verdict::Fail
-    }
+    // Then the shared rule, which adds the ceiling-inversion check this block
+    // never had. The reference floor it did check is preserved inside it.
+    crate::guards::decide_matched_verdict(
+        mean_gradient,
+        mean_dfa,
+        gap_lcb,
+        config.chance_baseline,
+        config.base.g2_min_accuracy,
+        config.base.g2_min_gap_closed,
+        pilot,
+    )
 }
 
 fn output_error(trace: &TrialTrace) -> [f32; 2] {
