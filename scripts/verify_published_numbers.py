@@ -262,6 +262,57 @@ def main() -> int:
                          / len(set(ff04) & set(ff04_attn)),
                          published(W14, r"at scale 0\.4 is \*\*(0\.\d+)\*\*")))
 
+    # ---- Azure: the width ladder, including the rung only Azure ran --------
+    # The four h256/d32-L4 cells are the only ones of their kind in the project
+    # — wave 8 ran h128, h512 and h1024 and skipped h256 — so this rung has no
+    # second copy to check it against and needs the named check most.
+    AZ = ROOT / "results/azure-d32l4-scope-v1/results"
+    AZDOC = "RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md"
+    for width, attn_root, attn_stem, rate_root, rate_stem, pattern in (
+        (128, V1, f"r1cal__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4",
+         V1, f"w1__ff-fixed__h128__e400__{ANCHOR}",
+         r"\| h128 \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*"),
+        (256, AZ, f"az8wid__ff-fixed-attn__h256__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h256__e400__{ANCHOR}",
+         r"\| \*\*h256\*\* \| \*\*4\*\* \| \*\*0\.\d+\*\* \| \*\*0\.\d+\*\* \| \*\*([+-]?\d\.\d+)\*\*"),
+        (512, V2, f"w8wid__ff-fixed-attn__h512__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h512__e400__{ANCHOR}",
+         r"\| h512 \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-]?\d\.\d+)\*\*"),
+        (1024, AZ, f"az8wid__ff-fixed-attn__h1024__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h1024__e400__{ANCHOR}",
+         r"\| h1024 \| 12 \| 0\.\d+ \| 0\.\d+ \| \*\*([+-−]?\d\.\d+)\*\*"),
+    ):
+        treatment = acc_present(attn_root, attn_stem)
+        control = acc_present(rate_root, rate_stem)
+        gain, pairs = paired_gain(treatment, control)
+        results.append(check(f"width ladder d32/L4 gain at h{width} (n={pairs})",
+                             gain, published(AZDOC, pattern)))
+
+    # The ladder is only a ladder if its rungs are ordered as published: the
+    # gain decays across h128 -> h256 -> h512 and then collapses. Asserting the
+    # shape, not just the four numbers, so that a rung moving without the prose
+    # moving fails here rather than being noticed by a reader.
+    ladder = []
+    for attn_root, attn_stem, rate_root, rate_stem in (
+        (V1, f"r1cal__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4",
+         V1, f"w1__ff-fixed__h128__e400__{ANCHOR}"),
+        (AZ, f"az8wid__ff-fixed-attn__h256__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h256__e400__{ANCHOR}"),
+        (V2, f"w8wid__ff-fixed-attn__h512__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h512__e400__{ANCHOR}"),
+        (AZ, f"az8wid__ff-fixed-attn__h1024__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h1024__e400__{ANCHOR}"),
+    ):
+        ladder.append(paired_gain(acc_present(attn_root, attn_stem),
+                                  acc_present(rate_root, rate_stem))[0])
+    monotone = all(a > b for a, b in zip(ladder, ladder[1:]))
+    collapses_last = ladder[2] > 0 > ladder[3]
+    shape_ok = monotone and collapses_last
+    print(f"  [{'ok  ' if shape_ok else 'FAIL'}] "
+          f"{'width ladder decays then collapses at h1024':<46} "
+          f"computed {'/'.join(f'{g:+.4f}' for g in ladder)}")
+    results.append(shape_ok)
+
     # ---- the paper draft must not resurrect a withdrawn claim ---------------
     print("\n  paper draft:")
     draft = (ROOT / "results/PAPER_DRAFT.md").read_text()

@@ -33,6 +33,51 @@ That includes the **complete 400-epoch training trajectories** — `epoch_mean_l
 `epoch_max_gradient_norm`, `epoch_mean_gradient_norm` — not merely end-point
 summaries.
 
+> ### AMENDED 2026-08-25 — the overlap is eight configurations, not three
+>
+> The three rows above are the overlap I **went looking for**, and I found the
+> expensive width arms because those were the ones I had in mind. Deriving the
+> overlap instead of choosing it — key every Azure cell by its scientific
+> configuration, key every AWS cell the same way, compare every pair that
+> matches on configuration *and* seed — gives **79 cell pairs across eight
+> configurations, 122,713 values, 0 differing**:
+>
+> | configuration | cell pairs | values | differing |
+> |---|---:|---:|---:|
+> | h128 / d32-L4 / `fixed-t250` / e400 | 12 | 19,620 | **0** |
+> | h128 / d32-L4 / `fixed-t500` / e400 | 9 | 14,715 | **0** |
+> | h128 / d32-L4 / `published-2ms` / **e200** | 8 | 6,680 | **0** |
+> | h512 / d32-L4 / e400 | 12 | 19,620 | **0** |
+> | h1024 / d32-L4 / e400 | 12 | 19,620 | **0** |
+> | h256 / rate-only / e400 | 4 | 6,532 | **0** |
+> | h512 / rate-only / e400 | 10 | 16,330 | **0** |
+> | h1024 / rate-only / e400 | 12 | 19,596 | **0** |
+> | **total** | **79** | **122,713** | **0** |
+>
+> The count is larger than 57,960 for two reasons that must not be confused. It
+> covers **43 more cell pairs**, and it counts **every serialised leaf** rather
+> than ten scalars plus four trajectories, so even the original 36 pairs
+> contribute more values here. Same agreement, more of it, measured with a
+> wider denominator.
+>
+> **What the four missed configurations add is not volume.** Every row in the
+> original table is h512 or h1024 — widths at which the read-out's gain is
+> reduced or inverted, and none of them the configuration the paper leads with.
+> Three of the new rows are at **h128 / d32-L4**, the headline width, across two
+> timing contracts and a second budget. The reproducibility evidence now covers
+> the configuration the paper actually claims, which it did not before.
+>
+> This is no longer narrated. `scripts/cross_isa_reproduction.py` derives the
+> overlap on every run of `scripts/record_checks.sh`, refuses to report if the
+> pair count falls below 79, and treats an absent field as a difference so that
+> a cell with less to disagree about cannot pass. It is negative-tested against
+> a one-digit perturbation deep inside a trajectory, a dropped field, and a
+> shrunken overlap.
+>
+> **Sixteen Azure cells have no AWS twin** and are excluded from the claim: the
+> four h256 / d32-L4 cells (the ladder rung AWS never ran) and the twelve
+> h1024 / d64-L4 cells of the voided AZ8-6 arm.
+
 These are genuinely separate runs on separate silicon: `wall_secs` for the same
 cell is **12,220 s on AWS and 38,063 s on Azure**, a 3.1× difference.
 
@@ -74,11 +119,27 @@ comparison against a macOS-recorded reference, including the historical 0.7378.
 
 ### Consequence for AZ8-1
 
-AZ8-1 asked whether the headline replicates on x86, and the watchdog killed the
-campaign before a single h128 cell ran (§4 below). But the question is answered
-anyway, and more strongly than it was asked: **the instrument does not merely
-replicate across ISA, it reproduces exactly.** A statistical replication of h128
-would have added nothing that these 57,960 values do not already establish.
+AZ8-1 asked whether the headline replicates on x86, and the campaign stopped
+before its h128 `published-2ms` **e400** arms ran (§4 below). But the question is
+answered anyway, and more strongly than it was asked: **the instrument does not
+merely replicate across ISA, it reproduces exactly.** A statistical replication
+of h128 would have added nothing that these values do not already establish.
+
+> **CORRECTED 2026-08-25 — twice.** This paragraph read *"the watchdog killed
+> the campaign before a single h128 cell ran."* Both halves were wrong.
+>
+> The watchdog did not kill it — the operator deallocated the fleet on
+> exhausted credit, corrected in
+> [`RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md`](RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md)
+> and not carried back here. And **29 h128 cells ran**: twelve at `fixed-t250`,
+> nine at `fixed-t500`, eight at `published-2ms`/e200. The claim was written
+> from the arm the hypothesis named rather than from the archive, and the
+> archive was on disk at the time.
+>
+> It matters beyond tidiness, because those 29 cells are what extends the
+> reproduction to the headline width — the amendment in §1. The sentence
+> asserting no h128 data existed sat directly above a table that would have
+> shown otherwise had it been derived rather than chosen.
 
 ## 4. How this evidence came to exist
 
@@ -99,9 +160,15 @@ This is luck, and is recorded as luck.
 
 - **Verified:** all 57,960 comparisons, this session, from the two campaigns'
   archived cell JSON; the differing binary hashes; the 3.1× wall-time difference
-  confirming independent execution.
-- **Verified:** the watchdog timing and the 95/252 truncation, from the Azure blob
-  container's own timestamps.
+  confirming independent execution. **Re-verified and widened 2026-08-25** to
+  122,713 values over 79 pairs, by `scripts/cross_isa_reproduction.py` under
+  `scripts/record_checks.sh`.
+- **Verified:** the 95/252 truncation, from the Azure blob container's own
+  timestamps. **The timing was verified; the cause attributed to it was not** —
+  the fleet was deallocated by the operator on exhausted credit, and a watchdog
+  firing at the predicted minute would have left the same trace. Corrected
+  2026-08-25; the original wording of this bullet claimed "the watchdog timing"
+  as verified, which conflated a measurement with an inference drawn from it.
 - **Not verified — and the limit of the claim:** cell JSON serialises floats at
   about nine decimal places. This establishes agreement **to that precision across
   57,960 values**, not bit-identity of the underlying `f32`. Proving bit-identity

@@ -82,10 +82,35 @@ matrix grid cannot reach it for a separate reason.
 
 **And the instrument's own answer to this is already in the record.** The
 attention read-out is a mechanism over the time axis, and it is what lifts the
-instrument from 0.7407 to **0.8821** — recovering most of the distance to the
-delay-free reference. That was the campaign's headline result all along; what is
-new here is *why* it works, and that it is the instrument's substitute for the
-temporal kernel rather than an unrelated improvement.
+instrument toward the delay-free reference. That was the campaign's headline
+result all along; what is new here is *why* it works, and that it is the
+instrument's substitute for the temporal kernel rather than an unrelated
+improvement.
+
+Paired by seed, on one substrate at a time, against the delay-free reference's
+**0.9042**:
+
+| contract | rate read-out | + attention d32/L4 | gain | reference |
+|---|---:|---:|---:|---:|
+| `published-2ms` (anchor) | 0.7062 | **0.8320** | +0.1258 | 0.9042 |
+| `fixed-t100` | 0.6672 | **0.8599** | +0.1927 | 0.9042 |
+
+> **CORRECTED 2026-08-25.** This paragraph read *"lifts the instrument from
+> 0.7407 to **0.8821**"*. Both are **single best cells, and not of the same
+> arm**: 0.7407 is the best of twelve `ff+fixed` cells at **h1024**, and 0.8821
+> the best of twelve attention cells at **h128** on the **`fixed-t100`**
+> contract. Two widths and two contracts, compared max to max, in a sentence
+> that reads as one arm improving.
+>
+> The conclusion survives — the read-out is what closes most of the distance,
+> on every paired contrast in the record — but the size does not. Max-to-max
+> gives 0.7407 → 0.8821 and a near-parity with 0.9042 that no paired comparison
+> supports. This document's own §4 argues the instrument is not defective but a
+> different model class; that argument does not need, and is not helped by, the
+> most flattering pair of cells in the archive.
+>
+> The rest of this finding is a structural reading of two forward passes and is
+> unaffected: no number in §1–§3 is a comparison of arms.
 
 ## 5. What is not established
 

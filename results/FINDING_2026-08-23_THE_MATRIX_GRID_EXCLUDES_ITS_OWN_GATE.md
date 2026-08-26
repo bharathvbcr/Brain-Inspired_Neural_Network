@@ -16,9 +16,29 @@ reaches 0.94". It does not top out at 0.72.
 | scope | best accuracy |
 |---|---:|
 | the 432-cell **matrix** grid | 0.7182 |
-| plain arm at converged budget (h1024/e400) | 0.7378 |
-| **attention arm, d32/L4/e400** | **0.8821** (mean 0.8320) |
+| plain arm at converged budget (h1024/e400) | 0.7378 *(mean, n=3)* |
+| **attention arm, d32/L4/e400, best cell anywhere** | **0.8821** |
 | pinned third-party reference | 0.9390–0.9573 |
+
+> **CORRECTED 2026-08-25.** The third row read *"attention arm, d32/L4/e400 —
+> 0.8821 (mean 0.8320)"*, which pairs a **maximum from one contract** with a
+> **mean from another**. 0.8821 is a single cell,
+> `w10con__ff-fixed-attn__h128__e400__fixed-t100__…__s5170003`, on the
+> **`fixed-t100`** contract; 0.8320 is the 12-seed mean on **`published-2ms`**,
+> whose own best cell is 0.8472. Two different contracts, one row, and the
+> parenthesis read as if the mean belonged to the max.
+>
+> The section's argument is unaffected — it is about which configurations the
+> matrix grid can reach, and 0.8821, 0.8472 and 0.8320 are all above the 0.80
+> floor the grid excludes. What was wrong was presenting a best cell as though
+> a mean stood behind it. Like for like, on `published-2ms`: mean 0.8320, best
+> 0.8472. On `fixed-t100`: mean 0.8599, best 0.8821.
+>
+> The 0.7378 row was checked at the same time and is **correct** — the
+> `ff+fixed` h1024/e400 mean over three cells in
+> `shd_instrument_v4/width-converged`, as `check_every_number.py`'s `ELSEWHERE`
+> table already records. It is labelled `(mean, n=3)` above only so the column
+> heading "best accuracy" does not imply otherwise.
 
 **140 of 776 campaign cells sit at or above 0.80 and carry `scientific_status:
 CELL_PASS`.** The instrument clears its own gate routinely. The 0.7182 figure is

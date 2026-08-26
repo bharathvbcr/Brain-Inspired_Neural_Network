@@ -40,6 +40,10 @@ run "published verdicts match their analyser" python3 scripts/check_verdicts_tra
 # A stale index reports a state that has moved, which is worse than none.
 run "the record index is current" python3 scripts/build_results_index.py --check
 run "published numbers reproduce from cells" python3 scripts/verify_published_numbers.py
+# The reproducibility claim was a hand-picked overlap of three configurations.
+# Derived instead, it is eight — and the four that were missed include the
+# headline width. A claim this load-bearing should be recomputed, not recalled.
+run "the x86 and aarch64 corpora agree" python3 scripts/cross_isa_reproduction.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 
 if [[ "$fail" -ne 0 ]]; then

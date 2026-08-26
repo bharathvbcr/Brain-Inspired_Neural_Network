@@ -52,10 +52,27 @@ def main() -> int:
             valid[cell_id] = cell
 
     failure_files = sorted(Path(args.failures).glob("*.json"))
-    gate_files = sorted(Path(args.gates).glob("*.json"))
+    # `glob("*.json")` also matched the four `quorum-node-*.json` files and the
+    # fleet-wide `quorum.json`, so a healthy four-node fleet reported "9/4
+    # reports" and `gate_ready` was **false on every campaign that has ever
+    # run** — a check that cannot pass, which is the same defect as a check that
+    # cannot fail with the sign flipped. The per-node attestations are
+    # `node-N.json`; the quorum files are derived from them and are checked for
+    # agreement rather than counted as if they were additional nodes.
+    gate_files = sorted(Path(args.gates).glob("node-*.json"))
+    quorum_files = sorted(Path(args.gates).glob("quorum*.json"))
     gates = [json.loads(path.read_text()) for path in gate_files]
+    quorums = [json.loads(path.read_text()) for path in quorum_files]
     binary_hashes = {gate.get("binary_sha256") for gate in gates}
-    gate_ready = len(gates) == NODE_COUNT and len(binary_hashes) == 1
+    quorum_hashes = {q.get("binary_sha256") for q in quorums}
+    gate_ready = (
+        len(gates) == NODE_COUNT
+        and len(binary_hashes) == 1
+        and None not in binary_hashes
+        # A quorum that disagrees with the nodes it summarises is worse than no
+        # quorum: it is the artefact a reader would trust.
+        and (not quorums or quorum_hashes == binary_hashes)
+    )
 
     def selection(*, hidden: int, epochs: int, contract: str = "published-2ms",
                   geometry: str = "adjacent-sum-5", dim: int | None) -> dict[int, float]:
@@ -84,7 +101,8 @@ def main() -> int:
     )
     lines.append(
         f"Binary/gate provenance: **{'READY' if gate_ready else 'INCOMPLETE'}** "
-        f"({len(gates)}/{NODE_COUNT} reports, {len(binary_hashes)} binary hashes)."
+        f"({len(gates)}/{NODE_COUNT} node attestations, {len(binary_hashes)} binary "
+        f"hash(es), {len(quorums)} quorum record(s) in agreement)."
     )
     lines.extend(["", "| Hypothesis | Measurement | Verdict |", "|---|---|---|"])
 
@@ -134,6 +152,48 @@ def main() -> int:
 
     lines.extend(["", "Gate F licenses absolute comparison with prior machines only when it passes; "
                   "all registered verdicts above are same-binary, same-machine paired contrasts."])
+
+    # Coverage, arm by arm — reporting only, no verdict logic. Added 2026-08-25.
+    #
+    # The verdict rows above compress every arm that is not 12/12 into the single
+    # word "incomplete", so a truncated campaign reports the arms it finished and
+    # says nothing about the ones it half-finished. This campaign stopped at 95 of
+    # 252 with **five arms partially run**, holding 35 cells; the first write-up
+    # listed the five complete arms and the zero-cell arms and passed over those
+    # 35 in silence. A partial arm is not the same as an absent one, and a reader
+    # cannot tell them apart from a verdict table alone.
+    lines.extend(["", "## Coverage, arm by arm", "",
+                  "Reporting only — no verdict below depends on this table. "
+                  "`planned` counts the frozen matrix; `ran` counts cells on disk; "
+                  "`valid` applies the preregistered validity gate.", "",
+                  "| wave | arm | ran / planned | valid | mean accuracy |",
+                  "|---|---|---:|---:|---:|"])
+    arms: dict[tuple, dict] = {}
+    for cell_id, spec in plan.items():
+        dim = spec.get("attn_dim")
+        key = (spec["wave"], spec["arm"], spec["hidden"], spec["epochs"],
+               spec["contract"], spec["geometry"],
+               f"d{dim}l{spec.get('attn_layers')}" if dim else "rate")
+        entry = arms.setdefault(key, {"planned": 0, "ran": 0, "valid": []})
+        entry["planned"] += 1
+        if cell_id in valid:
+            entry["ran"] += 1
+            entry["valid"].append(valid[cell_id]["accuracy"])
+        elif cell_id in voided:
+            entry["ran"] += 1
+    for key in sorted(arms):
+        wave, arm, hidden, epochs, contract, geometry, dim = key
+        entry = arms[key]
+        accs = entry["valid"]
+        mean = f"{statistics.mean(accs):.6f}" if accs else "—"
+        label = f"`{arm}` h{hidden} e{epochs} `{contract}` `{geometry}` {dim}"
+        lines.append(f"| `{wave}` | {label} | {entry['ran']} / {entry['planned']} "
+                     f"| {len(accs)} | {mean} |")
+    partial = {k: v for k, v in arms.items() if 0 < v["ran"] < v["planned"]}
+    lines.extend(["", f"**{len(partial)} arm(s) partially run**, holding "
+                  f"{sum(v['ran'] for v in partial.values())} cells. A partially "
+                  "run arm carries data and no registered verdict; it must be "
+                  "reported as neither absent nor complete."])
     report = "\n".join(lines) + "\n"
     if args.out:
         Path(args.out).write_text(report)

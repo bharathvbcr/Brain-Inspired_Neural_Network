@@ -45,6 +45,12 @@ from cell_validity import validity_problems  # noqa: E402
 CORPORA = [
     ROOT / "results/shd_attention_campaign_v1/cells",
     ROOT / "results/shd_attention_campaign_v2",
+    # The Azure cells landed on 2026-08-25 and were, until then, the only
+    # campaign cells on disk with no document in this sweep and no corpus here
+    # — so the one result written from them was the one set of numbers nothing
+    # recomputed. Its own write-up said the figures had been "re-derived from
+    # those files"; by hand, once, by the person who wrote them down.
+    ROOT / "results/azure-d32l4-scope-v1/results",
 ]
 
 #: The wave results. Each rests on the cell corpora above and nothing else.
@@ -55,10 +61,15 @@ CORPORA = [
 # The old `if not DOCUMENTS` guard could never fire, because the twelve
 # documents inside the window match forever. `_W[0-9]` rather than `_W`,
 # because `_WITHDRAWN` and `_WITH_HEADROOM` are not waves.
-DOCUMENTS = sorted((ROOT / "results").glob("RESULT_*_W[0-9]*.md"))
+DOCUMENTS = sorted(
+    set((ROOT / "results").glob("RESULT_*_W[0-9]*.md"))
+    # Not a wave, and so outside the glob: the Azure campaign is `az8*`. It is
+    # named rather than pattern-matched because there is one of it.
+    | {ROOT / "results/RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md"}
+)
 #: A count that must not silently shrink. A narrowed pattern or a moved
 #: directory would otherwise sweep fewer documents and still report success.
-MIN_DOCUMENTS = 13
+MIN_DOCUMENTS = 14
 
 #: Wave documents whose numbers this sweep cannot derive, and why. Naming them
 #: is the point: the date window used to exclude W1 by accident, so the script
@@ -106,6 +117,15 @@ ELSEWHERE = [
                "a two-axis comparison"),
     ("0.9029", "attn(e5)/attn(e400): the same, and verified by name"),
     ("0.9995", "attn(e20)/attn(e400): the same, and verified by name"),
+    ("0.6108", "AZ8-6's *would-be* gain, and the one number in the Azure result "
+               "that this sweep should not be able to derive. It is the d64/L4 "
+               "arm paired against its rate control over all twelve seeds "
+               "INCLUDING the six that fail the validity gate (-0.610792); the "
+               "sweep pairs valid cells only, which is why it cannot reach it. "
+               "The document prints it to say what the arm would have scored "
+               "and that the arm is VOIDED — a number published in order to be "
+               "refused. Deriving it would mean the sweep had started pairing "
+               "degenerate cells."),
 ]
 
 

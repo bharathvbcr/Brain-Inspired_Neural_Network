@@ -3,6 +3,10 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -142,6 +146,66 @@ class PlanTests(unittest.TestCase):
                 wide_threads=8,
                 duration_seconds=lambda _cell, _threads: 1.0,
             )
+
+
+class AnalyserProvenanceTests(unittest.TestCase):
+    """The gate accounting must be able to say READY, and to refuse to.
+
+    `glob("*.json")` over the gates directory also matched the four
+    `quorum-node-*.json` files and the fleet-wide `quorum.json`, so a healthy
+    four-node fleet counted nine attestations against `NODE_COUNT == 4` and
+    reported `INCOMPLETE`. That is a check that cannot pass — the same defect
+    as a check that cannot fail, with the sign reversed, and it is why the
+    archived `VERDICT.md` carries `INCOMPLETE (9/4 reports)` for a fleet whose
+    four host attestations are all present and all name one binary.
+    """
+
+    ROOT = Path(__file__).resolve().parent.parent.parent
+    CAMPAIGN = ROOT / "results/azure-d32l4-scope-v1"
+
+    def _analyse(self, gates: Path) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as failures:
+            proc = subprocess.run(
+                [sys.executable, str(self.ROOT / "scripts/azure/analyse.py"),
+                 "--plan", str(self.CAMPAIGN / "input/cells.json"),
+                 "--results", str(self.CAMPAIGN / "results"),
+                 "--gates", str(gates), "--failures", failures],
+                capture_output=True, text=True, cwd=self.ROOT)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def test_the_archived_fleet_reports_its_provenance_as_ready(self) -> None:
+        _, out = self._analyse(self.CAMPAIGN / "gates")
+        self.assertIn("Binary/gate provenance: **READY**", out)
+        self.assertIn(f"{NODE_COUNT}/{NODE_COUNT} node attestations", out)
+
+    def test_a_missing_node_attestation_is_refused(self) -> None:
+        # Refuse a vacuous pass: READY must be reachable *and* refusable.
+        with tempfile.TemporaryDirectory() as tmp:
+            partial = Path(tmp)
+            for path in sorted((self.CAMPAIGN / "gates").glob("*.json")):
+                if path.name != "node-3.json":
+                    (partial / path.name).write_text(path.read_text())
+            _, out = self._analyse(partial)
+        self.assertIn("Binary/gate provenance: **INCOMPLETE**", out)
+
+    def test_a_quorum_disagreeing_with_its_nodes_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            forged = Path(tmp)
+            for path in sorted((self.CAMPAIGN / "gates").glob("*.json")):
+                record = json.loads(path.read_text())
+                if path.name == "quorum.json":
+                    record["binary_sha256"] = "0" * 64
+                (forged / path.name).write_text(json.dumps(record))
+            _, out = self._analyse(forged)
+        self.assertIn("Binary/gate provenance: **INCOMPLETE**", out)
+
+    def test_every_partially_run_arm_is_named_in_the_coverage_table(self) -> None:
+        """A partial arm is not an absent one, and must not report as either."""
+        _, out = self._analyse(self.CAMPAIGN / "gates")
+        self.assertIn("## Coverage, arm by arm", out)
+        self.assertIn("**5 arm(s) partially run**, holding 35 cells", out)
+        for row in ("| 10 / 12 |", "| 9 / 12 |", "| 8 / 12 |", "| 4 / 12 |"):
+            self.assertIn(row, out, f"the coverage table lost the {row} arms")
 
 
 if __name__ == "__main__":

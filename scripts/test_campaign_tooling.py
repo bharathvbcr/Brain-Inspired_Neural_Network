@@ -15,7 +15,9 @@ Run: python3 scripts/test_campaign_tooling.py
 
 from __future__ import annotations
 
+import collections
 import contextlib
+import hashlib
 import io
 import json
 import re
@@ -1446,6 +1448,34 @@ class ControlPlaneCallsAreBoundedTest(unittest.TestCase):
                 module.subprocess.run = original
 
 
+#: Frozen per-corpus validity of every archived cell, as
+#: `campaign directory -> (cells, valid, digest over sorted "path:verdict")`.
+#: Re-frozen 2026-08-25 after the 95 recovered Azure cells landed; the
+#: pre-Azure corpora were re-derived at that point and stood at exactly their
+#: previous 953 of 1671, so the move was additive and no verdict was re-scored.
+#: See `AccuracyAndNonFiniteGateTest.test_the_archived_corpus_is_unaffected`.
+CORPUS_BASELINE = {
+    "azure-d32l4-scope-v1":
+        (95, 89, "8ecbe278f54b127f"),
+    "equivalence_2026-08-22":
+        (9, 9, "4bc73f151a70148e"),
+    "shd_attention_campaign_v1":
+        (528, 528, "3b49c49ce8954939"),
+    "shd_attention_campaign_v2":
+        (283, 273, "309c61dfd714d7ad"),
+    "shd_attention_pilot_v1":
+        (15, 15, "80f968419a71ef75"),
+    "shd_instrument_v1":
+        (2, 0, "f775e3a9a81a6076"),
+    "shd_instrument_v2":
+        (2, 0, "d4c60ea1943ff78e"),
+    "shd_instrument_v3":
+        (2, 0, "9d7b0d15e0aea17a"),
+    "shd_instrument_v4":
+        (830, 128, "b473c02013161ffe"),
+}
+
+
 class AccuracyAndNonFiniteGateTest(unittest.TestCase):
     """The gate must read the field every published number comes from.
 
@@ -1512,13 +1542,24 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
     def test_the_archived_corpus_is_unaffected(self):
         """Hardening a gate must not re-score work that was already judged.
 
-        Measured when the check landed: 953 of 1671 archived cells valid, before
-        and after. A drop here means the change voided cells retroactively,
-        which is a different and much larger decision than closing a hole.
+        The first version of this check asserted one number — 953 valid of 1671
+        — across the whole of `results/`. It fired on 2026-08-25, and not for
+        the reason it was written: the 95 recovered Azure cells had landed, so
+        the totals moved to 1042 of 1766 while **not one archived verdict had
+        changed**. A count cannot tell a re-scoring from an addition, which is
+        the one distinction this check exists to make.
+
+        So the invariant is per-corpus and per-cell: every campaign directory
+        carries its cell count, its valid count, and a digest over the sorted
+        `path:verdict` pairs inside it. Re-scoring any archived cell moves that
+        corpus's digest. Landing a new campaign adds a *new* key, which fails
+        loudly with the line to paste — an addition stays a deliberate,
+        reviewed act rather than silent drift, and it no longer looks like the
+        defect.
         """
         root = Path(__file__).resolve().parent.parent / "results"
-        valid = total = 0
-        for path in root.rglob("*.json"):
+        observed = collections.defaultdict(list)
+        for path in sorted(root.rglob("*.json")):
             try:
                 cell = json.loads(path.read_text())
             except (json.JSONDecodeError, OSError):
@@ -1526,13 +1567,44 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
             if not (isinstance(cell, dict)
                     and str(cell.get("schema", "")).startswith("shd-cal-cell")):
                 continue
-            total += 1
-            valid += not self.gate.validity_problems(cell)
+            rel = path.relative_to(root)
+            valid = not self.gate.validity_problems(cell)
+            observed[rel.parts[0]].append((str(rel), valid))
+
+        total = sum(len(rows) for rows in observed.values())
         self.assertGreater(total, 1000, "the corpus scan found almost nothing; "
                                         "the root is wrong and this test is vacuous")
-        self.assertEqual(valid, 953,
-                         f"{valid} of {total} cells now valid, not 953 — the gate "
-                         "has re-scored the archived record")
+        # Refuse a vacuous pass the other way: if a corpus disappears, an
+        # unchanged digest on the survivors must not read as "nothing moved".
+        missing = sorted(set(CORPUS_BASELINE) - set(observed))
+        self.assertFalse(missing, f"archived corpora vanished from results/: {missing}")
+
+        for corpus, rows in sorted(observed.items()):
+            rows.sort()
+            digest = hashlib.sha256(
+                "\n".join(f"{name}:{int(valid)}" for name, valid in rows).encode()
+            ).hexdigest()[:16]
+            count, n_valid = len(rows), sum(valid for _, valid in rows)
+            if corpus not in CORPUS_BASELINE:
+                self.fail(
+                    f"new cell corpus {corpus!r} ({n_valid} valid of {count}). "
+                    "Landing cells is allowed; doing it silently is not. Verify "
+                    "no archived verdict moved, then add to CORPUS_BASELINE:\n"
+                    f'    "{corpus}":\n        ({count}, {n_valid}, "{digest}"),'
+                )
+            expected = CORPUS_BASELINE[corpus]
+            if (count, n_valid, digest) == expected:
+                continue
+            now_invalid = [name for name, valid in rows if not valid]
+            self.fail(
+                f"{corpus}: {n_valid} valid of {count} (digest {digest}), "
+                f"baseline {expected[1]} of {expected[0]} (digest {expected[2]}). "
+                "The gate has re-scored the archived record, or cells were added "
+                "to an existing corpus without re-freezing it. Invalid now:\n  "
+                + "\n  ".join(now_invalid[:20])
+                + (f"\n  ... and {len(now_invalid) - 20} more"
+                   if len(now_invalid) > 20 else "")
+            )
 
 
 if __name__ == "__main__":

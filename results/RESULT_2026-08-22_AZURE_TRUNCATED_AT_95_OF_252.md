@@ -56,15 +56,68 @@ minimises makespan and it put the **cheapest, most important** arms last:
 | `az8wid` `ff+fixed` h128/e400 — **the primary baseline** | **0 / 12** |
 | `az8wid` `ff+fixed+attn` h128/e400 d32L4 — **the primary treatment** | **0 / 12** |
 | `az8geo` both arms, `channels-700` | **0 / 12** each |
-| `az8con` all four control arms | **0 / 12** each |
+| `az8con` the four `ff+fixed` control arms | **0 / 12** each |
 
 **AZ8-1, the campaign's headline question — does the result replicate on x86? —
 has no data.** So do AZ8-3 (geometry) and AZ8-4 (budget stability). AZ8-5 has one
-treatment arm (`fixed-t250`, 12/12) and **no control for it**, so it is not
-evaluable either.
+complete treatment arm (`fixed-t250`, 12/12), one partial one (`fixed-t500`,
+9/12), and **no control for either**, so it is not evaluable.
 
 Five arms completed 12/12, and they are the expensive ones: h1024 d32L4, h1024
 rate-only, h1024 d64L4, h512 d32L4, and `fixed-t250` d32L4.
+
+### CORRECTION 2026-08-25 — five arms were partially run, and this table hid them
+
+The table above lists the complete arms and the empty ones. **It passed over 35
+cells in five partially run arms**, and the sentence "`az8con` all four control
+arms 0/12" was wrong on its face: 21 `az8con` cells exist, in two *treatment*
+arms. The full coverage, arm by arm, is now generated rather than narrated —
+[`azure-d32l4-scope-v1/VERDICT.md`](azure-d32l4-scope-v1/VERDICT.md) §"Coverage,
+arm by arm", from `scripts/azure/analyse.py`:
+
+| wave | arm | ran / planned | valid | mean |
+|---|---|---:|---:|---:|
+| `az8wid` | `ff+fixed` h512 | **10 / 12** | 10 | 0.735203 |
+| `az8con` | `ff+fixed+attn` `fixed-t500` d32L4 | **9 / 12** | 9 | 0.852866 |
+| `az8wid` | `ff+fixed+attn` h128 **e200** d32L4 | **8 / 12** | 8 | 0.831493 |
+| `az8wid` | `ff+fixed` h256 | **4 / 12** | 4 | 0.722725 |
+| `az8wid` | `ff+fixed+attn` h256 d32L4 | **4 / 12** | 4 | 0.818573 |
+
+A partially run arm carries data and no registered verdict. Reporting it as
+absent is the same error as reporting it as complete, and the verdict table's
+single word "incomplete" cannot distinguish them — so the coverage table is now
+emitted on every run and a test pins the five partial arms by name.
+
+None of this moves a verdict. AZ8-1, AZ8-3 and AZ8-4 remain **NO DATA**: every
+arm they need is at 0/12, which the table above confirms rather than assumes.
+
+### What the partial arms are worth: the h256 rung
+
+Four of the 35 cells are the only ones of their kind anywhere in the project.
+The d32/L4 width ladder was published in
+[`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md)
+at h128, h512 and h1024 — **h256 at L4 was never run on AWS**, and these four
+cells are it. Paired by seed against the `ff+fixed` h256 control (whose Azure and
+AWS copies are bit-identical, §4):
+
+| width | pairs | `ff+fixed` | d32/L4 | gain | positive | source |
+|---|---:|---:|---:|---:|---:|---|
+| h128 | 12 | 0.706198 | 0.832008 | **+0.1258** | 12/12 | W8 |
+| **h256** | **4** | **0.722394** | **0.818573** | **+0.0962** | **4/4** | **Azure only** |
+| h512 | 12 | 0.735718 | 0.823322 | **+0.0876** | 12/12 | W8 |
+| h1024 | 12 | 0.738590 | 0.576782 | **−0.1618** | 1/12 | W8 |
+
+With the rung filled, the shape of the width scope is no longer a two-point
+statement. **The gain decays gently across h128 → h256 → h512 and then
+collapses between h512 and h1024** — it does not thin out steadily and cross
+zero. The published reading, "the gain inverts by h1024", is true and is the
+weaker of the two available.
+
+**This is descriptive and is not a verdict.** AZ8-2 was registered at h1024
+only; no criterion was registered at h256 or h512, and **four pairs is a third
+of the terminal seed count**, so the rung locates the collapse and does not
+measure it. What it is good for is choosing where a successor campaign should
+put its seeds, which is §5's business.
 
 ## 3. Registered verdicts
 
