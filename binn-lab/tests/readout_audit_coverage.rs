@@ -31,7 +31,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Any of these means the module looked at its own readout.
-const AUDIT_MARKERS: &[&str] = &["guards::", "ReadoutAudit", "Degeneracy", "CeilingHealth"];
+// What counts as auditing a READOUT. `guards::` and `CeilingHealth` used to be
+// on this list and are not readout audits: they answer "can this reference bound
+// anything?", which is a different question from "is this accuracy a constant
+// predictor?". A file can have a perfect ceiling check and still be reporting
+// the majority-class rate as though it were learning.
+//
+// The conflation was latent until seven runners gained
+// `guards::decide_matched_verdict` on 2026-08-25, at which point all seven
+// looked "audited" without one of them having grown a ReadoutAudit. Keeping the
+// markers apart is what stops a fix to one guard from silently discharging debt
+// against the other.
+const AUDIT_MARKERS: &[&str] = &["ReadoutAudit", "Degeneracy"];
 
 /// Modules reporting an accuracy with no degeneracy audit, as of 2026-08-22.
 ///
@@ -49,6 +60,23 @@ const KNOWN_UNAUDITED: &[&str] = &[
     // this test exists to close — it was in fact counted as *audited* until now,
     // for naming `guards::CeilingHealth` while explaining that it does not use it.
     "experiments/a6_ceiling_health.rs",
+    // Nine files added 2026-08-25, and none of them is a new defect: each was
+    // being counted as audited because it mentions `guards::` or
+    // `CeilingHealth`, which the marker list used to accept as a readout audit.
+    // They all have ceiling checks and none has a `ReadoutAudit`. Separating
+    // the markers moved them from silently exempt to visibly owed, which is the
+    // only honest place for them until they gain one. `deep_snn_scaling.rs` is
+    // the reason this matters: its depth-4 row printed `ok` for a constant
+    // predictor, and a readout audit is what would have said so first.
+    "experiments/credit_depth_scaling.rs",
+    "experiments/deep_snn_scaling.rs",
+    "experiments/live_transfer_rescue.rs",
+    "experiments/multi_channel_neuromod.rs",
+    "experiments/shd_depth_scaling.rs",
+    "experiments/temporal_deep_campaign.rs",
+    "experiments/temporal_optimizer_control.rs",
+    "experiments/track_b_rescue.rs",
+    "experiments/transfer_falsifier.rs",
     "experiments/c3.rs",
     "experiments/continual_learning.rs",
     "experiments/credit_assignment.rs",

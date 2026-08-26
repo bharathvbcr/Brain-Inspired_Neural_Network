@@ -319,11 +319,40 @@ def main() -> int:
     forbidden = {
         "v130 PASS as a live claim": r"gap LCB `?0\.9988`?[^—]*PASS",
         "live-transfer 1.0000/0.9983 cited as a result": r"mean 1\.0000 / LCB 0\.9983",
+        "the withdrawn RL broadcast contrasts as chance results":
+            r"remains at chance \(0\.5120",
+        "the pre-repair DFA and REINFORCE means as current":
+            r"clear the matched gate \(`c1-dfa-c8c4fe0899908b84`",
     }
     for label, pattern in forbidden.items():
         hit = re.search(pattern, draft)
         ok = hit is None
         print(f"  [{'ok  ' if ok else 'FAIL'}] draft does not cite {label}")
+        results.append(ok)
+
+    # A withdrawn number may still be *named* — saying what was withdrawn is how
+    # a reader knows. What must never happen is it appearing as a live claim. So
+    # this is not a ban on the string: every sentence containing it has to be a
+    # sentence that withdraws it. The blunt version of this check failed on the
+    # withdrawal notice itself, which would have taught the next person to
+    # delete the notice rather than the claim.
+    withdrawn_numbers = {
+        "the EventProp FAIL against SuperSpike 0.9150":
+            r"0\.5000 (?:vs|against) SuperSpike \*?\*?0\.9150",
+    }
+    for label, pattern in withdrawn_numbers.items():
+        unmarked = []
+        for match in re.finditer(pattern, draft):
+            start = draft.rfind(".", 0, max(match.start() - 400, 0)) + 1
+            end = draft.find("\n", match.end())
+            sentence = draft[start:end if end != -1 else len(draft)]
+            if "withdraw" not in sentence.lower():
+                unmarked.append(sentence.strip()[:70])
+        ok = not unmarked
+        print(f"  [{'ok  ' if ok else 'FAIL'}] draft cites {label} only as withdrawn")
+        if unmarked:
+            for line in unmarked:
+                print(f"           live citation: {line}")
         results.append(ok)
     required = {
         "the A6 undertraining caveat": "The reference is undertrained, and the task saturates",

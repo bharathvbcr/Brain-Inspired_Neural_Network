@@ -1,5 +1,27 @@
 # BINN — camera-ready results table
 
+> ### SUPERSEDED IN PART — 2026-08-25 matched-architecture re-run
+>
+> Every matched-architecture number in this document was produced before the
+> 2026-08-22 silent-initialisation repair, on a forward pass that emitted **zero
+> spikes at any seed**, and none of them has been regenerated here. The re-run
+> is [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)
+> and [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.1 carries the current figures.
+>
+> **The lead negative survives** — broadcast ±1 three-factor is at chance on both
+> forward graphs. **Three contrasts do not**: the discrete EventProp-style
+> spike-adjoint goes 0.5000 FAIL to 0.9450 / 0.8900 PASS, and the two RL
+> broadcast contrasts go 0.5250 to 0.9100 and 0.5113 to 0.7962. The gradient
+> ceiling goes 0.8887-0.9150 to **1.0000**, so every `gap_closed` here divides by
+> a different denominator than the instrument now produces.
+>
+> The `c1-*` config hashes cited below are **retired**: `MATCHED_INPUT_SCALE` was
+> not part of them, so each named two experiments. They no longer resolve, by
+> design. The retirement table is in the re-run document section 8.
+>
+> Rows concerning the SHD attention campaign, the live-transfer package and the
+> XOR task are unaffected: none of them runs on the matched dense-LIF forward.
+
 > **CITATION WARNING (added 2026-08-07).** This document cites the
 > `track-b-rescue` **v130** row (`1.0000`, gap LCB `0.9988`, PASS matched) as a
 > matched-substrate result. That report is stale: the source is **v131**, and the

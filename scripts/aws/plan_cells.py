@@ -703,11 +703,43 @@ def main() -> int:
     # cheapest, most decision-relevant wave queued at index 336 of 468.
     priority = tuple(p.strip() for p in args.priority.split(",") if p.strip())
     cells.sort(key=lambda c: (not c["wave"].startswith(priority), -estimated_seconds(c)))
+    if not priority:
+        # Shortest-processing-time-first: maximises the number of COMPLETED
+        # cells at any point, so a campaign that stops early leaves whole
+        # evaluable arms rather than a set of half-finished expensive ones.
+        # This is the deliberate opposite of the longest-first default below.
+        cells.sort(key=estimated_seconds)
+        print(f"scheduled shortest-first: {len(cells)} cells", file=sys.stderr)
+        return emit(cells, args)
     promoted = sum(1 for c in cells if c["wave"].startswith(priority))
     if promoted == 0:
         raise SystemExit(f"priority waves {priority} matched no cell - check the labels")
+    # The other half of the same defect. A prefix set that matches NOTHING was
+    # already refused above; a prefix set that matches EVERYTHING was not, and is
+    # just as silent. On 2026-08-25 the default `w1,w6,w7` matched all 224 cells
+    # of waves w15col, w16lad and w17hdl -- `w1` is a prefix of `w15` and `w16`
+    # and `w17` -- so "priority" promoted the entire plan, the tie-break fell
+    # through to longest-first, and the campaign was scheduled most-expensive
+    # cell first with the cheap decisive waves at the end.
+    #
+    # That is precisely the ordering that cost the Azure campaign every arm it
+    # cared about when it stopped early
+    # (`results/RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md`), and the
+    # lesson was already written down here when it happened again.
+    if promoted == len(cells) and len(set(c["wave"] for c in cells)) > 1:
+        raise SystemExit(
+            f"priority waves {priority} matched ALL {promoted} cells across "
+            f"{sorted(set(c['wave'] for c in cells))} - the prefixes are too "
+            "short to prioritise anything, so the plan would be ordered purely "
+            "longest-first. Name the waves precisely, or pass --priority '' to "
+            "schedule shortest-first on purpose."
+        )
     print(f"scheduled first: {promoted} cells from waves {priority}", file=sys.stderr)
 
+    return emit(cells, args)
+
+
+def emit(cells, args) -> int:
     payload = json.dumps(cells, indent=2) + "\n"
     if args.out == "-":
         sys.stdout.write(payload)

@@ -1,7 +1,8 @@
 # Broadcast ±1 three-factor credit fails a matched dense-LIF gate
 
-> **Provenance, current as of 2026-08-22.** Four results were withdrawn from this
-> package during the 2026-08-19→22 record repair and **none of them appears above**:
+> **Provenance, current as of 2026-08-25.** Seven results have been withdrawn from
+> this package and **none of them appears above**. Four went during the
+> 2026-08-19→22 record repair:
 > the `track-b-rescue` v130 PASS (`1.0000`, gap LCB `0.9988`) is withdrawn — the arm
 > reports `INVALID_HARNESS` at v131 and v132; the depth-collapse result is withdrawn
 > — every depth-matched ceiling is at chance; `shd-scientific-sweep` is withdrawn —
@@ -11,6 +12,17 @@
 > treatments solve, and two are now diagnosed:
 > `MatchedDeepGradient` collapses to silence, `ShdEpropCeiling` is a constant
 > predictor by a different mechanism. Neither is used above.
+>
+> Three more went on 2026-08-25, when the matched-architecture suites were re-run
+> under the repaired input scale: the **discrete EventProp-style spike-adjoint
+> FAIL** (0.5000 → 0.9450 / 0.8900 PASS — a spike-adjoint method had had no
+> spikes to differentiate through), and **both RL broadcast contrasts** (0.5250 →
+> 0.9100, 0.5113 → 0.7962). The lead negative survived on both forward graphs.
+> [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md).
+>
+> **The four `c1-*` config hashes this draft used to cite are retired.**
+> `MATCHED_INPUT_SCALE` was never mixed into them, so each named two different
+> experiments either side of the repair. They no longer resolve, deliberately.
 >
 > `scripts/record_checks.sh` machine-checks the **SHD attention-campaign**
 > numbers — twelve of them, recomputed from the archived cells by
@@ -28,11 +40,13 @@
 
 ## Abstract
 
-Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a single ±1 reward — fails a preregistered accuracy and gap bar when the dense leaky-integrate-and-fire forward pass is held identical to a SuperSpike backpropagation-through-time reference. Under matched-architecture protocol v4 (`c1-match-5dc6822e71229e9e`) the broadcast ±1 arm remains at chance (mean accuracy 0.5000, gap lower confidence bound 0.0000) while the gradient reference reaches 0.8963. On that same forward family, graded direct feedback alignment and directional REINFORCE with frozen per-neuron feedback clear the matched gate (`c1-dfa-c8c4fe0899908b84`: 0.9387, gap LCB 0.6894; `c1-rl-42eddc9c801308e9`: 0.9200, gap LCB 0.6846). Continuous reward-prediction-error scalar broadcast without spatial feedback alignment remains at chance (0.5120, LCB −0.0230). A discrete EventProp-style spike-adjoint head-to-head on the same matched forward also fails (`c1-eventprop-5bb083d5e88d0ad2`: 0.5000 against SuperSpike 0.9150; discrete ≠ continuous Wunderlich–Pehle). Live k-WTA transfer of the matched REINFORCE and DFA families remains a scoped **negative** across twelve gap-close variants (v13–v24), best gap LCB 0.3127 against a 0.5 threshold.
+Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a single ±1 reward — fails a preregistered accuracy and gap bar when the dense leaky-integrate-and-fire forward pass is held identical to a SuperSpike backpropagation-through-time reference. The arm remains at chance on **both** matched forward graphs (feed-forward 0.5000, gap lower confidence bound 0.0000; recurrent 0.5100, LCB −0.0230), against a gradient reference at 1.0000, n = 20 seeds. Every other rule tested on that forward now clears the gate: graded direct feedback alignment (0.9925 / 0.9875), directional REINFORCE with frozen per-neuron feedback (0.9950 / 0.9812), broadcast graded error (0.9975), and a discrete EventProp-style spike-adjoint (0.9450 / 0.8900). **The task therefore separates one rule from a field that otherwise saturates, and it no longer ranks the field**: with every reference at exactly 1.0000, each of those passes reduces to "the arm scored above 0.75". Live k-WTA transfer of the matched REINFORCE and DFA families remains a scoped **negative** across twelve gap-close variants (v13–v24), best gap LCB 0.3127 against a 0.5 threshold.
+
+> **Provenance of these numbers, and it is load-bearing.** The figures above are from a 2026-08-25 re-run under `MATCHED_INPUT_SCALE = 2.0`. Every previously published matched-architecture number was produced on a forward pass that emitted **zero spikes at any seed**, and the arms that most depended on spikes were the ones it most misrepresented — the discrete spike-adjoint read 0.5000 there and reads 0.9450 here, because a method that differentiates through spike times had none. That claim is **withdrawn**, along with the two RL broadcast contrasts (0.5250 → 0.9100 and 0.5113 → 0.7962). See [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md).
 
 **Two scope statements are load-bearing and are stated here rather than in a footnote.** First, the 80-epoch schedule undertrains *every* rule on it: raising the reference's budget alone lifts it from 0.9013 to 1.0000 by e640, so `gap_closed` at the canonical budget divides by a reference that is still climbing, and values above 1 are an artefact of the denominator rather than a result. The defensible reading of the ordering between local rules and BPTT at that budget is a statement about **learning speed**, not about a ceiling. Second, the matched task saturates: with every arm reaching 1.0000 at high budget it can no longer separate them, so no ceiling comparison on this task survives convergence.
 
-**Honesty notes.** On the DFA schedule a broadcast-*graded* contrast also reaches 0.9863, so the lead negative is ±1 three-factor specifically, not "any broadcast". Locality as a necessary ingredient is evidenced on one-layer XOR, not by the coincidence task alone. We do not claim biological realism, Assembly Calculus success, or impossibility of local learning in principle.
+**Honesty notes.** On the DFA schedule a broadcast-*graded* contrast reaches 0.9975, so the lead negative is ±1 three-factor specifically, not "any broadcast" — and since every other rule tested is now at or near ceiling, the negative is specific in a stronger sense than that phrasing suggests. Locality as a necessary ingredient is evidenced on one-layer XOR, not by the coincidence task alone. We do not claim biological realism, Assembly Calculus success, or impossibility of local learning in principle.
 
 ## 1. Introduction
 
@@ -68,9 +82,24 @@ The benchmark tests temporal structure preservation across depth ($L \in \{1, 2,
 
 ### 3.1 Matched-architecture primary results
 
-Broadcast ±1 three-factor fails the matched gate at chance (0.5000) with gap LCB 0.0000 while the SuperSpike BPTT gradient ceiling learns (0.8963). Graded DFA passes (0.9387, gap LCB 0.6894). REINFORCE × frozen feedback passes as primary (0.9200, gap LCB 0.6846). **Online learned feedback alignment (v130 schedule)** was withdrawn under v131 after reporting `INVALID_HARNESS` (ceiling-inverted warning on 3/20 seeds). Continuous scalar RPE broadcast remains at chance (0.5120, LCB -0.0230 FAIL), confirming that continuous magnitude without spatial directionality is information-theoretically insufficient on this gate. Discrete EventProp-style spike-adjoint H2H **FAIL**s at chance (0.5000, gap LCB 0.0000) against SuperSpike 0.9150 (`c1-eventprop-5bb083d5e88d0ad2`). The `live-transfer-rescue` binary is matched-only and **does not** constitute live k-WTA transfer; at v132 **every arm reports `INVALID_HARNESS`** — the ceiling-inverted warning fires on 3 of 20 seeds, with the arms at 1.0000 against a reference of 0.9895 — so no number from it is cited here.
+All figures below are the 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`, n = 20, reported on both forward graphs because the arms were historically split across two and the difference exceeds the registered 0.02 bar on two of them ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
 
-Honesty note required in the main text: on the DFA matched schedule, a broadcast-graded contrast also reaches high accuracy (0.9863). The lead negative therefore concerns **broadcast ±1 three-factor** credit, not the claim that every broadcast scalar fails coincidence. Locality as a necessary ingredient is evidenced on XOR (Section 3.4), not by coincidence DFA alone. Figure M plots this as a richness × addressability mechanism panel (including the 0.9863 cell and the XOR locality flip).
+| arm | feed-forward | recurrent | verdict |
+|---|---:|---:|---|
+| **broadcast ±1 three-factor** | **0.5000** | **0.5100** | **FAIL**, both |
+| graded DFA | 0.9925 | 0.9875 | PASS, both |
+| broadcast graded error | 0.9975 | 0.9975 | — (contrast) |
+| REINFORCE × frozen `B_i` | 0.9950 | 0.9812 | PASS, both |
+| RL graded-reward broadcast | 0.8787 | 0.9100 | — (contrast) |
+| RL ±1 broadcast | 0.7775 | 0.7962 | — (contrast) |
+| discrete EventProp spike-adjoint | 0.9450 | 0.8900 | PASS, both |
+| SuperSpike BPTT ceiling | 1.0000 | 1.0000 | reference |
+
+Broadcast ±1 three-factor fails the matched gate at chance on both graphs, against a reference that reaches 1.0000 at the canonical budget. **It is the only rule tested that does.** That is a sharper negative than the previous record described and a much weaker instrument: with the ceiling pinned at 1.0000, `gap_closed` reduces every PASS above to "the arm scored above 0.75", and five of the seven arms sit between 0.88 and 1.00. The task separates one rule from the field; it does not rank the field, and no ordering among the passing arms is claimed.
+
+**Three claims are withdrawn from this section, all by measurement.** The discrete EventProp-style spike-adjoint FAIL (0.5000 against SuperSpike 0.9150) is withdrawn: it reads 0.9450 / 0.8900 and PASSes on a forward that can spike, and the archived 0.5000 was a spike-adjoint method with no spikes to differentiate through. The two RL broadcast contrasts, cited as evidence that continuous magnitude without spatial directionality is insufficient, are withdrawn: they read 0.8787–0.9100 and 0.7775–0.7962. **Online learned feedback alignment (v130 schedule)** remains withdrawn as a credit-assignment result, though under both repairs it now PASSes by the registered rule at 1.0000 against a ceiling of 1.0000 with zero variance across 20 seeds — which `RESULT_2026-08-23_TRACK_B_REREAD.md` registers as a saturation result and explicitly not a credit-assignment one. The `live-transfer-rescue` binary is matched-only and **does not** constitute live k-WTA transfer.
+
+Honesty note required in the main text: on the DFA matched schedule, a broadcast-graded contrast reaches 0.9975. The lead negative therefore concerns **broadcast ±1 three-factor** credit, not the claim that every broadcast scalar fails coincidence. Locality as a necessary ingredient is evidenced on XOR (Section 3.4), not by coincidence DFA alone. **Figure M must be regenerated**: it plots richness × addressability as a graded panel, and on the re-run the panel has one failing cell and six at or near 1.0000, which is a different picture and a different claim.
 
 ### 3.2 Engine C1 secondary results
 
@@ -119,7 +148,11 @@ Two consequences:
 1. **`gap_closed` at the canonical budget is not a ceiling-normalised quantity.**
    It divides by a reference that is still climbing. With the reference at 1.0000
    the DFA arm's gap-closed would be `(0.9387 − 0.5)/(1.0 − 0.5) = 0.877`, not
-   `(0.9387 − 0.5)/(0.8963 − 0.5) = 1.107`. Values above 1 are an artefact of the
+   `(0.9387 − 0.5)/(0.8963 − 0.5) = 1.107`. (Both figures are from the archived
+   run; on the repaired instrument the reference *is* 1.0000 at the canonical
+   budget, so this arithmetic is no longer hypothetical — it is what the
+   denominator now is, and the ordering it produces is in §3.1.) Values above 1
+   are an artefact of the
    denominator; clamping them, as `runner.rs` does, hides the cause rather than
    fixing it.
 2. **Raising *both* budgets does not restore the ordering** — the arm stays at or
@@ -166,6 +199,18 @@ Four limits are load-bearing and are stated here rather than in a footnote.
 4. **Survivorship is reduced, not removed.** Pairing on seed compares the same trajectories rather than two differently filtered subsets, but the surviving recurrent pairs are those that did not diverge, and divergence is not random. The feed-forward comparison carries no such exposure at 12/12.
 
 
+### 3.8 Where 0.8320 sits against the literature, and why the gap is a class difference
+
+A read-out result on a standard benchmark invites one question immediately, and the paper answers it here rather than leaving it to a reader: published SHD accuracies for surrogate-gradient spiking networks sit around 0.90–0.95, and the pinned third-party reference used for calibration in this work reaches **0.9390 / 0.9368 / 0.9371** on the clean protocol. The instrument's converged attention arm reaches **0.8320**. The difference is about **0.087** against the best delay-free variant of that reference, and it is not a tuning gap.
+
+Four preregistered ablations turned every knob on the reference that could plausibly account for it — depth, dropout, read-out style, normalisation. **Together they do not explain it, and two of them subtract**: removing the reference's second hidden layer *gains* 0.0145 and removing its batchnorm appears to gain 0.0058. Of everything measured, only dropout is a positive contributor the instrument lacks, and it is worth 0.0128 of the 0.087.
+
+Reading the two forward passes term by term found what the configuration surface could not. The reference carries a **`Dcls1d` temporal kernel of 25 taps per synapse on every layer**, spanning 250 ms, and its membrane decays to a third in a single timestep — its temporal integration lives in the convolution and its neuron is close to a pointwise nonlinearity. The instrument is the mirror image: **no temporal kernel in any form**, and a membrane retaining 0.82 per step to compensate. These are not one architecture at two operating points ([`FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md`](FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md)).
+
+That reframes this paper's own result rather than excusing it. The attention read-out is a mechanism over the time axis added to a substrate that has none, and §3.5's shuffle control shows 96% of its benefit is contingent on temporal order. **The most likely reading of the +0.1258 is that the read-out is recovering a fraction of what a learned temporal kernel supplies** — which is a claim about what the read-out consumes, and is consistent with §3.7's finding that its advantage is larger, not smaller, where the substrate is recurrent.
+
+**Three limits on this section.** The kernel's contribution is supported by elimination and by reading the code, **not by an ablation that removed it** — removing 25 taps per synapse is a different model, not a configuration, and `scripts/test_shd_calibration.py::ReferenceKernelInvariantTests` makes the two underlying claims executable: no documented `model_type` removes the kernel, and binning cannot be varied without moving its width. The ablations were run at **n = 1** with a three-seed spread of 0.0022, so the batchnorm effect sits in the suggestive band and is not quoted as resolved. And they vary the *reference*, so every statement about the instrument is an inference from a difference of differences.
+
 ---
 
 ## 4. Discussion and limitations
@@ -174,9 +219,9 @@ Four limits are load-bearing and are stated here rather than in a footnote.
 
 The cleanest publishable claim is rule-topological: under a fixed dense-LIF forward, **broadcast ±1 three-factor** credit does not close the preregistered gap to SuperSpike BPTT, while graded DFA and REINFORCE×frozen-`B` do. That contrast supports modulator richness and feedback addressability as material factors on this gate (Figure M), without equating matched success to live sparse/k-WTA success.
 
-Richness alone is not “locality”: on the DFA matched schedule, broadcast-*graded* also reaches 0.9863. The lead FAIL is therefore specifically ±1 × surrogate eligibility under broadcast, not an indiscriminate “broadcast credit topology” ban. Addressability / locality as a necessary ingredient is evidenced by the one-layer XOR locality flip (broadcast graded fails; DFA solves), not by coincidence DFA alone.
+Richness alone is not “locality”: on the DFA matched schedule, broadcast-*graded* reaches 0.9975. The lead FAIL is therefore specifically ±1 × surrogate eligibility under broadcast, not an indiscriminate “broadcast credit topology” ban. Addressability / locality as a necessary ingredient is evidenced by the one-layer XOR locality flip (broadcast graded fails; DFA solves), not by coincidence DFA alone.
 
-**A6 Ceiling Health Caveat.** The 80-epoch schedule undertrains the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 at e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`). Therefore, gap closed values at e80 reflect *learning speed* on a saturating task rather than asymptotic representation capacity.
+**A6 Ceiling Health Caveat, and it has become the main limitation.** On the archived instrument the 80-epoch schedule undertrained the gradient reference (0.8963 / 0.9013 at e80, climbing to 1.0000 by e640; `RESULT_2026-08-19_A6_CEILING_HEALTH.md`), so gap-closed at e80 reflected *learning speed* rather than asymptotic capacity. On the repaired instrument the reference reaches **1.0000 at the canonical budget itself**, so there is no budget at which this task separates the arms. Every matched comparison in this paper is therefore bounded by a saturated reference, and the only claim that survives it is the one negative.
 
 **Falsifier.** A matched ±1 three-factor arm that clears the accuracy floor *and* gap LCB under the same dense-LIF forward, splits, and Gate G2 numeric thresholds would overturn the lead claim. Silent threshold changes, hash remassage, or live-path substitutions do not count.
 
@@ -188,7 +233,7 @@ Soft-WTA × structured B on live C1 uses disclosed temperature `T=1` (v21). That
 
 ### 4.3 Baselines and EventProp H2H
 
-The primary gradient ceiling on the matched gate is **SuperSpike BPTT** on the fixed dense-LIF forward. True σ′ e-prop (`c1x-eprop-true-*`, true-surrogate mean 0.7125) is a methods footnote only—not a H2H claim that e-prop rescues broadcast ±1 insufficiency. **Discrete EventProp-style spike-adjoint** was run H2H under protocol v28 (`c1-eventprop-5bb083d5e88d0ad2`): mean **0.5000** vs SuperSpike **0.9150**, gap LCB **0.0000**, **FAIL**. Honesty: this is a **discrete** hard spike-gate adjoint on the matched dense-LIF forward — **not** continuous Wunderlich–Pehle (2021) hybrid EventProp. Hybrid exact-forward arms labeled “e-prop/DFA” remain eligibility × transported modulators unless the true-σ′ family is cited explicitly.
+The primary gradient ceiling on the matched gate is **SuperSpike BPTT** on the fixed dense-LIF forward. True σ′ e-prop (`c1x-eprop-true-*`, true-surrogate mean 0.7125) is a methods footnote only—not a H2H claim that e-prop rescues broadcast ±1 insufficiency. **The discrete EventProp-style spike-adjoint FAIL is withdrawn.** It was reported as mean 0.5000 against SuperSpike 0.9150, gap LCB 0.0000; on the repaired forward it reaches **0.9450** (feed-forward) and **0.8900** (recurrent) and **PASSes** on both. The archived number was a spike-adjoint method on a forward that emitted no spikes, and "discrete ≠ continuous Wunderlich–Pehle" was an explanation offered for a result with a different cause. This remains a **discrete** hard spike-gate adjoint and still is not continuous Wunderlich–Pehle (2021) hybrid EventProp; no comparison to that method is claimed in either direction. Hybrid exact-forward arms labeled “e-prop/DFA” remain eligibility × transported modulators unless the true-σ′ family is cited explicitly.
 
 ### 4.4 Efficiency honesty (F1 / F2 / F5)
 
@@ -204,7 +249,13 @@ Continual forgetting (C2 / Gate G3 FAIL), multi-area scaling (R2 / Gate G4 **NO-
 
 ### 4.6 Neuromorphic benchmark scope and non-claims
 
-The SHD attention readout results are scoped to **h128 / `published-2ms` / `adjacent-sum-5`**. We do not claim calibration. The blocking gates are criteria 3 and 4 — `clean_reference` and `historical_reference` — and they are false for a **provenance** reason, not an accuracy one: the six third-party PyTorch reference artifacts record a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit has moved, while their recorded accuracies (clean 0.9390 / 0.9368 / 0.9371 against a 0.80 floor) already meet the requirement. Criterion 5, the Python mirror, is **not currently reachable**, because `matrix_authorized` conjoins those two gates ahead of it ([`FINDING_2026-08-21_CALIBRATION_GAP_IS_PROVENANCE_NOT_ACCURACY.md`](FINDING_2026-08-21_CALIBRATION_GAP_IS_PROVENANCE_NOT_ACCURACY.md)). We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
+The SHD attention readout results are scoped to **h128 / `published-2ms` / `adjacent-sum-5`**. We do not claim calibration, and the reason has changed.
+
+Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
+
+**The 0.80 `CELL_PASS` floor should not be read as a standard the instrument is failing to meet.** It was derived from one configuration of a reference that is a different model class, and four preregistered ablations of that reference show three of its choices are neutral or harmful to it: its second hidden layer costs 0.0145, its batchnorm appears to cost 0.0058, and its non-spiking summed readout buys 0.0012. Only its dropout clearly earns its place ([`RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md`](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md)).
+
+We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
 
 The following suites are explicitly **withdrawn**:
 1. `track-b-rescue` v130 online learned FB PASS (withdrawn under v131 `INVALID_HARNESS`).

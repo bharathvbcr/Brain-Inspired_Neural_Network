@@ -2,12 +2,12 @@
 
 # Record index
 
-301 documents. **8 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+302 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 36 | 0 |
-| Results | 32 | 2 |
+| Results | 33 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
 | Amendments | 13 | 1 |
@@ -17,7 +17,7 @@
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
-| Paper | 7 | 0 |
+| Paper | 5 | 2 |
 | Campaign control | 2 | 0 |
 | Writing | 2 | 0 |
 | Gates | 1 | 0 |
@@ -27,7 +27,7 @@
 | Build audits | 3 | 0 |
 | Hard audits | 2 | 0 |
 | Handoffs | 0 | 1 |
-| Claim registers | 1 | 0 |
+| Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
 | Other | 26 | 0 |
@@ -40,6 +40,9 @@ Read these only through the document that retired them.
 |---|---|
 | [AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md](AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md) | 2026-08-03 — the diagnosis in §1 was incomplete and the |
 | [HANDOFF_2026-08-02.md](HANDOFF_2026-08-02.md) | IN PART, 2026-08-03 / 2026-08-04 — read this before acting on anything below |
+| [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) | IN PART — 2026-08-25 matched-architecture re-run |
+| [PAPER_SKELETON.md](PAPER_SKELETON.md) | IN PART — 2026-08-25 matched-architecture re-run |
+| [PUBLISHABLE_CLAIMS.md](PUBLISHABLE_CLAIMS.md) | IN PART — 2026-08-25 matched-architecture re-run |
 | [RESULT_2026-08-19_SHD_ATTENTION_READOUT_PILOT.md](RESULT_2026-08-19_SHD_ATTENTION_READOUT_PILOT.md) | 2026-08-19 — the headline does not replicate at convergence |
 | [RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md](RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md) | 2026-08-22 — this result measured a protocol parameter, not the arm. |
 | [SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md](SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md) | 2026-08-22 by |
@@ -96,6 +99,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-25 | [RESULT_2026-08-25_MATCHED_ARCH_RERUN.md](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md) | Result — the lead negative survives both graphs, and three of the four contrasts that gave it meaning do not |
 | 2026-08-24 | [RESULT_2026-08-24_READOUT_ABLATION.md](RESULT_2026-08-24_READOUT_ABLATION.md) | Result — the readout is exonerated, and the enumeration is still incomplete |
 | 2026-08-24 | [RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md) | Result — every configurable difference is now measured, and together they do not explain the gap |
 | 2026-08-23 | [RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md](RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md) | Wave 14 — attention does not substitute for recurrence; it compounds with it |
@@ -253,8 +257,8 @@ Read these only through the document that retired them.
 |---|---|---|
 | 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) | What is left for the paper — 2026-08-20 |
 | — | [PAPER_VERIFY.md](PAPER_VERIFY.md) | Paper scientific verify — 2026-07-23 |
-| — | [PAPER_SKELETON.md](PAPER_SKELETON.md) | BINN paper skeleton — negative result + methods |
-| — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) | BINN — camera-ready results table |
+| — | [PAPER_SKELETON.md](PAPER_SKELETON.md) **[retired]** | BINN paper skeleton — negative result + methods |
+| — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) **[retired]** | BINN — camera-ready results table |
 | — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | PAPER_METRICS_FULL — hardened harvest |
 | — | [PAPER_FIGURE_SPEC.md](PAPER_FIGURE_SPEC.md) | BINN — figure / table specs (camera-ready) |
 | — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | Broadcast ±1 three-factor credit fails a matched dense-LIF gate |
@@ -354,7 +358,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
-| — | [PUBLISHABLE_CLAIMS.md](PUBLISHABLE_CLAIMS.md) | BINN — publishable claim freeze |
+| — | [PUBLISHABLE_CLAIMS.md](PUBLISHABLE_CLAIMS.md) **[retired]** | BINN — publishable claim freeze |
 
 ## Reproduction
 

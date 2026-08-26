@@ -130,15 +130,25 @@ impl RlMatchConfig {
         mix(&mut h, self.chance_baseline.to_bits() as u64);
         mix(&mut h, self.scientific_n_seeds as u64);
         mix(&mut h, u64::from(self.quick));
-        // Mixed ONLY when it differs from the historical default, so that the
-        // archived `RlMatchConfig` hashes still resolve through `from_hash` and every
-        // citation of them still replays. A run on the other graph is a
-        // different experiment and gets a different hash, which is the point;
-        // a run on the same graph must keep the identity it was published under.
-        if self.forward != RLMATCHCONFIG_DEFAULT_FORWARD {
-            mix(&mut h, FORWARD_HASH_TAG);
-            mix(&mut h, u64::from(self.forward.is_recurrent()));
-        }
+        // The forward graph, and the input scale the whole matched family is
+        // built at. Both are mixed unconditionally.
+        //
+        // `MATCHED_INPUT_SCALE` was NOT in this hash, and on 2026-08-25 that
+        // stopped being survivable. The constant went 0.5 -> 2.0 in the silent-
+        // initialisation repair, and re-running the archived config afterwards
+        // produced `c1-eventprop-5bb083d5e88d0ad2` reporting **0.8900** where
+        // the July record has the same hash at **0.5000**. A hash that
+        // identifies an experiment must cover everything that changes its
+        // result, or it silently names two.
+        //
+        // This does mean the archived hashes no longer resolve through
+        // `from_hash`. That is the correct outcome and not a regression: this
+        // binary genuinely cannot reproduce those numbers, and being told
+        // "unknown hash" is strictly better than being handed different ones
+        // under the name you asked for.
+        mix(&mut h, FORWARD_HASH_TAG);
+        mix(&mut h, u64::from(self.forward.is_recurrent()));
+        mix(&mut h, binn_learn::MATCHED_INPUT_SCALE.to_bits() as u64);
         h
     }
 
@@ -214,7 +224,21 @@ mod tests {
         }
         assert_eq!(RlMatchConfig::from_hash(&hash).as_ref(), Some(&sci));
         // Paper-cited scientific hash freeze (v12 reinforce_fb primary).
-        assert_eq!(hash, "c1-rl-42eddc9c801308e9");
+        // The frozen scientific hash. It MOVED on 2026-08-25, deliberately, and
+        // the retired value is recorded so the break is visible rather than
+        // inferred:
+        //
+        //     retired: c1-rl-42eddc9c801308e9   (MATCHED_INPUT_SCALE = 0.5, and the scale absent
+        //                       from the hash entirely)
+        //     current: c1-rl-d35e13c758e522f8   (MATCHED_INPUT_SCALE = 2.0, mixed in)
+        //
+        // The silent-initialisation repair moved the input scale 0.5 -> 2.0
+        // while the constant was not part of the hash, so the retired value
+        // named two different experiments -- `c1-rl-42eddc9c801308e9` appears in the
+        // July record and, re-run afterwards, produced materially different
+        // numbers under the same name. Mixing the scale in is what stops that;
+        // this freeze is what stops the hash drifting again by accident.
+        assert_eq!(hash, "c1-rl-d35e13c758e522f8");
     }
 
     #[test]
