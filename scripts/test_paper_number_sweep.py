@@ -41,9 +41,13 @@ class SweepPaperTest(unittest.TestCase):
               known=(0.1111,), allowed=("0.2222",), floor=1):
         """`(cells, elsewhere, traced, unexplained, complaints)`.
 
-        `sources` is the tier-C table; `extra` writes additional documents into
-        the temporary tree so an entry can name a real file.
+        `cells` is keyed by generator; `known` seeds the `arm` generator, which
+        is enough for every rule tested here. `sources` is the tier-C table, and
+        `extra` writes additional documents into the temporary tree so an entry
+        can name a real file.
         """
+        tiers = {name: set() for name in CEN.TIERS}
+        tiers["arm"] = set(known)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "results").mkdir()
@@ -56,7 +60,7 @@ class SweepPaperTest(unittest.TestCase):
                  mock.patch.object(CEN, "PAPER", root / "results/PAPER_DRAFT.md"), \
                  mock.patch.object(CEN, "PAPER_SOURCES", sources), \
                  mock.patch.object(CEN, "MIN_PAPER_NUMBERS", floor):
-                return CEN.sweep_paper(set(known), set(allowed))
+                return CEN.sweep_paper(tiers, set(allowed))
 
     # --- the clean case ----------------------------------------------------
 
@@ -65,7 +69,8 @@ class SweepPaperTest(unittest.TestCase):
             "0.1111 and 0.2222 and 0.3333",
             [("0.3333", "results/record.md", "the arm")],
             {"results/record.md": "the arm scored 0.3333"})
-        self.assertEqual((cells, elsewhere, traced), (1, 1, 1))
+        self.assertEqual((sum(cells.values()), elsewhere, traced), (1, 1, 1))
+        self.assertEqual(cells["arm"], 1)
         self.assertEqual(bad, [])
         self.assertEqual(complaints, [])
 
@@ -77,7 +82,7 @@ class SweepPaperTest(unittest.TestCase):
             [("0.1111", "results/record.md", "also here")],
             {"results/record.md": "0.1111"},
             floor=1)
-        self.assertEqual((cells, traced), (1, 0))
+        self.assertEqual((sum(cells.values()), traced), (1, 0))
 
     # --- the rules, each broken --------------------------------------------
 
@@ -147,8 +152,9 @@ class SweepPaperTest(unittest.TestCase):
             with mock.patch.object(CEN, "ROOT", root), \
                  mock.patch.object(CEN, "PAPER", root / "nothing.md"):
                 cells, elsewhere, traced, bad, complaints = CEN.sweep_paper(
-                    set(), set())
-        self.assertEqual((cells, elsewhere, traced, bad), (0, 0, 0, []))
+                    {name: set() for name in CEN.TIERS}, set())
+        self.assertEqual((sum(cells.values()), elsewhere, traced, bad),
+                         (0, 0, 0, []))
         self.assertTrue(any("did not run" in c for c in complaints), complaints)
 
 
@@ -182,6 +188,87 @@ class TheRealTableTest(unittest.TestCase):
         self.assertIn("len(quoted) < MIN_PAPER_NUMBERS", source)
 
 
+class GeneratorTiersTest(unittest.TestCase):
+    """`derivable` splits by generator, and each value is credited once.
+
+    The single coincidence rate this script used to print reached 31% as the
+    corpora grew to 97 configurations. It was honest and it was one number over
+    a set whose density is not uniform: `arm` quantities are sparse, `paired`
+    quantities are not, and both were called "derivable".
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tiers = CEN.derivable(CEN.load())
+
+    def test_the_generators_are_disjoint(self):
+        """Overlapping tiers would make the per-document counts sum to more
+        than the numbers actually checked."""
+        for a in CEN.TIERS:
+            for b in CEN.TIERS:
+                if a < b:
+                    self.assertEqual(self.tiers[a] & self.tiers[b], set(),
+                                     f"{a} and {b} overlap")
+
+    def test_every_tier_is_populated(self):
+        """A tier that is always empty is a tier that explains nothing, and its
+        printed coincidence rate would read as reassurance."""
+        for name in CEN.TIERS:
+            self.assertTrue(self.tiers[name], f"{name} is empty")
+
+    def test_the_arm_tier_is_sparser_than_the_paired_tier(self):
+        """The point of splitting them. If this inverts, the ordering in TIERS
+        is telling the reader the opposite of the truth."""
+        self.assertLess(len(self.tiers["arm"]), len(self.tiers["paired"]))
+
+    def test_explain_returns_the_strongest_generator(self):
+        value = min(self.tiers["arm"])
+        self.assertEqual(CEN.explain(value, self.tiers), "arm")
+        self.assertIsNone(CEN.explain(-1.0, self.tiers))
+
+    def test_a_paper_number_is_credited_to_exactly_one_generator(self):
+        cells, elsewhere, traced, bad, _ = CEN.sweep_paper(
+            self.tiers, {v for v, _ in CEN.ELSEWHERE})
+        quoted = {m.group(1) for m in
+                  CEN.NUMBER.finditer(CEN.PAPER.read_text())}
+        self.assertEqual(sum(cells.values()) + elsewhere + traced + len(bad),
+                         len(quoted))
+
+
+class ADocumentWithNoNumbersTest(unittest.TestCase):
+    """A sweep that finds nothing to check has not checked anything.
+
+    `RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md` is 93 lines long and
+    quotes no four-decimal number. It printed `[ok  ]` — the same word as a
+    document whose forty numbers were each recomputed from cells — for as long
+    as this sweep has existed.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.proc = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/check_every_number.py")],
+            capture_output=True, text=True)
+
+    def test_the_empty_document_is_marked_apart_from_a_pass(self):
+        line = [l for l in self.proc.stdout.splitlines()
+                if "W4_RECURRENT_ARM_IS_UNUSABLE" in l and l.startswith("  [")]
+        self.assertEqual(len(line), 1, self.proc.stdout)
+        self.assertIn("[none]", line[0])
+        self.assertNotIn("[ok  ]", line[0])
+
+    def test_it_is_excluded_from_the_closing_claim(self):
+        self.assertIn("carry no four-decimal number", self.proc.stdout)
+        self.assertIn("13 swept wave results", self.proc.stdout)
+
+    def test_the_document_really_has_no_numbers(self):
+        """If it acquires one, this class is asserting a state that has moved
+        and the [none] branch is no longer exercised by the real record."""
+        text = (ROOT / "results/RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md"
+                ).read_text()
+        self.assertEqual(list(CEN.NUMBER.finditer(text)), [])
+
+
 class TheRunSaysWhichTierTest(unittest.TestCase):
     """The end-to-end run, on the real record."""
 
@@ -199,6 +286,11 @@ class TheRunSaysWhichTierTest(unittest.TestCase):
                      "tier B, named in ELSEWHERE",
                      "tier C, traced to a named record"):
             self.assertIn(line, self.proc.stdout)
+
+    def test_each_generator_prints_its_own_coincidence_rate(self):
+        for name in CEN.TIERS:
+            self.assertRegex(self.proc.stdout,
+                             rf"{name}\s+\d+ quantities\s+a random 4dp value")
 
     def test_the_weaker_tier_says_it_is_weaker(self):
         """Three counts side by side read as three kinds of the same thing

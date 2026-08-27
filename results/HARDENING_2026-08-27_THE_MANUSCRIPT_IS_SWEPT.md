@@ -99,8 +99,12 @@ roughly 22 would match something by accident.
 
 That is a property of the wave sweep too, and it has been true of every "every
 number follows from the cells" line this script has printed since the corpora
-grew. It is not repaired here. It is measured, printed on every run, and named
-as the next piece of work.
+grew. It is not repaired here. It is measured, printed on every run, and taken
+up immediately afterwards in
+[`HARDENING_2026-08-27_THE_SWEEP_SAYS_HOW_STRONG_IT_IS.md`](HARDENING_2026-08-27_THE_SWEEP_SAYS_HOW_STRONG_IT_IS.md),
+which splits the rate by generator and shows that the density is almost entirely
+in one of them. The counts above are restated there as `arm 22, paired 48,
+pooled 2`.
 
 ## Files
 

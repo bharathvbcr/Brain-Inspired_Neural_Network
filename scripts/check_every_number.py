@@ -300,13 +300,39 @@ def load() -> dict[str, dict[int, tuple[float, bool]]]:
     return groups
 
 
-def derivable(groups) -> set[float]:
-    """Everything the cells can produce, as absolute values rounded to 4dp."""
-    out: set[float] = set()
+#: The generators, strongest-first, as they are reported. A number is credited to
+#: the FIRST one that can produce it.
+#:
+#: They are kept apart because they are not equally good evidence, and the single
+#: number this script used to print hid that. `arm` is one configuration's own
+#: mean, extremes, headroom or a per-seed value: 679 quantities, so a random 4dp
+#: value matches one 6.8% of the time. `paired` is anything computed over two
+#: comparable arms' shared seeds: 2,720 quantities and 27.2%, which is where
+#: essentially all of the global density lives. `pooled` is a cross-arm
+#: difference or ratio over each arm's own seeds: 287 quantities and 2.9%.
+#:
+#: A document whose numbers rest on `arm` has been checked against a sparse set.
+#: One whose numbers rest on `paired` has been checked against a set that would
+#: accept one number in four by accident. Same word — "derivable" — and very
+#: different evidence, so the run now says which.
+TIERS = ("arm", "paired", "pooled")
+
+
+def derivable(groups) -> dict[str, set[float]]:
+    """What the cells can produce, split by generator. Absolute, 4dp.
+
+    Was a single set, and `main` reported one coincidence rate over it. That
+    rate reached 31% as the corpora grew to 97 configurations, at which point
+    "every number follows from the cells" was about three times better than
+    chance and read like a proof. Splitting the set does not make the check
+    stronger; it makes the run say where its strength actually is.
+    """
+    out: dict[str, set[float]] = {tier: set() for tier in TIERS}
+    tier = "arm"
 
     def add(value: float) -> None:
         if isinstance(value, float) and value == value:
-            out.add(round(abs(value), 4))
+            out[tier].add(round(abs(value), 4))
 
     valid: dict[str, dict[int, float]] = {}
     for stem, seeds in groups.items():
@@ -368,6 +394,7 @@ def derivable(groups) -> set[float]:
         return sum(1 for x, y in zip(left, right) if x != y) == 1
 
     gains: list[float] = []
+    tier = "paired"
     for (left_stem, left), (right_stem, right) in itertools.combinations(valid.items(), 2):
         if not comparable(left_stem, right_stem):
             continue
@@ -393,9 +420,11 @@ def derivable(groups) -> set[float]:
             add(delta)
         left_mean = sum(left.values()) / len(left)
         right_mean = sum(right.values()) / len(right)
+        tier = "pooled"
         add(left_mean - right_mean)                                       # pooled
         if right_mean:
             add(left_mean / right_mean)                                   # ratio
+        tier = "paired"
 
     # Second-order quantities — differences OF gains, which is what every
     # two-sided hypothesis in this campaign is — are deliberately NOT generated
@@ -405,20 +434,39 @@ def derivable(groups) -> set[float]:
     # are verified individually in `verify_published_numbers.py`, which names
     # each derivation instead of guessing it, and are listed in ELSEWHERE with a
     # pointer to that check.
+    #
+    # Credit each value once, to the strongest generator that reaches it. Without
+    # this the tiers overlap and the per-tier counts below would sum to more than
+    # the numbers actually checked.
+    seen: set[float] = set()
+    for name in TIERS:
+        out[name] -= seen
+        seen |= out[name]
     return out
 
 
-def sweep_paper(known: set[float], allowed: set[str]) -> tuple[int, int, int, list[str], list[str]]:
+def explain(value: float, tiers: dict[str, set[float]]) -> str | None:
+    """The strongest generator that reaches `value`, or None."""
+    for name in TIERS:
+        if any(abs(value - k) <= TOL for k in tiers[name]):
+            return name
+    return None
+
+
+def sweep_paper(tiers: dict[str, set[float]], allowed: set[str]) -> tuple[dict[str, int], int, int, list[str], list[str]]:
     """Sweep `PAPER_DRAFT.md` at three named tiers.
 
-    Returns `(cells, elsewhere, traced, unexplained, complaints)`. The tiers are
-    returned separately rather than summed because a paper number backed by a
-    named run record is not the same evidence as one recomputed from cells, and
-    a single "checked" count would erase that.
+    Returns `(cells, elsewhere, traced, unexplained, complaints)`, where `cells`
+    is keyed by the generator that reached each number. The tiers are returned
+    separately rather than summed because a paper number backed by a named run
+    record is not the same evidence as one recomputed from cells, and a number
+    reached only by a paired statistic is not the same evidence as one that is a
+    configuration's own mean. A single "checked" count would erase both.
     """
     complaints: list[str] = []
+    empty = {tier: 0 for tier in TIERS}
     if not PAPER.is_file():
-        return 0, 0, 0, [], [f"{PAPER} is missing; the manuscript sweep did not run"]
+        return empty, 0, 0, [], [f"{PAPER} is missing; the manuscript sweep did not run"]
 
     text = PAPER.read_text()
     sources: dict[str, tuple[str, str]] = {}
@@ -440,15 +488,17 @@ def sweep_paper(known: set[float], allowed: set[str]) -> tuple[int, int, int, li
                 f"{value} is traced to {relpath}, which no longer contains it "
                 f"({what}) — the paper and its source have drifted apart")
 
-    cells = elsewhere = traced = 0
+    cells = dict(empty)
+    elsewhere = traced = 0
     unexplained: list[str] = []
     quoted: set[str] = set()
     for raw in sorted({m.group(1) for m in NUMBER.finditer(text)}):
         value = round(abs(float(raw.replace("−", "-").replace("+", ""))), 4)
         plain = f"{value:.4f}"
         quoted.add(plain)
-        if any(abs(value - k) <= TOL for k in known):
-            cells += 1
+        generator = explain(value, tiers)
+        if generator:
+            cells[generator] += 1
         elif plain in allowed:
             elsewhere += 1
         elif plain in sources:
@@ -502,39 +552,62 @@ def main() -> int:
               f"moved", file=sys.stderr)
         return 1
 
-    known = derivable(groups)
+    tiers = derivable(groups)
+    known = set().union(*tiers.values())
     allowed = {value for value, _ in ELSEWHERE}
     unexplained: list[tuple[str, str]] = []
     seen_allowed: set[str] = set()
     checked = 0
+    silent: list[str] = []
 
-    power = report_power(known)
     print(f"{len(known)} distinct quantities derivable from {len(groups)} "
-          f"configurations")
-    print(f"coincidence rate: a random 4dp value in [0,1] would match one of "
-          f"them {100 * power:.1f}% of the time, at tolerance {TOL}\n")
+          f"configurations, by generator:")
+    for name in TIERS:
+        print(f"  {name:<8} {len(tiers[name]):>5} quantities   a random 4dp value "
+              f"in [0,1] matches one {100 * report_power(tiers[name]):.1f}% of "
+              f"the time")
+    print(f"  tolerance {TOL}. A number reached only by `paired` has been checked "
+          f"against a set\n  that would accept one value in four by accident; say "
+          f"so rather than calling both\n  outcomes derivable and leaving it "
+          f"there.\n")
     for doc in DOCUMENTS:
         if doc.name in UNCHECKED:
             print(f"  [----] {doc.name[:64]:<64} UNCHECKED: {UNCHECKED[doc.name]}")
             continue
         numbers = sorted({m.group(1) for m in NUMBER.finditer(doc.read_text())})
         bad = []
+        by_tier = {name: 0 for name in TIERS}
         for text in numbers:
             checked += 1
             value = round(abs(float(text.replace("−", "-").replace("+", ""))), 4)
-            if any(abs(value - k) <= TOL for k in known):
+            generator = explain(value, tiers)
+            if generator:
+                by_tier[generator] += 1
                 continue
             plain = f"{value:.4f}"
             if plain in allowed:
                 seen_allowed.add(plain)
                 continue
             bad.append(text)
-        status = "ok" if not bad else f"UNEXPLAINED: {', '.join(bad)}"
-        print(f"  [{'ok  ' if not bad else 'FAIL'}] {doc.name[:64]:<64} {status}")
+        if bad:
+            mark, status = "FAIL", f"UNEXPLAINED: {', '.join(bad)}"
+        elif not numbers:
+            # `RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md` is 93 lines
+            # long and quotes no four-decimal number at all. It printed `ok` for
+            # as long as this sweep has existed -- the same word as a document
+            # whose forty numbers were each recomputed. A sweep that finds
+            # nothing to check has not checked anything.
+            mark, status = "none", "NOTHING TO CHECK: no four-decimal number here"
+            silent.append(doc.name)
+        else:
+            mark = "ok  "
+            status = "  ".join(f"{name} {by_tier[name]}" for name in TIERS
+                               if by_tier[name])
+        print(f"  [{mark}] {doc.name[:64]:<64} {status}")
         unexplained += [(doc.name, b) for b in bad]
 
     paper_cells, paper_elsewhere, paper_traced, paper_bad, paper_complaints = \
-        sweep_paper(known, allowed)
+        sweep_paper(tiers, allowed)
     # ELSEWHERE entries cited only by the manuscript are not stale. Before the
     # paper was swept they could not be seen at all, so staleness was measured
     # against a corpus that excluded one of the two readers.
@@ -550,10 +623,12 @@ def main() -> int:
     if missing:
         print(f"STALE entries in UNCHECKED — these documents are gone: {missing}")
     print()
-    total = paper_cells + paper_elsewhere + paper_traced + len(paper_bad)
+    paper_from_cells = sum(paper_cells.values())
+    total = paper_from_cells + paper_elsewhere + paper_traced + len(paper_bad)
     print(f"  [{'ok  ' if not (paper_bad or paper_complaints) else 'FAIL'}] "
           f"{PAPER.name[:64]:<64} {total} numbers")
-    print(f"         tier A, derived from the cells      {paper_cells}")
+    print(f"         tier A, derived from the cells      {paper_from_cells}"
+          f"   ({', '.join(f'{n} {paper_cells[n]}' for n in TIERS if paper_cells[n])})")
     print(f"         tier B, named in ELSEWHERE          {paper_elsewhere}")
     print(f"         tier C, traced to a named record    {paper_traced}")
     print(f"  tier C is NOT derivation. It establishes that the value is still "
@@ -565,7 +640,11 @@ def main() -> int:
     if paper_bad:
         print(f"  {len(paper_bad)} number(s) in {PAPER.name} with no tier at all: "
               f"{', '.join(paper_bad)}")
-    swept = len(DOCUMENTS) - len(UNCHECKED)
+    swept = len(DOCUMENTS) - len(UNCHECKED) - len(silent)
+    if silent:
+        print(f"\n{len(silent)} document(s) carry no four-decimal number and so "
+              f"were not checked by this sweep,\nand are excluded from the claim "
+              f"below: {', '.join(silent)}")
     print(f"\n{checked} numbers checked across {swept} wave results")
     if UNCHECKED:
         print(f"{len(UNCHECKED)} wave result(s) this sweep cannot judge, "
@@ -581,7 +660,7 @@ def main() -> int:
     # The claim names what was actually swept. It used to say "every wave
     # result" while a date window silently held one back.
     print(f"every number in the {swept} swept wave results follows from the cells, "
-          f"and every\nnumber in {PAPER.name} is derived from them ({paper_cells}), "
+          f"and every\nnumber in {PAPER.name} is derived from them ({paper_from_cells}), "
           f"named in ELSEWHERE ({paper_elsewhere}),\nor traced to a named primary "
           f"record ({paper_traced})")
     return 0
