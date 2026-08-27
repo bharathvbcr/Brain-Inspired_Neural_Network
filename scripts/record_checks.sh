@@ -51,6 +51,11 @@ run "the x86 and aarch64 corpora agree" python3 scripts/cross_isa_reproduction.p
 # the compute it voids had been spent. This answers the weaker form of it from
 # whatever has landed, on every run, and exits non-zero when nothing matched.
 run "the fleet reproduces its own record" python3 scripts/aws/check_reproduction.py
+# The paper's lead claim is a difference of differences, and computing it needs
+# four arms on shared seeds. Derived rather than recalled: on 2026-08-27 two of
+# twenty operating points carried all four, both at h128. A scope limit that
+# large should be recomputed on every run, not remembered.
+run "the mechanism control's coverage" python3 scripts/mechanism_coverage.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 
 if [[ "$fail" -ne 0 ]]; then

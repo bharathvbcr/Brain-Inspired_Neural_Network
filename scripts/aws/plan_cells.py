@@ -696,6 +696,68 @@ def wave20_the_recurrent_claim_at_thirty_two_seeds():
     return cells
 
 
+def wave21_the_mechanism_across_the_design_space():
+    """W21 - the paper's lead control, everywhere except where it already is.
+
+    `PAPER_DRAFT.md` leads with a difference-in-differences: attention's cost
+    under bin-shuffling against the rate read-out's own cost, +0.1347 against
+    +0.0142 at n=32. `scripts/mechanism_coverage.py` derives where that contrast
+    can actually be computed and the answer is **two of nineteen operating
+    points, both h128 / `published-2ms` / `adjacent-sum-5`**. Seventeen rungs
+    carry the intact arms and no destruction control at all.
+
+    So the campaign's best-evidenced claim is also its narrowest, and a reviewer
+    asking whether the mechanism generalises has nothing to read. This wave is
+    that question.
+
+    It also makes the width collapse testable rather than merely reported. §3.5
+    calls the h1024 inversion an anomaly "with no citation to lean on". If the
+    read-out's benefit is what temporal order buys, then where the benefit
+    inverts there should be nothing order-dependent left to destroy, and the
+    shuffle cost should collapse with it. That is a prediction the corpus cannot
+    currently answer at any width but one.
+
+    Two arms per operating point, twelve seeds, everything else reused:
+
+      * `ff+fixed` bin-shuffled -- the rate read-out's own shuffle cost, which
+        is what makes this a difference of differences rather than a drop. It
+        exists only at h128 on the anchor; every other width and geometry needs
+        its own, and at 4-24 minutes a cell it is the cheap half.
+      * `ff+fixed+attn` d32/L4 bin-shuffled.
+
+    The intact halves of all fourteen arms are already in the corpus at n=12,
+    from the same pinned binary and the same seeds.
+
+    Five widths complete the ladder wave 16 filled for the gain, so the gain and
+    its shuffle cost can be read against each other rung by rung rather than at
+    a single point. Two further points move the geometry and the contract
+    instead of the width, because "generalises across width" and "generalises
+    across binning" are different claims and the paper currently supports
+    neither.
+    """
+    cells = []
+    points = [
+        # (hidden, contract, geometry)
+        (256, ANCHOR[0], ANCHOR[1]),
+        (384, ANCHOR[0], ANCHOR[1]),
+        (512, ANCHOR[0], ANCHOR[1]),
+        (768, ANCHOR[0], ANCHOR[1]),
+        (1024, ANCHOR[0], ANCHOR[1]),
+        (128, ANCHOR[0], "channels-700"),
+        (128, "published-10ms", ANCHOR[1]),
+    ]
+    for hidden, contract, geometry in points:
+        for seed in SEEDS:
+            cells.append(cell("w21mec", "ff+fixed", hidden, 400, seed,
+                              contract=contract, geometry=geometry,
+                              temporal="bin-shuffled"))
+            cells.append(cell("w21mec", "ff+fixed+attn", hidden, 400, seed,
+                              contract=contract, geometry=geometry,
+                              attn_dim=32, attn_layers=4,
+                              temporal="bin-shuffled"))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -717,6 +779,7 @@ WAVES = {
     "w18": wave18_depth_ladder_at_h1024,
     "w19": wave19_does_the_optimum_move_with_width,
     "w20": wave20_the_recurrent_claim_at_thirty_two_seeds,
+    "w21": wave21_the_mechanism_across_the_design_space,
 }
 
 
