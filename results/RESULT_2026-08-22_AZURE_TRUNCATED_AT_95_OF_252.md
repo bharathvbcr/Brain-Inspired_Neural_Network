@@ -93,12 +93,34 @@ arm they need is at 0/12, which the table above confirms rather than assumes.
 
 ### What the partial arms are worth: the h256 rung
 
-Four of the 35 cells are the only ones of their kind anywhere in the project.
+Four of the 35 cells were, when this section was written, the only ones of their
+kind anywhere in the project.
+
+> **SUPERSEDED 2026-08-26 — deliberately, and the rung's numbers stand.** Wave 16
+> regenerates h256/d32-L4 at the full seed count, as
+> [`PREREG_2026-08-25_THE_H1024_COLLAPSE.md`](PREREG_2026-08-25_THE_H1024_COLLAPSE.md)
+> §5 registered it would: *"a rung at n=4 beside rungs at n=12 makes the
+> ladder's shape depend on which rung you trust."* These four cells are no
+> longer the evidence for the rung; they are now a cross-ISA check on it.
+>
+> That check has been run and is the strongest form of the reproduction claim so
+> far, because it was **prospective**: the four Azure x86-64 cells were recorded
+> 2026-08-21 and the aarch64 cells were produced 2026-08-26, and on the four
+> shared seeds **6,520 leaf values agree with zero differences**, across all
+> four complete 400-epoch trajectories. The 79-cell comparison in
+> [`FINDING_2026-08-22_REPRODUCIBLE_ACROSS_ISA_UNDER_GLIBC.md`](FINDING_2026-08-22_REPRODUCIBLE_ACROSS_ISA_UNDER_GLIBC.md)
+> derived its overlap from two archives that already existed; this one is a
+> prediction the claim made about cells that did not.
+>
+> The rung's per-seed values are unchanged and the table below is not restated
+> here — the wave-16 figures supersede it once that wave completes, and the
+> ladder is rebuilt from twelve cells rather than four.
+
 The d32/L4 width ladder was published in
 [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md)
-at h128, h512 and h1024 — **h256 at L4 was never run on AWS**, and these four
-cells are it. Paired by seed against the `ff+fixed` h256 control (whose Azure and
-AWS copies are bit-identical, §4):
+at h128, h512 and h1024. **h256 at L4 had never been run on AWS** when this was
+written, so these four cells were the whole of it. Paired by seed against the
+`ff+fixed` h256 control (whose Azure and AWS copies are bit-identical, §4):
 
 | width | pairs | `ff+fixed` | d32/L4 | gain | positive | source |
 |---|---:|---:|---:|---:|---:|---|
