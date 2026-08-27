@@ -31,6 +31,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+# `cell_validity` lives in `scripts/`, not `scripts/aws/`. Without this the
+# gate tests below error on import when this module is run on its own, and
+# pass when it is run beside any module that happens to import an analyser
+# -- which is how the omission survived: the suite was never run alone.
+sys.path.insert(0, str(ROOT / "scripts"))
 
 import plan_cells  # noqa: E402
 from plan_cells import cell, estimated_seconds  # noqa: E402
@@ -1367,7 +1372,6 @@ class AnalyserMeanTest(unittest.TestCase):
     """
 
     def copies(self):
-        sys.path.insert(0, str(ROOT / "scripts"))
         import analyse_wave8
         import analyse_wave11
         import temporal_campaign_verdict
@@ -1730,6 +1734,48 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
                 + (f"\n  ... and {len(now_invalid) - 20} more"
                    if len(now_invalid) > 20 else "")
             )
+
+
+
+class ClipDenominatorMirrorsTheBinary(unittest.TestCase):
+    """`cell_validity.TRAIN_BATCH_SIZE` duplicates a Rust constant.
+
+    The binary is pinned across every wave of this campaign, so it cannot be
+    rebuilt to emit its own step count, and a percentage computed against a
+    guessed denominator is worse than no percentage. The duplicate is therefore
+    checked against the source it mirrors.
+    """
+
+    def test_the_python_batch_size_equals_the_rust_one(self):
+        import cell_validity
+        src = (ROOT / "binn-lab/experiments/shd_instrument.rs").read_text()
+        match = re.search(r"let batch_size = (\d+)usize;", src)
+        self.assertIsNotNone(
+            match, "the Rust batch-size binding moved or was renamed; the "
+                   "mirrored constant can no longer be checked")
+        self.assertEqual(int(match.group(1)), cell_validity.TRAIN_BATCH_SIZE)
+
+    def test_a_cell_without_the_fields_gets_no_invented_denominator(self):
+        """No epochs / n_train means no percentage, not a plausible one."""
+        import cell_validity
+        self.assertIsNone(cell_validity.total_optimiser_steps({"clipped_steps": 5}))
+        self.assertIsNone(cell_validity.total_optimiser_steps(
+            {"epochs": 400, "n_train": 0}))
+        warnings = cell_validity.stability_warnings(
+            {"clipped_steps": 5, "epochs": None, "n_train": None})
+        row = next(w for w in warnings if "clipping bound" in w)
+        self.assertIn("5 batch step(s)", row)
+        self.assertNotIn("%", row)
+
+    def test_the_denominator_is_reported_when_the_cell_carries_it(self):
+        import cell_validity
+        self.assertEqual(
+            cell_validity.total_optimiser_steps({"epochs": 400, "n_train": 8156}),
+            12800)
+        warnings = cell_validity.stability_warnings(
+            {"clipped_steps": 96, "epochs": 400, "n_train": 8156})
+        self.assertIn("96 of 12,800 (0.75%)",
+                      next(w for w in warnings if "clipping bound" in w))
 
 
 if __name__ == "__main__":

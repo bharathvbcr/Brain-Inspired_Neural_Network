@@ -232,6 +232,40 @@ def _gradient_problems(cell: dict) -> list[str]:
     return problems
 
 
+#: Mirrors `let batch_size = 256usize;` in
+#: `binn-lab/experiments/shd_instrument.rs`. Duplicated rather than emitted by
+#: the binary because the binary is pinned across every wave of this campaign
+#: and must not be rebuilt to improve a diagnostic. `test_campaign_tooling.py`
+#: asserts the two stay equal.
+TRAIN_BATCH_SIZE = 256
+
+
+def total_optimiser_steps(cell: dict) -> int | None:
+    """How many optimiser steps a cell ran, or None if it does not say.
+
+    A clipped-step count without its denominator is unreadable: "bound on 96
+    steps" is either negligible or pervasive depending on a number the reader
+    does not have. Reported alongside rather than instead of the count, because
+    a derived percentage that silently assumed a batch size would be worse than
+    no percentage at all.
+    """
+    epochs = cell.get("epochs")
+    n_train = cell.get("n_train")
+    if not isinstance(epochs, int) or not isinstance(n_train, int):
+        return None
+    if epochs <= 0 or n_train <= 0:
+        return None
+    return epochs * -(-n_train // TRAIN_BATCH_SIZE)
+
+
+def _of_total(count: int, total: int | None) -> str:
+    """`96 of 12,800 (0.75%)`, or just `96` when the cell does not carry the
+    fields the denominator needs. Never invents a denominator."""
+    if not total:
+        return str(count)
+    return f"{count:,} of {total:,} ({100 * count / total:.2f}%)"
+
+
 def stability_warnings(cell: dict) -> list[str]:
     """Non-voiding notes a report must print.
 
@@ -257,7 +291,8 @@ def stability_warnings(cell: dict) -> list[str]:
     clipped_samples = cell.get("clipped_samples") or 0
     if clipped_steps or clipped_samples:
         warnings.append(
-            f"gradient clipping bound: {clipped_steps} batch step(s), "
+            f"gradient clipping bound: "
+            f"{_of_total(clipped_steps, total_optimiser_steps(cell))} batch step(s), "
             f"{clipped_samples} sample(s) — not comparable to an unclipped arm"
         )
     unclippable = cell.get("unclippable_steps") or 0

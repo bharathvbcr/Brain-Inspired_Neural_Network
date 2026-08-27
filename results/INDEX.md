@@ -2,11 +2,11 @@
 
 # Record index
 
-303 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+304 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 36 | 0 |
+| Preregistrations | 37 | 0 |
 | Results | 33 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
@@ -56,6 +56,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-27 | [PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md](PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md) | Preregistration — read-out depth at h1024, and what the collapse is actually made of |
 | 2026-08-25 | [PREREG_2026-08-25_THE_H1024_COLLAPSE.md](PREREG_2026-08-25_THE_H1024_COLLAPSE.md) | Preregistration — the h1024 collapse, the width ladder, and the headline at n=32 |
 | 2026-08-25 | [PREREG_2026-08-25_MATCHED_ARCH_RERUN_ON_BOTH_FORWARDS.md](PREREG_2026-08-25_MATCHED_ARCH_RERUN_ON_BOTH_FORWARDS.md) | Preregistration — re-run every matched arm, on both forward graphs, under the ceiling guard |
 | 2026-08-24 | [PREREG_2026-08-24_BATCHNORM_ABLATION.md](PREREG_2026-08-24_BATCHNORM_ABLATION.md) | Preregistration — batchnorm, the last untested item on the list |

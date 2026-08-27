@@ -104,3 +104,7 @@ results/*/reference-worktrees/
 *LinkedIn*
 sync_to_obsidian/
 *.draft.md
+
+# Transient flock handle from scripts/shd_calibration/runner.py; empty by
+# construction and recreated on demand.
+results/shd_instrument_v4/reference-cache.lock
