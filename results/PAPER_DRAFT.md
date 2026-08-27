@@ -1,4 +1,4 @@
-# Broadcast ±1 three-factor credit fails a matched dense-LIF gate
+# What a time-axis read-out buys is temporal order: a difference-in-differences on SHD
 
 > **Provenance, current as of 2026-08-25.** Seven results have been withdrawn from
 > this package and **none of them appears above**. Four went during the
@@ -41,6 +41,38 @@
 
 ## Abstract
 
+Adding a time-axis attention read-out to a spiking network raises SHD accuracy
+from 0.7057 to **0.8332** (gain **+0.1275**, positive in 32/32 seeds, 32/32 at or
+above 0.80). That much is unsurprising and not new. The result this paper is
+built on is the **conditional**: when the temporal order of the input is
+destroyed by permuting time bins — independently per sample, in **both the
+training and test splits**, so the task itself becomes rate-solvable — the
+read-out's *advantage over a rate read-out* collapses by **+0.1347**, while the
+rate read-out loses only **+0.0142** of its own. A **9.5× ratio, 32/32 seeds**.
+
+The distinction matters because "SHD depends on temporal order" is already
+established — Cramer et al. (2022) could not exceed 60% on spike-count-only SHD,
+and two 2025 studies reach the same conclusion with model-side and spike-time
+operators. What has not been measured is which *component's* contribution is the
+order-dependent one. This is a difference-in-differences on the **gain**, not on
+accuracy, and it is what the read-out is for.
+
+We report three scope limits against it. The gain **inverts at width h1024**
+(−0.1618), and on a six-rung ladder that inversion is a threshold — a 0.2178
+drop, 6.9× the largest gap below it — not a continuing slope; three preregistered
+rescue levers all fail, so the collapse is **located but unexplained**. The 0.80
+clearance is geometry-specific. And **0.8332 is not competitive**: the SHD
+frontier sits at 95–96.4% via learned delays, adaptation, and spiking
+transformers. This instrument carries **no temporal kernel of any kind**, and it
+lands where the literature puts a no-delay recurrent SNN. Four preregistered
+ablations fail to explain the 0.087 residual against a delay-free reference; the
+term-by-term reading attributes it to a 25-tap learned kernel per synapse that
+the reference has and the instrument does not. That attribution rests on
+elimination and code-reading, **not on an ablation that added the kernel**, and
+is the paper's weakest load-bearing inference.
+
+## Abstract — matched-architecture kill gate (secondary program)
+
 Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a single ±1 reward — fails a preregistered accuracy and gap bar when the dense leaky-integrate-and-fire forward pass is held identical to a SuperSpike backpropagation-through-time reference. The arm remains at chance on **both** matched forward graphs (feed-forward 0.5000, gap lower confidence bound 0.0000; recurrent 0.5100, LCB −0.0192), against a gradient reference at 1.0000, n = 20 seeds. Every other rule tested on that forward now clears the gate: graded direct feedback alignment (0.9925 / 0.9875), directional REINFORCE with frozen per-neuron feedback (0.9950 / 0.9812), broadcast graded error (0.9975), and a discrete EventProp-style spike-adjoint (0.9450 / 0.8900). **The task therefore separates one rule from a field that otherwise saturates, and it no longer ranks the field**: with every reference at exactly 1.0000, each of those passes reduces to "the arm scored above 0.75". Live k-WTA transfer of the matched REINFORCE and DFA families remains a scoped **negative** across twelve gap-close variants (v13–v24), best gap LCB 0.3127 against a 0.5 threshold.
 
 > **Provenance of these numbers, and it is load-bearing.** The figures above are from a 2026-08-25 re-run under `MATCHED_INPUT_SCALE = 2.0`. Every previously published matched-architecture number was produced on a forward pass that emitted **zero spikes at any seed**, and the arms that most depended on spikes were the ones it most misrepresented — the discrete spike-adjoint read 0.5000 there and reads 0.9450 here, because a method that differentiates through spike times had none. That claim is **withdrawn**, along with the two RL broadcast contrasts (0.5250 → 0.9100 and 0.5113 → 0.7962). See [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md).
@@ -48,6 +80,75 @@ Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a 
 **Two scope statements are load-bearing and are stated here rather than in a footnote.** First, the 80-epoch schedule undertrains *every* rule on it: raising the reference's budget alone lifts it from 0.9013 to 1.0000 by e640, so `gap_closed` at the canonical budget divides by a reference that is still climbing, and values above 1 are an artefact of the denominator rather than a result. The defensible reading of the ordering between local rules and BPTT at that budget is a statement about **learning speed**, not about a ceiling. Second, the matched task saturates: with every arm reaching 1.0000 at high budget it can no longer separate them, so no ceiling comparison on this task survives convergence.
 
 **Honesty notes.** On the DFA schedule a broadcast-*graded* contrast reaches 0.9975, so the lead negative is ±1 three-factor specifically, not "any broadcast" — and since every other rule tested is now at or near ceiling, the negative is specific in a stronger sense than that phrasing suggests. Locality as a necessary ingredient is evidenced on one-layer XOR, not by the coincidence task alone. We do not claim biological realism, Assembly Calculus success, or impossibility of local learning in principle.
+
+## 0. What is new here, and what is not
+
+> **Provenance of the citations in this section.** The literature positioning
+> below was assembled by a search pass on 2026-08-27, not by the author reading
+> each source. Numbers marked here were reported as extracted from the primary
+> PDF or a Crossref record; a further set encountered during that search
+> (Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR 95.60, d-cAdLIF 94.85) came only
+> from a secondary comparison table and is **deliberately excluded** from the
+> claims below. **Every citation in this section must be checked against its
+> primary source before submission.** Unlike every SHD number in this paper,
+> none of them is machine-verified against cells on disk, and
+> `scripts/check_every_number.py` does not sweep this document.
+
+
+This paper's SHD result sits in a populated field and the boundary is stated
+here rather than left to a reader.
+
+**Not new: a time-axis attention mechanism in a spiking network on SHD.**
+TA-SNN (Yao et al., ICCV 2021) applies squeeze-and-excitation attention over the
+time axis and reports 91.08%; STSC-SNN (Yu et al., 2022) places temporal
+attention inside the synaptic connection and reports 92.36%. Attention as a
+*temporal read-out* is older still outside spiking networks — attentive
+statistics pooling (Okabe et al., Interspeech 2018) is the same idea on speaker
+embeddings. The specific placement used here — attention **only** at the
+read-out, replacing the field's default unweighted Σₜ softmax(u[t]) — appears
+unoccupied, but a configuration gap is not a mechanism.
+
+**Not new: that SHD depends on temporal order.** The dataset's own authors
+constructed spike-count-only variants and could not exceed **60%** on SHD
+(Cramer et al., IEEE TNNLS 33(7), 2022). The Neuromorphic Sequential Arena
+(IJCAI 2025) removes temporal processing model-side and reports SHD falling
+86.48 → 68.51. Yu et al. (arXiv:2507.16043, 2025) randomise spike times while
+preserving counts, and separately reverse time, on SHD directly. Three
+independent destruction operators, one conclusion, all of it prior to this work.
+
+**Not new, and worth conceding plainly: the accuracy.** The SHD frontier is
+95–96.4%, reached by learned delays (DCLS, ICLR 2024), adaptation (SE-adLIF,
+Nature Communications 2025), and spiking transformers. This instrument's 0.8332
+is not in that band and is not offered as if it were. It is close to the
+best-effort no-delay recurrent baseline the dataset's authors themselves report
+(83.2 ± 1.3% at 1024 neurons with augmentation), which is where an architecture
+carrying no temporal kernel should land, and is the external corroboration §3.8
+argues for from ablation alone.
+
+**New: which component's contribution is the order-dependent one.** Every result
+above measures how much *accuracy* survives destroying temporal structure. None
+measures how much of a *specific component's marginal contribution* survives it.
+The contrast in §3.5 is a difference-in-differences — attention's shuffle cost
+against the rate read-out's own, on the same seeds, same splits, same
+destruction operator — and we find no published equivalent for any read-out on
+any neuromorphic benchmark.
+
+**New, and unsupported in either direction: the width collapse.** No published
+work reports an attention read-out degrading with hidden width, and none reports
+gradient pathology in an attention read-out over spike trains. Width normally
+*helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner: 3×128 →
+3×1024 improves 92.88 → 94.62). §3.5's inversion is therefore an anomaly against
+the baseline expectation with no citation to lean on, and the parsimonious
+alternative — overfitting on 8,156 training samples, which Cramer et al. document
+as severe — is **not excluded by anything in this paper**.
+
+**A caveat on the benchmark itself.** SHD ships no validation set. Baronig et al.
+(2025) report the same model at 95.81 ± 0.56 validating on test "to ensure
+comparability" and 93.79 ± 0.76 with a proper held-out split — a two-point gap.
+Differences below ~1.5 points between published SHD numbers are not reliably
+meaningful, and that applies to this paper's comparisons as much as anyone's.
+
+---
 
 ## 1. Introduction
 

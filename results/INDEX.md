@@ -266,7 +266,7 @@ Read these only through the document that retired them.
 | — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) **[retired]** | BINN — camera-ready results table |
 | — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | PAPER_METRICS_FULL — hardened harvest |
 | — | [PAPER_FIGURE_SPEC.md](PAPER_FIGURE_SPEC.md) | BINN — figure / table specs (camera-ready) |
-| — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | Broadcast ±1 three-factor credit fails a matched dense-LIF gate |
+| — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | What a time-axis read-out buys is temporal order: a difference-in-differences on SHD |
 
 ## Campaign control
 
