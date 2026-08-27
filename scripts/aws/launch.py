@@ -190,6 +190,7 @@ def main() -> int:
     print(f"fleet          {args.count} x {args.instance_type}  (~{vcpus} vCPU)")
     print(f"per instance   {args.concurrent_cells or 'nproc/threads'} cells "
           f"x {args.threads_per_cell} threads")
+    report_thread_mismatch(bucket, args.region, args.threads_per_cell)
     if args.dry_run:
         print("\ndry run - nothing provisioned")
         return 0
@@ -213,6 +214,59 @@ def main() -> int:
     ami = aws("ssm", "get-parameter", "--name", AL2023_ARM64_SSM,
               "--region", args.region)["Parameter"]["Value"]
     return launch_fleet(args, bucket, profile, ami)
+
+
+def report_thread_mismatch(bucket: str, region: str, requested: int) -> None:
+    """Say so when this launch would not match the running fleet's thread count.
+
+    `--threads-per-cell` defaults to 4 and the fleet then in flight was launched
+    at 16. Scaling with the default therefore silently produced a fleet running
+    two thread counts at once, and nothing said so: the count appears only in a
+    hostlog line nobody reads during a launch.
+
+    That turned out to be harmless -- `shd-instrument` is bit-identical across
+    thread counts, measured on this fleet, not assumed -- so this does NOT
+    refuse the launch. It is a real trade the operator should make on purpose:
+    fewer threads per cell raises total throughput and lengthens the slowest
+    single cell, which is what decides whether a cell survives a spot reclaim.
+
+    Best-effort. A launch must not fail because a provenance read did not
+    answer, so every failure here is silent by design.
+    """
+    try:
+        running = aws("ec2", "describe-instances", "--region", region,
+                      "--filters", f"Name=tag:Project,Values={TAG}",
+                      "Name=instance-state-name,Values=pending,running",
+                      "--query", "Reservations[].Instances[].InstanceId",
+                      "--output", "json")
+    except Exception:
+        return
+    counts: dict[object, int] = {}
+    for iid in running or []:
+        try:
+            out = subprocess.run(
+                ["aws", "s3", "cp", f"s3://{bucket}/gates/{iid}.json", "-"],
+                capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+            gate = json.loads(out.stdout) if out.returncode == 0 else {}
+        except (subprocess.TimeoutExpired, ValueError, OSError):
+            gate = {}
+        # Instances that booted before the gate JSON carried the field report
+        # None rather than being dropped: "not recorded" and "matches" must not
+        # look the same, which is the whole reason the field was added.
+        counts[gate.get("threads_per_cell")] = counts.get(gate.get("threads_per_cell"), 0) + 1
+    if not counts:
+        return
+    others = {k: v for k, v in counts.items() if k != requested}
+    if not others:
+        return
+    shown = ", ".join(f"{n} instance(s) at "
+                      f"{'an unrecorded count' if k is None else str(k) + ' threads'}"
+                      for k, v in sorted(others.items(), key=lambda kv: str(kv[0]))
+                      for n in [v])
+    print(f"  NOTE: the running fleet is {shown}; this launch requests "
+          f"{requested}. Cells stay bit-identical across thread counts, but the "
+          f"slowest cell does not: fewer threads means a longer single cell and "
+          f"more exposure to a spot reclaim.")
 
 
 def upload_inputs(bucket, args):

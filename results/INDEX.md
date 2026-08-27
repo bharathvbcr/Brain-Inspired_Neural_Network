@@ -2,14 +2,14 @@
 
 # Record index
 
-308 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+309 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 38 | 0 |
 | Results | 34 | 2 |
 | Findings | 13 | 0 |
-| Measurements | 9 | 0 |
+| Measurements | 10 | 0 |
 | Amendments | 15 | 1 |
 | Defects | 5 | 0 |
 | Hardening | 4 | 0 |
@@ -165,6 +165,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-08-27 | [MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md](MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md) | Measurement — wave 20's plain recurrent arm is complete, and H20-2 is now decidable in advance |
+| 2026-08-27 | [MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md](MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md) | Measurement — the fleet ran two thread counts, and the cells did not notice |
 | 2026-08-23 | [MEASUREMENT_2026-08-23_TRACK_B_UNDER_BOTH_REPAIRS.md](MEASUREMENT_2026-08-23_TRACK_B_UNDER_BOTH_REPAIRS.md) | Measurement — track-b under the two matched-arch repairs, attributed |
 | 2026-08-23 | [MEASUREMENT_2026-08-23_A_TASK_WITH_HEADROOM.md](MEASUREMENT_2026-08-23_A_TASK_WITH_HEADROOM.md) | Measurement — finding a task with headroom for the depth suite |
 | 2026-08-20 | [MEASUREMENT_2026-08-20_EXPERIMENT_PARALLELISM.md](MEASUREMENT_2026-08-20_EXPERIMENT_PARALLELISM.md) | Is BINN optimised for server-scale cores? |

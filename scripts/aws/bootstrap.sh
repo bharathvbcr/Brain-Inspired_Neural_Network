@@ -119,8 +119,25 @@ else
   GATE_STATUS=FAIL
 fi
 echo "cross-machine Gate F: $GATE_STATUS"
-printf '{"instance":"%s","binary_sha256":"%s","cross_machine_gate_f":"%s","uname":"%s","utc":"%s"}\n' \
-  "$INSTANCE_ID" "$BIN_SHA" "$GATE_STATUS" "$(uname -srm)" "$(date -u +%FT%TZ)" > /tmp/gate.json
+# The boot token has a 600s TTL and everything since -- dnf, a 249 MB tarball, a
+# 660 MB corpus, the binary, and Gate F itself -- can outlast it. Mint a fresh
+# one: an expired token yields an empty string, and "unknown instance type"
+# recorded as "" is the silent-failure shape this whole file argues against.
+IMDS_TOKEN="$(curl -s -X PUT 'http://169.254.169.254/latest/api/token' -H 'X-aws-ec2-metadata-token-ttl-seconds: 600')"
+INSTANCE_TYPE="$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/instance-type)"
+INSTANCE_TYPE="${INSTANCE_TYPE:-unknown}"
+# `threads_per_cell` is recorded because it is the one execution-environment
+# variable this campaign actually varies: the fleet is deliberately
+# heterogeneous, and on 2026-08-27 it ran 16 threads per cell on four
+# c7g.16xlarge and 4 on the two boxes added later. Bit-identity across thread
+# count is measured, not assumed -- see
+# MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md -- but before this
+# field existed the only witness to which count produced a cell was a line in a
+# hostlog, and hostlogs are not part of a cell's provenance. A reproduction
+# check that fails should not have to guess at the environment it is comparing.
+printf '{"instance":"%s","binary_sha256":"%s","cross_machine_gate_f":"%s","threads_per_cell":%s,"concurrent_cells":%s,"instance_type":"%s","uname":"%s","utc":"%s"}\n' \
+  "$INSTANCE_ID" "$BIN_SHA" "$GATE_STATUS" "$THREADS_PER_CELL" "$CONCURRENT_CELLS" \
+  "$INSTANCE_TYPE" "$(uname -srm)" "$(date -u +%FT%TZ)" > /tmp/gate.json
 aws s3 cp /tmp/gate.json "s3://$BUCKET/gates/$INSTANCE_ID.json" --quiet
 aws s3 cp /tmp/gate.log "s3://$BUCKET/gates/$INSTANCE_ID.log" --quiet
 

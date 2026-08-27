@@ -2173,5 +2173,81 @@ class TheUnsweptPaperIsAnnounced(unittest.TestCase):
                         f"the disclosure names a file that is gone")
 
 
+class ThreadCountProvenanceTest(AwsScriptedTest):
+    """The launcher must say when it would split the fleet's thread count.
+
+    `--threads-per-cell` defaults to 4; the fleet running on 2026-08-27 was
+    launched at 16. Scaling with the default produced a fleet running both, and
+    the only witness was a hostlog line. The notice exists so the next operator
+    makes that trade on purpose.
+
+    Both directions are pinned. A notice that cannot stay silent is noise the
+    reader learns to skip, which is the same defect as one that cannot fire.
+    """
+
+    def run_notice(self, gates, requested):
+        """Drive `report_thread_mismatch` against a scripted fleet.
+
+        `gates` maps instance id -> the gate JSON body, or None for an instance
+        whose gate object cannot be read at all.
+        """
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "launch_mod", ROOT / "scripts/aws/launch.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        def handler(argv):
+            if "describe-instances" in argv:
+                return 0, json.dumps(list(gates)), ""
+            if "cp" in argv:
+                key = [a for a in argv if a.startswith("s3://")][0]
+                iid = key.rsplit("/", 1)[1][: -len(".json")]
+                body = gates.get(iid)
+                if body is None:
+                    return 1, "", "NoSuchKey"
+                return 0, json.dumps(body), ""
+            raise AssertionError(f"unscripted call: {argv}")
+
+        self.fake = FakeAws(handler)
+        buf = io.StringIO()
+        original, mod.subprocess.run = mod.subprocess.run, self.fake
+        try:
+            with contextlib.redirect_stdout(buf):
+                mod.report_thread_mismatch("bkt", "us-east-1", requested)
+        finally:
+            mod.subprocess.run = original
+        return buf.getvalue()
+
+    def test_a_matching_fleet_says_nothing(self):
+        out = self.run_notice({"i-1": {"threads_per_cell": 16},
+                               "i-2": {"threads_per_cell": 16}}, 16)
+        self.assertEqual(out, "", f"notice fired on a fleet that matches: {out!r}")
+
+    def test_an_empty_fleet_says_nothing(self):
+        """The first launch of a campaign has nothing to disagree with."""
+        self.assertEqual(self.run_notice({}, 4), "")
+
+    def test_a_split_fleet_is_named_with_both_counts(self):
+        out = self.run_notice({"i-1": {"threads_per_cell": 16}}, 4)
+        self.assertIn("16 threads", out)
+        self.assertIn("requests 4", out)
+
+    def test_an_unreadable_gate_is_reported_as_unrecorded_not_as_agreement(self):
+        """"Could not be read" and "matches" must never look the same.
+
+        Every instance launched before the gate JSON carried the field lands
+        here, which is the fleet this notice was written for.
+        """
+        out = self.run_notice({"i-1": None}, 4)
+        self.assertIn("unrecorded", out)
+
+    def test_the_bootstrap_records_the_field_the_notice_reads(self):
+        """The notice is only as good as the provenance it reads."""
+        boot = (ROOT / "scripts/aws/bootstrap.sh").read_text()
+        self.assertIn('"threads_per_cell":', boot)
+        self.assertIn('"$THREADS_PER_CELL"', boot)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
