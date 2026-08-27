@@ -262,7 +262,7 @@ Read these only through the document that retired them.
 |---|---|---|
 | 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) | What is left for the paper — 2026-08-20 |
 | — | [PAPER_VERIFY.md](PAPER_VERIFY.md) | Paper scientific verify — 2026-07-23 |
-| — | [PAPER_SKELETON.md](PAPER_SKELETON.md) **[retired]** | BINN paper skeleton — negative result + methods |
+| — | [PAPER_SKELETON.md](PAPER_SKELETON.md) **[retired]** | BINN paper skeleton — SHD attention read-out (primary) + matched-architecture kill gate (secondary) |
 | — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) **[retired]** | BINN — camera-ready results table |
 | — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | PAPER_METRICS_FULL — hardened harvest |
 | — | [PAPER_FIGURE_SPEC.md](PAPER_FIGURE_SPEC.md) | BINN — figure / table specs (camera-ready) |
