@@ -2145,32 +2145,27 @@ class BothQueueReadersAgree(unittest.TestCase):
 
 
 
-class TheUnsweptPaperIsAnnounced(unittest.TestCase):
-    """`check_every_number.py` sweeps the wave results and not the paper.
+class ThePaperIsSweptTest(unittest.TestCase):
+    """`check_every_number.py` sweeps the manuscript as well as the waves.
 
-    That is defensible -- the paper draws on corpora the script does not load --
-    but a limit nobody is told about is indistinguishable from no limit. All 37
-    distinct unexplained values were traced on 2026-08-27 and every one appears
-    in another document under results/, so none is invented; they are verified by
-    document-to-document agreement rather than by derivation from cells.
+    Until 2026-08-27 it did not, and the class that stood here asserted the
+    announcement of that limit -- correctly, because a limit nobody is told
+    about is indistinguishable from no limit. The limit is now closed rather
+    than announced, so the assertion is retired rather than weakened: the sweep
+    is exercised in `scripts/test_paper_number_sweep.py`, and what remains here
+    is the one thing that file cannot check, namely that the announcement did
+    not survive the thing it was announcing.
     """
 
-    def test_the_sweep_says_the_paper_is_not_swept(self):
-        proc = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/check_every_number.py")],
-            capture_output=True, text=True)
-        self.assertIn("NOT SWEPT", proc.stdout)
-        self.assertIn("PAPER_DRAFT.md", proc.stdout)
-        self.assertIn("not by derivation from cells", proc.stdout)
+    def test_the_announcement_is_gone_from_the_source(self):
+        source = (ROOT / "scripts/check_every_number.py").read_text()
+        self.assertNotIn("PAPER_UNSWEPT", source,
+                         "the manuscript is swept; a constant naming it as "
+                         "unswept would be a disclosure of a limit that has "
+                         "been closed")
 
-    def test_the_named_file_still_exists(self):
-        """A disclosure about a file that has moved is a disclosure hiding
-        nothing."""
-        sys.path.insert(0, str(ROOT / "scripts"))
-        import check_every_number
-        self.assertTrue((ROOT / check_every_number.PAPER_UNSWEPT).is_file(),
-                        f"{check_every_number.PAPER_UNSWEPT} no longer exists; "
-                        f"the disclosure names a file that is gone")
+    def test_the_sweep_has_its_own_tests(self):
+        self.assertTrue((ROOT / "scripts/test_paper_number_sweep.py").is_file())
 
 
 class ThreadCountProvenanceTest(AwsScriptedTest):

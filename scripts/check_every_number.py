@@ -67,21 +67,142 @@ DOCUMENTS = sorted(
     # named rather than pattern-matched because there is one of it.
     | {ROOT / "results/RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md"}
 )
-#: A count that must not silently shrink. A narrowed pattern or a moved
-#: directory would otherwise sweep fewer documents and still report success.
-MIN_DOCUMENTS = 14
+#: The manuscript. It was deliberately NOT swept until 2026-08-27, on the ground
+#: that it draws on corpora this script does not load -- the hybrid lab, the
+#: instrument calibration, and published literature -- so a cell-only sweep would
+#: report 47 of its 119 numbers as unexplained when they are simply sourced
+#: elsewhere. That was true and it was also the largest hole in the record: the
+#: one artefact anyone outside this repository will read was the one artefact no
+#: mechanical check touched. The note that replaced the check said the 47 had
+#: been "traced on 2026-08-27" and each found in another document — by hand,
+#: once, with the result written in prose and never re-run.
+#:
+#: The sweep below closes it at three NAMED tiers, and the tiers are printed
+#: separately because they are not the same evidence:
+#:
+#:   A  derived from the cells, exactly as a wave result is
+#:   B  named in ELSEWHERE, with the derivation stated there
+#:   C  traced to one named primary record that still contains it
+#:
+#: Tier C is weaker than tier A and must never be reported as though it were.
+#: What it establishes is that the value exists in a specific machine-written run
+#: record, that the record still exists, and that it still carries the value —
+#: so a paper number cannot drift from its source, and a source cannot be
+#: deleted, without this failing. What it does NOT establish is that every
+#: occurrence of that value in the paper refers to that record: the table is
+#: keyed by value, and `0.5000` occurs eight times in the manuscript meaning
+#: chance, an EventProp FAIL, and a broadcast arm.
+PAPER = ROOT / "results/PAPER_DRAFT.md"
 
-#: `PAPER_DRAFT.md` is deliberately NOT swept, and that is a limit rather than a
-#: decision to be comfortable with. It draws on corpora this script does not
-#: load -- the hybrid lab, the instrument calibration, and published literature
-#: values -- so sweeping it would report ~39 of its ~115 numbers as unexplained
-#: when they are simply sourced elsewhere. Every one of those 39 was traced on
-#: 2026-08-27 and all 37 distinct values appear in another document under
-#: `results/`, so none is invented. But "appears in another document" is
-#: document-to-document agreement, NOT derivation from cells, and the paper is
-#: the one artefact where that distinction matters most. The gap is printed at
-#: the end of every run so it cannot be forgotten by going quiet.
-PAPER_UNSWEPT = "results/PAPER_DRAFT.md"
+#: Documents that may not be cited as a source for a paper number, because they
+#: are the paper's own downstream artefacts. Tracing `PAPER_DRAFT.md` to
+#: `PAPER_RESULTS_TABLE.md` is not provenance; it is the same claim written
+#: twice. Every entry in `PAPER_SOURCES` is checked against this list, so the
+#: table cannot quietly acquire a circular citation.
+PAPER_SIDE = frozenset({
+    "PAPER_DRAFT.md", "PAPER_RESULTS_TABLE.md", "PAPER_SKELETON.md",
+    "PAPER_METRICS_FULL.md", "PAPER_FIGURE_SPEC.md", "PAPER_VERIFY.md",
+    "PAPER_STATUS_2026-08-20.md", "PUBLISHABLE_CLAIMS.md",
+    "VENUE_FORMATTING.md", "INDEX.md",
+})
+
+#: A count that must not silently shrink. Both floors below are enforced in
+#: `main`; `MIN_DOCUMENTS` was declared here on 2026-08-24 and never read, so a
+#: narrowed glob would have swept fewer documents and still reported success —
+#: the exact failure the constant was written to prevent.
+MIN_DOCUMENTS = 14
+MIN_PAPER_NUMBERS = 110
+
+#: Tier C. `(value, primary record, what the number is there)`.
+#:
+#: Chosen by reading the paper's own sentence for each value and finding the
+#: record that produced it, not by taking whichever document happened to contain
+#: a matching string: `0.0737` also appears in
+#: MEASUREMENT_2026-08-03_RECURRENT_ARM_STABILITY.md as the accuracy
+#: `0.073763251`, which has nothing to do with the gap lower bound the paper
+#: quotes. An entry whose record no longer contains the value fails, an entry
+#: naming a record that does not exist fails, and an entry whose value has left
+#: the manuscript fails as stale — so this table cannot rot into a silencer.
+PAPER_SOURCES = [
+    # --- the July 2026 C1 / Gate G2 track (Section 3.3) ---------------------
+    ("0.4912", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "canonical C1 local-assembly mean, hash c1-118207fbc3eaba53"),
+    ("0.6775", "results/c1_sens_capacity.md",
+     "capacity-sensitivity local mean, which clears the 0.65 floor"),
+    ("0.4900", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "v13 live ReinforceFeedback local mean"),
+    ("0.0737", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "v13 live ReinforceFeedback gap lower bound"),
+    ("0.4838", "results/c1_rfb_em.md",
+     "v14 epoch-matched live RFB local mean"),
+    ("0.7262", "results/c1_sfb.md", "v15 structured-B local mean"),
+    ("0.2567", "results/c1_sfb.md", "v15 structured-B gap lower bound"),
+    ("0.6825", "results/c1_sfb_cap.md",
+     "v17 structured-by-capacity local mean"),
+    ("0.5025", "results/c1_sfb_soft.md", "v21 soft-WTA local mean"),
+    ("0.7325", "results/c1_dfa_live.md", "v20 live-DFA local mean"),
+    ("0.2601", "results/c1_dfa_live.md", "v20 live-DFA gap lower bound"),
+    ("0.3321", "results/c1_dfa_live.md",
+     "v20 descriptive chance-normalised gap lower bound, explicitly not a gate"),
+    ("0.6638", "results/c1_sfb_finth.md", "v23 finite-theta local mean"),
+    ("0.2370", "results/c1_sfb_finth.md", "v23 finite-theta gap lower bound"),
+    ("0.6437", "results/c1_sfb_cont.md", "v24 continuous-B local mean"),
+    ("0.1380", "results/c1_sfb_cont.md", "v24 continuous-B gap lower bound"),
+    ("0.6513", "results/MATCHED_ARCH_DFA_SPIKE_CONTROL.md",
+     "P4 spiking-path true-DFA primary arm"),
+    # --- the XOR locality flip (Section 3.4) --------------------------------
+    ("0.5008", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "xor_thresh under broadcast error: at chance"),
+    ("0.8267", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "xor_thresh under DFA"),
+    ("0.7733", "results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md",
+     "xor_thresh under gradient, the arm DFA passes"),
+    # --- the 2026-08-25 matched re-run, which the paper names as the source
+    #     of its matched table -----------------------------------------------
+    ("0.5000", "results/matched_rerun_2026-08-25/c1_match_feedforward.md",
+     "broadcast +-1 three-factor on the feed-forward graph: the lead negative"),
+    ("0.5100", "results/matched_rerun_2026-08-25/c1_match_recurrent.md",
+     "broadcast +-1 three-factor on the recurrent graph"),
+    ("0.0192", "results/matched_rerun_2026-08-25/c1_match_recurrent.md",
+     "the lead negative's gap lower bound on the recurrent graph, -0.0192"),
+    ("0.7775", "results/matched_rerun_2026-08-25/c1_matched-rl_feedforward.md",
+     "RL +-1 broadcast contrast, feed-forward"),
+    ("0.8787", "results/matched_rerun_2026-08-25/c1_matched-rl_feedforward.md",
+     "RL graded-reward broadcast contrast, feed-forward"),
+    ("0.9950", "results/matched_rerun_2026-08-25/c1_matched-rl_feedforward.md",
+     "REINFORCE x frozen B_i, the primary gated arm, feed-forward"),
+    ("0.9100", "results/matched_rerun_2026-08-25/c1_matched-rl_recurrent.md",
+     "RL graded-reward broadcast contrast, recurrent"),
+    ("0.9925", "results/matched_rerun_2026-08-25/c1_matched-dfa_feedforward.md",
+     "graded error x DFA, feed-forward"),
+    ("0.9975", "results/matched_rerun_2026-08-25/c1_matched-dfa_feedforward.md",
+     "graded error broadcast: the contrast the honesty note is about"),
+    ("0.9875", "results/matched_rerun_2026-08-25/c1_matched-dfa_recurrent.md",
+     "graded error x DFA, recurrent"),
+    ("0.9150", "results/c1_eventprop.md",
+     "SuperSpike BPTT ceiling on the EventProp fixture"),
+    # --- the archived A6 ceiling-health sweep (Section 3.6 and the caveat) ---
+    ("0.9387", "results/a6_ceiling_health_2026-08-19/a6_report.md",
+     "the archived MatchedDfa arm"),
+    ("0.8963", "results/a6_ceiling_health_2026-08-19/a6_report.md",
+     "the published canonical reference the gap-closed ratio is taken against"),
+    ("0.9013", "results/a6_ceiling_health_2026-08-19/a6_report.md",
+     "the reference re-run at the canonical e80/lr0.05"),
+    ("0.9700", "results/a6_ceiling_health_2026-08-19/a6_report.md",
+     "the reference at e320/lr0.05, the best budget swept"),
+    ("0.9863", "results/a6_ceiling_health_2026-08-19/matched_80.md",
+     "MatchedBroadcastErr, the control that sits above the arm under test"),
+    ("0.5113", "results/a6_ceiling_health_2026-08-19/matched_80.md",
+     "the archived MatchedRlFlat +-1 baseline"),
+    ("0.5250", "results/a6_ceiling_health_2026-08-19/matched_80.md",
+     "the archived MatchedRlGraded contrast"),
+    # --- elsewhere ----------------------------------------------------------
+    ("0.9988", "results/RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md",
+     "the withdrawn track-b-rescue v130 gap lower bound"),
+    ("0.9390", "results/FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md",
+     "the published 25-tap temporal-convolutional SHD reference: literature, "
+     "not a cell of this campaign"),
+]
 
 #: Wave documents whose numbers this sweep cannot derive, and why. Naming them
 #: is the point: the date window used to exclude W1 by accident, so the script
@@ -287,6 +408,66 @@ def derivable(groups) -> set[float]:
     return out
 
 
+def sweep_paper(known: set[float], allowed: set[str]) -> tuple[int, int, int, list[str], list[str]]:
+    """Sweep `PAPER_DRAFT.md` at three named tiers.
+
+    Returns `(cells, elsewhere, traced, unexplained, complaints)`. The tiers are
+    returned separately rather than summed because a paper number backed by a
+    named run record is not the same evidence as one recomputed from cells, and
+    a single "checked" count would erase that.
+    """
+    complaints: list[str] = []
+    if not PAPER.is_file():
+        return 0, 0, 0, [], [f"{PAPER} is missing; the manuscript sweep did not run"]
+
+    text = PAPER.read_text()
+    sources: dict[str, tuple[str, str]] = {}
+    for value, relpath, what in PAPER_SOURCES:
+        if value in sources:
+            complaints.append(f"PAPER_SOURCES names {value} twice")
+        sources[value] = (relpath, what)
+        doc = ROOT / relpath
+        if Path(relpath).name in PAPER_SIDE:
+            complaints.append(
+                f"{value} is traced to {relpath}, which is one of the paper's "
+                f"own artefacts; that is the claim written twice, not provenance")
+            continue
+        if not doc.is_file():
+            complaints.append(f"{value} is traced to {relpath}, which does not exist")
+            continue
+        if value not in doc.read_text():
+            complaints.append(
+                f"{value} is traced to {relpath}, which no longer contains it "
+                f"({what}) — the paper and its source have drifted apart")
+
+    cells = elsewhere = traced = 0
+    unexplained: list[str] = []
+    quoted: set[str] = set()
+    for raw in sorted({m.group(1) for m in NUMBER.finditer(text)}):
+        value = round(abs(float(raw.replace("−", "-").replace("+", ""))), 4)
+        plain = f"{value:.4f}"
+        quoted.add(plain)
+        if any(abs(value - k) <= TOL for k in known):
+            cells += 1
+        elif plain in allowed:
+            elsewhere += 1
+        elif plain in sources:
+            traced += 1
+        else:
+            unexplained.append(raw)
+
+    if len(quoted) < MIN_PAPER_NUMBERS:
+        complaints.append(
+            f"only {len(quoted)} distinct numbers found in {PAPER.name}, below "
+            f"the floor of {MIN_PAPER_NUMBERS}; the pattern or the file has "
+            f"changed and this sweep is now covering less than it claims")
+    for value in sorted(set(sources) - quoted):
+        complaints.append(
+            f"PAPER_SOURCES still names {value} ({sources[value][0]}), which is "
+            f"no longer quoted in the manuscript; delete the entry")
+    return cells, elsewhere, traced, unexplained, complaints
+
+
 def report_power(known: set[float], samples: int = 20000) -> float:
     """How often a random four-decimal value in [0, 1] matches by coincidence.
 
@@ -315,9 +496,10 @@ def main() -> int:
         print(f"only {len(groups)} configurations loaded; the corpora are not "
               "where this expects them", file=sys.stderr)
         return 1
-    if not DOCUMENTS:
-        print("no wave-result documents matched; the glob has stopped working",
-              file=sys.stderr)
+    if len(DOCUMENTS) < MIN_DOCUMENTS:
+        print(f"{len(DOCUMENTS)} wave-result documents matched, below the floor "
+              f"of {MIN_DOCUMENTS}; the glob has narrowed or the directory has "
+              f"moved", file=sys.stderr)
         return 1
 
     known = derivable(groups)
@@ -351,6 +533,16 @@ def main() -> int:
         print(f"  [{'ok  ' if not bad else 'FAIL'}] {doc.name[:64]:<64} {status}")
         unexplained += [(doc.name, b) for b in bad]
 
+    paper_cells, paper_elsewhere, paper_traced, paper_bad, paper_complaints = \
+        sweep_paper(known, allowed)
+    # ELSEWHERE entries cited only by the manuscript are not stale. Before the
+    # paper was swept they could not be seen at all, so staleness was measured
+    # against a corpus that excluded one of the two readers.
+    for raw in {m.group(1) for m in NUMBER.finditer(PAPER.read_text())} if PAPER.is_file() else set():
+        plain = f"{round(abs(float(raw.replace(chr(8722), '-').replace('+', ''))), 4):.4f}"
+        if plain in allowed:
+            seen_allowed.add(plain)
+
     stale = [v for v, _ in ELSEWHERE if v not in seen_allowed]
     # A named exclusion that no longer exists is an exclusion hiding nothing,
     # and would let a document be dropped by a rename rather than by a decision.
@@ -358,11 +550,21 @@ def main() -> int:
     if missing:
         print(f"STALE entries in UNCHECKED — these documents are gone: {missing}")
     print()
-    print(f"NOT SWEPT: {PAPER_UNSWEPT}. It draws on corpora this script does not "
-          f"load, so its numbers are verified by the named checks in "
-          f"verify_published_numbers.py and by document-to-document agreement, "
-          f"not by derivation from cells. That is weaker than what the documents "
-          f"above get.")
+    total = paper_cells + paper_elsewhere + paper_traced + len(paper_bad)
+    print(f"  [{'ok  ' if not (paper_bad or paper_complaints) else 'FAIL'}] "
+          f"{PAPER.name[:64]:<64} {total} numbers")
+    print(f"         tier A, derived from the cells      {paper_cells}")
+    print(f"         tier B, named in ELSEWHERE          {paper_elsewhere}")
+    print(f"         tier C, traced to a named record    {paper_traced}")
+    print(f"  tier C is NOT derivation. It establishes that the value is still "
+          f"present in one named,\n  machine-written run record and that the "
+          f"record still exists — not that every occurrence\n  in the manuscript "
+          f"refers to it. Read it as weaker than tier A, because it is.")
+    for complaint in paper_complaints:
+        print(f"  PROVENANCE: {complaint}")
+    if paper_bad:
+        print(f"  {len(paper_bad)} number(s) in {PAPER.name} with no tier at all: "
+              f"{', '.join(paper_bad)}")
     swept = len(DOCUMENTS) - len(UNCHECKED)
     print(f"\n{checked} numbers checked across {swept} wave results")
     if UNCHECKED:
@@ -374,11 +576,14 @@ def main() -> int:
         print(f"{len(unexplained)} number(s) the cells cannot produce:")
         for name, text in unexplained:
             print(f"  {name}: {text}")
-    if unexplained or stale or missing:
+    if unexplained or stale or missing or paper_bad or paper_complaints:
         return 1
     # The claim names what was actually swept. It used to say "every wave
     # result" while a date window silently held one back.
-    print(f"every number in the {swept} swept wave results follows from the cells")
+    print(f"every number in the {swept} swept wave results follows from the cells, "
+          f"and every\nnumber in {PAPER.name} is derived from them ({paper_cells}), "
+          f"named in ELSEWHERE ({paper_elsewhere}),\nor traced to a named primary "
+          f"record ({paper_traced})")
     return 0
 
 

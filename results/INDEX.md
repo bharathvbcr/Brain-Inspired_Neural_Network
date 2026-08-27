@@ -2,7 +2,7 @@
 
 # Record index
 
-311 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+312 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -12,7 +12,7 @@
 | Measurements | 11 | 0 |
 | Amendments | 15 | 1 |
 | Defects | 5 | 0 |
-| Hardening | 4 | 0 |
+| Hardening | 5 | 0 |
 | Audits | 2 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
@@ -218,6 +218,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-27 | [HARDENING_2026-08-27_THE_MANUSCRIPT_IS_SWEPT.md](HARDENING_2026-08-27_THE_MANUSCRIPT_IS_SWEPT.md) | The manuscript's numbers are checked, at three named tiers |
 | 2026-08-22 | [HARDENING_2026-08-22_THE_EVIDENCE_LAYER_HAD_NO_TESTS.md](HARDENING_2026-08-22_THE_EVIDENCE_LAYER_HAD_NO_TESTS.md) | Hardening round 2 — the layer that produced every number had no tests |
 | 2026-08-22 | [HARDENING_2026-08-22_THE_ATTENTION_KERNEL_HAD_NO_GATE.md](HARDENING_2026-08-22_THE_ATTENTION_KERNEL_HAD_NO_GATE.md) | Gate F had no attention arm, and the attention pin was split by optimisation level |
 | 2026-08-21 | [HARDENING_2026-08-21_CEILING_HEALTH_HAS_ONE_OWNER.md](HARDENING_2026-08-21_CEILING_HEALTH_HAS_ONE_OWNER.md) | Hardening — a dead reference can no longer be certified healthy |
