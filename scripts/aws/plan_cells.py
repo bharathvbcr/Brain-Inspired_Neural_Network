@@ -794,7 +794,24 @@ def main() -> int:
     # an exact `in ("w1", "w6")` test silently never matched w6 and left the
     # cheapest, most decision-relevant wave queued at index 336 of 468.
     priority = tuple(p.strip() for p in args.priority.split(",") if p.strip())
-    cells.sort(key=lambda c: (not c["wave"].startswith(priority), -estimated_seconds(c)))
+    # Controls before treatments, then longest-first within each.
+    #
+    # Longest-first alone minimises makespan and is why waves 15-17 reached the
+    # halfway mark with every attention arm at 12/12 and every rate control at
+    # zero: 112 cells done and almost nothing pairable. A gain needs both arms,
+    # so a schedule that finishes all the treatments first has produced no
+    # evidence at all until it is nearly done -- and a spot reclaim at 50% would
+    # have thrown away half a campaign for one usable contrast.
+    #
+    # Controls are the cheap half by a wide margin (0.09-0.65 h against 3-7 h),
+    # so running them first costs almost nothing on the makespan -- under 6% of
+    # wave 20's slot-hours -- and makes every treatment cell pairable the moment
+    # it lands.
+    def is_treatment(c):
+        return c["attn_dim"] is not None
+    cells.sort(key=lambda c: (not c["wave"].startswith(priority),
+                              is_treatment(c),
+                              -estimated_seconds(c)))
     if not priority:
         # Shortest-processing-time-first: maximises the number of COMPLETED
         # cells at any point, so a campaign that stops early leaves whole

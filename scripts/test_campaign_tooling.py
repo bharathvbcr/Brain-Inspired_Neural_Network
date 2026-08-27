@@ -2007,5 +2007,70 @@ class TheCostEstimateCarriesItsBias(unittest.TestCase):
         self.assertIn("estimated wall time", proc.stdout)
 
 
+
+class ControlsAreScheduledBeforeTreatments(unittest.TestCase):
+    """A gain needs both arms, so a schedule that finishes every treatment
+    first has produced no evidence at all until it is nearly done.
+
+    Waves 15-17 reached 112 of 224 cells with every attention arm at 12/12 and
+    every rate control at zero -- half a campaign for one usable contrast, and a
+    spot reclaim at that moment would have thrown it away. Longest-first
+    minimises makespan and maximises the damage from losing the fleet early.
+    """
+
+    def plan(self, waves, priority):
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/aws/plan_cells.py"),
+             "--waves", waves, "--priority", priority, "--out", "-"],
+            capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout)
+
+    def test_no_treatment_precedes_a_control_of_the_same_priority(self):
+        cells = self.plan("w20", "w20")
+        seen_treatment = False
+        for c in cells:
+            if c["attn_dim"] is not None:
+                seen_treatment = True
+            elif seen_treatment:
+                self.fail(f"control {c['id']} is scheduled after a treatment; "
+                          f"every treatment before it is unpairable")
+
+    def test_treatments_are_still_longest_first_within_a_priority_group(self):
+        """Controls-first must not cost the makespan ordering it sits on top of.
+
+        Within a group, not globally: `--priority` deliberately promotes a whole
+        wave ahead of cheaper cells elsewhere, so a global check would assert
+        that the priority flag does not work.
+        """
+        sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+        import plan_cells
+        for waves, priority in (("w18,w19", "w19"), ("w20", "w20")):
+            groups = {}
+            for c in self.plan(waves, priority):
+                if c["attn_dim"] is None:
+                    continue
+                key = c["wave"].startswith(tuple(priority.split(",")))
+                groups.setdefault(key, []).append(plan_cells.estimated_seconds(c))
+            for key, costs in groups.items():
+                self.assertEqual(
+                    costs, sorted(costs, reverse=True),
+                    f"treatments in the {'priority' if key else 'ordinary'} group "
+                    f"of {waves} are no longer longest-first")
+
+    def test_the_cheap_half_really_is_cheap(self):
+        """The rule is only free because controls cost a small share. If that
+        stops being true the trade-off needs revisiting rather than assuming."""
+        sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+        import plan_cells
+        cells = self.plan("w20", "w20")
+        control = sum(plan_cells.estimated_seconds(c)
+                      for c in cells if c["attn_dim"] is None)
+        total = sum(plan_cells.estimated_seconds(c) for c in cells)
+        self.assertLess(control / total, 0.25,
+                        f"controls are {100 * control / total:.0f}% of the work; "
+                        f"front-loading them is no longer close to free")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
