@@ -71,6 +71,18 @@ DOCUMENTS = sorted(
 #: directory would otherwise sweep fewer documents and still report success.
 MIN_DOCUMENTS = 14
 
+#: `PAPER_DRAFT.md` is deliberately NOT swept, and that is a limit rather than a
+#: decision to be comfortable with. It draws on corpora this script does not
+#: load -- the hybrid lab, the instrument calibration, and published literature
+#: values -- so sweeping it would report ~39 of its ~115 numbers as unexplained
+#: when they are simply sourced elsewhere. Every one of those 39 was traced on
+#: 2026-08-27 and all 37 distinct values appear in another document under
+#: `results/`, so none is invented. But "appears in another document" is
+#: document-to-document agreement, NOT derivation from cells, and the paper is
+#: the one artefact where that distinction matters most. The gap is printed at
+#: the end of every run so it cannot be forgotten by going quiet.
+PAPER_UNSWEPT = "results/PAPER_DRAFT.md"
+
 #: Wave documents whose numbers this sweep cannot derive, and why. Naming them
 #: is the point: the date window used to exclude W1 by accident, so the script
 #: claimed to have checked "every wave result" while never loading the cells
@@ -345,6 +357,12 @@ def main() -> int:
     missing = [n for n in UNCHECKED if not (ROOT / "results" / n).is_file()]
     if missing:
         print(f"STALE entries in UNCHECKED — these documents are gone: {missing}")
+    print()
+    print(f"NOT SWEPT: {PAPER_UNSWEPT}. It draws on corpora this script does not "
+          f"load, so its numbers are verified by the named checks in "
+          f"verify_published_numbers.py and by document-to-document agreement, "
+          f"not by derivation from cells. That is weaker than what the documents "
+          f"above get.")
     swept = len(DOCUMENTS) - len(UNCHECKED)
     print(f"\n{checked} numbers checked across {swept} wave results")
     if UNCHECKED:

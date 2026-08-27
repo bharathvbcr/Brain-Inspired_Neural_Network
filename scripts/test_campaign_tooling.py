@@ -2144,5 +2144,34 @@ class BothQueueReadersAgree(unittest.TestCase):
                       "the fix would be present and dead")
 
 
+
+class TheUnsweptPaperIsAnnounced(unittest.TestCase):
+    """`check_every_number.py` sweeps the wave results and not the paper.
+
+    That is defensible -- the paper draws on corpora the script does not load --
+    but a limit nobody is told about is indistinguishable from no limit. All 37
+    distinct unexplained values were traced on 2026-08-27 and every one appears
+    in another document under results/, so none is invented; they are verified by
+    document-to-document agreement rather than by derivation from cells.
+    """
+
+    def test_the_sweep_says_the_paper_is_not_swept(self):
+        proc = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/check_every_number.py")],
+            capture_output=True, text=True)
+        self.assertIn("NOT SWEPT", proc.stdout)
+        self.assertIn("PAPER_DRAFT.md", proc.stdout)
+        self.assertIn("not by derivation from cells", proc.stdout)
+
+    def test_the_named_file_still_exists(self):
+        """A disclosure about a file that has moved is a disclosure hiding
+        nothing."""
+        sys.path.insert(0, str(ROOT / "scripts"))
+        import check_every_number
+        self.assertTrue((ROOT / check_every_number.PAPER_UNSWEPT).is_file(),
+                        f"{check_every_number.PAPER_UNSWEPT} no longer exists; "
+                        f"the disclosure names a file that is gone")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
