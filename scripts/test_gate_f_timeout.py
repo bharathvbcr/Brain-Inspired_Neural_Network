@@ -162,8 +162,15 @@ def a_hung_instrument_is_a_timeout_not_a_pass(h):
 def a_hung_instrument_is_actually_dead_afterwards(h):
     h.run("hang", factor=0.1, floor=3.0)
     time.sleep(0.5)
+    # Scoped to THIS harness's temp directory, not to the bare string
+    # "fake-instrument". `pgrep -f` searches every process on the machine, so
+    # the unscoped form failed whenever a second copy of this suite was running
+    # -- it reported another run's fixture as this gate's leak. Four concurrent
+    # agents on 2026-08-27 made all four of their runs fail this way. A test
+    # that cannot tell its own subprocess from someone else's is not testing
+    # the property it names. `self.dir` is `mkdtemp`-unique per harness.
     survivors = subprocess.run(
-        ["pgrep", "-f", "fake-instrument"], capture_output=True, text=True
+        ["pgrep", "-f", str(h.dir)], capture_output=True, text=True
     ).stdout.split()
     assert not survivors, f"the instrument outlived the gate: pids {survivors}"
 
@@ -174,8 +181,10 @@ def a_grandchild_does_not_outlive_the_kill(h):
     r = h.run("grandchild", factor=0.1, floor=3.0)
     assert r["status"] == "TIMEOUT", r
     time.sleep(0.5)
+    # Same hazard as above: "time.sleep(600)" is not unique to this run. The
+    # grandchild is spawned by the fixture inside `h.dir`, so match on that.
     left = subprocess.run(
-        ["pgrep", "-f", "time.sleep(600)"], capture_output=True, text=True
+        ["pgrep", "-f", str(h.dir)], capture_output=True, text=True
     ).stdout.split()
     assert not left, f"a grandchild survived the timeout: pids {left}"
 
