@@ -138,6 +138,12 @@ aws s3 cp /tmp/gate.log "s3://$BUCKET/gates/$INSTANCE_ID.log" --quiet
     sleep 60
   done
 ) &
+# This loop never exits, so its PID must be kept and excluded from the `wait`
+# below. A bare `wait` waits for EVERY background job, this one included, and
+# blocks forever -- which is what kept four c7g.16xlarge idling at load 0.02 for
+# the whole of 2026-08-27 after waves 15-17 finished, and had done so silently
+# on every campaign before it. The instances never self-terminated once.
+PROVENANCE_PID=$!
 
 # --- work loop ------------------------------------------------------------
 worker() {
@@ -162,7 +168,16 @@ worker() {
   done
 }
 
-for slot in $(seq 1 "$CONCURRENT_CELLS"); do worker "$slot" & done
-wait
+WORKER_PIDS=()
+for slot in $(seq 1 "$CONCURRENT_CELLS"); do worker "$slot" & WORKER_PIDS+=("$!"); done
+# Only the workers. See PROVENANCE_PID above for why this is not a bare `wait`.
+wait "${WORKER_PIDS[@]}"
+
+kill "$PROVENANCE_PID" 2>/dev/null || true
 echo "=== all workers idle at $(date -u +%FT%TZ); shutting down ==="
+# One last ship AFTER the shutdown line is written, because the periodic loop is
+# now dead and without this the hostlog's final minute -- including the evidence
+# that the instance shut down cleanly -- never leaves the box.
+aws s3 cp /var/log/binn-bootstrap.log \
+  "s3://$BUCKET/hostlogs/$INSTANCE_ID.log" --quiet 2>/dev/null || true
 shutdown -h now

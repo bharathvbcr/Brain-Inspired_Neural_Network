@@ -1858,5 +1858,78 @@ class TheSameArmReproducesAcrossWaves(unittest.TestCase):
             "the field comparison would not notice a changed accuracy")
 
 
+
+class TheFleetActuallyShutsDown(unittest.TestCase):
+    """`bootstrap.sh` ended in a bare `wait`, and never reached its shutdown.
+
+    The provenance loop that ships the host log to S3 is an infinite background
+    job. A bare `wait` waits for every background job, so it blocked on that
+    loop forever and `shutdown -h now` was unreachable. Four c7g.16xlarge sat at
+    load 0.02 for hours after waves 15-17 finished, and every campaign before it
+    had done the same without anyone noticing -- the instances were always
+    terminated by hand, so "self-terminating" was never observed to be false.
+
+    Both halves are tested: the pattern must terminate, and the OLD pattern must
+    NOT, because a test that passes on the buggy version tests nothing.
+    """
+
+    SHUTDOWN_TIMEOUT = 10
+
+    def harness(self, wait_line: str) -> str:
+        return (
+            "#!/usr/bin/env bash\n"
+            "set -uo pipefail\n"
+            "( while true; do sleep 0.2; done ) &\n"
+            "PROVENANCE_PID=$!\n"
+            "WORKER_PIDS=()\n"
+            "for slot in 1 2 3; do ( sleep 0.3 ) & WORKER_PIDS+=(\"$!\"); done\n"
+            f"{wait_line}\n"
+            "kill \"$PROVENANCE_PID\" 2>/dev/null || true\n"
+            "echo SHUTDOWN\n"
+        )
+
+    def run_harness(self, wait_line: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "h.sh"
+            path.write_text(self.harness(wait_line))
+            try:
+                proc = subprocess.run(["bash", str(path)], capture_output=True,
+                                      text=True, timeout=self.SHUTDOWN_TIMEOUT)
+                return proc.stdout
+            except subprocess.TimeoutExpired:
+                return None
+
+    def test_waiting_on_the_worker_pids_reaches_shutdown(self):
+        out = self.run_harness('wait "${WORKER_PIDS[@]}"')
+        self.assertIsNotNone(out, "the fixed pattern still hangs")
+        self.assertIn("SHUTDOWN", out)
+
+    def test_a_bare_wait_never_reaches_shutdown(self):
+        """The negative half. If this ever passes, the test above is vacuous."""
+        self.assertIsNone(
+            self.run_harness("wait"),
+            "a bare `wait` returned even with an infinite background job, so "
+            "this test can no longer tell the fixed pattern from the broken one")
+
+    def test_bootstrap_waits_on_the_worker_pids(self):
+        text = (ROOT / "scripts/aws/bootstrap.sh").read_text()
+        self.assertIn('wait "${WORKER_PIDS[@]}"', text)
+        self.assertNotIn("\nwait\n", text,
+                         "bootstrap.sh has a bare `wait` again; it will block on "
+                         "the provenance loop and never shut the instance down")
+        # The shutdown must still be reachable at all, not merely unblocked.
+        self.assertIn("shutdown -h now", text)
+        self.assertLess(text.index('wait "${WORKER_PIDS[@]}"'),
+                        text.rindex("shutdown -h now"),
+                        "the wait must precede the shutdown it gates")
+
+    def test_the_provenance_loop_is_killed_before_shutdown(self):
+        """Otherwise the final log ship races a loop still writing the object."""
+        text = (ROOT / "scripts/aws/bootstrap.sh").read_text()
+        self.assertIn('kill "$PROVENANCE_PID"', text)
+        self.assertLess(text.index('kill "$PROVENANCE_PID"'),
+                        text.rindex("shutdown -h now"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
