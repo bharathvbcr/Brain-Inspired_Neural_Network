@@ -142,6 +142,95 @@ class ScalarValuesTest(unittest.TestCase):
                               f"{expected} is no longer in the spec's Panel B")
 
 
+class LeadFigureTest(unittest.TestCase):
+    """Figure 1 of the lead program, against Table SHD-2 and its four bans.
+
+    The manuscript leads with this figure and nothing was drawn for it until
+    2026-08-27, so there is no prior artwork to have drifted — what this class
+    pins is that it cannot start drifting.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        text = SOURCE.read_text()
+        cls.text = text
+        cls.fig = text[text.index("fn draw_lead_fig1("):
+                       text.index("/// One rule, drawn by rule")]
+        table = (ROOT / "results/PAPER_RESULTS_TABLE.md").read_text()
+        start = table.index("## Table SHD-2")
+        cls.table = table[start:table.index("## Table SHD-3", start)]
+
+    def test_the_table_was_found(self):
+        self.assertIn("bin-shuffle difference-in-differences", self.table)
+
+    def test_every_lead_value_is_in_table_shd_2(self):
+        """Each constant the figure draws must appear in the sheet the spec
+        cites for it, not merely in the spec's own restatement."""
+        expected = {
+            "SHUFFLE_COST_ATTN_32": "0.1347", "SHUFFLE_COST_RATE_32": "0.0142",
+            "ADVANTAGE_INTACT_32": "0.1275", "ADVANTAGE_SHUFFLED_32": "0.0070",
+            "ADVANTAGE_INTACT_12": "0.1258", "ADVANTAGE_SHUFFLED_12": "0.0050",
+            "ABS_ATTN_INTACT_12": "0.8320", "ABS_ATTN_SHUFFLED_12": "0.6983",
+            "ABS_RATE_INTACT_12": "0.7062", "ABS_RATE_SHUFFLED_12": "0.6934",
+            "SHUFFLE_COST_ATTN_12": "0.1337", "SHUFFLE_COST_RATE_12": "0.0128",
+            "PER_SEED_MIN_12": "0.0967", "PER_SEED_MAX_12": "0.1568",
+        }
+        scalars = source_scalars()
+        for const, value in expected.items():
+            with self.subTest(const=const):
+                self.assertEqual(scalars.get(const), value,
+                                 f"{const} is not {value}")
+                self.assertIn(value, self.table,
+                              f"{value} is no longer in Table SHD-2")
+
+    def test_the_inflated_cost_is_never_drawn(self):
+        """Ban 3. The wave-17 analyser merged a d32l1 archived shuffled control
+        into the d32l4 comparison for twelve pairs and inflated the cost from
+        +0.1347 to +0.1577 — MET either way, 17% high."""
+        self.assertNotIn("0.1577", drawable(self.text))
+
+    def test_the_prior_art_is_named_in_the_figure(self):
+        """Ban 1. Without it the figure invites the reading it is least
+        entitled to: that it shows SHD depends on temporal order."""
+        for marker in ("NOT SHOWN HERE, AND NOT CLAIMED", "Cramer",
+                       "Neuromorphic Sequential Arena", "Yu et al"):
+            self.assertIn(marker, self.fig)
+
+    def test_both_arms_are_drawn_at_equal_weight(self):
+        """Ban 1, continued: the rate arm is half the measurement, not a faint
+        control. Same helper, same bar width, same label sizes."""
+        self.assertEqual(self.fig.count("cost_bar("), 2)
+        widths = re.findall(r"\(\d+, base, (\d+), height\)", self.fig)
+        self.assertEqual(len(set(widths)), 1, f"bar widths differ: {widths}")
+
+    def test_the_shuffle_is_described_as_done_to_the_data(self):
+        """Ban 2. Nothing is removed from the model, so no ablation framing."""
+        self.assertIn("BOTH the training and test splits", self.fig)
+        self.assertIn("Nothing is removed from the model", self.fig)
+        for banned in ("attention off", "ablation of", "component axis"):
+            self.assertNotIn(banned, self.fig)
+
+    def test_the_smaller_sample_is_drawn_beside_the_larger(self):
+        """Ban 4. n = 32 must not read as a rescue: the two are near-identical
+        and that near-identity is the message."""
+        self.assertIn("ADVANTAGE_INTACT_12", self.fig)
+        self.assertIn("ADVANTAGE_INTACT_32", self.fig)
+        self.assertIn("did not rescue it", self.fig)
+
+    def test_no_absolute_shuffled_mean_is_drawn_at_n_32(self):
+        """Table SHD-2 prints `—` for them: at n = 32 only the costs exist, so
+        a figure quoting an absolute shuffled accuracy there would be quoting a
+        number nobody published."""
+        self.assertNotIn("ABS_ATTN_SHUFFLED_32", self.text)
+        self.assertNotIn("ABS_RATE_SHUFFLED_32", self.text)
+
+    def test_the_figure_is_a_new_file(self):
+        """The spec: "A new file must be produced; do not repoint an existing
+        fig* file at this spec"."""
+        self.assertIn('"leadfig1_the_conditional"', self.text)
+        self.assertIn("leadfig1_the_conditional", SPEC.read_text())
+
+
 class PanelAEncodingTest(unittest.TestCase):
     """The two things the spec says Panel A must not be allowed to say."""
 

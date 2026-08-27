@@ -172,11 +172,19 @@ contribution is the order-dependent one**, a difference-in-differences on the
 *gain* rather than on accuracy. `h128`, `published-2ms`, `d32/L4`, `e400`,
 n = 32.”
 
-**Artwork target:** **none — this figure has no artwork.** Nothing has been
-drawn for it and no file in
-[`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
-corresponds to it. A new file must be produced; do not repoint an existing
-`fig*` file at this spec.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig1_the_conditional.{png,pdf}`
+— **drawn 2026-08-27**, a new file as this spec required; no existing `fig*`
+file was repointed. Owner: `binn-lab/src/paper_figures.rs`
+(`draw_lead_fig1`), and `scripts/test_paper_figures_match_the_spec.py` checks
+every value in it against **Table SHD-2** of
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) — the sheet, not this file's
+restatement of it — and asserts each of the four bans above.
+
+Panel A plots **costs and not accuracies**, which is a deliberate departure from
+the layout line above. That line asks for "an intact → bin-shuffled pair" per
+arm, and Table SHD-2 prints `—` for the absolute bin-shuffled means at n = 32:
+at that sample size the two costs are the only quantities that exist. The
+intact → shuffled pair is drawable at n = 12 alone, and that is Panel C.
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) Abstract / §3.5 item 2 / §3.8.
 
 **Avoid:** “attention makes the network temporal”, “SHD requires timing” as this
@@ -461,10 +469,15 @@ to make the gain trend look cleaner.
 
 # Secondary program — matched-architecture kill gate
 
-> **Artwork status for everything below, updated 2026-08-27.** Four of the nine
-> files in
+> **Artwork status for everything below, updated 2026-08-27.** The lead
+> program's Figure 1 now has artwork —
+> `leadfig1_the_conditional`, a new file, drawn by the same generator. Lead
+> Figures 2, 3 and 4 still have none, and neither does a lead-program graphical
+> abstract; those are the package's remaining figure work.
+>
+> Of the nine secondary-program files in
 > [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
-> are **regenerated to the 2026-08-25 re-run**:
+> four are **regenerated to the 2026-08-25 re-run**:
 > `figM_mechanism_richness_addressability`, `fig1_matched_rule_swap`,
 > `fig3_engine_c1_means` and `graphical_abstract`. They have one owner —
 > `binn-lab/src/paper_figures.rs`, run as

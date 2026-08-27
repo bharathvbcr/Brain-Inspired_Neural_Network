@@ -52,6 +52,50 @@ mod nums {
     /// "above 0.75" against a reference at 1.
     pub const CEILING: Both = (1.0000, 1.0000);
 
+    // --- LEAD PROGRAM: the SHD read-out, Table SHD-2 -------------------------
+    //
+    // The manuscript leads with these and, until 2026-08-27, nothing had been
+    // drawn for any of the four lead figures. Note what is NOT here: absolute
+    // bin-shuffled means at n = 32. Table SHD-2 prints `—` for them, so only
+    // the two costs exist at that sample size and only the costs may be
+    // plotted. The absolute intact→shuffled pair exists at n = 12 alone.
+
+    /// Each arm's own shuffle cost, n = 32. **This pair is the figure.**
+    pub const SHUFFLE_COST_ATTN_32: f64 = 0.1347;
+    pub const SHUFFLE_COST_RATE_32: f64 = 0.0142;
+    /// Not `+0.1577`. The wave-17 analyser merged a `d32l1` archived shuffled
+    /// control into the `d32l4` comparison for twelve pairs and inflated the
+    /// cost by 17%. The verdict was MET either way; the corrected value is the
+    /// only one that may be drawn.
+    pub const SHUFFLE_COST_RATIO_32: f64 = 9.5;
+
+    /// The same result read as the collapse of the advantage, n = 32.
+    pub const ADVANTAGE_INTACT_32: f64 = 0.1275;
+    pub const ADVANTAGE_SHUFFLED_32: f64 = 0.0070;
+    pub const CONTINGENT_PCT_32: f64 = 94.5;
+
+    /// n = 12, the registration this confirms. Drawn beside n = 32 because the
+    /// near-identity is the message: twenty further seeds move the gain by
+    /// +0.0017 and the cost by +0.0010. Nothing was rescued by the larger run.
+    pub const ADVANTAGE_INTACT_12: f64 = 0.1258;
+    pub const ADVANTAGE_SHUFFLED_12: f64 = 0.0050;
+    pub const CONTINGENT_PCT_12: f64 = 96.0;
+
+    /// n = 12 absolute accuracy — the only sample size at which the intact and
+    /// shuffled means both exist. Drawn small and labelled, because an
+    /// accuracy-under-shuffle encoding at the centre of the figure would
+    /// reproduce prior art and lose the new result.
+    pub const ABS_ATTN_INTACT_12: f64 = 0.8320;
+    pub const ABS_ATTN_SHUFFLED_12: f64 = 0.6983;
+    pub const ABS_RATE_INTACT_12: f64 = 0.7062;
+    pub const ABS_RATE_SHUFFLED_12: f64 = 0.6934;
+    pub const SHUFFLE_COST_ATTN_12: f64 = 0.1337;
+    pub const SHUFFLE_COST_RATE_12: f64 = 0.0128;
+    /// Per seed at n = 12 the effect falls in this interval: no seed in which
+    /// it is absent.
+    pub const PER_SEED_MIN_12: f64 = 0.0967;
+    pub const PER_SEED_MAX_12: f64 = 0.1568;
+
     // --- XOR locality flip, 1-layer `xor_thresh` (Table D) -------------------
     pub const XOR_BCAST: f64 = 0.5008;
     pub const XOR_DFA: f64 = 0.8267;
@@ -124,6 +168,13 @@ const H: u32 = 900;
 pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
     fs::create_dir_all(out_dir)?;
     let mut written = Vec::new();
+    // Lead program first: it is what the manuscript leads with, and until
+    // 2026-08-27 nothing had been drawn for any of its four figures.
+    written.extend(write_pair(
+        out_dir,
+        "leadfig1_the_conditional",
+        draw_lead_fig1,
+    )?);
     written.extend(write_pair(
         out_dir,
         "figM_mechanism_richness_addressability",
@@ -291,6 +342,314 @@ fn draw_bar_row(
             RGBColor(120, 120, 120),
         )?;
     }
+    Ok(())
+}
+
+/// One arm's shuffle cost, drawn on a shared axis.
+///
+/// Both arms get the same bar width, the same label size and the same weight.
+/// `PAPER_FIGURE_SPEC.md` is explicit that the rate arm must be as visually
+/// prominent as the attention arm: the pair of costs IS the measurement, and a
+/// figure in which the control is a faint reference reads as "shuffling hurts
+/// the attention model", which is prior art.
+fn cost_bar(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+    (x0, y_base, width, height): (i32, i32, i32, i32),
+    scale: f64,
+    cost: f64,
+    color: RGBColor,
+    arm: &str,
+    detail: &str,
+    pairs: &str,
+) -> Result<(), DrawErr> {
+    let h = ((cost / scale) * height as f64).round() as i32;
+    let top = y_base - h;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, top), (x0 + width, y_base)],
+        color.filled(),
+    )))?;
+    centered(
+        root,
+        (x0 + width / 2, top - 22),
+        &format!("+{cost:.4}"),
+        26,
+        BLACK,
+    )?;
+    centered(root, (x0 + width / 2, y_base + 26), arm, 18, BLACK)?;
+    centered(
+        root,
+        (x0 + width / 2, y_base + 50),
+        detail,
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    centered(
+        root,
+        (x0 + width / 2, y_base + 72),
+        pairs,
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    Ok(())
+}
+
+/// Figure 1 of the lead program — the difference-in-differences on the gain.
+///
+/// Four things `PAPER_FIGURE_SPEC.md` forbids, and where each is handled:
+///
+/// 1. It must not read as "SHD is temporal" — that is prior art. The centre of
+///    the figure is the PAIR of costs, drawn at equal weight, and the banner
+///    across the top states the prior work by name so the figure cannot be
+///    mistaken for claiming it.
+/// 2. It must not be drawn as an ablation. Bin-shuffling is applied to the
+///    DATA, independently per sample, in BOTH splits — nothing is removed from
+///    the model — so no panel carries a model-component axis or an
+///    "attention off" label, and the operation is spelled out where it is
+///    named.
+/// 3. It must not quote +0.1577, the value the wave-17 analyser inflated by
+///    merging two read-out depths. Only +0.1347 appears.
+/// 4. It must not imply n = 32 rescued anything. Panel B draws n = 12 beside
+///    n = 32 precisely so the near-identity is visible.
+///
+/// Panel A plots costs and not accuracies because Table SHD-2 prints `—` for
+/// the absolute bin-shuffled means at n = 32: at that sample size the costs are
+/// the only quantities that exist. The spec's layout line asks for "an intact →
+/// bin-shuffled pair" per arm, which is drawable at n = 12 only, and that is
+/// what Panel C is.
+fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 14),
+        "Figure 1 — The conditional: a difference-in-differences on the gain",
+        26,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 48),
+        "Destroying temporal order costs the time-axis read-out almost everything it was buying, and costs the rate read-out almost nothing. The plotted quantity is each arm's own shuffle cost.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // The prior-art banner. Without it the figure invites the reading it is
+    // least entitled to.
+    let prior = RGBColor(238, 238, 242);
+    map_draw(root.draw(&Rectangle::new([(36, 72), (1364, 122)], prior.filled())))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 72), (1364, 122)],
+        RGBColor(170, 170, 178).stroke_width(1),
+    )))?;
+    label(
+        root,
+        (48, 80),
+        "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 (≤60% on spike-count-only SHD),",
+        12,
+        RGBColor(60, 60, 60),
+    )?;
+    label(
+        root,
+        (48, 100),
+        "the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
+        12,
+        RGBColor(60, 60, 60),
+    )?;
+
+    // --- Panel A ------------------------------------------------------------
+    label(
+        root,
+        (36, 138),
+        "Panel A — each arm's own shuffle cost. n = 32, seed-paired, h128 / published-2ms / adjacent-sum-5 / e400.",
+        16,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 160),
+        "Bin-shuffling permutes time bins independently per sample in BOTH the training and test splits, so the task itself becomes rate-solvable. Nothing is removed from the model.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    let base = 470;
+    let axis_top = 200;
+    let scale = 0.15;
+    // Axis, so the 9.5x is readable off the drawing rather than only asserted.
+    map_draw(root.draw(&PathElement::new(
+        vec![(150, axis_top), (150, base)],
+        RGBColor(120, 120, 120).stroke_width(2),
+    )))?;
+    for step in 0..=3 {
+        let value = 0.05 * step as f64;
+        let y = base - ((value / scale) * (base - axis_top) as f64).round() as i32;
+        map_draw(root.draw(&PathElement::new(
+            vec![(144, y), (1300, y)],
+            RGBColor(224, 224, 228).stroke_width(1),
+        )))?;
+        label(
+            root,
+            (96, y - 9),
+            &format!("{value:.2}"),
+            12,
+            RGBColor(120, 120, 120),
+        )?;
+    }
+    map_draw(root.draw(&PathElement::new(
+        vec![(150, base), (1300, base)],
+        BLACK.stroke_width(2),
+    )))?;
+
+    let height = base - axis_top;
+    cost_bar(
+        root,
+        (280, base, 300, height),
+        scale,
+        nums::SHUFFLE_COST_ATTN_32,
+        RGBColor(70, 100, 180),
+        "time-axis read-out  d32/L4",
+        "ff+fixed+attn",
+        "32 pairs · cost positive in 32/32",
+    )?;
+    cost_bar(
+        root,
+        (870, base, 300, height),
+        scale,
+        nums::SHUFFLE_COST_RATE_32,
+        RGBColor(200, 140, 60),
+        "rate read-out  ff+fixed",
+        "the control, and half the measurement",
+        "32 pairs",
+    )?;
+    centered(
+        root,
+        (725, 300),
+        &format!("{:.1}×", nums::SHUFFLE_COST_RATIO_32),
+        34,
+        RGBColor(50, 50, 50),
+    )?;
+    centered(root, (725, 336), "ratio of the two costs", 13, RGBColor(90, 90, 90))?;
+
+    // --- Panel B ------------------------------------------------------------
+    label(
+        root,
+        (36, 566),
+        "Panel B — the same result read as the collapse of the advantage over the rate arm.",
+        16,
+        BLACK,
+    )?;
+    let rows = [
+        (
+            "n = 32",
+            nums::ADVANTAGE_INTACT_32,
+            nums::ADVANTAGE_SHUFFLED_32,
+            nums::CONTINGENT_PCT_32,
+        ),
+        (
+            "n = 12  (the registration this confirms)",
+            nums::ADVANTAGE_INTACT_12,
+            nums::ADVANTAGE_SHUFFLED_12,
+            nums::CONTINGENT_PCT_12,
+        ),
+    ];
+    for (i, (name, intact, shuffled, pct)) in rows.into_iter().enumerate() {
+        let y = 600 + (i as i32) * 52;
+        label(root, (48, y), name, 14, BLACK)?;
+        label(
+            root,
+            (390, y),
+            &format!("intact  +{intact:.4}"),
+            16,
+            RGBColor(70, 100, 180),
+        )?;
+        label(root, (600, y), "→", 16, RGBColor(120, 120, 120))?;
+        label(
+            root,
+            (650, y),
+            &format!("bin-shuffled  +{shuffled:.4}"),
+            16,
+            RGBColor(200, 140, 60),
+        )?;
+        label(
+            root,
+            (940, y),
+            // Table SHD-2 prints 96%, not 96.0%. A figure that adds a decimal
+            // the sheet does not carry is quoting a number nobody computed.
+            &format!(
+                "{}% of the advantage is contingent on temporal order",
+                if (pct - pct.round()).abs() < 1e-9 {
+                    format!("{pct:.0}")
+                } else {
+                    format!("{pct:.1}")
+                }
+            ),
+            14,
+            BLACK,
+        )?;
+    }
+    label(
+        root,
+        (48, 706),
+        "Twenty further seeds move the gain by +0.0017 and the shuffle cost by +0.0010. The larger run confirms the registration; it did not rescue it.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    // --- Panel C ------------------------------------------------------------
+    // Absolute accuracy, deliberately small and labelled. Table SHD-2 prints
+    // `—` for the n = 32 shuffled means, so this panel is n = 12 or nothing.
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 736), (1364, 872)],
+        RGBColor(247, 247, 250).filled(),
+    )))?;
+    label(
+        root,
+        (48, 744),
+        "Panel C — the n = 12 measurement this confirms, in absolute accuracy. LABELLED n = 12: absolute bin-shuffled means are not published at n = 32.",
+        13,
+        BLACK,
+    )?;
+    label(
+        root,
+        (48, 772),
+        &format!(
+            "time-axis read-out   {:.4} → {:.4}   cost +{:.4}, positive in 12/12",
+            nums::ABS_ATTN_INTACT_12,
+            nums::ABS_ATTN_SHUFFLED_12,
+            nums::SHUFFLE_COST_ATTN_12
+        ),
+        14,
+        RGBColor(70, 100, 180),
+    )?;
+    label(
+        root,
+        (48, 798),
+        &format!(
+            "rate read-out        {:.4} → {:.4}   cost +{:.4}",
+            nums::ABS_RATE_INTACT_12,
+            nums::ABS_RATE_SHUFFLED_12,
+            nums::SHUFFLE_COST_RATE_12
+        ),
+        14,
+        RGBColor(200, 140, 60),
+    )?;
+    label(
+        root,
+        (48, 828),
+        &format!(
+            "Per seed the effect falls between +{:.4} and +{:.4} — no seed in which it is absent. Every w9shf cell passes the temporal audit (counts preserved, relocated fraction ≥ 0.5).",
+            nums::PER_SEED_MIN_12,
+            nums::PER_SEED_MAX_12
+        ),
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (48, 850),
+        "What is measured here is which component's contribution is the order-dependent one: a difference-in-differences on the gain, not on accuracy.",
+        12,
+        RGBColor(60, 60, 60),
+    )?;
     Ok(())
 }
 

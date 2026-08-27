@@ -58,13 +58,13 @@ home for the paper this file used to describe.
 - [x] Every number in the manuscript checked — 72 derived from cells, 7 named in
       `ELSEWHERE`, 40 traced to a named primary record
       (`scripts/check_every_number.py`)
-- [ ] **Lead-program figures: no artwork exists.** All four lead figures in
-      [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) — the difference-in-differences,
-      the headline accuracy, the width ladder, the resolution ladder — are marked
-      **"none — this figure has no artwork"**, and the spec records
-      `TODO(source needed)` for a lead-program graphical abstract. Four specified
-      figures with nothing drawn is the largest open authoring task in the
-      package, and it is on the program the manuscript leads with.
+- [ ] **Lead-program figures: one of four drawn.** Figure 1, the
+      difference-in-differences, was drawn on 2026-08-27
+      (`leadfig1_the_conditional`). The headline accuracy, the width ladder and
+      the resolution ladder are still marked **"none — this figure has no
+      artwork"** in [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md), and the spec
+      records `TODO(source needed)` for a lead-program graphical abstract. All
+      three are fully specified and drawable now — none waits on a wave.
 - [ ] Secondary-program artwork: four of nine files current, two stale — see the
       table below
 - [ ] Venue template applied (NeurIPS/ICML/TMLR/… `.sty` / Overleaf)
@@ -119,7 +119,9 @@ that sheet is the owner, and this table used to contradict it by ticking
 | fig0 | `…/fig0_claim_axis_legend.*` | present, unaffected by the re-run |
 | figD | `…/figD_diff_closure.*` | present, unaffected |
 | fig5 (Figure 9) | `…/fig5_xor_locality.*` | present, unaffected |
-| **lead program** | — | **no artwork specified for any lead figure** |
+| **lead Figure 1** | `…/leadfig1_the_conditional.*` | **drawn 2026-08-27** — the difference-in-differences |
+| lead Figures 2–4 | — | **no artwork**; specified and drawable, waiting on nobody |
+| lead graphical abstract | — | `TODO(source needed)` |
 
 The four current files have one owner, `binn-lab/src/paper_figures.rs`:
 
