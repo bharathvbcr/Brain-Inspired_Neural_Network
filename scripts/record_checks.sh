@@ -44,6 +44,13 @@ run "published numbers reproduce from cells" python3 scripts/verify_published_nu
 # Derived instead, it is eight — and the four that were missed include the
 # headline width. A claim this load-bearing should be recomputed, not recalled.
 run "the x86 and aarch64 corpora agree" python3 scripts/cross_isa_reproduction.py
+# The cross-ISA check above asks whether two machines agree. This asks whether
+# one fleet still agrees with its own record: every configuration two waves both
+# ran, regressed wave against wave. Wave 18 registers that question as H18-4 but
+# schedules it at plan index 140 of 192, so a failure would surface after most of
+# the compute it voids had been spent. This answers the weaker form of it from
+# whatever has landed, on every run, and exits non-zero when nothing matched.
+run "the fleet reproduces its own record" python3 scripts/aws/check_reproduction.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 
 if [[ "$fail" -ne 0 ]]; then

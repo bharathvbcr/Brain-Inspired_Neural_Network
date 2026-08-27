@@ -2249,5 +2249,81 @@ class ThreadCountProvenanceTest(AwsScriptedTest):
         self.assertIn('"$THREADS_PER_CELL"', boot)
 
 
+class ReleaseSkipsFailedCellsTest(AwsScriptedTest):
+    """A cell with a failure log ran. It must not be released as an orphan.
+
+    `release_dead_claims` computed `held - done - live`, where `done` was only
+    `results/`. A cell whose training went non-finite is claimed, has no result
+    and is not running -- identical, under that expression, to a cell no worker
+    ever touched. A dry run on 2026-08-27 called 22 of them orphaned, 17 of
+    them from waves 11-14.
+
+    Re-queuing one cannot produce a different answer: the seed and the binary
+    are both pinned, so it burns a slot and lands back in `failures/`. The
+    campaign has exactly one legitimate reason to re-run a claimed cell -- the
+    worker died mid-run -- and this pins that the two cases stay apart.
+    """
+
+    ORPHAN = "w20rec__rec-alif-attn__h128__s5170014"
+    FAILED = "w20rec__rec-alif__h128__s5170013"
+    LIVE = "w20rec__ff-fixed__h128__s5170031"
+    DONE = "w20rec__ff-fixed__h128__s5170030"
+
+    def release(self, apply=False):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "rdc_mod", ROOT / "scripts/aws/release_dead_claims.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.time = types.SimpleNamespace(sleep=lambda _: None)
+
+        def handler(argv):
+            if "list-objects-v2" in argv:
+                prefix = argv[argv.index("--prefix") + 1]
+                names = {
+                    "results/": [self.DONE + ".json"],
+                    "claims/": [self.ORPHAN, self.FAILED, self.LIVE, self.DONE],
+                    "failures/": [self.FAILED + ".log"],
+                }[prefix]
+                return 0, json.dumps(
+                    {"Contents": [{"Key": prefix + n} for n in names]}), ""
+            if "describe-instances" in argv:
+                return 0, "i-live\n", ""
+            if "send-command" in argv:
+                return 0, "cmd-1\n", ""
+            if "get-command-invocation" in argv:
+                return 0, f"/tmp/{self.LIVE}/cell.json\n", ""
+            if "rm" in argv:
+                return 0, "", ""
+            raise AssertionError(f"unscripted call: {argv}")
+
+        argv = ["release_dead_claims.py", "--bucket", "bkt"]
+        if apply:
+            argv.append("--apply")
+        self.drive(mod, handler, argv, mod.main)
+
+    def test_a_failed_cell_is_not_counted_as_an_orphan(self):
+        self.release()
+        self.assertIn("orphaned: 1", self.stdout, self.stdout)
+        self.assertIn(self.ORPHAN, self.stdout)
+        self.assertNotIn(self.FAILED, self.stdout)
+
+    def test_the_failure_count_is_reported_not_silently_subtracted(self):
+        """A cell dropped without being named is a cell nobody knows about."""
+        self.release()
+        self.assertIn("failed: 1", self.stdout, self.stdout)
+
+    def test_only_the_orphan_is_actually_deleted(self):
+        self.release(apply=True)
+        removed = [c for c in self.fake.calls if "rm" in c]
+        self.assertEqual(len(removed), 1, removed)
+        self.assertIn(f"s3://bkt/claims/{self.ORPHAN}", removed[0])
+
+    def test_a_running_cell_is_never_released(self):
+        self.release(apply=True)
+        removed = " ".join(" ".join(c) for c in self.fake.calls if "rm" in c)
+        self.assertNotIn(self.LIVE, removed)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -100,17 +100,30 @@ def main() -> int:
     args = parser.parse_args()
 
     done = {k[:-5] for k in keys(args.bucket, "results/") if k.endswith(".json")}
+    # A cell with a failure log RAN. It reached the trainer and the trainer
+    # reached a definite answer -- on 2026-08-27, five `rec+alif` cells whose
+    # loss went non-finite mid-training. Before this set was subtracted, every
+    # one of those looked exactly like a cell no worker had ever touched:
+    # claimed, no result, not running. A dry run on 2026-08-27 called 22 of
+    # them orphaned, 17 from waves 11-14 that finished weeks ago.
+    #
+    # Releasing them re-queues a deterministic run that already has its answer.
+    # It cannot produce a different one -- the seed is pinned and the binary is
+    # pinned -- so it burns the slot and lands back in `failures/`. Worse, it
+    # makes a diverged cell and an interrupted cell indistinguishable, and only
+    # the interrupted one may be re-run.
+    failed = {k[:-4] for k in keys(args.bucket, "failures/") if k.endswith(".log")}
     held = keys(args.bucket, "claims/")
-    print(f"claims held: {len(held)}, results: {len(done)}")
+    print(f"claims held: {len(held)}, results: {len(done)}, failures: {len(failed)}")
     print("asking the fleet what is actually running")
     live = live_cells(args.region)
     if not live:
         print("no live cell list could be built; releasing nothing")
         return 1
 
-    dead = sorted(held - done - live)
+    dead = sorted(held - done - failed - live)
     print(f"\nlive: {len(live)}   finished: {len(held & done)}   "
-          f"orphaned: {len(dead)}")
+          f"failed: {len(held & failed)}   orphaned: {len(dead)}")
     for cid in dead[:10]:
         print(f"  {cid[:76]}")
     if len(dead) > 10:
