@@ -1778,5 +1778,81 @@ class ClipDenominatorMirrorsTheBinary(unittest.TestCase):
                       next(w for w in warnings if "clipping bound" in w))
 
 
+
+class TheSameArmReproducesAcrossWaves(unittest.TestCase):
+    """H16 builds one ladder from rungs measured in four different waves.
+
+    h128 comes from `w1`, h512 and h1024 from `w3wid`/`w8wid`, and h256/h384/
+    h768 from `w16lad`. Comparing gains across those rungs assumes an arm
+    measured in one wave is the same arm measured in another -- the instrument
+    is deterministic and the binary is pinned, so it should be byte-identical.
+    That was assumed rather than checked until 2026-08-27.
+
+    Two arms exist in two waves at once, which is what makes the assumption
+    testable at all: `ff-fixed h128` and `ff-fixed-attn h128 d32l1`, in both
+    `w1` and `w3wid`. If either ever diverges, every cross-wave comparison in
+    the campaign -- H16's ladder above all -- is measuring wave as well as
+    width.
+    """
+
+    ANCHOR = "published-2ms__adjacent-sum-5"
+    FIELDS = ("accuracy", "mean_loss", "mean_gradient_norm", "mean_update_rms",
+              "mean_firing_rate", "majority_prediction", "classes_predicted",
+              "non_finite_events", "tail_loss_improvement", "epoch_mean_loss",
+              "epoch_mean_gradient_norm", "epoch_max_gradient_norm",
+              "epoch_max_gradient_step")
+
+    def arm(self, stem):
+        cells = {}
+        for root in (ROOT / "results/shd_attention_campaign_v1/cells",
+                     ROOT / "results/shd_attention_campaign_v2"):
+            for path in root.glob(f"{stem}__s*.json"):
+                cells[int(path.stem.split("__s")[-1])] = json.loads(path.read_text())
+        return cells
+
+    def assert_arms_identical(self, stem_a, stem_b):
+        a, b = self.arm(stem_a), self.arm(stem_b)
+        shared = sorted(set(a) & set(b))
+        self.assertGreaterEqual(
+            len(shared), 12,
+            f"{stem_a} and {stem_b} no longer overlap on twelve seeds; the "
+            f"cross-wave assumption became untestable rather than false, which "
+            f"is the outcome this test exists to make visible")
+        differing = [
+            s for s in shared
+            if any(repr(a[s].get(f)) != repr(b[s].get(f)) for f in self.FIELDS)
+        ]
+        self.assertEqual(
+            differing, [],
+            f"{len(differing)} of {len(shared)} seeds differ between {stem_a} "
+            f"and {stem_b}; every cross-wave comparison in the campaign is "
+            f"measuring wave as well as the axis under study")
+
+    def test_the_rate_arm_is_identical_in_w1_and_w3wid(self):
+        self.assert_arms_identical(
+            f"w1__ff-fixed__h128__e400__{self.ANCHOR}",
+            f"w3wid__ff-fixed__h128__e400__{self.ANCHOR}")
+
+    def test_the_attention_arm_is_identical_in_w1_and_w3wid(self):
+        self.assert_arms_identical(
+            f"w1__ff-fixed-attn__h128__e400__{self.ANCHOR}__d32l1",
+            f"w3wid__ff-fixed-attn__h128__e400__{self.ANCHOR}__d32l1")
+
+    def test_the_comparison_can_fail(self):
+        """The check itself, negatively tested: a one-ulp change must be caught.
+        Without this the two tests above would pass on any implementation that
+        compared nothing."""
+        a = self.arm(f"w1__ff-fixed__h128__e400__{self.ANCHOR}")
+        if not a:
+            self.skipTest("archived w1 rate cells absent")
+        seed = sorted(a)[0]
+        left = a[seed]
+        right = dict(left)
+        right["accuracy"] = left["accuracy"] + 1e-9
+        self.assertTrue(
+            any(repr(left.get(f)) != repr(right.get(f)) for f in self.FIELDS),
+            "the field comparison would not notice a changed accuracy")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
