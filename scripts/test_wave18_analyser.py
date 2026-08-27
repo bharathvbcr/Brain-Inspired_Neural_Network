@@ -119,7 +119,8 @@ class LadderGrid(unittest.TestCase):
             [sys.executable, str(ROOT / "scripts/aws/analyse_wave18.py"),
              "--plan", str(plan), "--results", str(self.res), "--out", str(out)],
             capture_output=True, text=True)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        # 0 complete, 2 incomplete-or-invalid; anything else is a crash.
+        self.assertIn(proc.returncode, (0, 2), proc.stderr)
         return out.read_text()
 
     def test_an_interior_maximum_clear_of_both_ends_meets_h18_1(self):
@@ -245,7 +246,7 @@ class HarnessCheckIsDestructive(unittest.TestCase):
              "--plan", str(plan), "--results", str(self.res),
              "--archive", str(self.archive), "--out", str(out)],
             capture_output=True, text=True)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn(proc.returncode, (0, 2), proc.stderr)
         return out.read_text()
 
     def test_an_untouched_copy_reproduces(self):
@@ -291,7 +292,7 @@ class HarnessCheckIsDestructive(unittest.TestCase):
         subprocess.run(
             [sys.executable, str(ROOT / "scripts/aws/analyse_wave18.py"),
              "--plan", str(plan), "--results", str(self.res), "--out", str(out)],
-            capture_output=True, text=True, check=True)
+            capture_output=True, text=True)
         self.assertIn("**H18-4: MET**", out.read_text())
 
 

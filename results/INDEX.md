@@ -2,7 +2,7 @@
 
 # Record index
 
-304 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+305 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -10,7 +10,7 @@
 | Results | 33 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
-| Amendments | 14 | 1 |
+| Amendments | 15 | 1 |
 | Defects | 5 | 0 |
 | Hardening | 4 | 0 |
 | Audits | 2 | 0 |
@@ -177,6 +177,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-27 | [AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md](AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md) | Amendment — H17-2 merged a four-layer intact arm with a one-layer shuffled control |
 | 2026-08-26 | [AMENDMENT_2026-08-26_SURROGATE_SCALE_IS_THE_WRONG_LEVER_FOR_A_FEEDFORWARD_ARM.md](AMENDMENT_2026-08-26_SURROGATE_SCALE_IS_THE_WRONG_LEVER_FOR_A_FEEDFORWARD_ARM.md) | Amendment — the primary lever's rationale was wrong, and it was derivable before registering |
 | 2026-08-22 | [AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md](AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md) | Amendment: re-run wave 4 without gradient clipping |
 | 2026-08-22 | [AMENDMENT_2026-08-22_REFERENCE_FINGERPRINT_SCOPE_FORWARD.md](AMENDMENT_2026-08-22_REFERENCE_FINGERPRINT_SCOPE_FORWARD.md) | Amendment: scope the reference fingerprint, for artifacts frozen from now on |

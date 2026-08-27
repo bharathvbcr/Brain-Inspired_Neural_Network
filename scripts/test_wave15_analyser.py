@@ -210,5 +210,65 @@ class MutationTest(unittest.TestCase):
         self.assertEqual(source.read_text(), original)
 
 
+
+class MergedArmsAreOneArm(unittest.TestCase):
+    """The guard from AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.
+
+    H17-2 merged `w1__…__d32l1__bin-shuffled` into a `d32l4` comparison for
+    twelve of its twenty-eight pairs, so the "shuffle cost" for those seeds was
+    (four-layer intact − one-layer shuffled) and came out +0.0541 high. Nothing
+    had ever checked that a merged arm is one arm.
+    """
+
+    def test_a_matched_pair_is_accepted(self):
+        a15.assert_same_arm(
+            f"w9shf__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__bin-shuffled",
+            f"w17hdl__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__bin-shuffled")
+
+    def test_the_historical_mismatch_raises(self):
+        with self.assertRaises(ValueError) as caught:
+            a15.assert_same_arm(
+                f"w1__ff-fixed-attn__h128__e400__{ANCHOR}__d32l1__bin-shuffled",
+                f"w17hdl__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__bin-shuffled")
+        self.assertIn("d32l1", str(caught.exception))
+        self.assertIn("d32l4", str(caught.exception))
+
+    def test_a_shuffled_control_cannot_be_merged_into_an_intact_arm(self):
+        """The other shape of the same mistake."""
+        with self.assertRaises(ValueError):
+            a15.assert_same_arm(
+                f"w9shf__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__bin-shuffled",
+                f"w17hdl__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4")
+
+    def test_every_real_merge_site_passes_the_guard(self):
+        """The regression test for the bug itself: run the analyser over an
+        empty results tree, which reaches every `merged()` call with the stems
+        the analyser actually ships. A reverted stem fails here."""
+        with tempfile.TemporaryDirectory() as tmp:
+            res = Path(tmp) / "results"
+            res.mkdir()
+            plan = Path(tmp) / "plan.json"
+            plan.write_text(json.dumps([{"id": "w17hdl__probe__s5170001"}]))
+            out = Path(tmp) / "report.md"
+            proc = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/aws/analyse_wave15.py"),
+                 "--plan", str(plan), "--results", str(res), "--out", str(out)],
+                capture_output=True, text=True)
+            # 2 is the analyser's deliberate "plan incomplete" code and is
+            # expected on an empty tree; a raised guard exits 1 with a traceback.
+            self.assertIn(proc.returncode, (0, 2),
+                          "a shipped merge averages two different arms:\n"
+                          + proc.stderr)
+            self.assertNotIn("must be one arm", proc.stderr)
+            self.assertIn("H17-2", out.read_text())
+
+    def test_the_amendment_records_the_corrected_number(self):
+        """The number in the fix and the number in its record must agree."""
+        text = (ROOT / "results"
+                / "AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md").read_text()
+        for needle in ("+0.1345", "+0.1577", "+0.1337", "0.6442", "w9shf"):
+            self.assertIn(needle, text)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

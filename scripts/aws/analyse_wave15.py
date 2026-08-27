@@ -124,6 +124,27 @@ SCIENTIFIC_FIELDS = (
 )
 
 
+def assert_same_arm(archive_stem: str, new_stem: str) -> None:
+    """Two stems that will be merged must describe the same arm.
+
+    Everything after the wave prefix has to match. Nothing checked this until
+    2026-08-27, when H17-2 was found merging a `d32l1` archived shuffled control
+    into a `d32l4` comparison, inflating the shuffle cost by +0.0541 on those
+    twelve seeds. See
+    `results/AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md`.
+
+    Raising rather than warning: a merge of two configurations is not a degraded
+    answer, it is a different quantity wearing the right name.
+    """
+    archive_tail = archive_stem.split("__", 1)[1]
+    new_tail = new_stem.split("__", 1)[1]
+    if archive_tail != new_tail:
+        raise ValueError(
+            f"merged() would average two different arms: archived "
+            f"{archive_tail!r} against new {new_tail!r}. A merged arm must be "
+            f"one arm.")
+
+
 def byte_identical(new: dict, archived: dict) -> list[str]:
     """Every scientific field, by repr so 1.0 and 1 cannot compare equal.
 
@@ -355,7 +376,17 @@ def main() -> int:
     lines.extend(["", "## H17 — the headline and its mechanism at n=32", ""])
 
     def merged(archive_root, archive_stem, new_stem):
-        """Archived twelve plus the twenty new seeds, one dict."""
+        """Archived twelve plus the twenty new seeds, one dict.
+
+        The two stems must describe the **same arm**: everything after the wave
+        prefix has to match. Nothing checked that until 2026-08-27, when H17-2
+        was found merging a `d32l1` archived shuffled control into a `d32l4`
+        comparison and inflating the shuffle cost by +0.0541 on those twelve
+        seeds. See `results/AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md`.
+        Raising here rather than warning: a merge of two configurations is not a
+        degraded answer, it is a different quantity wearing the right name.
+        """
+        assert_same_arm(archive_stem, new_stem)
         cells = load(archive_root, archive_stem, SEEDS)
         cells.update(load(res, new_stem, SEEDS_EXTENDED[12:]))
         return cells
@@ -384,8 +415,15 @@ def main() -> int:
 
     rate_shuf = merged(ARCHIVE_V1, f"w1__ff-fixed__h128__e400__{anchor}__bin-shuffled",
                        f"w17hdl__ff-fixed__h128__e400__{anchor}__bin-shuffled")
-    attn_shuf = merged(ARCHIVE_V1,
-                       f"w1__ff-fixed-attn__h128__e400__{anchor}__d32l1__bin-shuffled",
+    # `w9shf`, not `w1`: the archived shuffled control at the headline's own
+    # d32l4, which is the arm the published +0.1337 was measured on. `w1` carries
+    # a d32l1 shuffled arm at 0.6442 against w9shf's 0.6983, and that 0.054 is
+    # read-out depth rather than temporal structure.
+    # ARCHIVE_V2, not V1: `w9shf` lives in the campaign-v2 corpus while `r1cal`
+    # and `w1` live in v1. Reaching for the arm that happened to sit in the root
+    # already in hand is how the d32l1 control was picked up in the first place.
+    attn_shuf = merged(ARCHIVE_V2,
+                       f"w9shf__ff-fixed-attn__h128__e400__{anchor}__d32l4__bin-shuffled",
                        f"w17hdl__ff-fixed-attn__h128__e400__{anchor}__d32l4__bin-shuffled")
     attn_cost, attn_pos, attn_pairs = paired(attn, attn_shuf)
     rate_cost, _, rate_pairs = paired(rate, rate_shuf)

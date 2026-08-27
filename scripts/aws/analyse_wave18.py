@@ -365,7 +365,10 @@ def main() -> int:
         Path(args.out).write_text(text)
     else:
         print(text)
-    return 0
+    # 2 when the plan is incomplete or any cell is invalid, matching
+    # `analyse_wave15.py`. An analyser that exits 0 on a partial run lets a
+    # caller checking the exit code read an unfinished wave as a finished one.
+    return 0 if ran == len(plan) and not invalid else 2
 
 
 if __name__ == "__main__":
