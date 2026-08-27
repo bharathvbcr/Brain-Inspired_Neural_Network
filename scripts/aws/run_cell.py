@@ -12,20 +12,52 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
+
+#: Matches every other helper in this directory; `test_campaign_tooling.py`
+#: asserts the copies agree, and caught this file introducing 60.
+AWS_TIMEOUT_S = 300
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cell_id")
     parser.add_argument("--plan", default="cells.json")
+    parser.add_argument("--bucket", default=os.environ.get("BUCKET"),
+                        help="re-read the published queue from here when the "
+                             "cell is absent from the local plan")
     parser.add_argument("--work", required=True)
     parser.add_argument("--binary", required=True)
     parser.add_argument("--threads", default="16")
     parser.add_argument("--events", default="data/shd/events")
     args = parser.parse_args()
 
+    # `--plan` is the copy fetched once at boot. `claim_next.py` re-reads the
+    # PUBLISHED queue on every claim, so a wave appended mid-campaign is claimed
+    # here and then rejected by a plan that has never heard of it. That is not
+    # hypothetical: on 2026-08-27 wave 20 was appended, all eighty cells were
+    # claimed, and all eighty failed instantly with "is not in the plan" --
+    # consuming their claims, so they were dead rather than retried.
+    #
+    # Fixing claim_next alone was half a fix. Both readers of the queue have to
+    # agree on which queue they are reading.
     plan = {c["id"]: c for c in json.load(open(args.plan))}
+    if args.cell_id not in plan and args.bucket:
+        try:
+            fetched = subprocess.run(
+                ["aws", "s3", "cp", f"s3://{args.bucket}/input/cells.json", "-"],
+                capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+            if fetched.returncode == 0:
+                published = {c["id"]: c for c in json.loads(fetched.stdout)}
+                if args.cell_id in published:
+                    print(f"run_cell: {args.cell_id} is absent from {args.plan} "
+                          f"but present in the published queue; using the "
+                          f"published entry", file=sys.stderr)
+                    plan = published
+        except (subprocess.TimeoutExpired, ValueError, OSError) as exc:
+            print(f"run_cell: could not re-read the published queue ({exc})",
+                  file=sys.stderr)
     if args.cell_id not in plan:
         raise SystemExit(f"{args.cell_id} is not in the plan")
     spec = plan[args.cell_id]

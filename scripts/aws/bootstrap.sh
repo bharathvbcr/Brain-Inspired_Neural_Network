@@ -157,7 +157,7 @@ worker() {
     fi
     echo "slot $slot: running $id"
     if python3 scripts/aws/run_cell.py "$id" --work "/tmp/$id" --binary "$BIN" \
-         --threads "$THREADS_PER_CELL" > "/tmp/$id.log" 2>&1; then
+         --bucket "$BUCKET" --threads "$THREADS_PER_CELL" > "/tmp/$id.log" 2>&1; then
       aws s3 cp "/tmp/$id/cell.json" "s3://$BUCKET/results/$id.json" --quiet
     else
       echo "slot $slot: FAILED $id"

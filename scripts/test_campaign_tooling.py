@@ -20,6 +20,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -2070,6 +2071,77 @@ class ControlsAreScheduledBeforeTreatments(unittest.TestCase):
         self.assertLess(control / total, 0.25,
                         f"controls are {100 * control / total:.0f}% of the work; "
                         f"front-loading them is no longer close to free")
+
+
+
+class BothQueueReadersAgree(unittest.TestCase):
+    """`claim_next.py` re-reads the published queue; `run_cell.py` did not.
+
+    So a wave appended mid-campaign was claimed by one and rejected by the
+    other. On 2026-08-27 all eighty cells of wave 20 were claimed and failed
+    instantly with "is not in the plan", consuming their claims -- dead rather
+    than retried. Fixing claim_next alone was half a fix.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.boot = self.root / "cells.json"
+        self.boot.write_text(json.dumps([{"id": "old__cell__s1", "hidden": 128}]))
+        self.stub = self.root / "bin"
+        self.stub.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def fake_aws(self, published: str | None):
+        """A stub `aws` that serves the published queue, or fails."""
+        script = self.stub / "aws"
+        if published is None:
+            script.write_text("#!/usr/bin/env bash\nexit 1\n")
+        else:
+            script.write_text("#!/usr/bin/env bash\ncat <<'EOF'\n"
+                              + published + "\nEOF\n")
+        script.chmod(0o755)
+
+    def run_cell(self, cell_id: str):
+        env = dict(os.environ, PATH=f"{self.stub}:{os.environ['PATH']}")
+        return subprocess.run(
+            [sys.executable, str(ROOT / "scripts/aws/run_cell.py"), cell_id,
+             "--plan", str(self.boot), "--bucket", "some-bucket",
+             "--work", str(self.root / "w"),
+             "--binary", str(self.root / "no-such-binary")],
+            capture_output=True, text=True, env=env)
+
+    def test_a_cell_absent_from_the_boot_copy_is_taken_from_the_published_queue(self):
+        self.fake_aws(json.dumps([{"id": "new__cell__s1", "n_inputs": 140,
+                                   "hidden": 128, "seed": 1, "epochs": 1,
+                                   "contract": "published-2ms",
+                                   "geometry": "adjacent-sum-5", "attn_dim": None,
+                                   "attn_layers": None, "temporal": "intact",
+                                   "temporal_seed": None, "surrogate_scale": None,
+                                   "clip_grad_norm": None, "n_train": 8156}]))
+        proc = self.run_cell("new__cell__s1")
+        self.assertNotIn("is not in the plan", proc.stderr,
+                         "an appended wave is still rejected by the boot copy")
+        self.assertIn("present in the published queue", proc.stderr)
+
+    def test_a_cell_in_neither_is_still_refused(self):
+        """The guard must not become 'accept anything'."""
+        self.fake_aws(json.dumps([{"id": "other__cell__s1"}]))
+        self.assertIn("is not in the plan", self.run_cell("ghost__cell__s1").stderr)
+
+    def test_an_unreachable_queue_falls_back_and_says_so(self):
+        self.fake_aws(None)
+        proc = self.run_cell("new__cell__s1")
+        self.assertIn("is not in the plan", proc.stderr)
+
+    def test_bootstrap_passes_the_bucket_through(self):
+        """The fix is inert unless the worker actually supplies --bucket."""
+        text = (ROOT / "scripts/aws/bootstrap.sh").read_text()
+        self.assertIn('--bucket "$BUCKET"', text,
+                      "run_cell.py cannot re-read the queue without the bucket; "
+                      "the fix would be present and dead")
 
 
 if __name__ == "__main__":
