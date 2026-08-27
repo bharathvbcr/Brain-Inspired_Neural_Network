@@ -170,6 +170,44 @@ unaffected — its +0.1337, +0.0128 and 10× all reproduce exactly from the
 
 224 cells, 0 invalid, 0 failures, all on the pinned binary across 4 nodes.
 The 17 failures in the bucket are wave 13/14 cells and predate this campaign.
-Cell wall times, measured: attention 3.25–3.75 h and **nearly independent of
-hidden width** (h128 3.25 h, h1024 3.40 h); rate controls ~0.09 h at h128. The
-read-out over the time axis, not the layer, is where the cost lives.
+
+**On cell timings, and what they do not support.** Attention cells on this
+fleet ran 3.30 h (h128) to 3.75 h (h768), with h1024/L4 at 3.40 h; rate controls
+ran 0.09–0.39 h. An earlier draft of this section read that as attention cost
+being *"nearly independent of hidden width"*. **It does not support that**, and
+the claim is withdrawn.
+
+`wall_secs` is wall time under four-way co-scheduling on a shared
+memory-bandwidth budget, and across the corpus it is not a function of
+configuration at all. Two impossibilities make that plain: `d32l1` at h1024
+records **5.21 h** against `d32l4`'s **3.40 h**, though `attn_layers` multiplies
+the cost; and the same h1024 rate-only arm records **1.156 h** in one wave and
+**0.390 h** in another. Different waves ran on differently sized fleets, and
+cells are comparable only against cells scheduled beside them.
+
+What the timings **do** support is one negative claim, and it is robust because
+contention can only make measured time *longer*:
+`scripts/aws/estimate_cost.py` predicts **9.5 h** for h1024/d32/L4 at
+`--parallel-efficiency 0.49`. Reaching the measured 3.40 h would require an
+efficiency above 100%. The model over-predicts, and it did so in the direction
+that made this campaign look longer than it was — see §9.
+
+## 9. A note on the cost model, which misled this campaign three times
+
+`plan_cells.estimated_seconds()` states in its own docstring that it is a
+single-core ordinal function for scheduling and that "precision does not
+matter". It was read as a wall-clock predictor anyway, producing an ETA of
+"~6 h" at the halfway mark against an actual ~14 h remaining, and
+`estimate_cost.py` shares its calibration and predicts 46 h for waves 18–19
+where the measured arms imply roughly 16 h.
+
+The error is not a single wrong constant. Checked against the anchor the
+calibration came from — `ff+fixed` at h128, 9.6 s/epoch — the model needs an
+implied parallel efficiency of 143% to reach the measured 0.085 h, so it
+over-predicts even where it was calibrated. Recalibrating it against
+`wall_secs` is not available either, for the reasons in §8.
+
+No new coefficients are invented here. What changes is that the estimate no
+longer travels without its bias: `estimate_cost.py` now measures itself against
+the cells on disk and prints the ratio, so a prediction can never again be
+quoted as if it had been checked.

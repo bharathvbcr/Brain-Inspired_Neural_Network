@@ -1931,5 +1931,81 @@ class TheFleetActuallyShutsDown(unittest.TestCase):
                         text.rindex("shutdown -h now"))
 
 
+
+class TheCostEstimateCarriesItsBias(unittest.TestCase):
+    """`estimate_cost.py` over-predicts, and used to say so nowhere.
+
+    Its calibration is an extrapolation from two single-core measurements on a
+    laptop. Checked against the cells this campaign actually produced it is
+    1.6x-5.1x high, worst at the widest arms, and reaching its predicted numbers
+    would require a parallel efficiency above 100%. Quoted without that context
+    it produced a "~6 h" ETA against 14 h of remaining work.
+
+    The fix is not new coefficients -- `wall_secs` is wall time under four-way
+    co-scheduling and cannot recalibrate anything (see the result document's
+    section 8). The fix is that the prediction now travels with its measured
+    bias, and that a MISSING corpus says so instead of printing a bare estimate
+    that looks checked.
+    """
+
+    def report(self, *args):
+        import estimate_cost
+        return estimate_cost.calibration_report(*args)
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+
+    def test_the_report_names_configurations_and_a_ratio(self):
+        lines = self.report(16 * 0.49)
+        text = "\n".join(lines)
+        self.assertNotIn("UNAVAILABLE", text,
+                         "the calibration corpus is not readable; the estimate "
+                         "would print unchecked")
+        self.assertIn("median over-prediction", text)
+        self.assertIn("ff-fixed-attn h1024 d32l4", text)
+
+    def test_the_model_is_still_over_predicting(self):
+        """Not a bar to hold, a fact to keep visible. If this ever fails the
+        model was recalibrated and the result document's section 9 is stale."""
+        import re
+        text = "\n".join(self.report(16 * 0.49))
+        median = float(re.search(r"median over-prediction ([\d.]+)x", text).group(1))
+        self.assertGreater(median, 1.0,
+                           "the model no longer over-predicts; RESULT_2026-08-27 "
+                           "section 9 and this test both need rewriting")
+
+    def test_a_missing_corpus_is_announced_not_skipped(self):
+        """A calibration that could not run must never look like one that ran."""
+        import estimate_cost
+        original = estimate_cost.CALIBRATION_ROOT
+        try:
+            estimate_cost.CALIBRATION_ROOT = "results/no-such-corpus"
+            text = "\n".join(self.report(16 * 0.49))
+        finally:
+            estimate_cost.CALIBRATION_ROOT = original
+        self.assertIn("CALIBRATION UNAVAILABLE", text)
+        self.assertIn("UNCHECKED", text)
+        self.assertNotIn("median over-prediction", text)
+
+    def test_the_estimator_prints_the_report(self):
+        """The report existing is not the same as it being shown."""
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = Path(tmp) / "plan.json"
+            plan.write_text(json.dumps([{
+                "id": "probe__ff-fixed-attn__h1024__e400__published-2ms"
+                      "__adjacent-sum-5__d32l4__s5170001",
+                "wave": "probe", "arm": "ff+fixed+attn", "hidden": 1024,
+                "epochs": 400, "contract": "published-2ms",
+                "geometry": "adjacent-sum-5", "attn_dim": 32, "attn_layers": 4,
+            }]))
+            proc = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/aws/estimate_cost.py"),
+                 str(plan), "--vcpus", "256", "--threads-per-cell", "16"],
+                capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("median over-prediction", proc.stdout)
+        self.assertIn("estimated wall time", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

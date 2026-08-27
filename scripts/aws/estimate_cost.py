@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 from collections import defaultdict
+from pathlib import Path
 
 BASE_H128_S_PER_EPOCH = 9.6
 ATTN_INCREMENT_S = 58.1
@@ -58,6 +59,86 @@ def cell_core_seconds(cell: dict) -> float:
         io = ATTN_INCREMENT_S * ATTN_IO_FRACTION * (t / REF_T) * (hidden / REF_H) * (d / REF_D)
         attn = core + io
     return (base + attn) * epochs
+
+
+
+#: Cells on disk to calibrate against. Only same-fleet, same-wave comparisons
+#: are meaningful -- `wall_secs` is wall time under four-way co-scheduling, and
+#: across waves it is not a function of configuration at all (`d32l1` at h1024
+#: records 5.21 h against `d32l4`'s 3.40 h, though layers multiply the cost).
+#: So this does not recalibrate anything. It states the model's bias next to the
+#: model's answer, because an estimate quoted without its known bias is what
+#: produced a "~6 h" ETA against 14 h of remaining work.
+CALIBRATION_ROOT = "results/shd_attention_campaign_v2"
+#: Waves that ran on the 2026-08-26/27 four-node c7g.16xlarge fleet at 16
+#: threads per cell. Cells outside these are on other fleets and are not
+#: comparable to each other or to these.
+CALIBRATION_WAVES = ("w15col", "w16lad", "w17hdl")
+
+
+def measured_medians(root: Path) -> dict[tuple, float]:
+    """Median `wall_secs` per configuration, over the calibration fleet only."""
+    import re
+    import statistics
+    from collections import defaultdict
+
+    seen = defaultdict(list)
+    for path in sorted(root.glob("*.json")):
+        parts = path.stem.split("__")
+        if len(parts) < 6 or parts[0] not in CALIBRATION_WAVES:
+            continue
+        try:
+            cell = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        wall = cell.get("wall_secs")
+        if not isinstance(wall, (int, float)) or wall <= 0:
+            continue
+        attn = next((m.groups() for m in map(
+            lambda p: re.fullmatch(r"d(\d+)l(\d+)", p), parts[5:]) if m), None)
+        key = (parts[1], int(parts[2][1:]), int(parts[3][1:]), parts[4],
+               (int(attn[0]), int(attn[1])) if attn else None)
+        seen[key].append(wall)
+    return {k: statistics.median(v) for k, v in seen.items() if len(v) >= 3}
+
+
+def calibration_report(effective_threads: float) -> list[str]:
+    """Predicted against measured, per configuration. Never silent: if the
+    corpus is missing, that is said rather than skipped."""
+    root = Path(__file__).resolve().parent.parent.parent / CALIBRATION_ROOT
+    if not root.is_dir():
+        return [f"CALIBRATION UNAVAILABLE: {CALIBRATION_ROOT} is not on disk. "
+                f"The estimate below is UNCHECKED."]
+    medians = measured_medians(root)
+    if not medians:
+        return [f"CALIBRATION UNAVAILABLE: no cell in {CALIBRATION_ROOT} carries "
+                f"`wall_secs` for waves {'/'.join(CALIBRATION_WAVES)}. "
+                f"The estimate below is UNCHECKED."]
+    lines = ["model against the cells on disk "
+             f"({len(medians)} configurations, {'/'.join(CALIBRATION_WAVES)}):",
+             f"  {'configuration':<34}{'predicted':>11}{'measured':>10}{'ratio':>8}"]
+    ratios = []
+    for key, wall in sorted(medians.items()):
+        arm, hidden, epochs, contract, attn = key
+        cell = {"arm": arm.replace("-", "+"), "hidden": hidden, "epochs": epochs,
+                "contract": contract, "geometry": "adjacent-sum-5",
+                "attn_dim": attn[0] if attn else None,
+                "attn_layers": attn[1] if attn else None}
+        predicted = cell_core_seconds(cell) / GRAVITON_RATIO / effective_threads
+        ratios.append(predicted / wall)
+        label = f"{arm} h{hidden}" + (f" d{attn[0]}l{attn[1]}" if attn else "")
+        lines.append(f"  {label:<34}{predicted / 3600:>10.2f}h"
+                     f"{wall / 3600:>9.2f}h{predicted / wall:>8.2f}x")
+    ratios.sort()
+    mid = ratios[len(ratios) // 2]
+    lines += ["",
+              f"  median over-prediction {mid:.2f}x "
+              f"(range {ratios[0]:.2f}-{ratios[-1]:.2f}x). Divide the estimate "
+              f"below by roughly this.",
+              "  A ratio under 1.00x is impossible without an above-100% "
+              "parallel efficiency,",
+              "  so where one appears the model is under-predicting genuinely."]
+    return lines
 
 
 def main() -> int:
@@ -106,6 +187,9 @@ def main() -> int:
     print()
     print("The longest single cell is the floor on wall time: no amount of extra")
     print("capacity divides it further once it already has its threads.")
+    print()
+    for line in calibration_report(effective):
+        print(line)
     return 0
 
 
