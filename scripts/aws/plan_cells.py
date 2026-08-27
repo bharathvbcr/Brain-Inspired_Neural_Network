@@ -662,6 +662,40 @@ def wave19_does_the_optimum_move_with_width():
             for seed in SEEDS]
 
 
+def wave20_the_recurrent_claim_at_thirty_two_seeds():
+    """W20 - the paper's most fragile claim, at n=32.
+
+    Registered in
+    `results/PREREG_2026-08-27_THE_RECURRENT_CLAIM_AT_THIRTY_TWO_SEEDS.md`.
+
+    PAPER_DRAFT section 3.7 states that its recurrent comparison "rests on ten
+    pairs, the registered minimum" and that "one further loss on either would
+    have made the comparison unreportable". It also states that the surviving
+    pairs are those that did not diverge and that divergence is not random.
+    Over those ten pairs the Spearman correlation between the paired gain and
+    log10 of the peak gradient norm is -0.648: among the cells that completed,
+    the ones nearest divergence show the smaller gains.
+
+    Twenty more seeds on each of four arms retires the first limit and makes the
+    second measurable. The feed-forward reference is extended too, because the
+    claim is a DIFFERENCE of gains and pairing thirty-two against twelve would
+    silently drop back to twelve.
+
+    Every arm at surrogate scale 0.4, the constraint wave 14 established so that
+    substrate and scale cannot be confounded. 80 new cells; the archived twelve
+    of each arm are reused under the same pinned binary.
+    """
+    cells = []
+    for seed in SEEDS_EXTENDED[12:]:
+        cells.append(cell("w20rec", "rec+alif", 128, 400, seed, surrogate_scale=0.4))
+        cells.append(cell("w20rec", "rec+alif+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+        cells.append(cell("w20rec", "ff+fixed", 128, 400, seed, surrogate_scale=0.4))
+        cells.append(cell("w20rec", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, surrogate_scale=0.4))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -682,6 +716,7 @@ WAVES = {
     "w17": wave17_headline_at_thirty_two_seeds,
     "w18": wave18_depth_ladder_at_h1024,
     "w19": wave19_does_the_optimum_move_with_width,
+    "w20": wave20_the_recurrent_claim_at_thirty_two_seeds,
 }
 
 
