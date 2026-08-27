@@ -12,21 +12,109 @@ use plotters::style::text_anchor::{HPos, Pos, VPos};
 type DrawErr = Box<dyn std::error::Error>;
 
 /// Numbers from `results/PAPER_FIGURE_SPEC.md` / `PAPER_RESULTS_TABLE.md` only.
+///
+/// # The block below replaced a superseded one on 2026-08-27
+///
+/// This module used to carry `DFA = 0.9387`, `RL_FB = 0.9200` and
+/// `GRAD_MATCH = 0.8963`, with `gap LCB 0.6894 / 0.6846` written inline in the
+/// figure bodies. `PAPER_FIGURE_SPEC.md` §"Figure 6" now names that exact set
+/// as **"superseded and not for drawing"**: they are pre-repair figures from a
+/// forward pass that emitted zero spikes at any seed, and none of them appears
+/// in `PAPER_RESULTS_TABLE.md` any longer.
+///
+/// The generator went on drawing them, and reproduced the committed artwork
+/// byte-for-byte, so the figures on disk were the superseded block rendered at
+/// camera-ready quality. Numbers here are now the **2026-08-25 re-run** at
+/// `MATCHED_INPUT_SCALE = 2.0`, n = 20, feed-forward / recurrent
+/// (`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`), and
+/// `paper_figures_match_the_spec` parses the spec's own table and fails if the
+/// two ever disagree again.
 mod nums {
-    pub const BROADCAST_PM1: f64 = 0.5000;
-    pub const BROADCAST_GRADED: f64 = 0.9863;
-    pub const DFA: f64 = 0.9387;
-    pub const RL_FB: f64 = 0.9200;
-    pub const GRAD_MATCH: f64 = 0.8963;
+    /// `(feed-forward, recurrent)` from the 2026-08-25 re-run.
+    pub type Both = (f64, f64);
+
+    // --- matched dense-LIF, the 2026-08-25 re-run ---------------------------
+    /// `MatchedLocal` — ±1 reward × surrogate eligibility. The lead FAIL, and
+    /// at chance on both graphs.
+    pub const BROADCAST_PM1: Both = (0.5000, 0.5100);
+    /// `MatchedRlFlat` — ±1 broadcast REINFORCE. Shares the low-richness,
+    /// low-addressability cell with `BROADCAST_PM1` and disagrees with it by
+    /// 0.28, which is why the cell must be drawn as two rules.
+    pub const RL_FLAT: Both = (0.7775, 0.7962);
+    /// `MatchedRlReinforceFb` — REINFORCE × frozen `B_i`.
+    pub const RL_FB: Both = (0.9950, 0.9812);
+    /// `MatchedDfaGradedError` — graded error × DFA.
+    pub const DFA: Both = (0.9925, 0.9875);
+    /// `MatchedBroadcastGradedError` — the contrast the honesty note is about.
+    pub const BROADCAST_GRADED: Both = (0.9975, 0.9975);
+    /// SuperSpike BPTT. Saturates in every suite on both graphs, which is what
+    /// makes the passing arms unrankable: every one of them reduces to
+    /// "above 0.75" against a reference at 1.
+    pub const CEILING: Both = (1.0000, 1.0000);
+
+    // --- XOR locality flip, 1-layer `xor_thresh` (Table D) -------------------
     pub const XOR_BCAST: f64 = 0.5008;
     pub const XOR_DFA: f64 = 0.8267;
     pub const XOR_GRAD: f64 = 0.7733;
+
+    // --- engine C1 / Gate G2, hash c1-118207fbc3eaba53 (Figure 7) ------------
+    // Unaffected by the matched re-run: none of these runs on the matched
+    // dense-LIF forward.
     pub const C1_LOCAL: f64 = 0.4912;
     pub const C1_DENSE: f64 = 0.5000;
     pub const C1_GRAD: f64 = 0.8938;
     pub const C1_ELIG: f64 = 1.0000;
     pub const C1_PC: f64 = 0.9488;
     pub const LIVE_RFB: f64 = 0.4900;
+}
+
+/// How a cell is encoded. Accuracy is never mapped to a size or a ramp in
+/// Panel A: `PAPER_FIGURE_SPEC.md` requires pass / fail / at-chance, because
+/// with the reference at 1.0000 every pass reduces to "above 0.75" and a
+/// gradient would manufacture an ordering the task cannot support.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    Pass,
+    /// Gated and failed. Drawn identically whether the arm is at chance or not;
+    /// the accuracy is printed, not encoded.
+    Fail,
+    /// Measured and reported, but not a gated arm — so it is neither a pass to
+    /// be counted nor a failure to be explained away.
+    Contrast,
+    Reference,
+}
+
+impl Verdict {
+    fn tag(self) -> &'static str {
+        match self {
+            Verdict::Pass => "PASS",
+            Verdict::Fail => "FAIL",
+            Verdict::Contrast => "contrast (not gated)",
+            Verdict::Reference => "reference",
+        }
+    }
+
+    fn border(self) -> RGBColor {
+        match self {
+            Verdict::Pass => RGBColor(90, 170, 110),
+            Verdict::Fail => RGBColor(220, 90, 90),
+            Verdict::Contrast => RGBColor(200, 160, 60),
+            Verdict::Reference => RGBColor(90, 120, 200),
+        }
+    }
+
+    fn fill(self) -> RGBColor {
+        match self {
+            Verdict::Pass => RGBColor(233, 248, 237),
+            Verdict::Fail => RGBColor(253, 234, 234),
+            Verdict::Contrast => RGBColor(253, 246, 224),
+            Verdict::Reference => RGBColor(235, 240, 253),
+        }
+    }
+}
+
+fn both(v: nums::Both) -> String {
+    format!("{:.4} ff  /  {:.4} rec", v.0, v.1)
 }
 
 const W: u32 = 1400;
@@ -144,12 +232,18 @@ fn box_card(
     Ok(())
 }
 
+/// A bar row with an explicit chance line.
+///
+/// Without it a bar at 0.5008 on a two-class task reads as "half as good as
+/// 1.0" rather than "did not learn", which is the same manufactured ordering
+/// Panel A is forbidden to draw.
 fn draw_bar_row(
     root: &DrawingArea<SVGBackend<'_>, Shift>,
     x0: i32,
     y0: i32,
     width: i32,
     height: i32,
+    chance: Option<f64>,
     bars: &[(&str, f64, RGBColor)],
 ) -> Result<(), DrawErr> {
     let n = bars.len() as i32;
@@ -178,124 +272,232 @@ fn draw_bar_row(
         )?;
         centered(root, (bx + bar_w / 2, base + 18), name, 14, BLACK)?;
     }
+    if let Some(level) = chance {
+        let y = base - (level * (height - 50) as f64) as i32;
+        let dash = 12;
+        let mut x = x0;
+        while x < x0 + width {
+            map_draw(root.draw(&PathElement::new(
+                vec![(x, y), ((x + dash).min(x0 + width), y)],
+                RGBColor(120, 120, 120).stroke_width(2),
+            )))?;
+            x += dash * 2;
+        }
+        label(
+            root,
+            (x0 + width + 6, y - 8),
+            &format!("chance {level:.2}"),
+            12,
+            RGBColor(120, 120, 120),
+        )?;
+    }
+    Ok(())
+}
+
+/// One rule, drawn by rule rather than by topology.
+///
+/// `PAPER_FIGURE_SPEC.md` requires this: the low-richness / low-addressability
+/// cell holds `MatchedLocal` at chance and `MatchedRlFlat` at 0.78, and
+/// collapsing them into one "broadcast ±1" box is a stronger version of the
+/// overreach the lead claim's wording exists to avoid.
+fn rule_card(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+    (x0, y0, x1, y1): (i32, i32, i32, i32),
+    verdict: Verdict,
+    rule: &str,
+    mechanism: &str,
+    value: nums::Both,
+) -> Result<(), DrawErr> {
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, y0), (x1, y1)],
+        verdict.fill().filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, y0), (x1, y1)],
+        verdict.border().stroke_width(2),
+    )))?;
+    // The verdict is a labelled chip, not a colour alone: the categorical
+    // encoding has to survive a greyscale print.
+    let chip = 128;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0 + 10, y0 + 10), (x0 + 10 + chip, y0 + 32)],
+        verdict.border().filled(),
+    )))?;
+    centered(root, (x0 + 10 + chip / 2, y0 + 21), verdict.tag(), 12, WHITE)?;
+    label(root, (x0 + 10 + chip + 14, y0 + 12), rule, 16, BLACK)?;
+    label(root, (x0 + 12, y0 + 44), mechanism, 12, RGBColor(90, 90, 90))?;
+    label(root, (x0 + 12, y0 + 66), &both(value), 15, BLACK)?;
     Ok(())
 }
 
 fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
-        (40, 20),
+        (36, 16),
         "Figure M — Mechanism: richness × addressability",
         26,
         BLACK,
     )?;
     label(
         root,
-        (40, 55),
-        "Lead FAIL = broadcast ±1 three-factor (not every broadcast). XOR supplies locality evidence.",
-        14,
+        (36, 50),
+        "Matched dense-LIF forward, n = 20 per cell, 2026-08-25 re-run at MATCHED_INPUT_SCALE = 2.0. Pass / fail / at-chance — not a graded surface.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // The ceiling is the point of the panel, not an aside: with the reference
+    // saturated, every passing arm reduces to "above 0.75" and no ordering
+    // among them may be drawn or claimed.
+    let reference = Verdict::Reference;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 74), (1364, 112)],
+        reference.fill().filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 74), (1364, 112)],
+        reference.border().stroke_width(2),
+    )))?;
+    label(
+        root,
+        (48, 84),
+        &format!(
+            "SuperSpike BPTT reference saturates: {:.4} ff / {:.4} rec, every suite, both graphs. Every other rule tested clears the gate, so this panel shows WHICH SINGLE RULE FAILS a task the rest saturate — it does not rank the rest.",
+            nums::CEILING.0,
+            nums::CEILING.1
+        ),
+        13,
+        BLACK,
+    )?;
+
+    label(root, (352, 126), "Low addressability (broadcast)", 15, BLACK)?;
+    label(
+        root,
+        (930, 126),
+        "High addressability (directed / local feedback)",
+        15,
+        BLACK,
+    )?;
+    label(root, (16, 236), "Low richness", 14, BLACK)?;
+    label(root, (16, 256), "(±1)", 14, RGBColor(90, 90, 90))?;
+    label(root, (16, 470), "High richness", 14, BLACK)?;
+    label(root, (16, 490), "(graded)", 14, RGBColor(90, 90, 90))?;
+
+    // --- low richness ------------------------------------------------------
+    // Two rules, one cell. Drawn apart, with the distance between them stated,
+    // because that distance is the reason the lead claim says "±1 three-factor"
+    // and not "broadcast".
+    map_draw(root.draw(&Rectangle::new(
+        [(186, 148), (798, 372)],
+        RGBColor(248, 248, 250).filled(),
+    )))?;
+    rule_card(
+        root,
+        (196, 156, 788, 254),
+        Verdict::Fail,
+        "±1 × surrogate eligibility",
+        "MatchedLocal — the lead FAIL, and at chance on both graphs",
+        nums::BROADCAST_PM1,
+    )?;
+    rule_card(
+        root,
+        (196, 262, 788, 360),
+        Verdict::Contrast,
+        "±1 broadcast REINFORCE",
+        "MatchedRlFlat — same reward, same topology, well above chance",
+        nums::RL_FLAT,
+    )?;
+    label(
+        root,
+        (196, 366),
+        "One cell, two rules, 0.28 apart. Collapsing them into one “broadcast ±1” box is the overreach the lead claim’s wording exists to avoid.",
+        11,
+        RGBColor(110, 110, 110),
+    )?;
+
+    rule_card(
+        root,
+        (818, 156, 1364, 254),
+        Verdict::Pass,
+        "REINFORCE × frozen B_i",
+        "MatchedRlReinforceFb — directed feedback, same ±1 reward",
+        nums::RL_FB,
+    )?;
+
+    // --- high richness -----------------------------------------------------
+    rule_card(
+        root,
+        (196, 400, 788, 498),
+        Verdict::Contrast,
+        "broadcast graded error",
+        "MatchedBroadcastGradedError — on the DFA schedule; not a locality proof",
+        nums::BROADCAST_GRADED,
+    )?;
+    rule_card(
+        root,
+        (818, 400, 1364, 498),
+        Verdict::Pass,
+        "graded error × DFA",
+        "MatchedDfaGradedError",
+        nums::DFA,
+    )?;
+    label(
+        root,
+        (818, 512),
+        "Richness alone does not decide it: a graded BROADCAST rule reaches 0.9975.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (818, 534),
+        "Addressability alone does not either: ±1 through a frozen B_i passes.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (818, 556),
+        "What fails is the one rule that has neither.",
+        12,
         RGBColor(60, 60, 60),
     )?;
 
-    label(
-        root,
-        (280, 100),
-        "Low addressability (broadcast)",
-        14,
-        BLACK,
-    )?;
-    label(
-        root,
-        (780, 100),
-        "High addressability (directed / local FB)",
-        14,
-        BLACK,
-    )?;
-    label(root, (40, 220), "Low richness (±1 / flat)", 13, BLACK)?;
-    label(root, (40, 400), "High richness (graded)", 13, BLACK)?;
-
-    let fail = RGBColor(220, 90, 90);
-    let pass = RGBColor(90, 170, 110);
-    let disclose = RGBColor(230, 200, 90);
-
-    box_card(
-        root,
-        (200, 130, 620, 300),
-        RGBColor(255, 235, 235),
-        fail,
-        "Broadcast ±1 three-factor  FAIL",
-        &[
-            &format!("acc {:.4}", nums::BROADCAST_PM1),
-            "gap LCB 0.0000",
-            "c1-match-5dc6822e71229e9e",
-        ],
-    )?;
-    box_card(
-        root,
-        (700, 130, 1280, 300),
-        RGBColor(230, 250, 235),
-        pass,
-        "REINFORCE × frozen B  PASS",
-        &[
-            &format!("acc {:.4}", nums::RL_FB),
-            "gap LCB 0.6846",
-            "c1-rl-42eddc9c801308e9",
-        ],
-    )?;
-    box_card(
-        root,
-        (200, 330, 620, 500),
-        RGBColor(255, 250, 220),
-        disclose,
-        "Broadcast-graded  (disclose)",
-        &[
-            &format!("acc {:.4} on DFA schedule", nums::BROADCAST_GRADED),
-            "not a locality proof",
-            "c1-dfa-c8c4fe0899908b84 contrast",
-        ],
-    )?;
-    box_card(
-        root,
-        (700, 330, 1280, 500),
-        RGBColor(230, 250, 235),
-        pass,
-        "Graded DFA  PASS",
-        &[
-            &format!("acc {:.4}", nums::DFA),
-            "gap LCB 0.6894",
-            "c1-dfa-c8c4fe0899908b84",
-        ],
-    )?;
-
+    // --- Panel B -----------------------------------------------------------
     map_draw(root.draw(&Rectangle::new(
-        [(40, 540), (1360, 860)],
+        [(36, 622), (1364, 872)],
         RGBColor(245, 245, 248).filled(),
     )))?;
     label(
         root,
-        (60, 560),
-        "Panel B — XOR locality flip (1-layer; deep_xor_thresh.json)",
-        18,
+        (52, 632),
+        "Panel B — XOR locality flip (1-layer xor_thresh). Addressability evidence: broadcast fails a task DFA solves.",
+        15,
         BLACK,
     )?;
     draw_bar_row(
         root,
-        100,
-        620,
-        1200,
-        200,
+        90,
+        664,
+        1180,
+        170,
+        Some(0.5),
         &[
-            ("Broadcast", nums::XOR_BCAST, fail),
-            ("DFA", nums::XOR_DFA, pass),
-            ("Gradient", nums::XOR_GRAD, RGBColor(90, 120, 200)),
+            ("Broadcast — at chance", nums::XOR_BCAST, Verdict::Fail.border()),
+            ("DFA — solves", nums::XOR_DFA, Verdict::Pass.border()),
+            (
+                "Gradient — ceiling",
+                nums::XOR_GRAD,
+                Verdict::Reference.border(),
+            ),
         ],
     )?;
     label(
         root,
-        (60, 840),
-        "Caption: lead matched FAIL is broadcast ±1 three-factor; locality evidence is the XOR flip, not coincidence alone.",
+        (52, 848),
+        "Not claimed for 2-layer mid-init depth locality, where broadcast also solves. Matched PASS does not imply live muted-θ / k-WTA G2 PASS.",
         12,
-        RGBColor(50, 50, 50),
+        RGBColor(90, 90, 90),
     )?;
     Ok(())
 }
@@ -304,74 +506,68 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
         (40, 24),
-        "Figure 1 — Matched rule-swap schematic",
+        "Figure 5 — Matched rule-swap schematic",
         26,
         BLACK,
     )?;
     label(
         root,
         (40, 60),
-        "Forward held fixed; only the update rule changes. Lead FAIL label: broadcast ±1 three-factor.",
+        "Forward held fixed; only the update rule changes. Lead FAIL label: broadcast ±1 three-factor. Feed-forward / recurrent, 2026-08-25 re-run.",
         14,
         RGBColor(60, 60, 60),
     )?;
 
     box_card(
         root,
-        (80, 140, 520, 420),
+        (60, 200, 480, 470),
         RGBColor(235, 240, 255),
         RGBColor(70, 100, 180),
         "Dense-LIF coincidence forward",
         &[
             "shared win / wrec / wout",
             "continuous frames",
-            &format!("SuperSpike ceiling {:.4}", nums::GRAD_MATCH),
+            "both graphs: wrec = 0 and wrec live",
+            &format!("SuperSpike ceiling {:.4}", nums::CEILING.0),
         ],
     )?;
 
     let plugs = [
         (
-            620,
             120,
-            "Broadcast ±1 3F",
-            format!("FAIL  {:.4}", nums::BROADCAST_PM1),
-            RGBColor(220, 90, 90),
+            Verdict::Fail,
+            "±1 × surrogate eligibility",
+            "MatchedLocal — scalar reward, no addressing",
+            nums::BROADCAST_PM1,
         ),
         (
-            620,
             300,
-            "DFA graded×B",
-            format!("PASS  {:.4}", nums::DFA),
-            RGBColor(90, 170, 110),
+            Verdict::Pass,
+            "graded error × DFA",
+            "MatchedDfaGradedError — graded error, fixed random feedback",
+            nums::DFA,
         ),
         (
-            620,
             480,
-            "RL reinforce_fb",
-            format!("PASS  {:.4}", nums::RL_FB),
-            RGBColor(90, 170, 110),
+            Verdict::Pass,
+            "REINFORCE × frozen B_i",
+            "MatchedRlReinforceFb — ±1 reward through directed feedback",
+            nums::RL_FB,
         ),
         (
-            620,
             660,
-            "BPTT / SuperSpike",
-            format!("ceiling  {:.4}", nums::GRAD_MATCH),
-            RGBColor(90, 120, 200),
+            Verdict::Reference,
+            "SuperSpike BPTT",
+            "the ceiling every other arm is measured against",
+            nums::CEILING,
         ),
     ];
-    for (x, y, title, body, color) in plugs {
+    for (y, verdict, title, mechanism, value) in plugs {
         map_draw(root.draw(&PathElement::new(
-            vec![(520, 280), (x, y + 50)],
-            color.stroke_width(2),
+            vec![(480, 335), (560, y + 55)],
+            verdict.border().stroke_width(2),
         )))?;
-        box_card(
-            root,
-            (x, y, x + 640, y + 120),
-            RGBColor(250, 250, 250),
-            color,
-            title,
-            &[&body],
-        )?;
+        rule_card(root, (560, y, 1300, y + 110), verdict, title, mechanism, value)?;
     }
     Ok(())
 }
@@ -380,7 +576,7 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
         (40, 24),
-        "Figure 3 — Engine C1 condition means",
+        "Figure 7 — Engine C1 condition means",
         26,
         BLACK,
     )?;
@@ -396,8 +592,9 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
         root,
         80,
         140,
-        1000,
+        940,
         520,
+        Some(0.5),
         &[
             ("local-assembly", nums::C1_LOCAL, RGBColor(220, 90, 90)),
             ("dense-local", nums::C1_DENSE, RGBColor(200, 140, 80)),
@@ -428,59 +625,79 @@ fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     label(
         root,
         (40, 54),
-        "Same forward → broadcast ±1 three-factor fails; richer credit passes; live k-WTA transfer fails.",
+        "Same forward → ±1 × surrogate eligibility fails; every other rule tested passes against a reference at 1.0000; live k-WTA transfer fails.",
         14,
         RGBColor(60, 60, 60),
+    )?;
+    // Scope, because this abstract depicts the SECONDARY program. The
+    // manuscript leads with the SHD read-out and has no graphical abstract of
+    // its own yet -- an open authoring task, recorded in PAPER_FIGURE_SPEC.md
+    // rather than papered over here.
+    label(
+        root,
+        (40, 78),
+        "Secondary program (matched-architecture kill gate). The lead SHD read-out program has no graphical abstract specified.",
+        12,
+        RGBColor(120, 120, 120),
     )?;
 
     box_card(
         root,
-        (40, 120, 300, 360),
+        (36, 130, 300, 640),
         RGBColor(235, 240, 255),
         RGBColor(70, 100, 180),
         "Dense-LIF forward",
-        &["coincidence task", "shared architecture"],
+        &[
+            "coincidence task",
+            "shared architecture",
+            "wrec = 0 and wrec live",
+            "",
+            &format!("BPTT reference {:.4}", nums::CEILING.0),
+        ],
     )?;
 
     let rules = [
         (
-            340,
-            "±1 3F",
-            format!("FAIL {:.2}", nums::BROADCAST_PM1),
-            RGBColor(220, 90, 90),
+            Verdict::Fail,
+            "±1 × surrogate eligibility",
+            "MatchedLocal — scalar reward, no addressing",
+            nums::BROADCAST_PM1,
         ),
         (
-            560,
-            "DFA",
-            format!("PASS {:.2}", nums::DFA),
-            RGBColor(90, 170, 110),
+            Verdict::Pass,
+            "graded error × DFA",
+            "MatchedDfaGradedError — richer error, addressed",
+            nums::DFA,
         ),
         (
-            780,
-            "RL×B",
-            format!("PASS {:.2}", nums::RL_FB),
-            RGBColor(90, 170, 110),
+            Verdict::Pass,
+            "REINFORCE × frozen B_i",
+            "MatchedRlReinforceFb — same ±1 reward, addressed",
+            nums::RL_FB,
         ),
     ];
-    for (x, title, body, color) in rules {
-        box_card(
-            root,
-            (x, 140, x + 200, 340),
-            RGBColor(250, 250, 250),
-            color,
-            title,
-            &[&body],
-        )?;
+    for (i, (verdict, title, mechanism, value)) in rules.into_iter().enumerate() {
+        let y = 130 + (i as i32) * 170;
+        rule_card(root, (330, y, 970, y + 150), verdict, title, mechanism, value)?;
     }
+    // The passes are stacked, not ranked: with the reference saturated there is
+    // no ordering among them to draw.
+    label(
+        root,
+        (330, 648),
+        "The two passes are not ordered: against a reference at 1.0000 each reduces to “above 0.75”.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
 
     map_draw(root.draw(&PathElement::new(
-        vec![(1000, 250), (1120, 250)],
+        vec![(1000, 385), (1090, 385)],
         BLACK.stroke_width(3),
     )))?;
-    centered(root, (1060, 220), "transfer →", 14, BLACK)?;
+    centered(root, (1045, 356), "transfer →", 14, BLACK)?;
     centered(
         root,
-        (1060, 280),
+        (1045, 412),
         "live muted-θ / k-WTA",
         12,
         RGBColor(80, 80, 80),
@@ -488,30 +705,44 @@ fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
 
     box_card(
         root,
-        (1140, 140, 1360, 360),
-        RGBColor(255, 235, 235),
+        (1110, 130, 1364, 640),
+        RGBColor(253, 234, 234),
         RGBColor(220, 90, 90),
         "Live RFB → G2 FAIL",
         &[
             &format!("acc {:.4}", nums::LIVE_RFB),
             "gap-close still < 0.5",
             "v13–v24 package",
+            "",
+            "structured B clears the",
+            "accuracy floor only",
         ],
     )?;
 
     label(
         root,
-        (40, 420),
-        "Disclose elsewhere (Figure M): broadcast-graded 0.9863 on DFA schedule — does not erase the ±1 lead FAIL.",
-        13,
-        RGBColor(80, 80, 80),
+        (36, 700),
+        &format!(
+            "Disclose (Figure M): a broadcast-GRADED rule reaches {:.4}, and ±1 broadcast REINFORCE reaches {:.4}. Neither erases the ±1 × eligibility FAIL, and neither is a PASS.",
+            nums::BROADCAST_GRADED.0,
+            nums::RL_FLAT.0
+        ),
+        14,
+        RGBColor(70, 70, 70),
     )?;
     label(
         root,
-        (40, 460),
+        (36, 730),
+        "Matched PASS does not imply live muted-θ / k-WTA G2 PASS. No claim of biology, Assembly Calculus, impossibility, or neuromorphic hardware.",
+        13,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, 760),
         "Avoid: brain icons, “solved,” Assembly Calculus branding, bare “broadcast credit topology.”",
         12,
-        RGBColor(100, 100, 100),
+        RGBColor(140, 140, 140),
     )?;
     Ok(())
 }

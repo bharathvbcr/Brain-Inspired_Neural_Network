@@ -461,14 +461,28 @@ to make the gain trend look cleaner.
 
 # Secondary program — matched-architecture kill gate
 
-> **Artwork status for everything below.** Every file in
+> **Artwork status for everything below, updated 2026-08-27.** Four of the nine
+> files in
 > [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
-> is dated **24 July** in the working tree, which is before the 2026-08-25
-> matched re-run. The artwork therefore predates the redraw Figure M requires
-> and the value correction Figure 6 requires. The filenames below are the files
-> that exist; **they are not renamed to match this file’s new numbering**, so
-> `fig1_matched_rule_swap` is the artwork for Figure 5, `fig2_matched_means` for
-> Figure 6, and so on.
+> are **regenerated to the 2026-08-25 re-run**:
+> `figM_mechanism_richness_addressability`, `fig1_matched_rule_swap`,
+> `fig3_engine_c1_means` and `graphical_abstract`. They have one owner —
+> `binn-lab/src/paper_figures.rs`, run as
+> `cargo run --release -p binn-lab --features plots --bin paper-figures` — which
+> until today hardcoded the superseded value block quoted under Figure 6 and
+> reproduced the committed files byte-for-byte from it.
+> `scripts/test_paper_figures_match_the_spec.py` now parses this sheet and fails
+> if the generator and it disagree again.
+>
+> The other five files are still dated **24 July**, before the re-run. **No
+> generator produces them**, so bringing them current is an authoring task
+> rather than a re-run: `fig2_matched_means` (Figure 6) and `fig4_transfer_ladder`
+> (Figure 8) are stale and named as such below; `fig0_claim_axis_legend`,
+> `figD_diff_closure` and `fig5_xor_locality` are unaffected by the re-run.
+>
+> The filenames below are the files that exist; **they are not renamed to match
+> this file’s new numbering**, so `fig1_matched_rule_swap` is the artwork for
+> Figure 5, `fig2_matched_means` for Figure 6, and so on.
 
 ## Graphical abstract (required)
 
@@ -486,7 +500,7 @@ to make the gain trend look cleaner.
 3. Arrow “transfer to live muted-θ / k-WTA C1”
 4. Live RFB + gap-close → FAIL G2 (note: structured B clears acc floor only)
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/graphical_abstract.{png,pdf}` — **exists but is stale** (24 July; predates the re-run).
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/graphical_abstract.{png,pdf}` — **current as of 2026-08-27**: regenerated from the 2026-08-25 re-run, with the two passes stacked rather than ranked and the ±1 broadcast REINFORCE figure disclosed beside the broadcast-graded one.
 
 **Avoid:** brain icons, “solved,” Assembly Calculus branding, bare “broadcast credit topology.”
 
@@ -543,7 +557,7 @@ Source: [`deep_xor_thresh.json`](deep_xor_thresh.json). Do **not** claim the sam
 **Caption (required wording):**  
 “Mechanism evidence for H\*: richness × addressability on a matched dense-LIF forward, n = 20 per cell. The lead matched FAIL is **±1 × surrogate eligibility** specifically — not a ban on every broadcast scalar (broadcast-graded reaches 0.9975) and not on every ±1 rule (±1 broadcast REINFORCE reaches 0.78). Against a SuperSpike BPTT reference at **1.0000**, every other rule tested clears the gate, so this panel shows **which single rule fails a task the rest saturate** and does not rank the rest. Locality / addressability as a necessary ingredient is the XOR flip (broadcast fails; DFA solves), not coincidence alone. Matched PASS still does not imply live muted-θ / k-WTA G2 PASS.”
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figM_mechanism_richness_addressability.{png,pdf}` — **exists but is stale**: it is the pre-redraw graded surface (24 July), not the cliff this spec now requires. Not renamed.  
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figM_mechanism_richness_addressability.{png,pdf}` — **redrawn 2026-08-27** to this specification. Panel A encodes pass / fail / contrast as labelled chips with no accuracy-to-size mapping; the low-richness / low-addressability cell draws `MatchedLocal` and `MatchedRlFlat` as two rules with the 0.28 between them stated; the saturated reference leads the panel. Panel B carries an explicit chance line at 0.50, so the broadcast bar cannot read as “half as good” rather than “did not learn”. Not renamed.  
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.1 / §4.1.
 
 ---
@@ -553,7 +567,7 @@ Source: [`deep_xor_thresh.json`](deep_xor_thresh.json). Do **not** claim the sam
 - One forward graph; three update plugs (broadcast ±1 3F / DFA / RL×B) + BPTT ceiling.
 - Caption: “Forward held fixed; only the update rule changes. Lead FAIL label: broadcast ±1 three-factor.”
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig1_matched_rule_swap.{png,pdf}` — **exists**; the `fig1_` name is historical and is **not** renamed to `fig5_`.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig1_matched_rule_swap.{png,pdf}` — **current as of 2026-08-27**: regenerated from the 2026-08-25 re-run; it previously drew the superseded block. The `fig1_` name is historical and is **not** renamed to `fig5_`.
 
 ## Figure 6 — Matched means (bar or forest) *(was Figure 2)*
 
@@ -595,14 +609,14 @@ specifically; on the DFA schedule the broadcast-*graded* contrast reaches
 every PASS reduces to “the arm scored above 0.75”, and no ordering among them
 may be claimed. Encode pass / fail / at-chance, as Figure M does.
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig2_matched_means.{png,pdf}` — **exists but is stale**: it plots the superseded value block above. Not renamed.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig2_matched_means.{png,pdf}` — **exists but is stale**: it plots the superseded value block above. **No generator produces this file**, so unlike Figure M it cannot be brought current by a re-run; it has to be authored. Not renamed.
 
 ## Figure 7 — Engine C1 condition means *(was Figure 3)*
 
 From [`c1_g2.md`](c1_g2.md): local / dense / gradient / eligibility means + PC.  
 Callout box: H1/H2/θ=∞/`project` unused.
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig3_engine_c1_means.{png,pdf}` — **exists**; `fig3_` name is historical and not renamed.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig3_engine_c1_means.{png,pdf}` — **exists**, and gained a chance line at 0.50 on 2026-08-27: local-assembly (0.4912) and dense-local (0.5000) are at chance on a two-class task, which bars from a zero baseline made look like half the reference rather than no learning. `fig3_` name is historical and not renamed.
 
 ## Figure 8 — Transfer ladder *(was Figure 4)*
 
@@ -621,7 +635,7 @@ Dashed line at acc 0.65 and gap LCB 0.5.
 > Table A). Rungs 2–4 are live-transfer rows and are **unaffected** by the
 > matched re-run — none of them runs on the matched dense-LIF forward.
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig4_transfer_ladder.{png,pdf}` — **exists but is stale at rung 1**. `fig4_` name is historical and not renamed.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig4_transfer_ladder.{png,pdf}` — **exists but is stale at rung 1**. **No generator produces this file**; bringing rung 1 current is an authoring task. `fig4_` name is historical and not renamed.
 
 ## Figure 0 — Claim-axis legend
 
