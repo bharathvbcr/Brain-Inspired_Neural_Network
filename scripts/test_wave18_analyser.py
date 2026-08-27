@@ -88,6 +88,14 @@ class LadderGrid(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.res = Path(self.tmp.name) / "results"
         self.res.mkdir()
+        # An EMPTY archive, so H18-4 is NOT EVALUABLE and does not void the
+        # ladder verdicts these tests are about. Pointing at the committed
+        # corpus made them pass only while it held no `w15col` L2 cells; the
+        # moment waves 15-17 landed, every synthetic ladder here failed its
+        # harness check and voided. A fixture that depends on repo state is not
+        # a fixture.
+        self.archive = Path(self.tmp.name) / "archive"
+        self.archive.mkdir()
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -117,11 +125,17 @@ class LadderGrid(unittest.TestCase):
         out = Path(self.tmp.name) / "report.md"
         proc = subprocess.run(
             [sys.executable, str(ROOT / "scripts/aws/analyse_wave18.py"),
-             "--plan", str(plan), "--results", str(self.res), "--out", str(out)],
+             "--plan", str(plan), "--results", str(self.res),
+             "--archive", str(self.archive), "--out", str(out)],
             capture_output=True, text=True)
         # 0 complete, 2 incomplete-or-invalid; anything else is a crash.
         self.assertIn(proc.returncode, (0, 2), proc.stderr)
-        return out.read_text()
+        report = out.read_text()
+        self.assertIn("**H18-4: NOT EVALUABLE**", report,
+                      "the ladder fixtures must not trip the harness check; if "
+                      "they do, every verdict below is VOID and these tests are "
+                      "measuring nothing")
+        return report
 
     def test_an_interior_maximum_clear_of_both_ends_meets_h18_1(self):
         self.ladder({1: 0.69, 2: 0.78, 3: 0.75, 4: 0.60})

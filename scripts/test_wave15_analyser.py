@@ -266,7 +266,8 @@ class MergedArmsAreOneArm(unittest.TestCase):
         """The number in the fix and the number in its record must agree."""
         text = (ROOT / "results"
                 / "AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md").read_text()
-        for needle in ("+0.1345", "+0.1577", "+0.1337", "0.6442", "w9shf"):
+        for needle in ("+0.1345", "+0.1347", "+0.1577", "+0.1337", "0.6442",
+                       "w9shf"):
             self.assertIn(needle, text)
 
 

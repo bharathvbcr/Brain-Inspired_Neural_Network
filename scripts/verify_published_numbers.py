@@ -57,8 +57,12 @@ def check(label: str, computed: float, claimed: float, tol: float = 5e-5) -> boo
     return ok
 
 
-def acc_present(root: Path, stem: str) -> dict[int, float]:
+def acc_present(root: Path, stem: str, seeds=None) -> dict[int, float]:
     """Accuracies keyed by seed, for arms where a cell may legitimately be absent.
+
+    `seeds` defaults to the campaign's twelve. Wave 17 extends two arms to
+    thirty-two, and reading those with the default would silently return the
+    archived twelve and call it n=32 -- which it did, once.
 
     `acc` above refuses a missing cell, which is right for the waves whose arms
     are complete by construction. Waves 13 and 14 measure arms that diverge, so
@@ -75,7 +79,7 @@ def acc_present(root: Path, stem: str) -> dict[int, float]:
     from cell_validity import validity_problems
 
     out = {}
-    for seed in SEEDS:
+    for seed in (SEEDS if seeds is None else seeds):
         path = root / f"{stem}__s{seed}.json"
         if not path.is_file():
             continue
@@ -287,6 +291,105 @@ def main() -> int:
         gain, pairs = paired_gain(treatment, control)
         results.append(check(f"width ladder d32/L4 gain at h{width} (n={pairs})",
                              gain, published(AZDOC, pattern)))
+
+    # ---- The six-rung ladder, which says something different -------------
+    # The four-rung check above still guards the Azure document's own table and
+    # still passes. It is kept rather than replaced because those four numbers
+    # did not move. What moved is the SHAPE, and the shape read off four rungs
+    # is not the shape read off six, so the superseding claim gets its own
+    # assertion instead of inheriting the old one.
+    six = []
+    for width, attn_root, attn_stem, rate_root, rate_stem in (
+        (128, V1, f"r1cal__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4",
+         V1, f"w1__ff-fixed__h128__e400__{ANCHOR}"),
+        (256, V2, f"w16lad__ff-fixed-attn__h256__e400__{ANCHOR}__d32l4",
+         V2, f"w16lad__ff-fixed__h256__e400__{ANCHOR}"),
+        (384, V2, f"w16lad__ff-fixed-attn__h384__e400__{ANCHOR}__d32l4",
+         V2, f"w16lad__ff-fixed__h384__e400__{ANCHOR}"),
+        (512, V2, f"w8wid__ff-fixed-attn__h512__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h512__e400__{ANCHOR}"),
+        (768, V2, f"w16lad__ff-fixed-attn__h768__e400__{ANCHOR}__d32l4",
+         V2, f"w16lad__ff-fixed__h768__e400__{ANCHOR}"),
+        (1024, V2, f"w8wid__ff-fixed-attn__h1024__e400__{ANCHOR}__d32l4",
+         V1, f"w3wid__ff-fixed__h1024__e400__{ANCHOR}"),
+    ):
+        six.append(paired_gain(acc_present(attn_root, attn_stem),
+                               acc_present(rate_root, rate_stem))[0])
+    not_monotone = not all(a > b for a, b in zip(six, six[1:]))
+    collapse_is_last_step = six[4] > 0 > six[5]
+    only_one_inversion = sum(a <= b for a, b in zip(six, six[1:])) == 1
+    six_ok = not_monotone and collapse_is_last_step and only_one_inversion
+    print(f"  [{'ok  ' if six_ok else 'FAIL'}] "
+          f"{'six-rung ladder: one inversion, collapse at h1024':<46} "
+          f"{'; '.join(f'{g:+.4f}' for g in six)}")
+    results.append(six_ok)
+
+    # ---- Waves 15-17: the n=32 headline and the two second-order gaps ------
+    # These are the quantities `check_every_number.py` deliberately does not
+    # generate -- merged cross-wave arms and differences OF gains -- so they are
+    # verified by name here and excluded there by name, with each pointing at
+    # the other.
+    W1517 = "RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md"
+
+    W17_SEEDS = [5170001 + i for i in range(32)]
+
+    def merged_arm(archive_stem, new_stem):
+        """The archived twelve seeds plus the twenty new ones, one arm.
+
+        The new stem is read over all thirty-two seeds, not the default twelve:
+        reading it with the default returns nothing and leaves the archived
+        twelve wearing an n=32 label.
+        """
+        cells = dict(acc_present(V2, archive_stem) or acc_present(V1, archive_stem))
+        cells.update(acc_present(V2, new_stem, W17_SEEDS))
+        return cells
+
+    h_rate = merged_arm(f"w1__ff-fixed__h128__e400__{ANCHOR}",
+                        f"w17hdl__ff-fixed__h128__e400__{ANCHOR}")
+    h_attn = merged_arm(f"r1cal__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4",
+                        f"w17hdl__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4")
+    shared = sorted(set(h_rate) & set(h_attn))
+    results.append(check(f"H17-1 rate mean at n={len(shared)}",
+                         sum(h_rate[s] for s in shared) / len(shared),
+                         published(W1517, r"\| \*\*32\*\* \| \*\*(0\.\d+)\*\*")))
+    results.append(check(f"H17-1 attention mean at n={len(shared)}",
+                         sum(h_attn[s] for s in shared) / len(shared),
+                         published(W1517, r"\| \*\*32\*\* \| \*\*0\.\d+\*\* \| \*\*(0\.\d+)\*\*")))
+    results.append(check(f"H17-1 paired gain at n={len(shared)}",
+                         paired_gain(h_attn, h_rate)[0],
+                         published(W1517, r"\| \*\*32\*\* \| \*\*0\.\d+\*\* \| \*\*0\.\d+\*\* \| \*\*\+(0\.\d+)\*\*")))
+
+    # The two adjacent-rung gaps the sweep cannot generate. Stated as a signed
+    # difference of gains, which is why h384 - h512 is negative and is the one
+    # that breaks H16-1.
+    def rung(attn_root, attn_stem, rate_root, rate_stem):
+        return paired_gain(acc_present(attn_root, attn_stem),
+                           acc_present(rate_root, rate_stem))[0]
+    g256 = rung(V2, f"w16lad__ff-fixed-attn__h256__e400__{ANCHOR}__d32l4",
+                V2, f"w16lad__ff-fixed__h256__e400__{ANCHOR}")
+    g384 = rung(V2, f"w16lad__ff-fixed-attn__h384__e400__{ANCHOR}__d32l4",
+                V2, f"w16lad__ff-fixed__h384__e400__{ANCHOR}")
+    g512 = rung(V2, f"w8wid__ff-fixed-attn__h512__e400__{ANCHOR}__d32l4",
+                V1, f"w3wid__ff-fixed__h512__e400__{ANCHOR}")
+    results.append(check("H16-1 gap h256 - h384", g256 - g384,
+                         published(W1517, r"gaps: \+0\.\d+, \+(0\.\d+)"), tol=5e-4))
+    results.append(check("H16-1 gap h384 - h512 (the negative one)", g384 - g512,
+                         -published(W1517, r"gaps: \+0\.\d+, \+0\.\d+, \*\*−(0\.\d+)\*\*"),
+                         tol=5e-4))
+
+    # The spread behind "not distinguishable at n=12". A per-seed sd, which this
+    # repository's sweep derives no variances for.
+    a384 = acc_present(V2, f"w16lad__ff-fixed-attn__h384__e400__{ANCHOR}__d32l4")
+    r384 = acc_present(V2, f"w16lad__ff-fixed__h384__e400__{ANCHOR}")
+    a512 = acc_present(V2, f"w8wid__ff-fixed-attn__h512__e400__{ANCHOR}__d32l4")
+    r512 = acc_present(V1, f"w3wid__ff-fixed__h512__e400__{ANCHOR}")
+    common = sorted(set(a384) & set(r384) & set(a512) & set(r512))
+    deltas = [(a384[s] - r384[s]) - (a512[s] - r512[s]) for s in common]
+    mean = sum(deltas) / len(deltas)
+    sd = (sum((d - mean) ** 2 for d in deltas) / len(deltas)) ** 0.5
+    results.append(check("H16-1 sd of the seed-paired h384-h512 difference", sd,
+                         published(W1517, r"sd\n(0\.\d+)\*\*|sd\s*\*?\*?(0\.\d+)"),
+                         tol=5e-4))
 
     # The ladder is only a ladder if its rungs are ordered as published: the
     # gain decays across h128 -> h256 -> h512 and then collapses. Asserting the

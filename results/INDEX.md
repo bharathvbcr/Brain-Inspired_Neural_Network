@@ -2,12 +2,12 @@
 
 # Record index
 
-305 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+306 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 37 | 0 |
-| Results | 33 | 2 |
+| Results | 34 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 8 | 0 |
 | Amendments | 15 | 1 |
@@ -100,6 +100,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-27 | [RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md) | Result — waves 15–17: the collapse is a threshold in width, and the headline holds at n=32 |
 | 2026-08-25 | [RESULT_2026-08-25_MATCHED_ARCH_RERUN.md](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md) | Result — the lead negative survives both graphs, and three of the four contrasts that gave it meaning do not |
 | 2026-08-24 | [RESULT_2026-08-24_READOUT_ABLATION.md](RESULT_2026-08-24_READOUT_ABLATION.md) | Result — the readout is exonerated, and the enumeration is still incomplete |
 | 2026-08-24 | [RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md) | Result — every configurable difference is now measured, and together they do not explain the gap |

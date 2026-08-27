@@ -49,11 +49,15 @@ AWS = [
     ROOT / "results/shd_attention_campaign_v2",
 ]
 
+#: Raised 2026-08-27 from 79/8 when wave 16 regenerated the h256/d32l4 rung:
+#: its four Azure cells gained AWS twins and are byte-identical to them, so the
+#: overlap grew by one configuration and four pairs and the excluded set fell
+#: from 16 cells to 12. The floor moves with the corpus or it stops being a floor.
 #: Pinned so that a narrowed glob or a moved directory fails loudly instead of
 #: comparing fewer cells and still reporting agreement. Raise it when a wave
 #: adds overlap; never lower it to make a run pass.
-MIN_PAIRS = 79
-MIN_CONFIGURATIONS = 8
+MIN_PAIRS = 83
+MIN_CONFIGURATIONS = 9
 
 
 def configuration(path: Path, cell: dict) -> tuple:

@@ -1590,8 +1590,12 @@ CORPUS_BASELINE = {
         (9, 9, "4bc73f151a70148e"),
     "shd_attention_campaign_v1":
         (528, 528, "3b49c49ce8954939"),
+    #: Re-frozen 2026-08-27 on landing waves 15-17: 224 cells added, all valid.
+    #: 283 -> 507 and 273 -> 497, so the ten invalid cells are the same ten
+    #: `w13rec` cells as before and no archived verdict moved. See
+    #: `RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`.
     "shd_attention_campaign_v2":
-        (283, 273, "309c61dfd714d7ad"),
+        (507, 497, "104e61619a0848c7"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":

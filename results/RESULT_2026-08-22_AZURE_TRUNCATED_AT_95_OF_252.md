@@ -135,6 +135,25 @@ collapses between h512 and h1024** — it does not thin out steadily and cross
 zero. The published reading, "the gain inverts by h1024", is true and is the
 weaker of the two available.
 
+> **SUPERSEDED 2026-08-27 by [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md) §5.**
+> Wave 16 added h384 and h768 at twelve seeds each. On the six-rung ladder the
+> paragraph above is wrong in two ways, and both were invisible at four rungs:
+>
+> 1. **The decay is not strictly ordered.** h384 is +0.0760 and h512 is +0.0876,
+>    so the sequence rises between them. The inversion is inside its own noise
+>    (seed-paired difference −0.0116, sd 0.0253, negative in 7 of 12), so this is
+>    a statement that h384 and h512 cannot be ordered at n=12 — not that there is
+>    a dip.
+> 2. **The collapse is between h768 and h1024**, not h512 and h1024. h768 is
+>    still positive at **+0.0560**.
+>
+> The four numbers in the table above are unchanged and remain correct. The four
+> Azure h256 cells are now **byte-identical to their AWS twins** across thirteen
+> scientific fields, and the AWS gain over the same four seeds is **+0.0962** —
+> this rung's number to the digit. At twelve seeds it is +0.0966. The rung is
+> confirmed, not replaced, and it is now a cross-ISA check on the twelve rather
+> than the evidence itself.
+
 **This is descriptive and is not a verdict.** AZ8-2 was registered at h1024
 only; no criterion was registered at h256 or h512, and **four pairs is a third
 of the terminal seed count**, so the rung locates the collapse and does not

@@ -113,6 +113,24 @@ ELSEWHERE = [
     ("0.1058", "the published-2ms gain quoted in W3 and W8 between arms whose "
                "seed sets overlap on fewer than three seeds"),
     ("0.0242", "a per-seed SPREAD, not a mean; this sweep derives no variances"),
+    # Waves 15-17. The three headline numbers are means of a MERGED arm -- the
+    # archived twelve seeds plus wave 17's twenty -- and this sweep groups by
+    # stem, so `r1cal` and `w17hdl` are separate groups and their union is not
+    # generated. The two gaps are differences OF gains and the sd is a variance.
+    # Each is checked by name in verify_published_numbers.py.
+    ("0.7057", "H17-1 rate mean at n=32, a merged r1cal/w1 + w17hdl arm; "
+               "checked by name in verify_published_numbers.py"),
+    ("0.8332", "H17-1 attention mean at n=32, merged; checked by name in "
+               "verify_published_numbers.py"),
+    ("0.1275", "H17-1 paired gain at n=32, merged; checked by name in "
+               "verify_published_numbers.py"),
+    ("0.0206", "H16-1 gap h256 - h384, a difference OF gains; checked by name "
+               "in verify_published_numbers.py"),
+    ("0.0116", "H16-1 gap h384 - h512, the negative one that breaks the chain; "
+               "a difference OF gains, checked by name in "
+               "verify_published_numbers.py"),
+    ("0.0253", "the sd of the seed-paired h384-h512 difference; a per-seed "
+               "SPREAD, and this sweep derives no variances"),
     ("0.7556", "ff+fixed(e10)/ff+fixed(e400): a ratio across budgets, which is "
                "a two-axis comparison"),
     ("0.9029", "attn(e5)/attn(e400): the same, and verified by name"),

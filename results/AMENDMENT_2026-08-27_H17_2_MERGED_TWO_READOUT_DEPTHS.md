@@ -32,19 +32,23 @@ control is not a hypothetical contamination.
 
 ## 2. Size of the error
 
-| archived control | archived 12 pairs | merged 28 pairs | ratio vs rate arm |
+Measured at the 28 pairs available when the bug was found, with the wave's
+terminal n=32 in the last column:
+
+| archived control | archived 12 pairs | merged 28 pairs | at n=32 |
 |---|---:|---:|---:|
-| `w1 … d32l1` (as coded) | **+0.1878** | **+0.1577** | 12.3× |
-| `w9shf … d32l4` (correct) | **+0.1337** | **+0.1345** | 10.5× |
+| `w1 … d32l1` (as coded) | **+0.1878** | **+0.1577** | — |
+| `w9shf … d32l4` (correct) | **+0.1337** | **+0.1345** | **+0.1347** |
 
 The archived twelve were inflated by **+0.0541**, the merged figure by
-**+0.0232**. The mean accuracies are unambiguous: intact `r1cal` d32l4 is
+**+0.0232**. The corrected value is stable as seeds are added: +0.1337 at 12,
++0.1345 at 28, +0.1347 at 32. The mean accuracies are unambiguous: intact `r1cal` d32l4 is
 0.8320, shuffled `w9shf` d32l4 is 0.6983, shuffled `w1` d32l1 is **0.6442** —
 and that 0.054 is read-out depth, not temporal structure.
 
 **The verdict does not change.** H17-2 was MET as coded and is MET corrected:
-+0.1345 against a +0.05 bar, 28/28 positive against a 24/32 bar, 10.5× against
-a 5.0× bar. What changes is the reported effect size and the fact that the
++0.1347 against a +0.05 bar, 32/32 positive against a 24/32 bar, 9.5× against
+a 5.0× bar at the wave's terminal count. What changes is the reported effect size and the fact that the
 evidence behind it was contaminated.
 
 ## 3. The published claim is unaffected, and is now confirmed at n=28
@@ -56,9 +60,9 @@ from the archived cells, from the `d32l4` control. The paper never used the
 `d32l1` arm for this contrast.
 
 The corrected merge is the stronger statement, not a retraction: extending from
-12 seeds to 28 moves the shuffle cost from **+0.1337 to +0.1345**, and the
-sixteen new seeds alone give **+0.1350, 16/16 positive**. Two disjoint seed sets
-agree to 0.0013 on the paper's central mechanism claim.
+12 seeds to 32 moves the shuffle cost from **+0.1337 to +0.1347**, every added
+seed positive. Two disjoint seed sets agree to 0.001 on the paper's central
+mechanism claim.
 
 ## 4. Fix, and the class of bug rather than the instance
 
