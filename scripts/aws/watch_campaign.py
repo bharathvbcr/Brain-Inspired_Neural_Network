@@ -102,6 +102,22 @@ def gate_verdicts(bucket: str) -> dict[str, str]:
     return out
 
 
+# NOT BUILT, twice, and the reason is worth keeping next to the checks that were.
+#
+# The obvious third alarm is "this cell has been claimed far longer than cells
+# of its shape take". It cannot be made to work from what is recorded. Measured
+# on 2026-08-28: wave 18's four outstanding cells had been held 5.1 hours
+# against a 3.3-hour median for their configuration — 1.5x over, and entirely
+# innocent. They were running on a c7g.8xlarge at four threads per cell while
+# the median is dominated by cells run at sixteen threads on the larger boxes.
+#
+# A cell does not record which instance ran it, so the expectation cannot be
+# normalised for thread count, and an alarm on the raw ratio fires on every cell
+# that lands on a smaller box. The same sweep flagged six-minute rate cells at
+# "4x expected" because the expectation was 0.1 hours.
+#
+# `worker_processes` below is the check that does work: it asks whether anything
+# is running at all, which needs no expectation.
 def worker_processes(region: str) -> int | None:
     """How many `shd-instrument train-cell` processes the fleet is running.
 
