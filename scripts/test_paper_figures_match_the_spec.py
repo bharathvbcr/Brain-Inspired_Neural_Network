@@ -459,6 +459,57 @@ class PanelAEncodingTest(unittest.TestCase):
         self.assertIn("Some(0.5)", self.fig_m)
 
 
+class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
+    """A figure nothing cites does not appear in a submission.
+
+    On 2026-08-27, after all four lead figures were drawn,
+    `PAPER_DRAFT.md` referenced **Figure M four times and no other figure at
+    all**. The artwork existed, the spec named where each figure belonged, and
+    the manuscript pointed at none of them — which is the same failure as
+    artwork that does not exist, arriving one step later.
+
+    Scoped to the lead program and Figure M. The secondary program's figures
+    are numbered 5–9 in the spec and the draft does not call them out; that is
+    a live authoring gap, not something this file should assert away.
+    """
+
+    DRAFT = ROOT / "results/PAPER_DRAFT.md"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = cls.DRAFT.read_text()
+
+    def test_each_lead_figure_is_cited(self):
+        for n in (1, 2, 3, 4):
+            with self.subTest(figure=n):
+                self.assertRegex(
+                    self.text, rf"\(Figure {n}\)",
+                    f"Figure {n} is drawn but the manuscript never refers to it")
+
+    def test_figure_m_is_cited(self):
+        self.assertIn("Figure M", self.text)
+
+    def test_no_lead_figure_is_cited_more_than_its_home(self):
+        """Each is placed once, at the claim a reader meets it on. Repeating a
+        callout in the abstract and again in the discussion is a layout
+        decision, not something to accrue by accident."""
+        for n in (1, 2, 3, 4):
+            with self.subTest(figure=n):
+                self.assertEqual(len(re.findall(rf"\(Figure {n}\)", self.text)), 1)
+
+    def test_every_lead_figure_the_generator_writes_has_a_number(self):
+        """The map from stem to manuscript number, asserted rather than assumed:
+        a fifth lead stem added without a callout would otherwise pass."""
+        source = SOURCE.read_text()
+        stems = set(re.findall(r'"(leadfig\d+_\w+)"', source))
+        self.assertEqual(
+            stems,
+            {"leadfig1_the_conditional", "leadfig2_headline_accuracy",
+             "leadfig3_width_ladder", "leadfig4_resolution_ladder"},
+            "a lead figure was added or removed; give it a manuscript callout "
+            "and list it here")
+
+
 class TheGeneratorOwnsTheArtworkTest(unittest.TestCase):
     """The committed files and the generator's stem list must not drift apart."""
 

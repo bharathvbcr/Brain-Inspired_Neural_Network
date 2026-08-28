@@ -102,12 +102,38 @@ comment explaining *why* it is banned, and a table check asserted against an
 expression that was true by construction. Both now scan drawable code and the
 actual constant block.
 
+## The figures existed and nothing pointed at them
+
+Drawn, checked, committed — and `PAPER_DRAFT.md` referenced **Figure M four
+times and no other figure at all.** All four lead figures were unreachable from
+the manuscript, which is the same failure as artwork that does not exist,
+arriving one step later.
+
+Each is now called out once, at the claim a reader meets it on: §3.5 item 1 →
+Figure 2, item 2 → Figure 1, item 4 → Figure 3, item 5 → Figure 4. That mapping
+is the spec's own — its `Draft cite:` lines already name those sections — so the
+placement was executed rather than invented, and one callout per figure rather
+than one at every location those lines mention, because a `Draft cite` line is a
+provenance map for the author, not an instruction to repeat the callout in the
+abstract and the discussion too.
+
+**No number was touched**, and the sweep confirms it: 72 derived from cells,
+7 named in `ELSEWHERE`, 40 traced to a named record, unchanged either side of
+the edit.
+
+Four tests hold it, all negative-tested: a figure losing its callout, a callout
+duplicating, and a fifth lead stem being added to the generator without one.
+The invariant is deliberately scoped to the lead program and Figure M — the
+secondary program's figures are numbered 5–9 and the draft calls out none of
+them, which is a live authoring gap and not something a test should assert away.
+
 ## What is left
 
 A **lead-program graphical abstract**, which the spec records as
-`TODO(source needed)`. It is the only unspecified piece of figure work in the
-package; everything else either exists or is named as authoring work with its
-reason.
+`TODO(source needed)`, and callouts for the secondary program's Figures 5–9.
+The graphical abstract is the only piece of figure work in the package with no
+specification at all; everything else either exists or is named as authoring
+work with its reason.
 
 ## Files
 
