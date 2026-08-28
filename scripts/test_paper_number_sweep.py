@@ -59,6 +59,7 @@ class SweepPaperTest(unittest.TestCase):
             with mock.patch.object(CEN, "ROOT", root), \
                  mock.patch.object(CEN, "PAPER", root / "results/PAPER_DRAFT.md"), \
                  mock.patch.object(CEN, "PAPER_SOURCES", sources), \
+                 mock.patch.object(CEN, "KNOWN_COINCIDENCE", {}), \
                  mock.patch.object(CEN, "MIN_PAPER_NUMBERS", floor):
                 return CEN.sweep_paper(tiers, set(allowed))
 
@@ -73,16 +74,23 @@ class SweepPaperTest(unittest.TestCase):
         self.assertEqual(cells["arm"], 1)
         self.assertEqual(bad, [])
         self.assertEqual(complaints, [])
+        # 0.1111 reaches tier A, 0.2222 is in ELSEWHERE and 0.3333 is traced;
+        # none of the three collides with another tier, so no judgement is due.
 
-    def test_a_cell_derived_number_is_not_double_counted_as_traced(self):
-        """Tier A wins. A number the cells produce must not be reported at the
-        weaker tier merely because the table also names it."""
-        cells, _, traced, _, _ = self.sweep(
+    def test_a_named_source_wins_over_a_derivation(self):
+        """This assertion was the other way round until 2026-08-28, and it was
+        wrong. Crediting the cells first relabels provenance: `0.9390` is a
+        published result from another paper and became reachable by the
+        `paired` generator when the corpus grew. See
+        `NamedSourceBeatsCoincidenceTest` for the full case."""
+        cells, _, traced, _, complaints = self.sweep(
             "0.1111",
             [("0.1111", "results/record.md", "also here")],
             {"results/record.md": "0.1111"},
             floor=1)
-        self.assertEqual((sum(cells.values()), traced), (1, 0))
+        self.assertEqual((sum(cells.values()), traced), (0, 1))
+        self.assertTrue(any("no judgement is recorded" in c for c in complaints),
+                        complaints)
 
     # --- the rules, each broken --------------------------------------------
 
@@ -186,6 +194,84 @@ class TheRealTableTest(unittest.TestCase):
         self.assertEqual(source.count("\nMIN_DOCUMENTS = "), 1)
         self.assertIn("len(DOCUMENTS) < MIN_DOCUMENTS", source)
         self.assertIn("len(quoted) < MIN_PAPER_NUMBERS", source)
+
+
+class NamedSourceBeatsCoincidenceTest(unittest.TestCase):
+    """An entry a human wrote outranks a numerical match this script found.
+
+    Crediting the cells first silently relabels provenance. After 242 cells were
+    collected on 2026-08-28, three paper numbers with explicit sources became
+    reachable by a generator and were reported as "derived from the cells" —
+    including `0.9390`, a published 25-tap temporal-convolutional SHD result
+    from another paper, which no cell of this campaign can produce. At 22%
+    density in the `paired` generator, collisions of that kind are expected.
+    """
+
+    def sweep(self, paper, sources, allowed, known, tiers):
+        table = {name: set() for name in CEN.TIERS}
+        table.update(tiers)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "results").mkdir()
+            (root / "results/PAPER_DRAFT.md").write_text(paper)
+            for _, relpath, _ in sources:
+                target = root / relpath
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(" ".join(v for v, _, _ in sources))
+            with mock.patch.object(CEN, "ROOT", root), \
+                 mock.patch.object(CEN, "PAPER", root / "results/PAPER_DRAFT.md"), \
+                 mock.patch.object(CEN, "PAPER_SOURCES", sources), \
+                 mock.patch.object(CEN, "KNOWN_COINCIDENCE", known), \
+                 mock.patch.object(CEN, "MIN_PAPER_NUMBERS", 1):
+                return CEN.sweep_paper(table, set(allowed))
+
+    def test_a_traced_value_is_not_credited_to_a_generator(self):
+        cells, _, traced, bad, complaints = self.sweep(
+            "0.3333",
+            [("0.3333", "results/record.md", "a literature value")],
+            allowed=set(), known={"0.3333": "coincidence"},
+            tiers={"paired": {0.3333}})
+        self.assertEqual(traced, 1)
+        self.assertEqual(sum(cells.values()), 0,
+                         "a named source must outrank a coincidental match")
+        self.assertEqual((bad, complaints), ([], []))
+
+    def test_an_undeclared_overlap_is_reported(self):
+        _, _, _, _, complaints = self.sweep(
+            "0.3333",
+            [("0.3333", "results/record.md", "a literature value")],
+            allowed=set(), known={}, tiers={"paired": {0.3333}})
+        self.assertTrue(any("no judgement is recorded" in c for c in complaints),
+                        complaints)
+
+    def test_a_stale_declaration_is_reported(self):
+        _, _, _, _, complaints = self.sweep(
+            "0.3333",
+            [("0.3333", "results/record.md", "a literature value")],
+            allowed=set(), known={"0.9999": "a collision that has gone"},
+            tiers={})
+        self.assertTrue(any("no generator reaches any more" in c
+                            for c in complaints), complaints)
+
+    def test_an_elsewhere_value_also_outranks_a_generator(self):
+        cells, elsewhere, _, _, complaints = self.sweep(
+            "0.3333", [], allowed={"0.3333"},
+            known={"0.3333": "second-order, not the same computation"},
+            tiers={"pooled": {0.3333}})
+        self.assertEqual((elsewhere, sum(cells.values())), (1, 0))
+        self.assertEqual(complaints, [])
+
+    def test_the_real_declarations_are_all_still_colliding(self):
+        """Every entry in the committed list describes a live collision. One
+        that has stopped colliding is a judgement about nothing."""
+        tiers = CEN.derivable(CEN.load())
+        for value in CEN.KNOWN_COINCIDENCE:
+            with self.subTest(value=value):
+                self.assertIsNotNone(CEN.explain(float(value), tiers))
+
+    def test_every_declaration_carries_a_reason(self):
+        for value, why in CEN.KNOWN_COINCIDENCE.items():
+            self.assertGreater(len(why.strip()), 20, f"{value}: {why!r}")
 
 
 class GeneratorTiersTest(unittest.TestCase):

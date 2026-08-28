@@ -113,6 +113,27 @@ PAPER_SIDE = frozenset({
 MIN_DOCUMENTS = 14
 MIN_PAPER_NUMBERS = 110
 
+#: Values with a named source that a generator ALSO reaches, each with the
+#: judgement a human made. A new overlap fails; a declared one is reported and
+#: passes; a declaration whose overlap has gone fails as stale.
+#:
+#: Every entry here is a coincidence rather than a derivation, which is what a
+#: 22%-dense `paired` generator predicts. An overlap that is NOT a coincidence
+#: means the named entry has become unnecessary and should be deleted instead —
+#: that happened to `0.9995` on 2026-08-28, a ratio across budgets the enlarged
+#: corpus genuinely produces.
+KNOWN_COINCIDENCE = {
+    "0.9390": "a published 25-tap temporal-convolutional SHD result from "
+              "another paper. No cell of this campaign can produce it, so the "
+              "match is arithmetic and nothing else.",
+    "0.6775": "a July C1 / Gate G2 local mean from the matched-architecture "
+              "program, which does not run on the SHD instrument at all.",
+    "0.2370": "a July C1 gap lower bound, same program, same reasoning.",
+    "0.1411": "M-2, a difference OF gains. This sweep deliberately generates no "
+              "second-order quantities, so a `pooled` match cannot be the same "
+              "computation.",
+}
+
 #: Tier C. `(value, primary record, what the number is there)`.
 #:
 #: Chosen by reading the paper's own sentence for each value and finding the
@@ -267,7 +288,14 @@ ELSEWHERE = [
     ("0.7556", "ff+fixed(e10)/ff+fixed(e400): a ratio across budgets, which is "
                "a two-axis comparison"),
     ("0.9029", "attn(e5)/attn(e400): the same, and verified by name"),
-    ("0.9995", "attn(e20)/attn(e400): the same, and verified by name"),
+    # `0.9995` — attn(e20)/attn(e400) — was here until 2026-08-28 and was
+    # deleted because the sweep declared it stale, which is the entry doing its
+    # job in the direction nobody plans for. Collecting wave 18's hundred cells
+    # and wave 21's first sixty enlarged the comparable-pair set enough that the
+    # ratio now falls out of the `pooled` generator directly. The number did not
+    # change and W6 still quotes it; it stopped needing an exception, so the
+    # exception had to go. An ELSEWHERE list that only ever grows is a list that
+    # has stopped meaning "the cells cannot produce this".
     ("0.6108", "AZ8-6's *would-be* gain, and the one number in the Azure result "
                "that this sweep should not be able to derive. It is the d64/L4 "
                "arm paired against its rate control over all twelve seeds "
@@ -490,19 +518,39 @@ def sweep_paper(tiers: dict[str, set[float]], allowed: set[str]) -> tuple[dict[s
 
     cells = dict(empty)
     elsewhere = traced = 0
+    coincident: list[tuple[str, str, str]] = []
     unexplained: list[str] = []
     quoted: set[str] = set()
     for raw in sorted({m.group(1) for m in NUMBER.finditer(text)}):
         value = round(abs(float(raw.replace("−", "-").replace("+", ""))), 4)
         plain = f"{value:.4f}"
         quoted.add(plain)
+        # A NAMED source wins over a derivation, and the order matters.
+        #
+        # Crediting the cells first silently relabels provenance. On 2026-08-28,
+        # after 242 cells were collected, three paper numbers with explicit
+        # sources became cell-derivable and were reported as "derived from the
+        # cells": `0.6775` and `0.2370` from the July C1 track, and — decisively
+        # — `0.9390`, a **published 25-tap temporal-convolutional SHD result
+        # from another paper**, which cannot be derived from this campaign at
+        # all. At 22% density in the `paired` generator, coincidences of this
+        # kind are expected rather than surprising.
+        #
+        # So an entry a human wrote and checked outranks a numerical match this
+        # script found. The overlaps are still reported below, because an entry
+        # that has become genuinely derivable should be retired and only a human
+        # can tell that from a coincidence.
         generator = explain(value, tiers)
-        if generator:
-            cells[generator] += 1
-        elif plain in allowed:
+        if plain in allowed:
             elsewhere += 1
+            if generator:
+                coincident.append((plain, "ELSEWHERE", generator))
         elif plain in sources:
             traced += 1
+            if generator:
+                coincident.append((plain, sources[plain][0], generator))
+        elif generator:
+            cells[generator] += 1
         else:
             unexplained.append(raw)
 
@@ -511,6 +559,21 @@ def sweep_paper(tiers: dict[str, set[float]], allowed: set[str]) -> tuple[dict[s
             f"only {len(quoted)} distinct numbers found in {PAPER.name}, below "
             f"the floor of {MIN_PAPER_NUMBERS}; the pattern or the file has "
             f"changed and this sweep is now covering less than it claims")
+    overlapping = {plain for plain, _, _ in coincident}
+    for plain, source, generator in sorted(coincident):
+        if plain in KNOWN_COINCIDENCE:
+            continue
+        complaints.append(
+            f"{plain} has a named source ({source}) AND is reachable by the "
+            f"`{generator}` generator, and no judgement is recorded. It is "
+            f"credited to the named source. If the derivation is genuine, "
+            f"retire the entry; if it is a coincidence, declare it in "
+            f"KNOWN_COINCIDENCE with the reason. A human decides which.")
+    for plain in sorted(set(KNOWN_COINCIDENCE) - overlapping):
+        complaints.append(
+            f"KNOWN_COINCIDENCE still declares {plain}, which no generator "
+            f"reaches any more. The judgement it records is about a collision "
+            f"that has gone; delete it.")
     for value in sorted(set(sources) - quoted):
         complaints.append(
             f"PAPER_SOURCES still names {value} ({sources[value][0]}), which is "
@@ -637,6 +700,10 @@ def main() -> int:
           f"refers to it. Read it as weaker than tier A, because it is.")
     for complaint in paper_complaints:
         print(f"  PROVENANCE: {complaint}")
+    if KNOWN_COINCIDENCE:
+        print(f"  {len(KNOWN_COINCIDENCE)} value(s) have a named source that a "
+              f"generator also reaches by coincidence; each is declared with "
+              f"its reason and credited to the source, not the generator.")
     if paper_bad:
         print(f"  {len(paper_bad)} number(s) in {PAPER.name} with no tier at all: "
               f"{', '.join(paper_bad)}")

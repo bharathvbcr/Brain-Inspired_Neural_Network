@@ -1595,8 +1595,22 @@ CORPUS_BASELINE = {
     #: 283 -> 507 and 273 -> 497, so the ten invalid cells are the same ten
     #: `w13rec` cells as before and no archived verdict moved. See
     #: `RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`.
+    #:
+    #: Re-frozen again 2026-08-28 on landing waves 18-19: 112 cells added, all
+    #: valid. 507 -> 619 and 497 -> 609, both +112, so the ten invalid are still
+    #: the same ten `w13rec` cells and no archived verdict moved. `git status`
+    #: showed 0 modified and 0 deleted under this corpus, which is the direct
+    #: form of the same statement.
+    #:
+    #: ONLY SETTLED WAVES ARE LANDED HERE. Waves 20 and 21 were in flight and
+    #: their cells were collected and then removed: the wave-20 analyser's
+    #: pre-flight tests run against an EMPTY results directory precisely so the
+    #: analyser falls back to this archive, and they assert it reproduces the
+    #: published ten-pair pilot. Landing a partial wave 20 here made the archive
+    #: contain the thing those tests exist to check the analyser against, and
+    #: three of them failed. The archive means "waves that are done".
     "shd_attention_campaign_v2":
-        (507, 497, "104e61619a0848c7"),
+        (619, 609, "95bb809b486ea580"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":
