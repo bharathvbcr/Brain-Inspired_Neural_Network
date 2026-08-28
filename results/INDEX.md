@@ -2,14 +2,14 @@
 
 # Record index
 
-316 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+317 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 39 | 0 |
 | Results | 34 | 2 |
 | Findings | 13 | 0 |
-| Measurements | 11 | 0 |
+| Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
 | Defects | 5 | 0 |
 | Hardening | 9 | 0 |
@@ -166,6 +166,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-08-27 | [MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md](MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md) | Measurement — wave 20's plain recurrent arm is complete, and H20-2 is now decidable in advance |
+| 2026-08-27 | [MEASUREMENT_2026-08-27_THE_RECURRENT_FOLLOW_UP_IS_NOT_WARRANTED.md](MEASUREMENT_2026-08-27_THE_RECURRENT_FOLLOW_UP_IS_NOT_WARRANTED.md) | The recurrent-stability follow-up wave is not warranted, and the record already says so |
 | 2026-08-27 | [MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md](MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md) | Measurement — the fleet ran two thread counts, and the cells did not notice |
 | 2026-08-27 | [MEASUREMENT_2026-08-27_THE_FLEET_ALREADY_REPRODUCES_SIXTEEN_CELLS.md](MEASUREMENT_2026-08-27_THE_FLEET_ALREADY_REPRODUCES_SIXTEEN_CELLS.md) | Measurement — wave 18 already reproduces the archive on sixteen cells, at index 68 of 192 |
 | 2026-08-23 | [MEASUREMENT_2026-08-23_TRACK_B_UNDER_BOTH_REPAIRS.md](MEASUREMENT_2026-08-23_TRACK_B_UNDER_BOTH_REPAIRS.md) | Measurement — track-b under the two matched-arch repairs, attributed |
