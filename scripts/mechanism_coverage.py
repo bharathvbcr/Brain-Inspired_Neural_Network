@@ -129,6 +129,70 @@ def coverage(cells):
     return rows
 
 
+def planned(path, cells) -> list[str]:
+    """What the queued cells would add if every one of them landed.
+
+    Coverage as measured answers "what can the paper say today". This answers
+    "will the compute already committed buy what it was registered to buy" —
+    and it is answerable the moment a wave is queued rather than after its last
+    cell lands. Wave 21 is 168 cells and roughly 300 slot-hours; a wave whose
+    geometry token or read-out depth did not line up with the intact arms it
+    has to pair against would produce **nothing**, and would say so only at the
+    end.
+
+    A plan entry is turned into the same shape `read` produces, so the
+    projection runs through `coverage` itself rather than through a second
+    implementation of the pairing rule. Two implementations of that rule would
+    drift, and the projection would then reassure about a pairing the analyser
+    does not do.
+    """
+    try:
+        entries = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"could not read the plan at {path}: {exc}") from None
+
+    projected = list(cells)
+    for entry in entries:
+        depth = (f"d{entry['attn_dim']}l{entry['attn_layers']}"
+                 if entry.get("attn_dim") else None)
+        projected.append({
+            "seed": entry["seed"],
+            "hidden": entry["hidden"],
+            "contract": entry["contract"],
+            "geometry": entry["geometry"],
+            "epochs": entry["epochs"],
+            "depth": depth,
+            "arm": entry["arm"],
+            "surrogate_scale": entry.get("surrogate_scale"),
+            "clip_grad_norm": entry.get("clip_grad_norm"),
+            "temporal": entry.get("temporal") or "intact",
+        })
+
+    now = {(point, depth) for point, depth, *_, n in coverage(cells) if n}
+    then = {(point, depth) for point, depth, *_, n in coverage(projected) if n}
+    gained = sorted(then - now, key=lambda k: (k[0], k[1]))
+
+    out = ["",
+           f"IF EVERY QUEUED CELL LANDS: {len(now)} → {len(then)} operating "
+           f"point(s) could support the difference-in-differences."]
+    if not gained:
+        # The alarm this exists for. Queued compute that buys no new operating
+        # point is either ground already covered or a wave whose cells cannot
+        # pair with the intact arms they were registered against.
+        out.append("  NO new operating point. The queued cells add nothing this "
+                   "check can pair — verify the wave against the arms it is "
+                   "meant to contrast with BEFORE its compute is spent.")
+        return out
+    for (hidden, contract, geometry), depth in gained:
+        out.append(f"  + h{hidden} `{contract}` `{geometry}` {depth}")
+    widths = sorted({point[0] for point, _ in then})
+    contracts = sorted({point[1] for point, _ in then})
+    geometries = sorted({point[2] for point, _ in then})
+    out.append(f"  widths would become {widths}, contracts {contracts}, "
+               f"geometries {geometries}")
+    return out
+
+
 def render(rows) -> list[str]:
     out = ["| width | contract | geometry | read-out | rate intact | rate shuffled "
            "| attn intact | attn shuffled | **contrast at n** |",
@@ -144,11 +208,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results", action="append", default=[])
     parser.add_argument("--markdown", action="store_true")
+    parser.add_argument("--plan", help="a published cells.json; report what the "
+                                       "queued cells would add if they all land")
     args = parser.parse_args()
 
     roots = list(DEFAULT_ROOTS) + [Path(r) for r in args.results]
-    rows = coverage(read(roots))
+    cells = read(roots)
+    rows = coverage(cells)
     print("\n".join(render(rows)))
+    if args.plan:
+        print("\n".join(planned(args.plan, cells)))
     if args.markdown:
         return 0
 

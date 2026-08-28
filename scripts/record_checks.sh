@@ -55,6 +55,16 @@ run "the fleet reproduces its own record" python3 scripts/aws/check_reproduction
 # four arms on shared seeds. Derived rather than recalled: on 2026-08-27 two of
 # twenty operating points carried all four, both at h128. A scope limit that
 # large should be recomputed on every run, not remembered.
+# Coverage as MEASURED. The companion question -- will the compute already
+# queued buy the operating points the wave was registered to buy -- needs the
+# published plan, which lives in S3, and a gate that needs the network is a gate
+# that gets skipped. Run it by hand when queueing a mechanism wave:
+#
+#   aws s3 cp s3://$BUCKET/input/cells.json /tmp/cells.json
+#   python3 scripts/mechanism_coverage.py --plan /tmp/cells.json
+#
+# On 2026-08-28 that reported wave 21 taking coverage from 2 operating points to
+# 9, across every width from 128 to 1024 and both contracts and geometries.
 run "the mechanism control's coverage" python3 scripts/mechanism_coverage.py
 run "checks that cannot fail" python3 scripts/find_weak_checks.py
 
