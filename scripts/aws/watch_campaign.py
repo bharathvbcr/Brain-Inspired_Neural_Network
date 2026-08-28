@@ -241,9 +241,11 @@ def main() -> int:
     settled: set[str] = set()
     stranded: set[str] = set()
     suspected: set[str] = set()
+    health: str | None = None
     seen_gates: dict[str, str] = {}
     quiet = 0
     last_done = None
+    prev_done = None
     last_inst = None
     last_plan = None
     down_since = None
@@ -399,24 +401,47 @@ def main() -> int:
         # Silence is not a stall, and it is not health either. After a run of
         # polls with nothing settling, ask the fleet directly rather than infer
         # from silence and cry wolf every half hour.
-        if last_done is not None and len(done) == last_done and outstanding:
+        # Against the PREVIOUS POLL, not the last progress report. `last_done`
+        # only advances when progress crosses `--step`, so comparing to it meant
+        # any smaller amount of progress left `len(done) != last_done` forever
+        # and the quiet counter never accumulated again — the stall check
+        # silently stopped working until another full step landed. With
+        # `--step 10` on a wave whose last cells trickle in, that is most of the
+        # wave, and a fleet dying in that window would have gone unreported.
+        if prev_done is not None and len(done) == prev_done and outstanding:
             quiet += 1
             if quiet >= args.stall_after:
                 quiet = 0
                 busy = worker_processes(args.region)
-                if busy is None:
-                    say(f"could not count worker processes at "
-                        f"{len(done)}/{len(plan)} — an instance did not answer, "
-                        f"so this is neither a stall nor a clean bill")
-                elif busy == 0:
-                    say(f"STALLED {len(done)}/{len(plan)}: NO WORKER PROCESSES on "
-                        f"the running instance(s), {len(outstanding)} cell(s) "
-                        f"outstanding. This needs a hand.")
-                else:
-                    say(f"quiet {len(done)}/{len(plan)} but healthy: {busy} worker "
-                        f"process(es) busy on long cells")
-        else:
+                # Reported only when the ANSWER CHANGES. A wave of three-hour
+                # cells is quiet for a long time by design, and repeating
+                # "quiet but healthy" every half hour is good news the reader
+                # learns to skip — which is how the one that says STALLED gets
+                # skipped with it. Silence here means "still the answer you
+                # were last given", never "nothing was asked".
+                verdict = ("unknown" if busy is None
+                           else "stalled" if busy == 0 else "healthy")
+                if verdict != health:
+                    if busy is None:
+                        say(f"could not count worker processes at "
+                            f"{len(done)}/{len(plan)} — an instance did not "
+                            f"answer, so this is neither a stall nor a clean "
+                            f"bill")
+                    elif busy == 0:
+                        say(f"STALLED {len(done)}/{len(plan)}: NO WORKER "
+                            f"PROCESSES on the running instance(s), "
+                            f"{len(outstanding)} cell(s) outstanding. This "
+                            f"needs a hand.")
+                    else:
+                        say(f"quiet {len(done)}/{len(plan)} but healthy: {busy} "
+                            f"worker process(es) busy on long cells. Silence "
+                            f"from here means this answer has not changed.")
+                    health = verdict
+        elif prev_done is not None:
+            # Work landed, so any previous stall verdict is stale: the next
+            # quiet stretch must ask again rather than assume the last answer.
             quiet = 0
+            health = None
 
         if last_done is not None and len(done) >= last_done + args.step:
             say(f"progress {len(done)}/{len(plan)}, {len(failed)} failed, "
@@ -429,6 +454,7 @@ def main() -> int:
                 f"of {len(plan)} planned")
             return 0
 
+        prev_done = len(done)
         last_plan, last_inst = len(plan), inst if inst is not None else last_inst
         if args.once:
             return 0

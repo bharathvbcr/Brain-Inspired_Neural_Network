@@ -53,6 +53,14 @@ class Fleet:
         #: Claim markers still held. Defaults to every planned cell, which is
         #: the state during a run; pass a shorter list to model a release.
         self.claims = list(self.plan) if claims is None else list(claims)
+        #: Optional results-by-poll. Indexed by `self.poll`, which the test's
+        #: sleep hook advances at each poll boundary — NOT by how many times
+        #: the results prefix happens to be listed. Keying it to the call count
+        #: coupled the fixture to the poll's internal call pattern, and a
+        #: schedule that drifts by one produces a plausible wrong answer rather
+        #: than an error.
+        self.schedule = None
+        self.poll = 0
 
     def __call__(self, args):
         import json
@@ -66,7 +74,10 @@ class Fleet:
             return json.dumps([{"id": c} for c in self.plan])
         if args[:2] == ["s3", "ls"]:
             if "results/" in args[2]:
-                return listing("results/", [f"{c}.json" for c in self.results])
+                rows = self.results
+                if self.schedule is not None:
+                    rows = self.schedule[min(self.poll, len(self.schedule) - 1)]
+                return listing("results/", [f"{c}.json" for c in rows])
             if "hostlogs/" in args[2]:
                 return listing("hostlogs/", [f"{i}.log" for i in self.hostlogs])
             if "claims/" in args[2]:
@@ -349,6 +360,89 @@ class AReclaimedCellTest(unittest.TestCase):
         self.assertEqual(len(lines), 1, lines)
         self.assertIn("16 cell(s)", lines[0])
         self.assertIn("and 13 more", lines[0])
+
+
+class StallReportingTest(unittest.TestCase):
+    """The stall check speaks when the answer changes, and not otherwise.
+
+    A wave of three-hour cells is quiet by design. Repeating "quiet but
+    healthy" every half hour is good news the reader learns to skip — which is
+    how the one that says STALLED gets skipped with it. But silence must mean
+    "still the answer you were last given", never "nothing was asked", so the
+    first answer of a quiet stretch is always spoken.
+    """
+
+    def poll(self, fleet, times, workers):
+        """Run `times` polls with a scripted worker-process count."""
+        import itertools
+        said: list[str] = []
+        stop = itertools.count()
+
+        def sleep(_):
+            fleet.poll += 1
+            if next(stop) >= times - 1:
+                raise KeyboardInterrupt
+
+        with mock.patch.object(WC, "aws", fleet), \
+             mock.patch.object(WC, "say", said.append), \
+             mock.patch.object(WC.time, "sleep", sleep), \
+             mock.patch.object(WC, "worker_processes", lambda _r: workers), \
+             mock.patch.object(sys, "argv",
+                               ["watch_campaign", "--bucket", "b",
+                                "--interval", "0", "--stall-after", "1"]):
+            try:
+                WC.main()
+            except KeyboardInterrupt:
+                pass
+        return said
+
+    def fleet(self):
+        return Fleet(plan=["a", "b"], results=["a"], instances=2)
+
+    def test_a_healthy_answer_is_given_once(self):
+        said = self.poll(self.fleet(), times=5, workers=8)
+        healthy = [l for l in said if "but healthy" in l]
+        self.assertEqual(len(healthy), 1, said)
+        self.assertIn("has not changed", healthy[0])
+
+    # NOT TESTED, and named rather than left to be assumed: that progress
+    # RESETS the health verdict, so a stall either side of a batch of work is
+    # reported twice rather than once. The behaviour is right — traced by hand
+    # on 2026-08-28, `health` goes stalled -> None -> stalled across a landing
+    # cell — but driving it needs a fixture that advances results exactly at
+    # poll boundaries, and two attempts at that disagreed with each other by
+    # one poll. A test I cannot make say the same thing twice is worse than a
+    # gap I have written down: it would pass or fail for reasons other than the
+    # code under it.
+    #
+    # What IS covered below: a healthy answer is given once and not repeated, a
+    # stall is reported, an unanswerable count is neither, and the stall check
+    # survives progress smaller than --step.
+    def test_the_stall_check_survives_progress_below_the_report_step(self):
+        """The defect this class found. The quiet counter compared against
+        `last_done`, which only advances when progress crosses `--step`. One
+        cell landing under a step of ten left `len(done) != last_done` forever,
+        so the counter never accumulated and the stall check stopped working
+        until another full step arrived — most of a wave whose last cells
+        trickle in, with a dying fleet unreported throughout."""
+        fleet = Fleet(plan=[f"c{i}" for i in range(20)], instances=2)
+        # One cell lands, well under the default step, then it goes quiet.
+        fleet.schedule = [["c0"], ["c0", "c1"], ["c0", "c1"], ["c0", "c1"]]
+        said = self.poll(fleet, times=4, workers=0)
+        self.assertTrue(any("STALLED" in l for l in said),
+                        f"progress under --step disabled the stall check: {said}")
+
+    def test_a_stall_is_reported(self):
+        said = self.poll(self.fleet(), times=4, workers=0)
+        stalled = [l for l in said if "STALLED" in l]
+        self.assertEqual(len(stalled), 1, said)
+        self.assertIn("needs a hand", stalled[0])
+
+    def test_an_unanswerable_count_is_neither(self):
+        said = self.poll(self.fleet(), times=4, workers=None)
+        self.assertTrue(any("neither a stall nor a clean bill" in l
+                            for l in said), said)
+        self.assertFalse(any("STALLED" in l for l in said), said)
 
 
 class TheScriptIsUsableTest(unittest.TestCase):
