@@ -55,6 +55,14 @@ run "the fleet reproduces its own record" python3 scripts/aws/check_reproduction
 # four arms on shared seeds. Derived rather than recalled: on 2026-08-27 two of
 # twenty operating points carried all four, both at h128. A scope limit that
 # large should be recomputed on every run, not remembered.
+# The campaign watcher is `scripts/aws/watch_campaign.py` and there is one of
+# them. It replaced `scripts/aws/watch.sh` on 2026-08-28; both watched the same
+# bucket, neither referenced the other, and the shell one counted every result
+# object the bucket had ever held against the current plan's total, so it
+# declared COMPLETE on its first poll. Run it as:
+#
+#   python3 scripts/aws/watch_campaign.py --bucket $BUCKET
+#
 # Coverage as MEASURED. The companion question -- will the compute already
 # queued buy the operating points the wave was registered to buy -- needs the
 # published plan, which lives in S3, and a gate that needs the network is a gate

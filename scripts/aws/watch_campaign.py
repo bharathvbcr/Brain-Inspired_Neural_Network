@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
-"""Emit one line per campaign event: progress, named failures, fleet, key cells.
+"""Emit one line per campaign event: progress, failures, gates, stalls, reclaims.
+
+# One watcher, because two is how one of them stays broken
+
+This replaces `scripts/aws/watch.sh`, deleted in the same commit. Both watched
+the same campaign and neither knew about the other, and on 2026-08-28 `watch.sh`
+was **broken**: it counted every object under `results/` — 616 of them, from all
+twenty-one waves the bucket has ever run — against the current plan's 360, so
+`settled >= TOTAL` was true on its first poll and it would have printed
+`COMPLETE` and exited immediately.
+
+This file had the same defect for exactly one poll, in the opposite direction of
+discovery: its first run said `done 525` against a plan of 360, which is what
+made the numerator wrong in a way somebody noticed. `watch.sh` expressed the
+same arithmetic as a comparison rather than a printed pair, so it failed
+silently instead.
+
+Two capabilities came from `watch.sh` and are ported here rather than lost:
+Gate F verdicts announced as instances join, and the SSM worker-process count
+that distinguishes a long cell from a dead fleet. Its header's hardest-won
+lesson — that the plan can grow mid-campaign, so the total is re-read every
+cycle and never captured at start-up, which "has now done so twice" — was
+rediscovered here a third time before that file was read. It is now written
+down in one place.
 
 # Why this replaces a shell loop
 
@@ -56,6 +79,67 @@ def plan_ids(bucket: str) -> set[str]:
         return {c["id"] for c in json.loads(raw)}
     except (ValueError, KeyError, TypeError):
         return set()
+
+
+def gate_verdicts(bucket: str) -> dict[str, str]:
+    """`instance -> its cross-machine Gate F verdict`.
+
+    Every reported wave must carry its instances' Gate F verdict, and instances
+    self-terminate, so a gate first seen while watching is worth an event.
+    Ported from `watch.sh`, which this file replaces.
+    """
+    out: dict[str, str] = {}
+    listing = aws(["s3", "ls", f"s3://{bucket}/gates/"])
+    for line in listing.splitlines():
+        key = line.split()[-1] if line.strip() else ""
+        if not key.endswith(".json"):
+            continue
+        try:
+            body = json.loads(aws(["s3", "cp", f"s3://{bucket}/gates/{key}", "-"]))
+        except ValueError:
+            continue
+        out[body.get("instance", key[:-5])] = body.get("cross_machine_gate_f", "?")
+    return out
+
+
+def worker_processes(region: str) -> int | None:
+    """How many `shd-instrument train-cell` processes the fleet is running.
+
+    Silence is not a stall: a single attention cell at e400 runs for hours, so
+    no new result in half an hour is the normal state for most of this campaign.
+    Asking whether the workers are ALIVE is what distinguishes a long cell from
+    a dead fleet. Ported from `watch.sh`.
+
+    Expensive — one `send-command` and a sleep per instance — so it runs only
+    after a run of polls with no progress at all, never on the normal path.
+    Returns None if any instance cannot be reached, because a partial count
+    would read as a partial stall.
+    """
+    ids = aws(["ec2", "describe-instances", "--region", region,
+               "--filters", "Name=instance-state-name,Values=running",
+               "--query", "Reservations[].Instances[].InstanceId",
+               "--output", "text"]).split()
+    if not ids:
+        return 0
+    total = 0
+    for instance in ids:
+        command = aws(["ssm", "send-command", "--region", region,
+                       "--instance-ids", instance,
+                       "--document-name", "AWS-RunShellScript",
+                       "--parameters",
+                       'commands=["pgrep -fc \'shd-instrument train-cell\' || echo 0"]',
+                       "--query", "Command.CommandId", "--output", "text"]).strip()
+        if not command:
+            return None
+        time.sleep(7)
+        seen = aws(["ssm", "get-command-invocation", "--region", region,
+                    "--command-id", command, "--instance-id", instance,
+                    "--query", "StandardOutputContent",
+                    "--output", "text"]).strip()
+        if not seen.isdigit():
+            return None
+        total += int(seen)
+    return total
 
 
 def hostlog_claims(bucket: str) -> dict[str, set[str]]:
@@ -123,12 +207,17 @@ def main() -> int:
     p.add_argument("--cell", action="append", default=[],
                    help="a cell whose completion or loss is worth its own line")
     p.add_argument("--once", action="store_true", help="one poll, then exit")
+    p.add_argument("--stall-after", type=int, default=6,
+                   help="polls with no progress before asking the fleet, over "
+                        "SSM, whether any worker process is alive")
     args = p.parse_args()
 
     seen_fail: set[str] = set()
     seen_waves: set[str] = set()
     settled: set[str] = set()
     stranded: set[str] = set()
+    seen_gates: dict[str, str] = {}
+    quiet = 0
     last_done = None
     last_inst = None
     last_plan = None
@@ -152,6 +241,19 @@ def main() -> int:
         done = plan & results
         failed = plan & failures
         inst = instances(args.region)
+
+        # Gates first seen while watching. On the first poll they are summarised
+        # in one line rather than announced individually: a restart that emits
+        # six notifications saying nothing new is a restart the reader learns
+        # to skip.
+        gates = gate_verdicts(args.bucket)
+        if last_plan is None and gates:
+            say("gates: " + "  ".join(f"{i[:11]}={v}" for i, v in sorted(gates.items())))
+        else:
+            for instance, verdict in sorted(gates.items()):
+                if instance not in seen_gates:
+                    say(f"GATE {instance}: cross-machine Gate F {verdict}")
+        seen_gates = gates
 
         if last_plan is None:
             say(f"watching {len(plan)} planned cells: {len(done)} done, "
@@ -249,6 +351,28 @@ def main() -> int:
                 f"unfinished — nothing is claiming work")
         else:
             down_since = None
+
+        # Silence is not a stall, and it is not health either. After a run of
+        # polls with nothing settling, ask the fleet directly rather than infer
+        # from silence and cry wolf every half hour.
+        if last_done is not None and len(done) == last_done and outstanding:
+            quiet += 1
+            if quiet >= args.stall_after:
+                quiet = 0
+                busy = worker_processes(args.region)
+                if busy is None:
+                    say(f"could not count worker processes at "
+                        f"{len(done)}/{len(plan)} — an instance did not answer, "
+                        f"so this is neither a stall nor a clean bill")
+                elif busy == 0:
+                    say(f"STALLED {len(done)}/{len(plan)}: NO WORKER PROCESSES on "
+                        f"the running instance(s), {len(outstanding)} cell(s) "
+                        f"outstanding. This needs a hand.")
+                else:
+                    say(f"quiet {len(done)}/{len(plan)} but healthy: {busy} worker "
+                        f"process(es) busy on long cells")
+        else:
+            quiet = 0
 
         if last_done is not None and len(done) >= last_done + args.step:
             say(f"progress {len(done)}/{len(plan)}, {len(failed)} failed, "
