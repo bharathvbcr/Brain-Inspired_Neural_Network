@@ -277,6 +277,23 @@ ELSEWHERE = [
     # stem, so `r1cal` and `w17hdl` are separate groups and their union is not
     # generated. The two gaps are differences OF gains and the sd is a variance.
     # Each is checked by name in verify_published_numbers.py.
+    # Wave 20. Merged `w13rec`/`w14sub` + `w20rec` arms and one difference OF
+    # gains — the two shapes this sweep does not generate, for the same reasons
+    # as waves 15-17 above. All eight are recomputed from the cells by name in
+    # verify_published_numbers.py, with an implementation that shares no code
+    # with the frozen analyser; writing that one first produced +0.1568 for the
+    # difference of gains by averaging two gains over different seed sets, and
+    # the disagreement is what showed the pairing had been dropped.
+    ("0.5187", "H20-1 recurrent rate mean over the 24 shared seeds, merged arm"),
+    ("0.7944", "H20-1 recurrent attention mean over the same 24, merged arm"),
+    ("0.2757", "H20-1 recurrent paired gain, merged arm"),
+    ("0.8275", "H20-1 feed-forward attention mean at n=32, merged arm"),
+    ("0.1551", "H20-1 difference of gains, seed-paired across all four arms: "
+               "second order, and the campaign's registered statistic"),
+    ("0.4813", "H20-4 recurrent headroom, 1 - a merged-arm mean"),
+    ("0.5728", "H20-4 recurrent gain over headroom: a ratio of second-order "
+               "quantities"),
+    ("0.4080", "H20-4 feed-forward gain over headroom: the same"),
     ("0.7057", "H17-1 rate mean at n=32, a merged r1cal/w1 + w17hdl arm; "
                "checked by name in verify_published_numbers.py"),
     ("0.8332", "H17-1 attention mean at n=32, merged; checked by name in "

@@ -2,12 +2,12 @@
 
 # Record index
 
-317 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+318 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 39 | 0 |
-| Results | 34 | 2 |
+| Results | 35 | 2 |
 | Findings | 13 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
@@ -102,6 +102,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-28 | [RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md](RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md) | Result — wave 20: the recurrent claim survives a tripled sample, and survivorship is not shaping it |
 | 2026-08-27 | [RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md) | Result — waves 15–17: the collapse is a threshold in width, and the headline holds at n=32 |
 | 2026-08-25 | [RESULT_2026-08-25_MATCHED_ARCH_RERUN.md](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md) | Result — the lead negative survives both graphs, and three of the four contrasts that gave it meaning do not |
 | 2026-08-24 | [RESULT_2026-08-24_READOUT_ABLATION.md](RESULT_2026-08-24_READOUT_ABLATION.md) | Result — the readout is exonerated, and the enumeration is still incomplete |

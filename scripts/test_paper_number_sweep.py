@@ -21,6 +21,7 @@ Run: python3 scripts/test_paper_number_sweep.py
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 import tempfile
@@ -344,8 +345,21 @@ class ADocumentWithNoNumbersTest(unittest.TestCase):
         self.assertNotIn("[ok  ]", line[0])
 
     def test_it_is_excluded_from_the_closing_claim(self):
+        """The closing claim must count exactly the documents it checked.
+
+        This asserted "13 swept wave results" until 2026-08-28, when landing
+        wave 20's result document made it 14 — a true change breaking a test
+        that had pinned a number rather than the relationship. The invariant is
+        that the claimed count equals the number of documents marked `[ok  ]`:
+        one that could not be judged and one with nothing in it are both
+        excluded, and neither may be counted as swept."""
         self.assertIn("carry no four-decimal number", self.proc.stdout)
-        self.assertIn("13 swept wave results", self.proc.stdout)
+        passed = len(re.findall(r"^  \[ok  \] RESULT_", self.proc.stdout, re.M))
+        claimed = int(re.search(r"(\d+) swept wave results",
+                                self.proc.stdout).group(1))
+        self.assertEqual(claimed, passed,
+                         f"claims {claimed} swept but marked {passed} ok")
+        self.assertGreater(passed, 10)
 
     def test_the_document_really_has_no_numbers(self):
         """If it acquires one, this class is asserting a state that has moved

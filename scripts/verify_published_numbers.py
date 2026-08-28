@@ -28,7 +28,7 @@ ANCHOR = "published-2ms__adjacent-sum-5"
 
 #: The number of checks this script must run. See the floor test at the end of
 #: `main` for why a count that only ever prints itself is not a check.
-MIN_CHECKS = 66
+MIN_CHECKS = 78
 
 
 def acc(root: Path, stem: str) -> list[float]:
@@ -362,6 +362,86 @@ def main() -> int:
     results.append(check(f"H17-1 paired gain at n={len(shared)}",
                          paired_gain(h_attn, h_rate)[0],
                          published(W1517, r"\| \*\*32\*\* \| \*\*0\.\d+\*\* \| \*\*0\.\d+\*\* \| \*\*\+(0\.\d+)\*\*")))
+
+    # ---- Wave 20: the recurrent claim at n=32 ------------------------------
+    # Same shape as waves 15-17 and the same reason: merged cross-wave arms and
+    # a difference OF gains, neither of which `check_every_number.py` generates.
+    # Recomputed here from the cells with an implementation that shares no code
+    # with `analyse_wave20.py`, so the analyser and the write-up are checked by
+    # something that is not either of them.
+    W20 = "RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md"
+    W20_SEEDS = [5170001 + i for i in range(32)]
+    SS = "ss0.4"
+
+    def w20_arm(archive_stem, new_stem):
+        cells = dict(acc_present(V2, archive_stem) or acc_present(V1, archive_stem))
+        cells.update(acc_present(V2, new_stem, W20_SEEDS))
+        return cells
+
+    # The archived twelve of each arm sit under DIFFERENT wave prefixes: the
+    # recurrent rate arm is `w13rec`, the other three are `w14sub`. Using one
+    # prefix for all four returns an empty rate arm and a plausible-looking
+    # wrong answer.
+    rec_rate = w20_arm(f"w13rec__rec-alif__h128__e400__{ANCHOR}__{SS}",
+                       f"w20rec__rec-alif__h128__e400__{ANCHOR}__{SS}")
+    rec_attn = w20_arm(f"w14sub__rec-alif-attn__h128__e400__{ANCHOR}__d32l4__{SS}",
+                       f"w20rec__rec-alif-attn__h128__e400__{ANCHOR}__d32l4__{SS}")
+    ff_rate = w20_arm(f"w14sub__ff-fixed__h128__e400__{ANCHOR}__{SS}",
+                      f"w20rec__ff-fixed__h128__e400__{ANCHOR}__{SS}")
+    ff_attn = w20_arm(f"w14sub__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__{SS}",
+                      f"w20rec__ff-fixed-attn__h128__e400__{ANCHOR}__d32l4__{SS}")
+
+    rec_shared = sorted(set(rec_rate) & set(rec_attn))
+    ff_shared = sorted(set(ff_rate) & set(ff_attn))
+    results.append(check(f"H20-2 usable recurrent pairs is {len(rec_shared)}",
+                         float(len(rec_shared)),
+                         published(W20, r"\| \*\*usable pairs\*\* \| \*\*(\d+)\*\* \|"),
+                         tol=0.5))
+
+    def mean(cells, seeds):
+        return sum(cells[s] for s in seeds) / len(seeds)
+
+    rec_base, rec_top = mean(rec_rate, rec_shared), mean(rec_attn, rec_shared)
+    ff_base, ff_top = mean(ff_rate, ff_shared), mean(ff_attn, ff_shared)
+    rec_g = paired_gain(rec_attn, rec_rate)[0]
+    ff_g = paired_gain(ff_attn, ff_rate)[0]
+    both = [s for s in rec_shared
+            if s in ff_rate and s in ff_attn]
+    did = sum((rec_attn[s] - rec_rate[s]) - (ff_attn[s] - ff_rate[s])
+              for s in both) / len(both)
+
+    for label, computed, pattern in (
+        ("H20-1 recurrent rate mean", rec_base,
+         r"`rec\+alif` \| 24 \| (0\.\d+)"),
+        ("H20-1 recurrent attention mean", rec_top,
+         r"`rec\+alif` \| 24 \| 0\.\d+ \| (0\.\d+)"),
+        ("H20-1 recurrent paired gain", rec_g,
+         r"`rec\+alif` \| 24 \| 0\.\d+ \| 0\.\d+ \| \*\*\+(0\.\d+)\*\*"),
+        ("H20-1 feed-forward rate mean", ff_base,
+         r"`ff\+fixed` \| 32 \| (0\.\d+)"),
+        ("H20-1 feed-forward attention mean", ff_top,
+         r"`ff\+fixed` \| 32 \| 0\.\d+ \| (0\.\d+)"),
+        ("H20-1 feed-forward paired gain", ff_g,
+         r"`ff\+fixed` \| 32 \| 0\.\d+ \| 0\.\d+ \| \*\*\+(0\.\d+)\*\*"),
+        # SEED-PAIRED across all four arms, not the difference of two
+        # independently averaged gains. Those are different numbers: the second
+        # gives +0.1568 here because the feed-forward gain is averaged over 32
+        # seeds while the recurrent one has only 24, so the two means are not
+        # taken over the same seeds. The registration says "seed-paired
+        # difference of gains", and a difference-in-differences that is not
+        # paired is not one.
+        ("H20-1 difference of gains", did,
+         r"difference of gains \*\*\+(0\.\d+)\*\*"),
+        ("H20-4 recurrent headroom", 1.0 - rec_base,
+         r"`rec\+alif` \| 0\.\d+ \| (0\.\d+)"),
+        ("H20-4 feed-forward headroom", 1.0 - ff_base,
+         r"`ff\+fixed` \| 0\.\d+ \| (0\.\d+)"),
+        ("H20-4 recurrent gain over headroom", rec_g / (1.0 - rec_base),
+         r"`rec\+alif` \| 0\.\d+ \| 0\.\d+ \| \+0\.\d+ \| (0\.\d+)"),
+        ("H20-4 feed-forward gain over headroom", ff_g / (1.0 - ff_base),
+         r"`ff\+fixed` \| 0\.\d+ \| 0\.\d+ \| \+0\.\d+ \| (0\.\d+)"),
+    ):
+        results.append(check(label, computed, published(W20, pattern)))
 
     # The two adjacent-rung gaps the sweep cannot generate. Stated as a signed
     # difference of gains, which is why h384 - h512 is negative and is the one
