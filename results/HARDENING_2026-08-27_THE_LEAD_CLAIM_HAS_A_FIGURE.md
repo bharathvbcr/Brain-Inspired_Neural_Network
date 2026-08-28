@@ -91,13 +91,25 @@ A rounding check came out of drawing it: Table SHD-2 prints **96%**, and
 carry is quoting a number nobody computed, so the formatter now drops a
 trailing zero.
 
-## What is still undrawn
+## What was still undrawn — superseded the same day
 
-Lead Figures **2, 3 and 4** — headline accuracy and the 0.80 clearance, the
-width ladder and its threshold at h1024, the resolution ladder — and a
-lead-program graphical abstract, which the spec records as
-`TODO(source needed)`. All three figures are fully specified with their numbers
-already in hand; **none waits on wave 18, 20 or 21.**
+> This section read: *"Lead Figures 2, 3 and 4 … All three figures are fully
+> specified with their numbers already in hand; none waits on wave 18, 20 or
+> 21."* That was true when written and stopped being true a few hours later.
+> **All three were drawn on 2026-08-27**
+> ([`HARDENING_2026-08-27_THE_LEAD_PROGRAM_IS_DRAWN.md`](HARDENING_2026-08-27_THE_LEAD_PROGRAM_IS_DRAWN.md)),
+> and the manuscript now calls out all four.
+
+What remains is a **lead-program graphical abstract**, which
+[`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) records as
+`TODO(source needed)` — the only piece of figure work in the package with no
+specification at all — and callouts for the secondary program's Figures 5–9.
+
+The correction is left visible rather than rewritten away, because a
+forward-looking section is the part of a record most likely to rot: it is a
+claim about a state that is *expected* to change, and nothing in this repository
+checks prose against the state it describes. `check_record_links.py` verifies
+that links resolve, not that sentences are still true.
 
 ## Files
 
