@@ -41,9 +41,45 @@ PAIRS = [
     ("VERDICTS_W12.md", "RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md"),
     ("VERDICTS_W13.md", "RESULT_2026-08-23_W13_RECURRENT_STABILITY.md"),
     ("VERDICTS_W14.md", "RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md"),
+    ("VERDICTS_W15.md", "RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md"),
 ]
 
-VERDICT = "SUPPORTED|NOT SUPPORTED|NOT EVALUABLE"
+#: Wave results this check CANNOT cross-check, each with the reason.
+#:
+#: `PAIRS` was a curated list of four and nothing noticed the other ten. That is
+#: the same defect as a date window that silently stops matching: the closing
+#: line said "every published verdict is the one its analyser computed" while
+#: covering four of the campaign's fourteen wave results, and the most recent —
+#: carrying H16-1, H16-2, H17-1 and H17-2 — was not among them. Its verdicts had
+#: been retyped from an analyser run that was never saved anywhere.
+#:
+#: Every `RESULT_*_W*.md` must now appear in `PAIRS` or here. An entry naming a
+#: document that no longer exists fails, and a document in neither fails, so the
+#: list cannot rot into a way of dropping a wave quietly.
+NO_VERDICTS = {
+    "RESULT_2026-08-19_W1_ATTENTION_AT_CONVERGENCE.md": "no per-wave analyser",
+    "RESULT_2026-08-20_W3_SCOPE_LIMITS.md": "no per-wave analyser",
+    "RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md": "no per-wave analyser",
+    "RESULT_2026-08-20_W5_BUDGET_LADDER_INCONCLUSIVE.md": "no per-wave analyser",
+    "RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md": "no per-wave analyser",
+    "RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md": "no per-wave analyser",
+    "RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md":
+        "no per-wave analyser",
+    "RESULT_2026-08-22_W10_RESOLUTION_LADDER.md":
+        "analyse_wave10.py writes no VERDICTS file — it has no --out",
+    "RESULT_2026-08-22_W11_CLIPPING_WAS_NOT_THE_WHOLE_CAUSE.md":
+        "analyse_wave11.py writes no VERDICTS file — it has no --out",
+}
+
+#: Written longest-first by convention, and that convention is NOT what makes it
+#: safe. Every use below anchors the verdict between `**` on both sides, or
+#: against a `**` that follows it, so `MET` cannot match the tail of `NOT MET`:
+#: the engine tries `MET` at the position after the separator, fails on `N`, and
+#: backtracks to the longer alternative. Reordering this string to put `MET`
+#: first was tried on 2026-08-28 and changed no verdict — recorded because a
+#: comment claiming the order is load-bearing would be a false reason for a true
+#: line, and the next person would preserve the wrong thing.
+VERDICT = "NOT SUPPORTED|NOT EVALUABLE|SUPPORTED|NOT MET|MET"
 #: The analysers write `**X-1** … -> **VERDICT**`.
 # The middle group must not cross another hypothesis label. With a bare `(.*?)`
 # under re.S, a hypothesis the analyser reports *without* a verdict — "S-3b
@@ -55,15 +91,44 @@ GENERATED = re.compile(
     rf"\*\*([A-Z]-\d+[a-z]?)\*\*((?:(?!\*\*[A-Z]-\d).)*?)(?:->|→)\s*\*\*({VERDICT})\*\*",
     re.S,
 )
+#: The wave-15 analyser and everything frozen after it write the verdict inside
+#: one bold span: `**H15-1: NOT MET** (bar: ...)`. The arrow form above does not
+#: match it, and the `if not generated` guard caught that rather than reporting
+#: a clean pass over nothing — which is the only reason this second pattern
+#: exists rather than a silently empty comparison.
+GENERATED_INLINE = re.compile(
+    rf"\*\*([A-Z]\d*-\d+[a-z]?):\s*({VERDICT})\*\*")
 #: A write-up states it either as a heading, `**X-1 — VERDICT`, or in a table.
-HAND_PROSE = re.compile(rf"\*\*([A-Z]-\d+[a-z]?)\s*[—–-]+\s*({VERDICT})")
+HAND_PROSE = re.compile(rf"\*\*([A-Z]\d*-\d+[a-z]?)\s*[—–-]+\s*({VERDICT})")
+#: A write-up's verdict table. The column count is not fixed: waves 8 and 12-14
+#: use four columns and the wave-15/17 table uses three, and a pattern pinned to
+#: one shape reported "discussed but unparsable" for every verdict in the other
+#: — loudly, which is the only reason it was found rather than passed over.
 HAND_TABLE = re.compile(
-    rf"\*\*([A-Z]-\d+[a-z]?)\*\*[^\n|]*\|[^\n|]*\|[^\n|]*\|\s*\*\*({VERDICT})\*\*")
+    rf"\*\*([A-Z]\d*-\d+[a-z]?)\*\*(?:[^\n|]*\|){{1,4}}[^\n]*?\*\*({VERDICT})\*\*")
 
 
 def main() -> int:
     compared = 0
     problems: list[str] = []
+
+    # Coverage first. A curated list that quietly stops covering the newest
+    # wave is worse than no list, because the closing line keeps claiming
+    # everything.
+    checked = {hand for _, hand in PAIRS}
+    for path in sorted((ROOT / "results").glob("RESULT_*_W[0-9]*.md")):
+        if path.name not in checked and path.name not in NO_VERDICTS:
+            problems.append(
+                f"{path.name}: neither cross-checked nor declared in "
+                f"NO_VERDICTS. Every wave result is one or the other.")
+    for name, why in sorted(NO_VERDICTS.items()):
+        if not (ROOT / "results" / name).is_file():
+            problems.append(f"NO_VERDICTS names {name}, which does not exist")
+        elif name in checked:
+            problems.append(f"{name} is both cross-checked and declared "
+                            f"uncheckable ({why}); remove the declaration")
+    print(f"  {len(checked)} wave result(s) cross-checked, "
+          f"{len(NO_VERDICTS)} declared uncheckable")
 
     for generated_name, hand_name in PAIRS:
         generated_path, hand_path = CAMPAIGN / generated_name, ROOT / "results" / hand_name
@@ -76,7 +141,9 @@ def main() -> int:
             problems.extend(pair_problems)
             continue
 
-        generated = {k: v for k, _, v in GENERATED.findall(generated_path.read_text())}
+        generated_text = generated_path.read_text()
+        generated = {k: v for k, _, v in GENERATED.findall(generated_text)}
+        generated |= dict(GENERATED_INLINE.findall(generated_text))
         hand_text = hand_path.read_text()
         hand = dict(HAND_PROSE.findall(hand_text)) | dict(HAND_TABLE.findall(hand_text))
 
