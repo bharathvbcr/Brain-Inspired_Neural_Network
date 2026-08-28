@@ -1054,7 +1054,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     label(
         root,
         (36, 48),
-        "The gain is positive on five rungs and inverts at h1024. n = 12 per rung, d32/L4, e400, seed-paired. Rungs are drawn as points: no curve is fitted and none may be.",
+        "EVERY RUNG IS d32/L4. The gain is positive on five rungs and inverts at h1024 — a property of THIS read-out depth, not of the width: at h1024, d32/L2 gains +0.0405 in 20/20 seeds.",
         13,
         RGBColor(70, 70, 70),
     )?;
@@ -1150,6 +1150,13 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (36, 562),
         "No monotonic decay is claimed above the threshold, and no dip at h384: the registration asked for 0.005 separations over quantities inside their own noise floor.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, 584),
+        "n = 12 per rung, d32/L4, e400, seed-paired. Rungs are points: no curve is fitted and none may be.",
         12,
         RGBColor(110, 110, 110),
     )?;

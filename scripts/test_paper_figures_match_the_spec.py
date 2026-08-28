@@ -364,6 +364,24 @@ class LeadFigure3Test(unittest.TestCase):
         # banned has to be writable down beside the code that obeys the ban.
         self.assertNotIn("0.0392", drawable(self.text))
 
+    def test_the_ladder_declares_its_read_out_depth(self):
+        """Ban 5, as rewritten 2026-08-28. Every rung is d32/L4, and wave 18
+        showed the inversion is a property of that depth rather than of the
+        width: at h1024, d32/L2 gains +0.0405 in 20/20. A figure that says
+        "gain inverts at h1024" without naming the depth states something
+        broader than the measurement."""
+        self.assertIn("EVERY RUNG IS d32/L4", self.fig)
+        self.assertIn("not of the width", self.fig)
+
+    def test_the_depth_ladder_itself_is_still_not_plotted(self):
+        """The same ban's surviving half: one depth per figure. A width ladder
+        with a second axis is a different figure and none is specified."""
+        self.assertNotIn("LADDER_L2", self.text)
+        # Word-boundary: LADDER_DROP and LADDER_LARGEST_GAP_BELOW are scalars
+        # about the step, not a second series. Counting the bare prefix caught
+        # them and made this assert 5 == 1.
+        self.assertEqual(len(re.findall(r"nums::LADDER\b", self.fig)), 1)
+
     def test_the_width_axis_is_evenly_spaced(self):
         """A log-width axis visually compresses the step, which is the one
         feature this figure exists for."""

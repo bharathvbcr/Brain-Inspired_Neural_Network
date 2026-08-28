@@ -375,10 +375,21 @@ Surrogate scale is separately amended as the wrong lever for a feed-forward arm
    8,156 training samples — is **not excluded by anything in this paper**
    ([`PAPER_DRAFT.md`](PAPER_DRAFT.md) §0) and must not be excluded by the
    drawing either.
-5. **It must not show the h1024 depth result.** `d32/L2` at h1024 reaching
-   **+0.0392** (12/12) is explicitly **not claimed** — it rests on three points
-   with L3 missing and two archived, and is registered as its own wave
-   ([`PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md`](PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md)).
+5. **It must not plot the h1024 depth ladder, and it must now say it is an
+   L4 ladder.** This ban was written while `d32/L2` at h1024 reaching **+0.0392**
+   (12/12) rested on three points with L3 missing and two archived. **That wave
+   has since reported**: wave 18 ran all four depths at twenty seeds with zero
+   divergences, and H18-1 is **MET** — the optimum in depth at h1024 is
+   interior, with `d32/L2` at **+0.0405** in 20/20
+   ([`RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md`](RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md)).
+
+   The figure still plots **one depth**, because a width ladder with a second
+   axis is a different figure. What changes is that it may no longer imply the
+   inversion is a property of the width: **every rung is `d32/L4`, and the
+   drawing must say so on its face**, so a reader does not carry "gain inverts
+   at h1024" away unqualified. The depth result belongs in §3.5's prose and in a
+   figure of its own if one is ever specified; `TODO(source needed)` for that
+   figure, which is an authoring decision and not a missing number.
    Keep it off this figure entirely.
 
 **Caption (required wording):**
