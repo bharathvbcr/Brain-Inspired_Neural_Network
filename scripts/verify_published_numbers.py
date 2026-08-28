@@ -28,7 +28,7 @@ ANCHOR = "published-2ms__adjacent-sum-5"
 
 #: The number of checks this script must run. See the floor test at the end of
 #: `main` for why a count that only ever prints itself is not a check.
-MIN_CHECKS = 78
+MIN_CHECKS = 82
 
 
 def acc(root: Path, stem: str) -> list[float]:
@@ -362,6 +362,30 @@ def main() -> int:
     results.append(check(f"H17-1 paired gain at n={len(shared)}",
                          paired_gain(h_attn, h_rate)[0],
                          published(W1517, r"\| \*\*32\*\* \| \*\*0\.\d+\*\* \| \*\*0\.\d+\*\* \| \*\*\+(0\.\d+)\*\*")))
+
+    # ---- Waves 18-19: the depth ladder's MEDIAN accuracy columns -----------
+    # `check_every_number.py` generates means, extremes and per-seed values and
+    # deliberately no medians, so these four are verified by name here. The
+    # analyser prints medians for accuracy and a MEAN for the paired gain, which
+    # is why the columns must not be subtracted: at L3 the difference of medians
+    # is +0.0446 against a paired mean gain of +0.0371.
+    W1819 = "RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md"
+    import statistics as _stats
+
+    w18_rate = acc_present(V2, f"w18dep__ff-fixed__h1024__e400__{ANCHOR}",
+                           [5170001 + i for i in range(20)])
+    for depth, expected_row in ((1, r"\| L1 \| 20 \| 0\.\d+ \| (0\.\d+)"),
+                                (2, r"\| \*\*L2\*\* \| 20 \| 0\.\d+ \| (0\.\d+)"),
+                                (3, r"\| L3 \| 20 \| 0\.\d+ \| (0\.\d+)"),
+                                (4, r"\| L4 \| 20 \| 0\.\d+ \| (0\.\d+)")):
+        cells = acc_present(
+            V2, f"w18dep__ff-fixed-attn__h1024__e400__{ANCHOR}__d32l{depth}",
+            [5170001 + i for i in range(20)])
+        shared = sorted(set(cells) & set(w18_rate))
+        results.append(check(
+            f"H18-1 L{depth} attention median over {len(shared)} shared seeds",
+            _stats.median(cells[s] for s in shared),
+            published(W1819, expected_row)))
 
     # ---- Wave 20: the recurrent claim at n=32 ------------------------------
     # Same shape as waves 15-17 and the same reason: merged cross-wave arms and

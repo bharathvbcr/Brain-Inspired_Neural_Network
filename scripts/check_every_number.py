@@ -277,6 +277,16 @@ ELSEWHERE = [
     # stem, so `r1cal` and `w17hdl` are separate groups and their union is not
     # generated. The two gaps are differences OF gains and the sd is a variance.
     # Each is checked by name in verify_published_numbers.py.
+    # Waves 18-19. The depth ladder's accuracy columns are MEDIANS over the
+    # shared seeds, and this sweep generates means, extremes and per-seed values
+    # and deliberately no medians. Recomputed by name in
+    # verify_published_numbers.py. They are printed beside a MEAN paired gain,
+    # which is why that document says in as many words not to subtract them.
+    ("0.7228", "H18-1 L1 attention median at h1024"),
+    ("0.7767", "H18-1 L2 attention median at h1024"),
+    ("0.7838", "H18-1 L3 attention median at h1024, the rung whose norm of "
+               "1.347 breaks H18-2"),
+    ("0.6093", "H18-1 L4 attention median at h1024"),
     # Wave 20. Merged `w13rec`/`w14sub` + `w20rec` arms and one difference OF
     # gains — the two shapes this sweep does not generate, for the same reasons
     # as waves 15-17 above. All eight are recomputed from the cells by name in
