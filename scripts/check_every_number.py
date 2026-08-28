@@ -129,6 +129,11 @@ KNOWN_COINCIDENCE = {
     "0.6775": "a July C1 / Gate G2 local mean from the matched-architecture "
               "program, which does not run on the SHD instrument at all.",
     "0.2370": "a July C1 gap lower bound, same program, same reasoning.",
+    "0.8267": "xor_thresh under DFA — a two-class XOR fixture in the "
+              "matched-architecture program, which shares no task, no corpus "
+              "and no arm with the SHD instrument. It collided with a per-seed "
+              "accuracy the moment wave 20 landed, in `arm`, the sparsest "
+              "generator at 6.8%.",
     "0.1411": "M-2, a difference OF gains. This sweep deliberately generates no "
               "second-order quantities, so a `pooled` match cannot be the same "
               "computation.",

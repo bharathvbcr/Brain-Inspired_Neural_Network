@@ -24,10 +24,12 @@ Four properties matter most and none would crash if broken:
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -90,13 +92,61 @@ class Spearman(unittest.TestCase):
         self.assertIsNone(a20.spearman([1, 2, 3], [3, 2, 1]))
 
 
+def pre_wave20_archive(into: Path) -> int:
+    """The campaign archive as it stood before wave 20 landed.
+
+    Every real archived cell except `w20rec__*`. The analyser always searches
+    `ARCHIVE_V2` in addition to `--results`, so once wave 20 settled 80/80 and
+    was landed there, a test that supplies a deliberately THIN wave-20 arm had
+    it topped up by the real one — and asserted NOT MET against a report that
+    said MET. Nothing is stubbed: these are the same cells, minus the wave whose
+    arrival is the only thing that changed.
+    """
+    landed = 0
+    for path in (ROOT / "results/shd_attention_campaign_v2").glob("*.json"):
+        if path.name.startswith("w20rec__"):
+            continue
+        shutil.copy2(path, into / path.name)
+        landed += 1
+    # A builder that silently copied nothing would make every assertion that
+    # depends on it vacuous in the direction of "no pairs found".
+    assert landed > 400, f"pre-wave-20 archive rebuilt with only {landed} cells"
+    return landed
+
+
 class ReproducesThePublishedPilot(unittest.TestCase):
     """The archive already holds every cell §3.7 was computed from.
 
-    Before wave 20 lands a single cell, the frozen analyser must reproduce the
-    paper's numbers from those cells. If it cannot, it is measuring something
-    else and every verdict it later issues is about that other thing.
+    The frozen analyser must reproduce the paper's published pilot from those
+    cells. If it cannot, it is measuring something else and every verdict it
+    later issues is about that other thing.
+
+    # Why this builds a fixture instead of reading the archive directly
+
+    It used to pass an EMPTY results directory so the analyser fell back to
+    `ARCHIVE_V2`, and asserted the ten-pair pilot. That worked while the premise
+    held — "before wave 20 lands a single cell" — and stopped working the moment
+    wave 20 settled 80/80 and its cells were landed in that archive, which is
+    the normal end of a wave rather than anything going wrong. Three of these
+    tests failed at once.
+
+    The guarantee is worth keeping permanently, so the archive is reconstructed
+    as it stood BEFORE wave 20: every real archived cell except `w20rec__*`.
+    Nothing is stubbed and no number is hardcoded into a fixture — these are the
+    same cells §3.7 was computed from, minus the wave whose arrival is the only
+    thing that changed.
     """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.archive = Path(cls._tmp.name) / "archive"
+        cls.archive.mkdir()
+        pre_wave20_archive(cls.archive)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
 
     def report(self) -> str:
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,11 +155,11 @@ class ReproducesThePublishedPilot(unittest.TestCase):
             plan = Path(tmp) / "plan.json"
             plan.write_text(json.dumps([{"id": "w20rec__probe__s5170001"}]))
             out = Path(tmp) / "r.md"
-            proc = subprocess.run(
-                [sys.executable, str(ROOT / "scripts/aws/analyse_wave20.py"),
-                 "--plan", str(plan), "--results", str(empty), "--out", str(out)],
-                capture_output=True, text=True)
-            self.assertIn(proc.returncode, (0, 2), proc.stderr)
+            with mock.patch.object(a20, "ARCHIVE_V2", self.archive), \
+                 mock.patch.object(sys, "argv",
+                                   ["analyse_wave20", "--plan", str(plan),
+                                    "--results", str(empty), "--out", str(out)]):
+                self.assertIn(a20.main(), (0, 2))
             return out.read_text()
 
     def test_it_finds_the_ten_pairs_the_paper_reports(self):
@@ -166,14 +216,21 @@ class Grids(unittest.TestCase):
                    {s: (0.71 + ff_gain, 1.0) for s in seeds})
 
     def run_analyser(self) -> str:
+        """Against the pre-wave-20 archive, so a grid built to be thin stays
+        thin. The archived controls these grids intend to reuse are still
+        there; only the real wave 20 is held out."""
+        archive = Path(self.tmp.name) / "archive"
+        archive.mkdir(exist_ok=True)
+        if not any(archive.iterdir()):
+            pre_wave20_archive(archive)
         plan = Path(self.tmp.name) / "plan.json"
         plan.write_text(json.dumps([{"id": p.stem} for p in self.res.glob("*.json")]))
         out = Path(self.tmp.name) / "r.md"
-        proc = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/aws/analyse_wave20.py"),
-             "--plan", str(plan), "--results", str(self.res), "--out", str(out)],
-            capture_output=True, text=True)
-        self.assertIn(proc.returncode, (0, 2), proc.stderr)
+        with mock.patch.object(a20, "ARCHIVE_V2", archive), \
+             mock.patch.object(sys, "argv",
+                               ["analyse_wave20", "--plan", str(plan),
+                                "--results", str(self.res), "--out", str(out)]):
+            self.assertIn(a20.main(), (0, 2))
         return out.read_text()
 
     def test_a_full_healthy_grid_meets_every_hypothesis(self):
