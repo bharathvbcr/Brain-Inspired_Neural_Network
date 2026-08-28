@@ -39,7 +39,7 @@ class Fleet:
     """A scripted bucket and account, driven through `WC.aws`."""
 
     def __init__(self, plan, results=(), failures=(), instances=5,
-                 plan_readable=True, hostlogs=None, live_ids=None):
+                 plan_readable=True, hostlogs=None, live_ids=None, claims=None):
         self.plan = list(plan)
         self.results = list(results)
         self.failures = list(failures)
@@ -50,6 +50,9 @@ class Fleet:
         #: instance ids still alive; defaults to every instance with a hostlog
         self.live_ids = (list(self.hostlogs) if live_ids is None
                          else list(live_ids))
+        #: Claim markers still held. Defaults to every planned cell, which is
+        #: the state during a run; pass a shorter list to model a release.
+        self.claims = list(self.plan) if claims is None else list(claims)
 
     def __call__(self, args):
         import json
@@ -66,12 +69,42 @@ class Fleet:
                 return listing("results/", [f"{c}.json" for c in self.results])
             if "hostlogs/" in args[2]:
                 return listing("hostlogs/", [f"{i}.log" for i in self.hostlogs])
+            if "claims/" in args[2]:
+                return listing("claims/", list(self.claims))
             return listing("failures/", [f"{c}.log" for c in self.failures])
         if args[0] == "ec2":
             if "InstanceId" in " ".join(args):
                 return " ".join(self.live_ids) + "\n" if self.live_ids else ""
             return "" if self.instances is None else f"{self.instances}\n"
         return ""
+
+    def run_twice(self, **kw):
+        """Two polls, which is what the strandedness debounce requires.
+
+        A single sample cannot tell a real strand from a hostlog that has not
+        caught up with a live instance's claim, so nothing is reported until a
+        cell survives two consecutive polls.
+        """
+        import itertools
+        said: list[str] = []
+        argv = ["watch_campaign", "--bucket", "b", "--interval", "0"]
+        for cell in kw.pop("cells", []):
+            argv += ["--cell", cell]
+        stop = itertools.count()
+
+        def sleep(_):
+            if next(stop) >= 1:
+                raise KeyboardInterrupt
+
+        with mock.patch.object(WC, "aws", self), \
+             mock.patch.object(WC, "say", said.append), \
+             mock.patch.object(WC.time, "sleep", sleep), \
+             mock.patch.object(sys, "argv", argv):
+            try:
+                WC.main()
+            except KeyboardInterrupt:
+                pass
+        return said
 
     def run(self, **kw):
         """One poll. Returns the emitted lines."""
@@ -202,7 +235,7 @@ class AReclaimedCellTest(unittest.TestCase):
         fleet = Fleet(plan=[self.CELL, "other"],
                       hostlogs={"i-dead": [self.CELL]},
                       live_ids=["i-alive"], instances=1)
-        lines = fleet.run(cells=[self.CELL])
+        lines = fleet.run_twice(cells=[self.CELL])
         self.assertTrue(any("STRANDED" in l for l in lines), lines)
         self.assertTrue(any("release_dead_claims.py" in l for l in lines), lines)
         self.assertTrue(any("KEY CELL" in l for l in lines), lines)
@@ -217,6 +250,46 @@ class AReclaimedCellTest(unittest.TestCase):
         lines = fleet.run(cells=[self.CELL])
         self.assertFalse(any("STRANDED" in l for l in lines), lines)
 
+    def test_a_released_cell_is_no_longer_reported(self):
+        """The false positive in the RECOVERED state, seen in anger on
+        2026-08-28: eight cells were released back to the queue and the very
+        next poll called the same eight stranded. Hostlogs are append-only and
+        outlive their instances, so a dead log goes on naming a cell that has
+        already been handed back — for exactly as long as it waits unclaimed,
+        which is the window in which it has already been fixed."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-dead": [self.CELL]},
+                      live_ids=["i-alive"], claims=[])
+        self.assertFalse(any("STRANDED" in l
+                             for l in fleet.run(cells=[self.CELL])))
+
+    def test_one_poll_alone_does_not_report(self):
+        """Debounce. A cell a live instance has just claimed sits in the dead
+        instance's log and not yet in the live one's — hostlogs ship once a
+        minute — which is indistinguishable from a real strand in one sample.
+        `--once` takes exactly one poll, so nothing is reported."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-dead": [self.CELL]},
+                      live_ids=["i-alive"], claims=[self.CELL])
+        self.assertFalse(any("STRANDED" in l
+                             for l in fleet.run(cells=[self.CELL])))
+
+    def test_two_consecutive_polls_report(self):
+        """The mirror, so the debounce cannot silence the alarm entirely."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-dead": [self.CELL]},
+                      live_ids=["i-alive"], claims=[self.CELL])
+        self.assertTrue(any("STRANDED" in l
+                            for l in fleet.run_twice(cells=[self.CELL])))
+
+    def test_claim_names_survive_an_empty_suffix(self):
+        """Claim markers carry no extension. `name[:-len("")]` is `name[:-0]`,
+        which is the empty string for every key — a set of one empty name that
+        intersects nothing, silently disabling the alarm."""
+        with mock.patch.object(WC, "aws",
+                               lambda a: listing("claims/", ["w__c1", "w__c2"])):
+            self.assertEqual(WC.keys("b", "claims/", ""), {"w__c1", "w__c2"})
+
     def test_a_cell_whose_owner_is_alive_is_not_reported(self):
         """The common case a false alarm would ruin: still running. These take
         up to fourteen hours."""
@@ -230,7 +303,7 @@ class AReclaimedCellTest(unittest.TestCase):
         went unreported until someone ran release_dead_claims.py by hand."""
         fleet = Fleet(plan=["unnamed", "other"],
                       hostlogs={"i-dead": ["unnamed"]}, live_ids=["i-alive"])
-        lines = fleet.run(cells=[])
+        lines = fleet.run_twice(cells=[])
         self.assertTrue(any("STRANDED" in l for l in lines), lines)
 
     def test_a_finished_cell_is_never_called_stranded(self):
@@ -272,7 +345,7 @@ class AReclaimedCellTest(unittest.TestCase):
         cells = [f"w__c{i}" for i in range(16)]
         fleet = Fleet(plan=cells + ["other"],
                       hostlogs={"i-dead": cells}, live_ids=["i-alive"])
-        lines = [l for l in fleet.run(cells=[]) if "STRANDED" in l]
+        lines = [l for l in fleet.run_twice(cells=[]) if "STRANDED" in l]
         self.assertEqual(len(lines), 1, lines)
         self.assertIn("16 cell(s)", lines[0])
         self.assertIn("and 13 more", lines[0])

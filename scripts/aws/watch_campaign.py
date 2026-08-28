@@ -67,8 +67,16 @@ def aws(args: list[str]) -> str:
 
 
 def keys(bucket: str, prefix: str, suffix: str) -> set[str]:
+    """Object names under `prefix`, with `suffix` stripped.
+
+    An empty suffix means "strip nothing" and must not be written as
+    `name[:-len(suffix)]`, which is `name[:-0]` and therefore the empty string
+    for every key. Claim markers carry no extension, so that slice would return
+    a set containing one empty name and nothing else.
+    """
     out = aws(["s3", "ls", f"s3://{bucket}/{prefix}", "--recursive"])
-    return {line.split()[-1].rsplit("/", 1)[-1][:-len(suffix)]
+    cut = len(suffix) or None
+    return {line.split()[-1].rsplit("/", 1)[-1][:cut and -cut]
             for line in out.splitlines()
             if line.strip() and line.split()[-1].endswith(suffix)}
 
@@ -232,6 +240,7 @@ def main() -> int:
     seen_waves: set[str] = set()
     settled: set[str] = set()
     stranded: set[str] = set()
+    suspected: set[str] = set()
     seen_gates: dict[str, str] = {}
     quiet = 0
     last_done = None
@@ -304,6 +313,14 @@ def main() -> int:
         outstanding_now = plan - done - failed
         alive = live_instance_ids(args.region) if outstanding_now else None
         if alive:
+            # Only cells whose claim is STILL HELD. A hostlog is append-only and
+            # outlives its instance, so after `release_dead_claims.py` hands a
+            # cell back to the queue the dead log still names it and nothing
+            # else does — it read as stranded for as long as it sat unclaimed,
+            # which is precisely the window in which it has already been fixed.
+            # Observed on 2026-08-28: eight cells were released and the very
+            # next poll reported the same eight as stranded.
+            held = keys(args.bucket, "claims/", "")
             claims = hostlog_claims(args.bucket)
             # A cell any LIVE instance's log names is running, whatever a dead
             # instance's log also says. This is the same refusal
@@ -314,8 +331,19 @@ def main() -> int:
             abandoned = set().union(*(c for i, c in claims.items()
                                       if i not in alive)) \
                 if any(i not in alive for i in claims) else set()
-            stranded_now = (abandoned - running) & outstanding_now
-        fresh = sorted(stranded_now - stranded)
+            stranded_now = (abandoned - running) & outstanding_now & held
+        # Reported only after TWO consecutive polls. Hostlogs ship once a
+        # minute and this polls every five, so a cell a live instance has just
+        # claimed can sit in a dead instance's log and not yet in the live
+        # one's — claimed, outstanding, and named only by a host that is gone.
+        # That is indistinguishable from a real strand in one sample and
+        # resolves by itself in the next. Seen in anger on 2026-08-28: eight
+        # cells were released, re-claimed, and reported stranded while
+        # `release_dead_claims.py`, asking the fleet over SSM, said zero.
+        confirmed = stranded_now & suspected
+        suspected = stranded_now
+        fresh = sorted(confirmed - stranded)
+        stranded_now = confirmed
         if fresh:
             # A reclaimed instance strands every cell it held at once, so name a
             # few and count the rest rather than emitting one line per slot.
