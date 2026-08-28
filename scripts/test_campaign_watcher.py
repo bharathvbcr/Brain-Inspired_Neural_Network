@@ -178,15 +178,22 @@ class NamedEventsTest(unittest.TestCase):
         self.assertFalse(any("KEY CELL" in l for l in lines), lines)
 
 
-class AReclaimedKeyCellTest(unittest.TestCase):
-    """A key cell has three outcomes, not two.
+class AReclaimedCellTest(unittest.TestCase):
+    """A cell has three outcomes, not two, and only one of them is recoverable.
 
     A diverged cell writes a failure log and cannot be re-run: the seed and the
     binary are pinned, so a requeue burns a slot and lands back in `failures/`.
     A cell whose spot instance is reclaimed writes **nothing** — its claim is
-    orphaned and it simply never finishes. Only the second is recoverable, and
-    before this the watcher was silent on it forever, which is how the one loss
-    that can be fixed would have looked identical to no news.
+    orphaned and it simply never finishes. Before this the watcher was silent
+    on the second forever, which is how the one loss that can be fixed looked
+    identical to no news.
+
+    The regression test below is the important one. The first implementation
+    mapped `cell -> owner` and let whichever hostlog was processed last win. It
+    reported six of wave 20's cells stranded; `release_dead_claims.py`, asking
+    the fleet over SSM, said zero. Hostlogs accumulate and outlive their
+    instances, so a cell that was reclaimed, released and picked up again is
+    named in both a dead log and a live one.
     """
 
     CELL = "w20rec__key__s1"
@@ -196,18 +203,35 @@ class AReclaimedKeyCellTest(unittest.TestCase):
                       hostlogs={"i-dead": [self.CELL]},
                       live_ids=["i-alive"], instances=1)
         lines = fleet.run(cells=[self.CELL])
-        self.assertTrue(any("KEY CELL STRANDED" in l for l in lines), lines)
-        self.assertTrue(any("release_dead_claims.py can requeue" in l
-                            for l in lines), lines)
+        self.assertTrue(any("STRANDED" in l for l in lines), lines)
+        self.assertTrue(any("release_dead_claims.py" in l for l in lines), lines)
+        self.assertTrue(any("KEY CELL" in l for l in lines), lines)
 
-    def test_a_cell_whose_owner_is_alive_is_not_reported(self):
-        """The common case, and the one a false alarm would ruin: a cell that
-        is simply still running. These take up to fourteen hours."""
+    def test_a_cell_a_live_log_also_claims_is_not_stranded(self):
+        """The false positive that shipped and was caught by disagreeing with
+        the authoritative check. A dead instance's log naming a cell proves
+        nothing when a live instance's log names it too."""
         fleet = Fleet(plan=[self.CELL, "other"],
-                      hostlogs={"i-alive": [self.CELL]},
+                      hostlogs={"i-dead": [self.CELL], "i-alive": [self.CELL]},
                       live_ids=["i-alive"])
         lines = fleet.run(cells=[self.CELL])
         self.assertFalse(any("STRANDED" in l for l in lines), lines)
+
+    def test_a_cell_whose_owner_is_alive_is_not_reported(self):
+        """The common case a false alarm would ruin: still running. These take
+        up to fourteen hours."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-alive": [self.CELL]}, live_ids=["i-alive"])
+        self.assertFalse(any("STRANDED" in l
+                             for l in fleet.run(cells=[self.CELL])))
+
+    def test_strandedness_covers_cells_nobody_named(self):
+        """Scoped to `--cell` at first, so a reclaim anywhere else in the plan
+        went unreported until someone ran release_dead_claims.py by hand."""
+        fleet = Fleet(plan=["unnamed", "other"],
+                      hostlogs={"i-dead": ["unnamed"]}, live_ids=["i-alive"])
+        lines = fleet.run(cells=[])
+        self.assertTrue(any("STRANDED" in l for l in lines), lines)
 
     def test_a_finished_cell_is_never_called_stranded(self):
         fleet = Fleet(plan=[self.CELL, "other"], results=[self.CELL],
@@ -217,8 +241,7 @@ class AReclaimedKeyCellTest(unittest.TestCase):
         self.assertTrue(any("KEY CELL COMPLETE" in l for l in lines), lines)
 
     def test_a_failed_cell_is_called_unrecoverable_and_not_stranded(self):
-        """The distinction is the point: requeueing a divergence wastes a slot
-        and cannot change the answer."""
+        """Requeueing a divergence wastes a slot and cannot change the answer."""
         fleet = Fleet(plan=[self.CELL, "other"], failures=[self.CELL],
                       hostlogs={"i-dead": [self.CELL]}, live_ids=["i-alive"])
         lines = fleet.run(cells=[self.CELL])
@@ -227,22 +250,32 @@ class AReclaimedKeyCellTest(unittest.TestCase):
                             for l in lines), lines)
 
     def test_an_unreadable_instance_list_raises_no_alarm(self):
-        """If the fleet cannot be listed, every claim is treated as live. The
-        same refusal `release_dead_claims.py` makes: never act on incomplete
-        information about what is running."""
+        """The same refusal `release_dead_claims.py` makes: never act on
+        incomplete information about what is running."""
         fleet = Fleet(plan=[self.CELL, "other"],
                       hostlogs={"i-dead": [self.CELL]}, live_ids=[])
-        lines = fleet.run(cells=[self.CELL])
-        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+        self.assertFalse(any("STRANDED" in l
+                             for l in fleet.run(cells=[self.CELL])))
 
     def test_a_cell_no_hostlog_mentions_raises_no_alarm(self):
-        """A cell claimed seconds ago has not reached any hostlog yet — those
-        ship once a minute — and must not be called stranded."""
+        """Hostlogs ship once a minute; a just-claimed cell is in none of
+        them."""
         fleet = Fleet(plan=[self.CELL, "other"],
                       hostlogs={"i-alive": ["something-else"]},
                       live_ids=["i-alive"])
-        lines = fleet.run(cells=[self.CELL])
-        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+        self.assertFalse(any("STRANDED" in l
+                             for l in fleet.run(cells=[self.CELL])))
+
+    def test_a_mass_reclaim_is_summarised_rather_than_listed(self):
+        """One reclaimed instance strands every cell it held. One line per slot
+        is a flood the reader learns to skip."""
+        cells = [f"w__c{i}" for i in range(16)]
+        fleet = Fleet(plan=cells + ["other"],
+                      hostlogs={"i-dead": cells}, live_ids=["i-alive"])
+        lines = [l for l in fleet.run(cells=[]) if "STRANDED" in l]
+        self.assertEqual(len(lines), 1, lines)
+        self.assertIn("16 cell(s)", lines[0])
+        self.assertIn("and 13 more", lines[0])
 
 
 class TheScriptIsUsableTest(unittest.TestCase):

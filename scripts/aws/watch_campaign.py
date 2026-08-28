@@ -58,16 +58,30 @@ def plan_ids(bucket: str) -> set[str]:
         return set()
 
 
-def hostlog_owners(bucket: str) -> dict[str, str]:
-    """`cell id -> the instance whose log last claimed it`.
+def hostlog_claims(bucket: str) -> dict[str, set[str]]:
+    """`instance id -> every cell its log has ever claimed`.
 
     `bootstrap.sh` ships each host's bootstrap log to `hostlogs/<instance>.log`
     once a minute, and every claim appears there as `slot N: running <cell id>`.
     That is the cheap half of the liveness question: `release_dead_claims.py`
     answers the expensive half over SSM, one `send-command` and a seven-second
     sleep per instance, which is far too heavy to poll on.
+
+    It returns the claims per instance rather than one owner per cell, and that
+    is the whole correctness of the thing. **Hostlogs accumulate and outlive
+    their instances.** A cell claimed by an instance that was reclaimed, then
+    released back to the queue and picked up by a live one, is named in BOTH
+    logs — the dead instance's log stays in S3 forever. A `cell -> owner` map
+    lets whichever log is processed last win, and S3 listing order is
+    alphabetical rather than chronological.
+
+    That is not hypothetical: the first version of this returned such a map and
+    reported six of wave 20's cells stranded. `release_dead_claims.py`, asking
+    the fleet over SSM, said **zero**. All six were running on a live instance
+    and were named in a dead one's log only because they had been requeued
+    earlier the same day — by the very release this check exists to prompt.
     """
-    owners: dict[str, str] = {}
+    claims: dict[str, set[str]] = {}
     listing = aws(["s3", "ls", f"s3://{bucket}/hostlogs/", "--recursive"])
     for line in listing.splitlines():
         if not line.strip() or not line.split()[-1].endswith(".log"):
@@ -75,9 +89,8 @@ def hostlog_owners(bucket: str) -> dict[str, str]:
         key = line.split()[-1]
         instance = key.rsplit("/", 1)[-1][:-4]
         body = aws(["s3", "cp", f"s3://{bucket}/{key}", "-"])
-        for entry in re.findall(r"slot \d+: running (\S+)", body):
-            owners[entry] = instance
-    return owners
+        claims[instance] = set(re.findall(r"slot \d+: running (\S+)", body))
+    return claims
 
 
 def live_instance_ids(region: str) -> set[str] | None:
@@ -161,21 +174,43 @@ def main() -> int:
         # one loss that is actually recoverable, which is the exact shape of
         # "a check that could not run reporting the same result as one that
         # ran and passed".
+        # Checked for EVERY outstanding cell, not only the named ones. The first
+        # version looked at `--cell` alone, which meant a reclaim anywhere else
+        # in the plan went unreported until someone ran release_dead_claims.py
+        # by hand — which on 2026-08-27 is exactly how two orphaned cells were
+        # found, by luck rather than by the watch.
+        #
+        # The hostlog read is the same one either way, so widening it costs a
+        # larger set comparison and nothing else.
         stranded_now: set[str] = set()
-        unfinished = [c for c in args.cell
-                      if c not in settled and c not in results and c not in failures]
-        if unfinished:
-            alive = live_instance_ids(args.region)
-            owners = hostlog_owners(args.bucket) if alive is not None else {}
-            for cell in unfinished:
-                owner = owners.get(cell)
-                if owner is not None and alive is not None and owner not in alive:
-                    stranded_now.add(cell)
-                    if cell not in stranded:
-                        say(f"KEY CELL STRANDED: {cell} was claimed by {owner}, "
-                            f"which is gone. No result, no failure log — a spot "
-                            f"reclaim, which release_dead_claims.py can requeue. "
-                            f"A divergence cannot be requeued; this can.")
+        outstanding_now = plan - done - failed
+        alive = live_instance_ids(args.region) if outstanding_now else None
+        if alive:
+            claims = hostlog_claims(args.bucket)
+            # A cell any LIVE instance's log names is running, whatever a dead
+            # instance's log also says. This is the same refusal
+            # `release_dead_claims.py` makes: never call a cell dead on the
+            # word of a host that is gone when a host that is here claims it.
+            running = set().union(*(c for i, c in claims.items() if i in alive)) \
+                if any(i in alive for i in claims) else set()
+            abandoned = set().union(*(c for i, c in claims.items()
+                                      if i not in alive)) \
+                if any(i not in alive for i in claims) else set()
+            stranded_now = (abandoned - running) & outstanding_now
+        fresh = sorted(stranded_now - stranded)
+        if fresh:
+            # A reclaimed instance strands every cell it held at once, so name a
+            # few and count the rest rather than emitting one line per slot.
+            shown = ", ".join(c.split("__", 1)[-1][:56] for c in fresh[:3])
+            more = f" and {len(fresh) - 3} more" if len(fresh) > 3 else ""
+            say(f"STRANDED: {len(fresh)} cell(s) claimed by an instance that is "
+                f"gone — {shown}{more}. No result and no failure log, so this is "
+                f"a spot reclaim and `python3 scripts/aws/release_dead_claims.py "
+                f"--bucket {args.bucket} --apply` can requeue them. A divergence "
+                f"writes a failure log and cannot be requeued; this can.")
+        for cell in args.cell:
+            if cell in stranded_now and cell not in stranded:
+                say(f"  ...one of them is a KEY CELL: {cell}")
         stranded = stranded_now
 
         for cell in args.cell:
