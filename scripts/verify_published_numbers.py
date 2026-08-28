@@ -26,6 +26,10 @@ V2 = ROOT / "results/shd_attention_campaign_v2"
 SEEDS = [5170001 + i for i in range(12)]
 ANCHOR = "published-2ms__adjacent-sum-5"
 
+#: The number of checks this script must run. See the floor test at the end of
+#: `main` for why a count that only ever prints itself is not a check.
+MIN_CHECKS = 66
+
 
 def acc(root: Path, stem: str) -> list[float]:
     out = []
@@ -482,6 +486,25 @@ def main() -> int:
     print(f"\n{len(results) - bad}/{len(results)} published numbers reproduce from the cells.")
     if bad:
         print("MISMATCH — a published number does not follow from the archived cells.")
+    # A floor, because `66/66` and `65/65` both read as success. Deleting a
+    # failing check is the cheapest way to make this script green, and until
+    # 2026-08-28 nothing noticed: `results` is a list of booleans and its
+    # LENGTH was never asserted.
+    #
+    # This is the third instance of the shape found today. `MIN_DOCUMENTS` in
+    # check_every_number.py was declared and never read; `PAIRS` in
+    # check_verdicts_transcribed.py was a curated list covering four of
+    # fourteen wave results. Each printed a total that was true of what it
+    # looked at and silent about what it did not.
+    #
+    # Raise this when checks are added. Lowering it is a decision to verify
+    # less and should read like one in the diff.
+    if len(results) < MIN_CHECKS:
+        print(f"\nonly {len(results)} checks ran, below the floor of "
+              f"{MIN_CHECKS}. A check was removed or stopped being reached; "
+              f"verifying fewer numbers must not look like verifying them all.",
+              file=sys.stderr)
+        return 1
     return 1 if bad else 0
 
 
