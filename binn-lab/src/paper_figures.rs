@@ -96,6 +96,90 @@ mod nums {
     pub const PER_SEED_MIN_12: f64 = 0.0967;
     pub const PER_SEED_MAX_12: f64 = 0.1568;
 
+    // --- Figure 2: headline accuracy and the 0.80 clearance (Table SHD-1) ----
+    /// n = 32 confirmation and the n = 12 registration. Neither supersedes the
+    /// other and the sheet says so, so both are drawn.
+    pub const HEAD_RATE_32: f64 = 0.7057;
+    pub const HEAD_ATTN_32: f64 = 0.8332;
+    pub const HEAD_GAIN_32: f64 = 0.1275;
+    pub const HEAD_RATE_12: f64 = 0.7062;
+    pub const HEAD_ATTN_12: f64 = 0.8320;
+    pub const HEAD_GAIN_12: f64 = 0.1258;
+    /// Budget stability: |e400 − e200|.
+    pub const HEAD_BUDGET_DELTA: f64 = 0.0002;
+
+    /// The published field, from `PAPER_DRAFT.md` §0. **Not machine-checked**
+    /// against cells, unlike every other number in this module: assembled by a
+    /// 2026-08-27 search pass, and `check_every_number.py` does not sweep §0.
+    /// The figure says so on its face.
+    pub const FIELD_FRONTIER_LO: f64 = 0.95;
+    pub const FIELD_FRONTIER_HI: f64 = 0.964;
+    pub const FIELD_STSC_SNN: f64 = 0.9236;
+    pub const FIELD_TA_SNN: f64 = 0.9108;
+    /// The anchor: the dataset authors' own no-delay recurrent baseline, 1024
+    /// neurons, with augmentation.
+    pub const FIELD_NO_DELAY: f64 = 0.832;
+    pub const FIELD_NO_DELAY_SD: f64 = 0.013;
+    /// SHD ships no validation set. Baronig et al. 2025 report the same model
+    /// at 95.81 validating on test and 93.79 on a held-out split, so
+    /// differences below about this much between published numbers are not
+    /// reliably meaningful — including this paper's own.
+    pub const FIELD_UNRESOLVABLE: f64 = 0.015;
+
+    /// Figure 2 Panel C, the geometry ladder (Table SHD-5). The 0.80 clearance
+    /// is geometry-specific; the gain is not.
+    pub const GEOM: [(&str, f64, f64, f64, &str); 3] = [
+        ("adjacent-sum-5 / published-2ms (anchor)", 0.7062, 0.8320, 0.1258, "12/12"),
+        ("published-10ms", 0.6734, 0.8225, 0.1491, "10/12"),
+        ("channels-700 (standard 700-channel input)", 0.6774, 0.7864, 0.1090, "6/12"),
+    ];
+
+    // --- Figure 3: the width ladder (Table SHD-3, Table SHD-4) ---------------
+    /// `(width, rate, attention, gain, positive)`, n = 12 per rung.
+    pub const LADDER: [(&str, f64, f64, f64, &str); 6] = [
+        ("h128", 0.7062, 0.8320, 0.1258, "12/12"),
+        ("h256", 0.7240, 0.8206, 0.0966, "12/12"),
+        ("h384", 0.7336, 0.8096, 0.0760, "12/12"),
+        ("h512", 0.7357, 0.8233, 0.0876, "12/12"),
+        ("h768", 0.7386, 0.7946, 0.0560, "11/12"),
+        ("h1024", 0.7386, 0.5768, -0.1618, "1/12"),
+    ];
+    /// The step into h1024, and the largest gap below it. 6.9x, against a
+    /// registered 3x bar of 0.0947.
+    pub const LADDER_DROP: f64 = 0.2178;
+    pub const LADDER_LARGEST_GAP_BELOW: f64 = 0.0316;
+    pub const LADDER_DROP_RATIO: f64 = 6.9;
+    /// h384 − h512, seed-paired. H16-1 NOT MET: the two rungs are **not
+    /// distinguishable** at twelve seeds, so no connector may assert an order.
+    pub const LADDER_H384_H512: f64 = -0.0116;
+    pub const LADDER_H384_H512_SD: f64 = 0.0253;
+
+    /// The three preregistered rescue levers at h1024/d32/L4. Every one is
+    /// negative and worse than the arm it was meant to rescue.
+    /// `(lever, gain, positive, median epoch-mean gradient norm)`.
+    pub const LEVERS: [(&str, f64, &str, f64); 4] = [
+        ("surrogate scale 0.5", -0.2106, "0/12", 142.009),
+        ("surrogate scale 0.25", -0.2565, "0/12", 151.391),
+        ("clip-grad-norm 1000.0", -0.0904, "1/12", 11.660),
+        ("(the unclipped arm they were to rescue)", -0.1618, "1/12", 55.494),
+    ];
+
+    // --- Figure 4: the resolution ladder (Table SHD-6) -----------------------
+    /// `(contract, bin, rate, attention, gain)`. The 1400 ms analysis window is
+    /// held FIXED across all three; only the frame count varies. That is the
+    /// whole reason the axis means anything, and it is stated on the figure.
+    pub const RESOLUTION: [(&str, &str, f64, f64, f64); 3] = [
+        ("fixed-t100", "14.0 ms", 0.6672, 0.8599, 0.1927),
+        ("fixed-t250", "5.6 ms", 0.6844, 0.8594, 0.1751),
+        ("fixed-t500", "2.8 ms", 0.7069, 0.8543, 0.1474),
+    ];
+    /// gain(t500) − gain(t100), against a two-sided bar of 0.03.
+    pub const RESOLUTION_TREND: f64 = -0.0453;
+    /// The rate arm rises across the same ladder, inside a 0.05 confound bar.
+    /// Drawn, because omitting it lets the falling gain be misread as the
+    /// attention arm degrading rather than the rate arm catching up.
+    pub const RESOLUTION_BASELINE_DRIFT: f64 = 0.0397;
+
     // --- XOR locality flip, 1-layer `xor_thresh` (Table D) -------------------
     pub const XOR_BCAST: f64 = 0.5008;
     pub const XOR_DFA: f64 = 0.8267;
@@ -175,6 +259,9 @@ pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
         "leadfig1_the_conditional",
         draw_lead_fig1,
     )?);
+    written.extend(write_pair(out_dir, "leadfig2_headline_accuracy", draw_lead_fig2)?);
+    written.extend(write_pair(out_dir, "leadfig3_width_ladder", draw_lead_fig3)?);
+    written.extend(write_pair(out_dir, "leadfig4_resolution_ladder", draw_lead_fig4)?);
     written.extend(write_pair(
         out_dir,
         "figM_mechanism_richness_addressability",
@@ -649,6 +736,627 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         "What is measured here is which component's contribution is the order-dependent one: a difference-in-differences on the gain, not on accuracy.",
         12,
         RGBColor(60, 60, 60),
+    )?;
+    Ok(())
+}
+
+/// Figure 2 of the lead program — headline accuracy, and that it is not
+/// competitive.
+///
+/// The spec's first ban is the whole construction: "Drawing the panel with an
+/// axis that starts at 0.65, or omitting the frontier marker, would make the
+/// bar read as a win." So there is exactly ONE accuracy axis in this figure,
+/// it runs 0.50 to 1.00, and the instrument's markers and the published field
+/// sit on it together. `0.8332` cannot look like a frontier number on an axis
+/// that shows where the frontier is.
+///
+/// Ban 3 is enforced by absence: Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR
+/// 95.60 and d-cAdLIF 94.85 came from a secondary comparison table rather than
+/// a primary source and are excluded from the paper's claims. No constant for
+/// them exists in `nums`, so they cannot be drawn by accident.
+fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 14),
+        "Figure 2 — Headline accuracy, and the 0.80 clearance",
+        26,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 48),
+        "The read-out takes the instrument from 0.7057 to 0.8332, every seed positive and every seed at or above 0.80. THIS IS NOT COMPETITIVE, and the axis below says so.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // --- the single shared axis --------------------------------------------
+    let (x0, x1) = (150, 1330);
+    let (lo, hi) = (0.50, 1.00);
+    let axis_y = 470;
+    let at = |v: f64| x0 + (((v - lo) / (hi - lo)) * (x1 - x0) as f64).round() as i32;
+
+    // Both bands are drawn FIRST, so every marker sits over them. Painted after
+    // Panel A they hid the instrument's own point, which is the one thing on
+    // this axis that must be visible.
+    //
+    // The anchor is a BAND, not a marker, and the instrument's marker falls
+    // inside it. That is the comparison the caption makes: an architecture
+    // carrying no temporal kernel lands where the dataset authors' own no-delay
+    // recurrent baseline lands.
+    let lo_b = at(nums::FIELD_NO_DELAY - nums::FIELD_NO_DELAY_SD);
+    let hi_b = at(nums::FIELD_NO_DELAY + nums::FIELD_NO_DELAY_SD);
+    map_draw(root.draw(&Rectangle::new(
+        [(lo_b, 330), (hi_b, axis_y)],
+        RGBColor(232, 232, 236).filled(),
+    )))?;
+    // Kept short so it fits over a band this narrow. The reading it supports is
+    // in the footer, where there is room for a sentence.
+    centered(root, ((lo_b + hi_b) / 2, 298), "no-delay recurrent baseline", 12, BLACK)?;
+    centered(
+        root,
+        ((lo_b + hi_b) / 2, 316),
+        "Cramer et al. 2022 — 83.2 ± 1.3%",
+        11,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // The frontier band.
+    map_draw(root.draw(&Rectangle::new(
+        [(at(nums::FIELD_FRONTIER_LO), 296), (at(nums::FIELD_FRONTIER_HI), axis_y)],
+        RGBColor(226, 232, 244).filled(),
+    )))?;
+    centered(
+        root,
+        ((at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2, 236),
+        "SHD frontier",
+        13,
+        RGBColor(60, 80, 140),
+    )?;
+    centered(
+        root,
+        ((at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2, 218),
+        &format!(
+            "{:.0}–{:.1}%",
+            nums::FIELD_FRONTIER_LO * 100.0,
+            nums::FIELD_FRONTIER_HI * 100.0
+        ),
+        15,
+        RGBColor(60, 80, 140),
+    )?;
+
+    map_draw(root.draw(&PathElement::new(
+        vec![(x0, axis_y), (x1, axis_y)],
+        BLACK.stroke_width(2),
+    )))?;
+    let mut tick = 50;
+    while tick <= 100 {
+        let v = tick as f64 / 100.0;
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(v), axis_y), (at(v), axis_y + 8)],
+            BLACK.stroke_width(1),
+        )))?;
+        centered(root, (at(v), axis_y + 22), &format!("{v:.2}"), 12, RGBColor(90, 90, 90))?;
+        tick += 5;
+    }
+    label(root, (36, axis_y - 8), "accuracy", 13, RGBColor(90, 90, 90))?;
+
+    // The 0.80 gate.
+    let mut y = 296;
+    while y < axis_y {
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(0.80), y), (at(0.80), (y + 10).min(axis_y))],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        y += 20;
+    }
+    label(root, (at(0.80) + 8, 446), "0.80 gate", 12, RGBColor(110, 110, 110))?;
+
+    // --- Panel A: this instrument, on that axis -----------------------------
+    label(root, (36, 92), "Panel A — this instrument, n = 32 seed-paired", 16, BLACK)?;
+    let rate = RGBColor(200, 140, 60);
+    let attn = RGBColor(70, 100, 180);
+    for (v, color, name, detail) in [
+        (
+            nums::HEAD_RATE_32,
+            rate,
+            "rate read-out  ff+fixed",
+            format!("{:.4}", nums::HEAD_RATE_32),
+        ),
+        (
+            nums::HEAD_ATTN_32,
+            attn,
+            "time-axis read-out  d32/L4",
+            format!("{:.4}", nums::HEAD_ATTN_32),
+        ),
+    ] {
+        map_draw(root.draw(&Circle::new((at(v), 420), 9, color.filled())))?;
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(v), 420), (at(v), axis_y)],
+            color.stroke_width(1),
+        )))?;
+        centered(root, (at(v), 392), &detail, 15, BLACK)?;
+        centered(root, (at(v), 376), name, 12, RGBColor(80, 80, 80))?;
+    }
+    map_draw(root.draw(&PathElement::new(
+        vec![(at(nums::HEAD_RATE_32), 420), (at(nums::HEAD_ATTN_32), 420)],
+        BLACK.stroke_width(2),
+    )))?;
+    centered(
+        root,
+        ((at(nums::HEAD_RATE_32) + at(nums::HEAD_ATTN_32)) / 2, 438),
+        &format!("gain +{:.4}", nums::HEAD_GAIN_32),
+        14,
+        BLACK,
+    )?;
+
+    label(
+        root,
+        (36, 118),
+        &format!(
+            "n = 32 (confirmation):  {:.4} → {:.4},  gain +{:.4},  positive 32/32,  ≥ 0.80 in 32/32,  |e400 − e200| = {:.4}",
+            nums::HEAD_RATE_32, nums::HEAD_ATTN_32, nums::HEAD_GAIN_32, nums::HEAD_BUDGET_DELTA
+        ),
+        14,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 142),
+        &format!(
+            "n = 12 (registered):     {:.4} → {:.4},  gain +{:.4},  positive 12/12,  ≥ 0.80 in 12/12",
+            nums::HEAD_RATE_12, nums::HEAD_ATTN_12, nums::HEAD_GAIN_12
+        ),
+        14,
+        RGBColor(80, 80, 80),
+    )?;
+    label(
+        root,
+        (36, 166),
+        "n = 12 is the registered measurement and n = 32 the confirmation. Neither supersedes the other.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+
+    // --- Panel B: the published field, same axis ----------------------------
+    label(
+        root,
+        (36, 196),
+        "Panel B — the published field, on the same axis. The instrument carries no temporal kernel of any kind.",
+        16,
+        BLACK,
+    )?;
+    let field = RGBColor(90, 90, 100);
+    // Staggered: at this scale the two markers are 1.3 points apart and their
+    // labels collide on one line.
+    for (v, name, text_y) in [
+        (nums::FIELD_TA_SNN, "TA-SNN 91.08 — attention over the time axis (ICCV 2021)", 250),
+        (nums::FIELD_STSC_SNN, "STSC-SNN 92.36 — attention inside the synapse (2022)", 272),
+    ] {
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(v), text_y + 12), (at(v), axis_y)],
+            field.stroke_width(1),
+        )))?;
+        label(root, (at(v) - 340, text_y), name, 11, field)?;
+    }
+    // Ban 2, drawn to scale on this axis rather than only asserted in words.
+    let band = at(lo + nums::FIELD_UNRESOLVABLE) - x0;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, 512), (x0 + band, 528)],
+        RGBColor(206, 206, 214).filled(),
+    )))?;
+    label(
+        root,
+        (x0 + band + 12, 506),
+        &format!(
+            "{:.1} points, to scale. SHD ships no validation set: Baronig et al. 2025 report one model at 95.81 validating on test and 93.79 on a held-out split.",
+            nums::FIELD_UNRESOLVABLE * 100.0
+        ),
+        12,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (x0 + band + 12, 526),
+        "Differences narrower than this between published SHD numbers are not reliably meaningful — including this paper's own.",
+        12,
+        RGBColor(90, 90, 90),
+    )?;
+
+    // --- Panel C: the clearance is geometry-specific ------------------------
+    label(
+        root,
+        (36, 568),
+        "Panel C — the 0.80 clearance is geometry-specific. The gain is not: attention buys roughly the same amount everywhere tested.",
+        16,
+        BLACK,
+    )?;
+    for (i, (name, r, a, gain, clears)) in nums::GEOM.into_iter().enumerate() {
+        let y = 604 + (i as i32) * 46;
+        label(root, (48, y), name, 13, BLACK)?;
+        label(root, (560, y), &format!("rate {r:.4}"), 13, rate)?;
+        label(root, (720, y), &format!("attention {a:.4}"), 13, attn)?;
+        label(root, (920, y), &format!("gain +{gain:.4}"), 13, BLACK)?;
+        label(
+            root,
+            (1090, y),
+            &format!("≥ 0.80 in {clears}"),
+            13,
+            if clears == "12/12" { BLACK } else { RGBColor(170, 90, 60) },
+        )?;
+    }
+
+    label(
+        root,
+        (36, 742),
+        "This instrument lands INSIDE the no-delay recurrent band — which is where an architecture carrying no temporal kernel of any kind should land, and is the whole reading.",
+        12,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (36, 770),
+        "Excluded from this axis on purpose: Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR 95.60, d-cAdLIF 94.85 — a secondary comparison table, not a primary source.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, 800),
+        "NOT MACHINE-CHECKED: every literature value in Panel B comes from a 2026-08-27 search pass. Unlike every SHD number in this paper it is not verified against cells on disk,",
+        12,
+        RGBColor(160, 80, 60),
+    )?;
+    label(
+        root,
+        (36, 822),
+        "and check_every_number.py does not sweep the section it lives in. Each must be checked against its primary source before submission.",
+        12,
+        RGBColor(160, 80, 60),
+    )?;
+    Ok(())
+}
+
+/// Figure 3 of the lead program — the width ladder and the threshold.
+///
+/// Five of this figure's bans are about lines that are not there:
+///
+/// 1. No connector runs through the first five rungs, and none may. H16-1 —
+///    "the gain decays monotonically with width up to the collapse" — is NOT
+///    MET: seed-paired, gain(h384) − gain(h512) is −0.0116 with sd 0.0253,
+///    negative in only 7 of 12 seeds. A fitted curve or a monotone-looking
+///    connector asserts an ordering the measurement cannot support, so the
+///    rungs are points and h384–h512 carries an explicit bracket saying they
+///    are indistinguishable.
+/// 2. No dip at h384 is drawn. The registration demanded strict ordering with
+///    0.005 separations over quantities inside their own noise floor; that is a
+///    defect in the registration, not a finding about width.
+/// 3. The step is placed between h768 and h1024, not between h512 and h1024 —
+///    the four-rung reading is superseded and h768 is still +0.0560.
+/// 4. No mechanism is offered. All three registered levers failed, and the
+///    known correlate — gradient norms leaving O(1) — is a correlate. The
+///    figure's own words are "located but unexplained", and the parsimonious
+///    alternative (overfitting on 8,156 training samples) is not excluded by
+///    anything in this paper, so it must not be excluded by the drawing.
+/// 5. The h1024 `d32/L2` result is absent entirely: +0.0392 rests on three
+///    points with L3 missing and is registered as its own wave.
+///
+/// The width axis is categorical and evenly spaced. A log-width axis would
+/// visually compress the step, which is the one feature the figure exists for.
+fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 14),
+        "Figure 3 — The width ladder, and a threshold rather than a slope",
+        26,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 48),
+        "The gain is positive on five rungs and inverts at h1024. n = 12 per rung, d32/L4, e400, seed-paired. Rungs are drawn as points: no curve is fitted and none may be.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // --- Panel A ------------------------------------------------------------
+    let (lo, hi) = (-0.20, 0.15);
+    let (top, bottom) = (110, 470);
+    let x0 = 200;
+    let step_x = 175;
+    let at_y =
+        |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
+    let at_x = |i: usize| x0 + (i as i32) * step_x;
+
+    for k in 0..8 {
+        let v = -0.20 + 0.05 * k as f64;
+        let y = at_y(v);
+        map_draw(root.draw(&PathElement::new(
+            vec![(x0 - 60, y), (1330, y)],
+            RGBColor(232, 232, 236).stroke_width(1),
+        )))?;
+        label(root, (110, y - 9), &format!("{v:+.2}"), 12, RGBColor(120, 120, 120))?;
+    }
+    let zero = at_y(0.0);
+    map_draw(root.draw(&PathElement::new(
+        vec![(x0 - 60, zero), (1330, zero)],
+        BLACK.stroke_width(2),
+    )))?;
+    label(root, (36, zero - 9), "gain", 13, RGBColor(90, 90, 90))?;
+
+    // The step, between h768 and h1024 and nowhere else.
+    let break_x = (at_x(4) + at_x(5)) / 2;
+    let mut y = top;
+    while y < bottom {
+        map_draw(root.draw(&PathElement::new(
+            vec![(break_x, y), (break_x, (y + 12).min(bottom))],
+            RGBColor(170, 90, 60).stroke_width(2),
+        )))?;
+        y += 24;
+    }
+    label(root, (break_x + 10, top + 4), "the step sits HERE,", 12, RGBColor(170, 90, 60))?;
+    label(root, (break_x + 10, top + 22), "between h768 and h1024", 12, RGBColor(170, 90, 60))?;
+
+    for (i, (name, _rate, _attn, gain, positive)) in nums::LADDER.into_iter().enumerate() {
+        let (x, y) = (at_x(i), at_y(gain));
+        let color = if gain > 0.0 {
+            RGBColor(70, 100, 180)
+        } else {
+            RGBColor(170, 90, 60)
+        };
+        map_draw(root.draw(&Circle::new((x, y), 10, color.filled())))?;
+        centered(
+            root,
+            (x, y - 26),
+            &format!("{gain:+.4}"),
+            16,
+            BLACK,
+        )?;
+        centered(root, (x, bottom + 20), name, 15, BLACK)?;
+        centered(root, (x, bottom + 42), positive, 12, RGBColor(110, 110, 110))?;
+    }
+
+    // h384 and h512 are not distinguishable, and the figure has to say so where
+    // a reader would otherwise read a dip.
+    let (b0, b1) = (at_x(2), at_x(3));
+    let bracket_y = at_y(0.0) + 26;
+    map_draw(root.draw(&PathElement::new(
+        vec![(b0, bracket_y - 8), (b0, bracket_y), (b1, bracket_y), (b1, bracket_y - 8)],
+        RGBColor(120, 120, 130).stroke_width(2),
+    )))?;
+    centered(
+        root,
+        ((b0 + b1) / 2, bracket_y + 14),
+        &format!(
+            "not distinguishable at n = 12: paired {:+.4}, sd {:.4}, negative in 7 of 12",
+            nums::LADDER_H384_H512,
+            nums::LADDER_H384_H512_SD
+        ),
+        12,
+        RGBColor(100, 100, 110),
+    )?;
+
+    label(
+        root,
+        (36, 540),
+        &format!(
+            "The drop into h1024 is {:.4} — {:.1}× the largest gap below it ({:.4}), and more than twice the registered 3× bar. That is what makes it a threshold rather than the slope continuing.",
+            nums::LADDER_DROP, nums::LADDER_DROP_RATIO, nums::LADDER_LARGEST_GAP_BELOW
+        ),
+        13,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 562),
+        "No monotonic decay is claimed above the threshold, and no dip at h384: the registration asked for 0.005 separations over quantities inside their own noise floor.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    // --- Panel B ------------------------------------------------------------
+    label(
+        root,
+        (36, 606),
+        "Panel B — located, and not explained. Three preregistered rescue levers at h1024 / d32/L4, n = 12 each.",
+        16,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 630),
+        "Every lever is negative, and every one is worse than the arm it was meant to rescue.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    for (i, (lever, gain, positive, norm)) in nums::LEVERS.into_iter().enumerate() {
+        let y = 664 + (i as i32) * 34;
+        let rescued = lever.starts_with('(');
+        let ink = if rescued { RGBColor(110, 110, 110) } else { BLACK };
+        label(root, (48, y), lever, 14, ink)?;
+        label(root, (560, y), &format!("gain {gain:+.4}"), 14, RGBColor(170, 90, 60))?;
+        label(root, (760, y), &format!("positive {positive}"), 13, ink)?;
+        label(
+            root,
+            (930, y),
+            &format!("median epoch-mean gradient norm {norm:.3}"),
+            13,
+            ink,
+        )?;
+    }
+    label(
+        root,
+        (36, 810),
+        "Clipping moved the median gradient norm from 55.494 to 11.660 and accuracy did not follow. At h512 the same flag is inert: 12/12 cells byte-identical to the archived unclipped cells.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, 840),
+        "LOCATED BUT UNEXPLAINED. Gradient norms leaving O(1) are a correlate, not a cause, and overfitting on 8,156 training samples is not excluded by anything in this paper.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    Ok(())
+}
+
+/// Figure 4 of the lead program — the resolution ladder.
+///
+/// Only `fixed-tN` may be plotted: the `published-Nms` family moves bin width
+/// and sequence length together, so no number from it can be attributed to
+/// either, and the S-5 test built on it is refuted and withdrawn. The fixed
+/// 1400 ms window is stated on the figure because it is the whole reason the
+/// axis means anything.
+///
+/// Both series are drawn. The rate arm rises +0.0397 across the same ladder —
+/// checked against a preregistered 0.05 confound bar and cleared — and without
+/// it the falling gain reads as the attention arm degrading rather than as the
+/// rate arm catching up.
+fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 14),
+        "Figure 4 — The resolution ladder, with the analysis window held fixed",
+        26,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 48),
+        "fixed-tN: the 1400 ms analysis window is HELD FIXED and only the number of frames varies. This is the axis that isolates resolution from sequence length. n = 12 per rung.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    let (lo, hi) = (0.60, 0.90);
+    let (top, bottom) = (130, 560);
+    let x0 = 300;
+    let step_x = 380;
+    let at_y =
+        |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
+    let at_x = |i: usize| x0 + (i as i32) * step_x;
+
+    for k in 0..7 {
+        let v = 0.60 + 0.05 * k as f64;
+        let y = at_y(v);
+        map_draw(root.draw(&PathElement::new(
+            vec![(200, y), (1330, y)],
+            RGBColor(234, 234, 238).stroke_width(1),
+        )))?;
+        label(root, (146, y - 9), &format!("{v:.2}"), 12, RGBColor(120, 120, 120))?;
+    }
+    // The 0.80 gate, cleared 12/12 at every rung.
+    let gate = at_y(0.80);
+    let mut x = 200;
+    while x < 1330 {
+        map_draw(root.draw(&PathElement::new(
+            vec![(x, gate), ((x + 14).min(1330), gate)],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        x += 28;
+    }
+    label(root, (1210, gate - 22), "0.80 gate — cleared 12/12 at every rung", 12, RGBColor(110, 110, 110))?;
+    label(root, (36, at_y(0.75) - 9), "accuracy", 13, RGBColor(90, 90, 90))?;
+
+    let attn = RGBColor(70, 100, 180);
+    let rate = RGBColor(200, 140, 60);
+    // Both series, joined within themselves only. The comparison the figure
+    // makes is vertical — the gap at each rung — not across rungs.
+    for (series, color, pick) in [
+        ("attention", attn, 1usize),
+        ("rate", rate, 0usize),
+    ] {
+        let _ = series;
+        let points: Vec<(i32, i32)> = nums::RESOLUTION
+            .iter()
+            .enumerate()
+            .map(|(i, (_, _, r, a, _))| (at_x(i), at_y(if pick == 1 { *a } else { *r })))
+            .collect();
+        map_draw(root.draw(&PathElement::new(points.clone(), color.stroke_width(2))))?;
+        for point in points {
+            map_draw(root.draw(&Circle::new(point, 9, color.filled())))?;
+        }
+    }
+
+    for (i, (contract, bin, r, a, gain)) in nums::RESOLUTION.into_iter().enumerate() {
+        let x = at_x(i);
+        centered(root, (x, at_y(a) - 28), &format!("{a:.4}"), 15, BLACK)?;
+        centered(root, (x, at_y(r) + 20), &format!("{r:.4}"), 15, BLACK)?;
+        map_draw(root.draw(&PathElement::new(
+            vec![(x, at_y(a)), (x, at_y(r))],
+            RGBColor(140, 140, 148).stroke_width(1),
+        )))?;
+        centered(
+            root,
+            (x + 76, (at_y(a) + at_y(r)) / 2),
+            &format!("gain +{gain:.4}"),
+            15,
+            BLACK,
+        )?;
+        centered(
+            root,
+            (x + 76, (at_y(a) + at_y(r)) / 2 + 20),
+            "12/12 positive",
+            12,
+            RGBColor(110, 110, 110),
+        )?;
+        centered(root, (x, bottom + 24), contract, 16, BLACK)?;
+        centered(root, (x, bottom + 46), &format!("{bin} bins"), 13, RGBColor(110, 110, 110))?;
+    }
+    centered(root, (at_x(0) - 130, bottom + 24), "coarse", 13, RGBColor(120, 120, 120))?;
+    centered(root, (at_x(2) + 130, bottom + 24), "fine", 13, RGBColor(120, 120, 120))?;
+    // Below the bin labels, not level with them.
+    label(root, (36, 636), "time-axis read-out", 13, attn)?;
+    label(root, (220, 636), "rate read-out", 13, rate)?;
+
+    label(
+        root,
+        (36, 664),
+        &format!(
+            "The advantage SHRINKS as bins get finer: gain(t500) − gain(t100) = {:.4} against a two-sided bar of 0.03.",
+            nums::RESOLUTION_TREND
+        ),
+        15,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 692),
+        "That is the opposite of the direction the withdrawn S-5 hypothesis predicted — now asked on an axis that isolates resolution from sequence length.",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (36, 728),
+        &format!(
+            "The rate baseline rises +{:.4} across the same ladder, inside the preregistered 0.05 confound bar. Both series are drawn because without the baseline the falling gain",
+            nums::RESOLUTION_BASELINE_DRIFT
+        ),
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (36, 750),
+        "reads as the attention arm degrading, when what it shows is the rate arm catching up. So this is a property of the read-out, not of the substrate beneath it.",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (36, 792),
+        "NOT DRAWN, and not drawable here: the published-Nms family, which moves bin width and sequence length together so no number from it can be attributed to either.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, 822),
+        "NO MECHANISM AND NO PREFERENCE. The paper offers no account of why the advantage shrinks and recommends no operating point. \"Attention prefers coarse bins\" is not carried by this.",
+        12,
+        RGBColor(120, 120, 120),
     )?;
     Ok(())
 }

@@ -284,9 +284,15 @@ and differences below ~1.5 points between published numbers are not reliably
 meaningful. Literature values are from a search pass and are not machine-checked
 against cells.”
 
-**Artwork target:** **none — this figure has no artwork.** No file exists for
-it in [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
-and none is renamed to serve as one.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig2_headline_accuracy.{png,pdf}`
+— **drawn 2026-08-27**, a new file. There is exactly **one** accuracy axis in it,
+running 0.50 to 1.00, and the instrument's markers and the published field sit on
+it together: `0.8332` cannot look like a frontier number on an axis that shows
+where the frontier is. The no-delay recurrent baseline is drawn as a **band** and
+the instrument's own marker falls inside it. The ~1.5-point unresolvable
+difference is drawn to scale on that same axis. The four excluded comparison
+numbers have **no constant in the generator**, so they cannot be plotted by
+accident, and the literature strip carries "NOT MACHINE-CHECKED" on its face.
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) Abstract / §0 / §3.5 item 1 / §3.8.
 
 **Avoid:** truncated y-axes, “state of the art”, “competitive with”, leaderboard
@@ -389,8 +395,13 @@ moves the median gradient norm from 55.494 to 11.660. **The collapse is located
 and unexplained**; nothing in this paper offers a mechanism for it. n = 12 per
 rung, `d32/L4`, `e400`.”
 
-**Artwork target:** **none — this figure has no artwork.** Nothing has been
-drawn for it and no existing `fig*` file is renamed to it.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig3_width_ladder.{png,pdf}`
+— **drawn 2026-08-27**, a new file. The rungs are points with **no connector of
+any kind** through them; h384–h512 carries an explicit bracket reading "not
+distinguishable at n = 12"; the step glyph sits between h768 and h1024; the width
+axis is evenly spaced rather than log, which would compress the step the figure
+exists for; and the panel's own words are "LOCATED BUT UNEXPLAINED". The h1024
+`d32/L2` result has no constant in the generator.
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) Abstract / §0 / §3.5 item 4.
 
 **Avoid:** fitted trend lines, log-width axes that visually compress the step,
@@ -457,8 +468,10 @@ sequence length. The rate baseline drifts **+0.0397** across the same ladder,
 inside the 0.05 confound bar, so this is a property of the read-out and not of
 the substrate beneath it. n = 12 per rung.”
 
-**Artwork target:** **none — this figure has no artwork.** No file exists for it
-and none is renamed to serve as one.
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig4_resolution_ladder.{png,pdf}`
+— **drawn 2026-08-27**, a new file. Both series are drawn, the fixed 1400 ms
+window is stated in the subtitle, and the figure carries "NO MECHANISM AND NO
+PREFERENCE".
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.5 item 5.
 
 **Avoid:** a bin-width axis without the fixed-window annotation, `published-Nms`
@@ -469,11 +482,14 @@ to make the gain trend look cleaner.
 
 # Secondary program — matched-architecture kill gate
 
-> **Artwork status for everything below, updated 2026-08-27.** The lead
-> program's Figure 1 now has artwork —
-> `leadfig1_the_conditional`, a new file, drawn by the same generator. Lead
-> Figures 2, 3 and 4 still have none, and neither does a lead-program graphical
-> abstract; those are the package's remaining figure work.
+> **Artwork status for everything below, updated 2026-08-27.** **All four lead
+> figures now have artwork** — `leadfig1_the_conditional`,
+> `leadfig2_headline_accuracy`, `leadfig3_width_ladder` and
+> `leadfig4_resolution_ladder`, all new files drawn by the same generator, each
+> checked by `scripts/test_paper_figures_match_the_spec.py` against the
+> `Table SHD-N` it cites and against every ban its section names. A
+> lead-program graphical abstract remains `TODO(source needed)` and is the only
+> unspecified piece of figure work left.
 >
 > Of the nine secondary-program files in
 > [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)

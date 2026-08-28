@@ -45,6 +45,20 @@ MATCHED = {
     "CEILING": "SuperSpike BPTT ceiling",
 }
 
+def shd_table(name: str, next_name: str) -> str:
+    """One `## Table SHD-N` block of `PAPER_RESULTS_TABLE.md`."""
+    text = (ROOT / "results/PAPER_RESULTS_TABLE.md").read_text()
+    start = text.index(f"## Table {name}")
+    return text[start:text.index(f"## Table {next_name}", start)]
+
+
+def figure_body(name: str, ends_before: str) -> str:
+    """One `draw_*` function's source."""
+    text = SOURCE.read_text()
+    start = text.index(f"fn {name}(")
+    return text[start:text.index(ends_before, start)]
+
+
 def drawable(text: str) -> str:
     """The source with `//` and `///` comment lines removed."""
     return "\n".join(line for line in text.splitlines()
@@ -156,9 +170,7 @@ class LeadFigureTest(unittest.TestCase):
         cls.text = text
         cls.fig = text[text.index("fn draw_lead_fig1("):
                        text.index("/// One rule, drawn by rule")]
-        table = (ROOT / "results/PAPER_RESULTS_TABLE.md").read_text()
-        start = table.index("## Table SHD-2")
-        cls.table = table[start:table.index("## Table SHD-3", start)]
+        cls.table = shd_table("SHD-2", "SHD-3")
 
     def test_the_table_was_found(self):
         self.assertIn("bin-shuffle difference-in-differences", self.table)
@@ -231,6 +243,177 @@ class LeadFigureTest(unittest.TestCase):
         self.assertIn("leadfig1_the_conditional", SPEC.read_text())
 
 
+class LeadFigure2Test(unittest.TestCase):
+    """Headline accuracy, against Table SHD-1 / SHD-5 and its four bans."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_lead_fig2", "/// Figure 3 of the lead program")
+        cls.shd1 = shd_table("SHD-1", "SHD-2")
+        cls.shd5 = shd_table("SHD-5", "SHD-6")
+
+    def test_the_headline_values_are_table_shd_1(self):
+        scalars = source_scalars()
+        for const, value in (("HEAD_RATE_32", "0.7057"), ("HEAD_ATTN_32", "0.8332"),
+                             ("HEAD_GAIN_32", "0.1275"), ("HEAD_RATE_12", "0.7062"),
+                             ("HEAD_ATTN_12", "0.8320"), ("HEAD_GAIN_12", "0.1258")):
+            with self.subTest(const=const):
+                self.assertEqual(scalars.get(const), value)
+                self.assertIn(value, self.shd1)
+
+    def test_the_geometry_ladder_is_table_shd_5(self):
+        geom = re.search(r"pub const GEOM: \[.*?\] = \[(.*?)\];",
+                         self.text, re.S).group(1)
+        drawn = re.findall(r"(0\.\d{4})", geom)
+        self.assertEqual(len(drawn), 9, drawn)
+        for value in drawn:
+            with self.subTest(value=value):
+                self.assertIn(value, self.shd5,
+                              f"{value} is drawn but is not in Table SHD-5")
+
+    def test_the_axis_shows_where_the_frontier_is(self):
+        """Ban 1: an axis starting at 0.65, or one without the frontier marker,
+        makes 0.8332 read as a win. One axis, 0.50 to 1.00, both on it."""
+        self.assertIn("let (lo, hi) = (0.50, 1.00);", self.fig)
+        self.assertIn("FIELD_FRONTIER_LO", self.fig)
+        self.assertIn("FIELD_FRONTIER_HI", self.fig)
+        self.assertIn("NOT COMPETITIVE", self.fig)
+
+    def test_the_unresolvable_band_is_drawn_to_scale(self):
+        """Ban 2: differences below ~1.5 points between published SHD numbers
+        are not reliably meaningful, this paper's own included."""
+        self.assertIn("FIELD_UNRESOLVABLE", self.fig)
+        self.assertIn("not reliably meaningful", self.fig)
+        self.assertEqual(source_scalars().get("FIELD_UNRESOLVABLE"), "0.015")
+
+    def test_the_excluded_comparison_numbers_have_no_constants(self):
+        """Ban 3, enforced by absence rather than by care: Pfa-SNN 96.26,
+        Event-SSMA 95.90, SpikeSCR 95.60 and d-cAdLIF 94.85 came from a
+        secondary comparison table and are excluded from the paper's claims.
+        With no constant for them they cannot be plotted by accident."""
+        nums_block = self.text[self.text.index("mod nums {"):
+                               self.text.index("/// How a cell is encoded")]
+        for value in ("0.9626", "0.9590", "0.9560", "0.9485"):
+            self.assertNotIn(value, nums_block)
+
+    def test_the_literature_strip_says_it_is_unverified(self):
+        """Ban 4: every value in Panel B came from a search pass, is not
+        machine-checked against cells, and check_every_number.py does not sweep
+        the section it lives in."""
+        self.assertIn("NOT MACHINE-CHECKED", self.fig)
+        self.assertIn("before submission", self.fig)
+
+
+class LeadFigure3Test(unittest.TestCase):
+    """The width ladder, against Table SHD-3 / SHD-4 and its five bans."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_lead_fig3", "/// Figure 4 of the lead program")
+        cls.shd3 = shd_table("SHD-3", "SHD-4")
+        cls.shd4 = shd_table("SHD-4", "SHD-5")
+
+    def test_every_rung_is_in_table_shd_3(self):
+        rungs = re.search(r"pub const LADDER: \[.*?\] = \[(.*?)\];",
+                          self.text, re.S).group(1)
+        for value in re.findall(r"(-?0\.\d{4})", rungs):
+            with self.subTest(value=value):
+                self.assertIn(value.lstrip("-"), self.shd3)
+
+    def test_every_lever_is_in_table_shd_4(self):
+        levers = re.search(r"pub const LEVERS: \[.*?\] = \[(.*?)\];",
+                           self.text, re.S).group(1)
+        for value in re.findall(r"(-?\d+\.\d+)", levers):
+            with self.subTest(value=value):
+                self.assertIn(value.lstrip("-"), self.shd4 + self.shd3)
+
+    def test_no_curve_is_fitted_through_the_rungs(self):
+        """Ban 1. H16-1 is NOT MET; a connector through the first five rungs
+        asserts an ordering the measurement cannot support."""
+        rung_loop = self.fig[self.fig.index("for (i, (name, _rate"):]
+        self.assertNotIn("PathElement", rung_loop.split("// h384")[0])
+
+    def test_the_indistinguishable_rungs_are_marked_as_such(self):
+        """Ban 1 and 2 together: h384 and h512 are not distinguishable at n=12,
+        and the figure must not manufacture a dip at h384."""
+        self.assertIn("not distinguishable at n = 12", self.fig)
+        self.assertIn("LADDER_H384_H512", self.fig)
+        self.assertIn("LADDER_H384_H512_SD", self.fig)
+
+    def test_the_step_is_placed_between_h768_and_h1024(self):
+        """Ban 3: the four-rung reading placing it below h512 is superseded."""
+        self.assertIn("between h768 and h1024", self.fig)
+        self.assertIn("(at_x(4) + at_x(5)) / 2", self.fig)
+
+    def test_no_mechanism_is_offered(self):
+        """Ban 4: the levers all failed and the gradient-norm correlate is a
+        correlate. "Gradient pathology" would claim what H15-1 refuted."""
+        self.assertIn("LOCATED BUT UNEXPLAINED", self.fig)
+        self.assertIn("correlate, not a cause", self.fig)
+        self.assertIn("overfitting on 8,156 training samples is not excluded",
+                      self.fig)
+        for banned in ("gradient pathology", "gradient explosion", "scaling law"):
+            self.assertNotIn(banned, self.fig.lower())
+
+    def test_the_h1024_depth_result_is_absent(self):
+        """Ban 5: d32/L2 at h1024 reaching +0.0392 rests on three points with
+        L3 missing and is registered as its own wave. Keep it off entirely."""
+        # Comments stripped: the ban is on DRAWING it, and the reason it is
+        # banned has to be writable down beside the code that obeys the ban.
+        self.assertNotIn("0.0392", drawable(self.text))
+
+    def test_the_width_axis_is_evenly_spaced(self):
+        """A log-width axis visually compresses the step, which is the one
+        feature this figure exists for."""
+        self.assertIn("x0 + (i as i32) * step_x", self.fig)
+        self.assertNotIn("ln()", self.fig)
+        self.assertNotIn("log2", self.fig)
+
+
+class LeadFigure4Test(unittest.TestCase):
+    """The resolution ladder, against Table SHD-6 and its three bans."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_lead_fig4", "/// One rule, drawn by rule")
+        cls.shd6 = shd_table("SHD-6", "SHD-7")
+
+    def test_every_rung_is_in_table_shd_6(self):
+        rungs = re.search(r"pub const RESOLUTION: \[.*?\] = \[(.*?)\];",
+                          self.text, re.S).group(1)
+        for value in re.findall(r"(0\.\d{4})", rungs):
+            with self.subTest(value=value):
+                self.assertIn(value, self.shd6)
+
+    def test_only_the_fixed_family_is_plotted(self):
+        """Ban 1: published-Nms moves bin width and sequence length together,
+        so no number from it can be attributed to either."""
+        self.assertIn("fixed-t100", self.text)
+        self.assertNotIn("published-2ms", self.fig)
+        self.assertNotIn("published-10ms", self.fig)
+
+    def test_the_fixed_window_is_stated_on_the_figure(self):
+        """It is the whole reason the axis means anything."""
+        self.assertIn("1400 ms analysis window is HELD FIXED", self.fig)
+
+    def test_both_series_are_drawn(self):
+        """Ban 2: without the baseline the falling gain reads as the attention
+        arm degrading rather than as the rate arm catching up."""
+        self.assertIn('("attention", attn, 1usize)', self.fig)
+        self.assertIn('("rate", rate, 0usize)', self.fig)
+        self.assertIn("RESOLUTION_BASELINE_DRIFT", self.fig)
+        self.assertIn("confound bar", self.fig)
+
+    def test_no_mechanism_or_preference_is_offered(self):
+        """Ban 3. "Attention prefers coarse bins" is an interpretation the
+        evidence does not carry."""
+        self.assertIn("NO MECHANISM AND NO PREFERENCE", self.fig)
+        self.assertNotIn("optimal resolution", self.fig.lower())
+
+
 class PanelAEncodingTest(unittest.TestCase):
     """The two things the spec says Panel A must not be allowed to say."""
 
@@ -279,7 +462,9 @@ class PanelAEncodingTest(unittest.TestCase):
 class TheGeneratorOwnsTheArtworkTest(unittest.TestCase):
     """The committed files and the generator's stem list must not drift apart."""
 
-    STEMS = ("figM_mechanism_richness_addressability", "fig1_matched_rule_swap",
+    STEMS = ("leadfig1_the_conditional", "leadfig2_headline_accuracy",
+             "leadfig3_width_ladder", "leadfig4_resolution_ladder",
+             "figM_mechanism_richness_addressability", "fig1_matched_rule_swap",
              "fig3_engine_c1_means", "graphical_abstract")
     FIGURES = ROOT / "results/runs/2026-07-23-paper-hard-both/figures"
 

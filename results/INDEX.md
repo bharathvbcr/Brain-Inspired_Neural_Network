@@ -2,7 +2,7 @@
 
 # Record index
 
-315 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+316 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -12,7 +12,7 @@
 | Measurements | 11 | 0 |
 | Amendments | 15 | 1 |
 | Defects | 5 | 0 |
-| Hardening | 8 | 0 |
+| Hardening | 9 | 0 |
 | Audits | 2 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
@@ -220,6 +220,7 @@ Read these only through the document that retired them.
 |---|---|---|
 | 2026-08-27 | [HARDENING_2026-08-27_THE_SWEEP_SAYS_HOW_STRONG_IT_IS.md](HARDENING_2026-08-27_THE_SWEEP_SAYS_HOW_STRONG_IT_IS.md) | The number sweep now says which generator reached each number, and stops calling an empty document a pass |
 | 2026-08-27 | [HARDENING_2026-08-27_THE_MANUSCRIPT_IS_SWEPT.md](HARDENING_2026-08-27_THE_MANUSCRIPT_IS_SWEPT.md) | The manuscript's numbers are checked, at three named tiers |
+| 2026-08-27 | [HARDENING_2026-08-27_THE_LEAD_PROGRAM_IS_DRAWN.md](HARDENING_2026-08-27_THE_LEAD_PROGRAM_IS_DRAWN.md) | All four lead-program figures are drawn |
 | 2026-08-27 | [HARDENING_2026-08-27_THE_LEAD_CLAIM_HAS_A_FIGURE.md](HARDENING_2026-08-27_THE_LEAD_CLAIM_HAS_A_FIGURE.md) | The paper's central claim has artwork |
 | 2026-08-27 | [HARDENING_2026-08-27_THE_FIGURES_DREW_A_SUPERSEDED_BLOCK.md](HARDENING_2026-08-27_THE_FIGURES_DREW_A_SUPERSEDED_BLOCK.md) | The camera-ready figures were drawing a value block the spec calls "not for drawing" |
 | 2026-08-22 | [HARDENING_2026-08-22_THE_EVIDENCE_LAYER_HAD_NO_TESTS.md](HARDENING_2026-08-22_THE_EVIDENCE_LAYER_HAD_NO_TESTS.md) | Hardening round 2 — the layer that produced every number had no tests |
