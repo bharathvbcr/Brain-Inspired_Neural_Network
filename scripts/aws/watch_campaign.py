@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -57,6 +58,36 @@ def plan_ids(bucket: str) -> set[str]:
         return set()
 
 
+def hostlog_owners(bucket: str) -> dict[str, str]:
+    """`cell id -> the instance whose log last claimed it`.
+
+    `bootstrap.sh` ships each host's bootstrap log to `hostlogs/<instance>.log`
+    once a minute, and every claim appears there as `slot N: running <cell id>`.
+    That is the cheap half of the liveness question: `release_dead_claims.py`
+    answers the expensive half over SSM, one `send-command` and a seven-second
+    sleep per instance, which is far too heavy to poll on.
+    """
+    owners: dict[str, str] = {}
+    listing = aws(["s3", "ls", f"s3://{bucket}/hostlogs/", "--recursive"])
+    for line in listing.splitlines():
+        if not line.strip() or not line.split()[-1].endswith(".log"):
+            continue
+        key = line.split()[-1]
+        instance = key.rsplit("/", 1)[-1][:-4]
+        body = aws(["s3", "cp", f"s3://{bucket}/{key}", "-"])
+        for entry in re.findall(r"slot \d+: running (\S+)", body):
+            owners[entry] = instance
+    return owners
+
+
+def live_instance_ids(region: str) -> set[str] | None:
+    out = aws(["ec2", "describe-instances", "--region", region,
+               "--filters", "Name=instance-state-name,Values=running,pending",
+               "--query", "Reservations[].Instances[].InstanceId",
+               "--output", "text"]).strip()
+    return set(out.split()) if out else None
+
+
 def instances(region: str) -> int | None:
     out = aws(["ec2", "describe-instances", "--region", region,
                "--filters", "Name=instance-state-name,Values=running,pending",
@@ -84,6 +115,7 @@ def main() -> int:
     seen_fail: set[str] = set()
     seen_waves: set[str] = set()
     settled: set[str] = set()
+    stranded: set[str] = set()
     last_done = None
     last_inst = None
     last_plan = None
@@ -122,6 +154,30 @@ def main() -> int:
                 f"at {len(done)} done)")
         seen_fail = set(failed)
 
+        # Key cells are checked for a THIRD outcome besides done and failed.
+        # A diverged cell writes a failure log; a cell whose spot instance is
+        # reclaimed writes nothing at all -- its claim is simply orphaned and it
+        # never finishes. Without this the watcher stays silent forever on the
+        # one loss that is actually recoverable, which is the exact shape of
+        # "a check that could not run reporting the same result as one that
+        # ran and passed".
+        stranded_now: set[str] = set()
+        unfinished = [c for c in args.cell
+                      if c not in settled and c not in results and c not in failures]
+        if unfinished:
+            alive = live_instance_ids(args.region)
+            owners = hostlog_owners(args.bucket) if alive is not None else {}
+            for cell in unfinished:
+                owner = owners.get(cell)
+                if owner is not None and alive is not None and owner not in alive:
+                    stranded_now.add(cell)
+                    if cell not in stranded:
+                        say(f"KEY CELL STRANDED: {cell} was claimed by {owner}, "
+                            f"which is gone. No result, no failure log — a spot "
+                            f"reclaim, which release_dead_claims.py can requeue. "
+                            f"A divergence cannot be requeued; this can.")
+        stranded = stranded_now
+
         for cell in args.cell:
             if cell in settled:
                 continue
@@ -130,7 +186,8 @@ def main() -> int:
                 say(f"KEY CELL COMPLETE: {cell}")
             elif cell in failures:
                 settled.add(cell)
-                say(f"KEY CELL LOST: {cell}")
+                say(f"KEY CELL LOST: {cell} — a failure log exists, so it ran to "
+                    f"a definite answer. This is not recoverable by requeueing.")
 
         waves = {c.split("__")[0] for c in done}
         for wave in sorted(waves - seen_waves):

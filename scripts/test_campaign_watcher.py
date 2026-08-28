@@ -39,24 +39,37 @@ class Fleet:
     """A scripted bucket and account, driven through `WC.aws`."""
 
     def __init__(self, plan, results=(), failures=(), instances=5,
-                 plan_readable=True):
+                 plan_readable=True, hostlogs=None, live_ids=None):
         self.plan = list(plan)
         self.results = list(results)
         self.failures = list(failures)
         self.instances = instances
         self.plan_readable = plan_readable
+        #: `{instance id: [cell ids that instance's log claims]}`
+        self.hostlogs = dict(hostlogs or {})
+        #: instance ids still alive; defaults to every instance with a hostlog
+        self.live_ids = (list(self.hostlogs) if live_ids is None
+                         else list(live_ids))
 
     def __call__(self, args):
         import json
         if args[:2] == ["s3", "cp"]:
+            if "hostlogs/" in args[2]:
+                instance = args[2].rsplit("/", 1)[-1][:-4]
+                return "".join(f"slot 1: running {c}\n"
+                               for c in self.hostlogs.get(instance, []))
             if not self.plan_readable:
                 return ""
             return json.dumps([{"id": c} for c in self.plan])
         if args[:2] == ["s3", "ls"]:
             if "results/" in args[2]:
                 return listing("results/", [f"{c}.json" for c in self.results])
+            if "hostlogs/" in args[2]:
+                return listing("hostlogs/", [f"{i}.log" for i in self.hostlogs])
             return listing("failures/", [f"{c}.log" for c in self.failures])
         if args[0] == "ec2":
+            if "InstanceId" in " ".join(args):
+                return " ".join(self.live_ids) + "\n" if self.live_ids else ""
             return "" if self.instances is None else f"{self.instances}\n"
         return ""
 
@@ -163,6 +176,73 @@ class NamedEventsTest(unittest.TestCase):
         fleet = Fleet(plan=["a", "b"])
         lines = fleet.run(cells=["a"])
         self.assertFalse(any("KEY CELL" in l for l in lines), lines)
+
+
+class AReclaimedKeyCellTest(unittest.TestCase):
+    """A key cell has three outcomes, not two.
+
+    A diverged cell writes a failure log and cannot be re-run: the seed and the
+    binary are pinned, so a requeue burns a slot and lands back in `failures/`.
+    A cell whose spot instance is reclaimed writes **nothing** — its claim is
+    orphaned and it simply never finishes. Only the second is recoverable, and
+    before this the watcher was silent on it forever, which is how the one loss
+    that can be fixed would have looked identical to no news.
+    """
+
+    CELL = "w20rec__key__s1"
+
+    def test_a_cell_whose_owner_is_gone_is_reported(self):
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-dead": [self.CELL]},
+                      live_ids=["i-alive"], instances=1)
+        lines = fleet.run(cells=[self.CELL])
+        self.assertTrue(any("KEY CELL STRANDED" in l for l in lines), lines)
+        self.assertTrue(any("release_dead_claims.py can requeue" in l
+                            for l in lines), lines)
+
+    def test_a_cell_whose_owner_is_alive_is_not_reported(self):
+        """The common case, and the one a false alarm would ruin: a cell that
+        is simply still running. These take up to fourteen hours."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-alive": [self.CELL]},
+                      live_ids=["i-alive"])
+        lines = fleet.run(cells=[self.CELL])
+        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+
+    def test_a_finished_cell_is_never_called_stranded(self):
+        fleet = Fleet(plan=[self.CELL, "other"], results=[self.CELL],
+                      hostlogs={"i-dead": [self.CELL]}, live_ids=["i-alive"])
+        lines = fleet.run(cells=[self.CELL])
+        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+        self.assertTrue(any("KEY CELL COMPLETE" in l for l in lines), lines)
+
+    def test_a_failed_cell_is_called_unrecoverable_and_not_stranded(self):
+        """The distinction is the point: requeueing a divergence wastes a slot
+        and cannot change the answer."""
+        fleet = Fleet(plan=[self.CELL, "other"], failures=[self.CELL],
+                      hostlogs={"i-dead": [self.CELL]}, live_ids=["i-alive"])
+        lines = fleet.run(cells=[self.CELL])
+        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+        self.assertTrue(any("not recoverable by requeueing" in l
+                            for l in lines), lines)
+
+    def test_an_unreadable_instance_list_raises_no_alarm(self):
+        """If the fleet cannot be listed, every claim is treated as live. The
+        same refusal `release_dead_claims.py` makes: never act on incomplete
+        information about what is running."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-dead": [self.CELL]}, live_ids=[])
+        lines = fleet.run(cells=[self.CELL])
+        self.assertFalse(any("STRANDED" in l for l in lines), lines)
+
+    def test_a_cell_no_hostlog_mentions_raises_no_alarm(self):
+        """A cell claimed seconds ago has not reached any hostlog yet — those
+        ship once a minute — and must not be called stranded."""
+        fleet = Fleet(plan=[self.CELL, "other"],
+                      hostlogs={"i-alive": ["something-else"]},
+                      live_ids=["i-alive"])
+        lines = fleet.run(cells=[self.CELL])
+        self.assertFalse(any("STRANDED" in l for l in lines), lines)
 
 
 class TheScriptIsUsableTest(unittest.TestCase):
