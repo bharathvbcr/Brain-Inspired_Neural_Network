@@ -144,6 +144,41 @@ mod nums {
         ("h768", 0.7386, 0.7946, 0.0560, "11/12"),
         ("h1024", 0.7386, 0.5768, -0.1618, "1/12"),
     ];
+    /// Wave 21's difference-in-differences across the design space, in LADDER
+    /// order then the two alternative binnings. Figure 1 Panel D.
+    /// `(point, DiD, positive, quadruples, gain_is_negative)`.
+    ///
+    /// The last field exists because a DiD-only column at h1024 reads as "the
+    /// mechanism is healthy at every width", and that point is the one place
+    /// where the read-out consumes temporal order while HARMING accuracy.
+    /// `PAPER_FIGURE_SPEC.md` Figure 1 Panel D ban 3 requires it be marked.
+    pub const DID_LADDER: [(&str, f64, u32, u32, bool); 8] = [
+        ("h128", 0.1205, 32, 32, false),
+        ("h256", 0.0862, 12, 12, false),
+        ("h384", 0.0767, 12, 12, false),
+        ("h512", 0.0968, 12, 12, false),
+        ("h768", 0.1881, 12, 12, false),
+        ("h1024", 0.1122, 10, 12, true),
+        ("h128 / channels-700", 0.1122, 12, 12, false),
+        ("h128 / published-10ms", 0.0959, 12, 12, false),
+    ];
+    /// The registered bar every point above clears.
+    pub const DID_BAR: f64 = 0.03;
+    /// H21-3: Spearman rho between the six per-width gains and their DiDs,
+    /// against the n=6 one-tailed critical value at alpha=0.05. NOT MET, and
+    /// Panel D ban 2 and Figure 3 ban 6 both exist because of it.
+    pub const DID_RHO: f64 = -0.1430;
+    pub const DID_RHO_BAR: f64 = 0.829;
+    /// Coverage as MEASURED. Ban 4: the caption says 9 of 21, never "every
+    /// width" -- twelve operating points still carry no bin-shuffled twin.
+    pub const COVERAGE_COVERED: u32 = 9;
+    pub const COVERAGE_TOTAL: u32 = 21;
+    /// h768 carries the smallest positive gain on LADDER and the largest DiD
+    /// in the campaign. It is the single clearest refutation of H21-3 and
+    /// Figure 3's required annotation names it.
+    pub const DID_H768: f64 = 0.1881;
+    pub const GAIN_H768: f64 = 0.0560;
+
     /// The step into h1024, and the largest gap below it. 6.9x, against a
     /// registered 3x bar of 0.0947.
     pub const LADDER_DROP: f64 = 0.2178;
@@ -247,6 +282,14 @@ fn both(v: nums::Both) -> String {
 
 const W: u32 = 1400;
 const H: u32 = 900;
+/// Figure 1 carries a fourth panel -- wave 21's eight-point DiD ladder -- and
+/// Panels A-C already reach y=872 of the standard 900. Rather than compress
+/// three finished panels to fit a fourth, this figure alone is taller.
+const H_LEAD1: u32 = 1380;
+/// Figure 3 gained wave 21's two-line "the mechanism does not track this curve"
+/// annotation, which pushed Panel B and its closing statement down by 60px.
+/// At the standard 900 the last line was drawn at y=900 and was invisible.
+const H_LEAD3: u32 = 980;
 
 /// Generate required camera-ready figures into `out_dir`.
 pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
@@ -254,13 +297,19 @@ pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
     let mut written = Vec::new();
     // Lead program first: it is what the manuscript leads with, and until
     // 2026-08-27 nothing had been drawn for any of its four figures.
-    written.extend(write_pair(
+    written.extend(write_pair_sized(
         out_dir,
         "leadfig1_the_conditional",
         draw_lead_fig1,
+        H_LEAD1,
     )?);
     written.extend(write_pair(out_dir, "leadfig2_headline_accuracy", draw_lead_fig2)?);
-    written.extend(write_pair(out_dir, "leadfig3_width_ladder", draw_lead_fig3)?);
+    written.extend(write_pair_sized(
+        out_dir,
+        "leadfig3_width_ladder",
+        draw_lead_fig3,
+        H_LEAD3,
+    )?);
     written.extend(write_pair(out_dir, "leadfig4_resolution_ladder", draw_lead_fig4)?);
     written.extend(write_pair(
         out_dir,
@@ -282,12 +331,21 @@ fn write_pair(
     stem: &str,
     draw: fn(&DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr>,
 ) -> Result<Vec<PathBuf>, DrawErr> {
+    write_pair_sized(out_dir, stem, draw, H)
+}
+
+fn write_pair_sized(
+    out_dir: &Path,
+    stem: &str,
+    draw: fn(&DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr>,
+    h: u32,
+) -> Result<Vec<PathBuf>, DrawErr> {
     let png = out_dir.join(format!("{stem}.png"));
     let pdf = out_dir.join(format!("{stem}.pdf"));
     let svg_path = out_dir.join(format!("{stem}.svg.tmp"));
 
     {
-        let root = SVGBackend::new(&svg_path, (W, H)).into_drawing_area();
+        let root = SVGBackend::new(&svg_path, (W, h)).into_drawing_area();
         root.fill(&WHITE).map_err(|e| format!("svg fill: {e}"))?;
         draw(&root)?;
         root.present().map_err(|e| format!("svg present: {e}"))?;
@@ -306,7 +364,7 @@ fn write_pair(
     fs::write(&pdf, pdf_bytes)?;
 
     // Rasterize SVG → PNG via resvg (same tree, system fonts loaded).
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(W, H).ok_or("pixmap alloc")?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(W, h).ok_or("pixmap alloc")?;
     resvg::render(
         &tree,
         resvg::tiny_skia::Transform::default(),
@@ -737,6 +795,132 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         12,
         RGBColor(60, 60, 60),
     )?;
+
+    // --- Panel D ------------------------------------------------------------
+    //
+    // Wave 21's eight-point DiD ladder. Specified in `PAPER_FIGURE_SPEC.md`
+    // Figure 1 Panel D with four bans, and every one of them is a constraint
+    // on how the points are ARRANGED rather than on which are drawn:
+    //
+    //   1. ladder order, never sorted by DiD -- sorting manufactures the trend
+    //      H21-3 refuted;
+    //   2. no gain on this axis and no connector between points -- rho is
+    //      -0.1430 against a bar of +0.829, so a line asserts a NOT MET result;
+    //   3. h1024 marked as the arm whose gain is negative;
+    //   4. coverage stated as 9 of 21, never "every width".
+    label(
+        root,
+        (36, 900),
+        "Panel D — the same contrast at eight operating points. n = 12 per point, n = 32 at the anchor, seed-paired.",
+        16,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 922),
+        "Only the bin-shuffled halves are new; intact halves are reused from the corpus at the same seeds and the same pinned binary.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    let d_left = 300;
+    let d_right = 1180;
+    let d_top = 962;
+    let d_scale = 0.20_f64;
+    let x_of = |v: f64| d_left + ((v / d_scale) * (d_right - d_left) as f64).round() as i32;
+
+    // Gridlines and the registered bar. The bar is drawn once, labelled, and
+    // every point sits to the right of it -- which is the panel's whole claim.
+    for step in 0..=4 {
+        let value = 0.05 * step as f64;
+        let x = x_of(value);
+        map_draw(root.draw(&PathElement::new(
+            vec![(x, d_top - 6), (x, d_top + 8 * 40)],
+            RGBColor(228, 228, 232).stroke_width(1),
+        )))?;
+        label(
+            root,
+            (x - 14, d_top + 8 * 40 + 8),
+            &format!("{value:.2}"),
+            12,
+            RGBColor(120, 120, 120),
+        )?;
+    }
+    let bar_x = x_of(nums::DID_BAR);
+    map_draw(root.draw(&PathElement::new(
+        vec![(bar_x, d_top - 6), (bar_x, d_top + 8 * 40)],
+        RGBColor(200, 90, 40).stroke_width(2),
+    )))?;
+    label(
+        root,
+        (bar_x + 6, d_top - 26),
+        &format!("registered bar +{:.2}", nums::DID_BAR),
+        12,
+        RGBColor(200, 90, 40),
+    )?;
+
+    for (i, (name, did, positive, of, gain_negative)) in nums::DID_LADDER.iter().enumerate() {
+        let y = d_top + i as i32 * 40;
+        label(root, (36, y + 4), name, 13, BLACK)?;
+        // Ban 3: the one point where the read-out consumes temporal order and
+        // harms accuracy is named on the figure, not left to the caption.
+        if *gain_negative {
+            label(
+                root,
+                (150, y + 5),
+                "gain is NEGATIVE here",
+                11,
+                RGBColor(200, 90, 40),
+            )?;
+        }
+        let fill = if *gain_negative {
+            RGBColor(200, 90, 40)
+        } else {
+            RGBColor(46, 106, 150)
+        };
+        map_draw(root.draw(&Rectangle::new(
+            [(d_left, y + 6), (x_of(*did), y + 24)],
+            fill.filled(),
+        )))?;
+        label(
+            root,
+            (x_of(*did) + 10, y + 6),
+            &format!("+{did:.4}   {positive}/{of}"),
+            12,
+            RGBColor(60, 60, 60),
+        )?;
+    }
+
+    // Ban 2 and ban 4 in text, beside the points they constrain.
+    let note_y = d_top + 8 * 40 + 34;
+    label(
+        root,
+        (36, note_y),
+        &format!(
+            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width. Twelve carry intact arms with no bin-shuffled twin and claim nothing.",
+            nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
+        ),
+        13,
+        RGBColor(60, 60, 60),
+    )?;
+    label(
+        root,
+        (36, note_y + 24),
+        &format!(
+            "Its SIZE is not the gain. Spearman rho over the six widths is {:.4} against a registered bar of +{:.3} (NOT MET): h768 carries the smallest positive gain on the ladder ({:+.4}) and the largest DiD here ({:+.4}).",
+            nums::DID_RHO, nums::DID_RHO_BAR, nums::GAIN_H768, nums::DID_H768
+        ),
+        13,
+        RGBColor(60, 60, 60),
+    )?;
+    label(
+        root,
+        (36, note_y + 48),
+        "Points are in ladder order and are deliberately NOT connected and NOT sorted by effect size: either would assert a relationship the rank correlation rejects.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+
     Ok(())
 }
 
@@ -1161,23 +1345,56 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         RGBColor(110, 110, 110),
     )?;
 
+    // Required annotation, `PAPER_FIGURE_SPEC.md` Figure 3, added 2026-08-29.
+    //
+    // This ladder plots the GAIN. A reader arriving from Figure 1 will assume
+    // the order-dependence rises and falls with it, and wave 21 measured that
+    // it does not. Ban 6 forbids drawing the DiD here as a second series --
+    // precisely BECAUSE the two are uncorrelated, superimposing them invites
+    // the eye to find the relationship the rank correlation rejects. So it is
+    // said in words instead, and it sits with the other statements about what
+    // this figure does NOT show.
+    //
+    // Two lines, not one: at 12pt the single-line version ran off the 1400px
+    // canvas and lost the sentence naming where the DiD ladder actually is.
+    label(
+        root,
+        (36, 610),
+        &format!(
+            "THE MECHANISM DOES NOT TRACK THIS CURVE. Spearman rho between these rungs and their difference-in-differences is {:.4}, against a registered bar of +{:.3} — NOT MET.",
+            nums::DID_RHO, nums::DID_RHO_BAR
+        ),
+        12,
+        RGBColor(160, 80, 60),
+    )?;
+    label(
+        root,
+        (36, 630),
+        &format!(
+            "h768 carries the smallest positive gain on this ladder ({:+.4}) and the largest DiD in the campaign ({:+.4}). The DiD ladder is Figure 1 Panel D, and is deliberately not superimposed here.",
+            nums::GAIN_H768, nums::DID_H768
+        ),
+        12,
+        RGBColor(160, 80, 60),
+    )?;
+
     // --- Panel B ------------------------------------------------------------
     label(
         root,
-        (36, 606),
+        (36, 666),
         "Panel B — located, and not explained. Three preregistered rescue levers at h1024 / d32/L4, n = 12 each.",
         16,
         BLACK,
     )?;
     label(
         root,
-        (36, 630),
+        (36, 690),
         "Every lever is negative, and every one is worse than the arm it was meant to rescue.",
         12,
         RGBColor(110, 110, 110),
     )?;
     for (i, (lever, gain, positive, norm)) in nums::LEVERS.into_iter().enumerate() {
-        let y = 664 + (i as i32) * 34;
+        let y = 724 + (i as i32) * 34;
         let rescued = lever.starts_with('(');
         let ink = if rescued { RGBColor(110, 110, 110) } else { BLACK };
         label(root, (48, y), lever, 14, ink)?;
@@ -1193,14 +1410,14 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     }
     label(
         root,
-        (36, 810),
+        (36, 870),
         "Clipping moved the median gradient norm from 55.494 to 11.660 and accuracy did not follow. At h512 the same flag is inert: 12/12 cells byte-identical to the archived unclipped cells.",
         12,
         RGBColor(110, 110, 110),
     )?;
     label(
         root,
-        (36, 840),
+        (36, 900),
         "LOCATED BUT UNEXPLAINED. Gradient norms leaving O(1) are a correlate, not a cause, and overfitting on 8,156 training samples is not excluded by anything in this paper.",
         13,
         RGBColor(70, 70, 70),

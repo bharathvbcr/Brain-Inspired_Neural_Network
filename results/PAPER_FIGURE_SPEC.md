@@ -195,12 +195,12 @@ faint control rather than half the measurement.
 
 ---
 
-### Panel D — the contrast across the design space (**required; NOT YET DRAWN**)
+### Panel D — the contrast across the design space (required MUST)
 
-**Status: specified 2026-08-29, no generator.** `binn-lab/src/paper_figures.rs`
-draws Panels A–C only. This panel is the strongest single answer to *"does the
-result generalise?"*, which was the campaign's largest scope limit until wave 21
-closed it, and a table is a weak way to say it.
+**Status: drawn 2026-08-29** by `binn-lab/src/paper_figures.rs`. All four bans
+below are pinned by `scripts/test_paper_figures_match_the_spec.py`
+(`LeadFigure1PanelDTest`), each negative-tested. Figure 1 is taller than the
+other figures for this panel rather than compressing Panels A–C to fit it.
 
 **Plot:** the seed-paired DiD at each of the eight operating points, as a
 horizontal dot/bar with the registered **+0.03** bar drawn as a rule. `n = 12`
@@ -372,7 +372,8 @@ the registered 3× bar (**0.0947**). Source:
 **Table SHD-3**, registered in
 [`PREREG_2026-08-25_THE_H1024_COLLAPSE.md`](PREREG_2026-08-25_THE_H1024_COLLAPSE.md).
 
-**Required annotation, added 2026-08-29 (NOT YET DRAWN).** This ladder plots the
+**Required annotation, added and drawn 2026-08-29** (pinned by
+`LeadFigure3AnnotationTest`). This ladder plots the
 **gain**, and a reader who has seen Figure 1 will assume the order-dependence
 rises and falls with it. **It does not.** Spearman ρ between these six rungs and
 their difference-in-differences is **−0.1430** against a registered bar of

@@ -65,12 +65,11 @@ home for the paper this file used to describe.
       it cites and against every ban its spec section names
 - [ ] Lead-program graphical abstract — the spec records `TODO(source needed)`;
       the last *unspecified* piece of figure work in the package
-- [ ] **Figure 1 Panel D and the Figure 3 annotation are specified and NOT
-      DRAWN** (added 2026-08-29 for wave 21). Panel D is the eight-point
-      difference-in-differences ladder — the answer to "does it generalise?",
-      and a table is a weak way to give it. The Figure 3 annotation stops the
-      width ladder implying the mechanism tracks the gain, which ρ = −0.1430
-      says it does not. Both need `binn-lab/src/paper_figures.rs`
+- [x] **Figure 1 Panel D and the Figure 3 annotation drawn** 2026-08-29 for
+      wave 21. Panel D is the eight-point difference-in-differences ladder;
+      the Figure 3 annotation stops the width ladder implying the mechanism
+      tracks the gain, which ρ = −0.1430 says it does not. Nine new tests pin
+      the bans on both, each negative-tested
 - [ ] Secondary-program artwork: four of nine files current, two stale — see the
       table below
 - [ ] Venue template applied (NeurIPS/ICML/TMLR/… `.sty` / Overleaf)
@@ -140,9 +139,9 @@ that sheet is the owner, and this table used to contradict it by ticking
 | fig0 | `…/fig0_claim_axis_legend.*` | present, unaffected by the re-run |
 | figD | `…/figD_diff_closure.*` | present, unaffected |
 | fig5 (Figure 9) | `…/fig5_xor_locality.*` | present, unaffected |
-| **lead Figure 1** | `…/leadfig1_the_conditional.*` | **Panels A–C drawn 2026-08-27**; **Panel D specified 2026-08-29, not drawn** |
+| **lead Figure 1** | `…/leadfig1_the_conditional.*` | **Panels A–C drawn 2026-08-27, Panel D 2026-08-29** — the DiD across eight operating points |
 | **lead Figure 2** | `…/leadfig2_headline_accuracy.*` | **drawn 2026-08-27** — headline, on one axis with the field |
-| **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27**; **required "the mechanism does not track this curve" annotation specified 2026-08-29, not drawn** |
+| **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27**, annotated 2026-08-29 — the mechanism does not track this curve |
 | **lead Figure 4** | `…/leadfig4_resolution_ladder.*` | **drawn 2026-08-27** — the resolution ladder |
 | lead graphical abstract | — | `TODO(source needed)` — the last unspecified piece |
 

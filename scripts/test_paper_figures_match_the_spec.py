@@ -243,6 +243,124 @@ class LeadFigureTest(unittest.TestCase):
         self.assertIn("leadfig1_the_conditional", SPEC.read_text())
 
 
+def did_ladder() -> list[tuple[str, str, int, int, bool]]:
+    """`nums::DID_LADDER` as (point, DiD, positive, quadruples, gain_negative)."""
+    text = SOURCE.read_text()
+    block = text[text.index("pub const DID_LADDER"):]
+    block = block[:block.index("];")]
+    return [(m[0], m[1], int(m[2]), int(m[3]), m[4] == "true")
+            for m in re.findall(
+                r'\("([^"]+)",\s*([\d.]+),\s*(\d+),\s*(\d+),\s*(true|false)\)', block)]
+
+
+class LeadFigure1PanelDTest(unittest.TestCase):
+    """Figure 1 Panel D — wave 21's eight-point difference-in-differences.
+
+    Every ban the spec puts on this panel is a constraint on how the points are
+    ARRANGED, not on which are drawn, because the arrangement is what can lie:
+    the wave measured that the effect's size does NOT track the gain, and the
+    obvious renderings (sorted bars, a connecting line, a shared axis) all
+    assert the relationship the rank correlation rejects.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        text = SOURCE.read_text()
+        cls.text = text
+        cls.fig = text[text.index("fn draw_lead_fig1("):
+                       text.index("/// Figure 2 of the lead program")]
+        cls.panel = cls.fig[cls.fig.index("// --- Panel D ---"):]
+        cls.ladder = did_ladder()
+        cls.table = shd_table("SHD-2", "SHD-3")
+
+    def test_the_ladder_was_parsed(self):
+        """A parser matching nothing would pass every test below."""
+        self.assertEqual(len(self.ladder), 8, self.ladder)
+
+    def test_every_point_is_in_table_shd_2b(self):
+        """Table SHD-2b is inside the SHD-2 slice, which runs to SHD-3."""
+        self.assertIn("Table SHD-2b", self.table)
+        for point, did, positive, of, _ in self.ladder:
+            with self.subTest(point=point):
+                self.assertIn(did, self.table, f"{point}: {did} is not in the sheet")
+                self.assertIn(f"{positive}/{of}", self.table)
+
+    def test_ban_1_the_points_are_in_ladder_order_not_sorted_by_effect(self):
+        """Sorting by DiD manufactures the trend H21-3 refuted."""
+        widths = [p for p, *_ in self.ladder if p.startswith("h") and "/" not in p]
+        self.assertEqual(widths, ["h128", "h256", "h384", "h512", "h768", "h1024"])
+        values = [float(d) for _, d, *_ in self.ladder]
+        self.assertNotEqual(values, sorted(values), "points are sorted by DiD")
+        self.assertNotEqual(values, sorted(values, reverse=True),
+                            "points are reverse-sorted by DiD")
+
+    def test_ban_2_no_connector_is_drawn_between_the_points(self):
+        """rho = -0.1430 against +0.829. A line asserts a NOT MET result.
+
+        The panel draws gridlines and the registered bar with PathElement, so
+        the check is that no path is built from the ladder itself.
+        """
+        body = drawable(self.panel)
+        for line in body.splitlines():
+            if "PathElement" in line:
+                self.assertNotIn("DID_LADDER", line)
+        self.assertNotIn("did_points", body)
+
+    def test_ban_2_the_gain_is_not_drawn_on_this_axis(self):
+        """One quantity per panel. LADDER is Figure 3's series, not this one."""
+        self.assertNotIn("nums::LADDER", drawable(self.panel))
+
+    def test_ban_3_the_negative_gain_arm_is_marked(self):
+        """A DiD-only column reads as 'healthy at every width'. h1024 is not."""
+        marked = [p for p, _, _, _, neg in self.ladder if neg]
+        self.assertEqual(marked, ["h1024"], self.ladder)
+        self.assertIn("gain is NEGATIVE here", self.panel)
+
+    def test_ban_4_coverage_is_stated_as_nine_of_twenty_one(self):
+        """Twelve operating points still carry no bin-shuffled twin."""
+        scalars = re.findall(r"pub const COVERAGE_(\w+): u32 = (\d+);", self.text)
+        self.assertEqual(dict(scalars), {"COVERED": "9", "TOTAL": "21"})
+        self.assertIn("NOT every width", self.panel)
+
+    def test_the_refutation_is_on_the_panel_not_only_in_the_caption(self):
+        """H21-3 is NOT MET and the panel has to say so where it is read."""
+        self.assertIn("is not the gain", self.panel)
+        self.assertIn("NOT connected", self.panel)
+
+
+class LeadFigure3AnnotationTest(unittest.TestCase):
+    """Figure 3's required 2026-08-29 annotation, and its sixth ban."""
+
+    @classmethod
+    def setUpClass(cls):
+        text = SOURCE.read_text()
+        cls.text = text
+        cls.fig = text[text.index("fn draw_lead_fig3("):
+                       text.index("fn draw_lead_fig4(")]
+
+    def test_the_annotation_is_present(self):
+        self.assertIn("THE MECHANISM DOES NOT TRACK THIS CURVE", self.fig)
+
+    def test_it_names_the_statistic_and_that_it_is_not_met(self):
+        self.assertIn("DID_RHO", self.fig)
+        self.assertIn("DID_RHO_BAR", self.fig)
+        self.assertIn("NOT MET", self.fig)
+
+    def test_it_names_h768_as_the_clearest_case(self):
+        """Smallest positive gain on the ladder, largest DiD in the campaign."""
+        self.assertIn("GAIN_H768", self.fig)
+        self.assertIn("DID_H768", self.fig)
+
+    def test_ban_6_the_did_ladder_is_not_a_second_series_here(self):
+        """Superimposing two uncorrelated quantities invites the eye to find
+        the relationship the statistic rejects. One quantity per figure."""
+        self.assertNotIn("DID_LADDER", self.fig)
+
+    def test_it_says_where_the_did_ladder_actually_is(self):
+        """Naming the ban without naming the alternative reads as an omission."""
+        self.assertIn("Figure 1 Panel D", self.fig)
+
+
 class LeadFigure2Test(unittest.TestCase):
     """Headline accuracy, against Table SHD-1 / SHD-5 and its four bans."""
 
