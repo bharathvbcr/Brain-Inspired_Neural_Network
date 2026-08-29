@@ -137,6 +137,20 @@ KNOWN_COINCIDENCE = {
     "0.1411": "M-2, a difference OF gains. This sweep deliberately generates no "
               "second-order quantities, so a `pooled` match cannot be the same "
               "computation.",
+    # Wave 21's four difference-in-differences, quoted in PAPER_DRAFT.md 3.5.
+    # Same class as 0.1411 and judged the same way on 2026-08-29: a DiD is a
+    # difference OF paired differences, and this sweep generates no second-order
+    # quantity, so the `paired` set cannot contain the same computation. The
+    # collisions are what a set of 3,080 values dense enough to match a random
+    # 4dp number 24.9% of the time does to six quoted values. Each is
+    # recomputed by name from the cells in verify_published_numbers.py, which
+    # is the check that actually establishes them.
+    "0.0862": "H21-1, the seed-paired DiD at h256. Second-order; see above.",
+    "0.0767": "H21-1, the seed-paired DiD at h384. Second-order; see above.",
+    "0.0968": "H21-1, the seed-paired DiD at h512. Second-order; see above.",
+    "0.1122": "the seed-paired DiD at h1024 (H21-2) and at `channels-700` "
+              "(H21-4), which are equal to four places. Second-order; see "
+              "above.",
     # Both surfaced on 2026-08-29 when wave 21's 168 cells enlarged the derived
     # set. Neither number moved; the generator grew until it happened to reach
     # them, which is what a 22%-dense `paired` set does as a corpus grows.
@@ -280,6 +294,12 @@ ELSEWHERE = [
     ("0.1411", "M-2, a difference OF gains across the substrate; checked by "
                "name in verify_published_numbers.py"),
     ("0.1207", "W6-3, gain(e20) − gain(e400): second order"),
+    ("0.1430", "H21-3, the Spearman rank correlation between the six per-width "
+               "gains and their DiDs. A rank statistic over a ladder is not a "
+               "cell quantity and this sweep generates no such thing; it is "
+               "recomputed from the cells by name in "
+               "verify_published_numbers.py, which reads -0.1429 against the "
+               "published -0.1430"),
     ("0.0039", "W5-3, the movement of a contrast between two budgets: second order"),
     ("0.1058", "the published-2ms gain quoted in W3 and W8 between arms whose "
                "seed sets overlap on fewer than three seeds"),

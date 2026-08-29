@@ -168,6 +168,48 @@ the cost from +0.1347 to +0.1577. The verdict was MET either way and
 [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.5 is unaffected
 ([`AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md`](AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md)).
 
+### Table SHD-2b — The same contrast at seven further operating points (wave 21)
+
+Registered in [`PREREG_2026-08-27_THE_MECHANISM_ACROSS_THE_DESIGN_SPACE.md`](PREREG_2026-08-27_THE_MECHANISM_ACROSS_THE_DESIGN_SPACE.md)
+before any cell existed; analysed by the frozen `scripts/aws/analyse_wave21.py`.
+**168 cells, zero divergences, zero voided**, every point above the registered
+floor of nine seed-paired quadruples. Intact halves are reused from the corpus at
+the same seeds and the same pinned binary; only the `bin-shuffled` halves are new.
+
+| Operating point | Quadruples | Gain | **DiD** | DiD positive |
+|---|---:|---:|---:|---:|
+| h128 / `published-2ms` / `adjacent-sum-5` *(anchor)* | 32 | +0.1275 | **+0.1205** | 32/32 |
+| h256 | 12 | +0.0966 | **+0.0862** | 12/12 |
+| h384 | 12 | +0.0760 | **+0.0767** | 12/12 |
+| h512 | 12 | +0.0876 | **+0.0968** | 12/12 |
+| h768 | 12 | +0.0560 | **+0.1881** | 12/12 |
+| h1024 | 12 | −0.1318 | **+0.1122** | 10/12 |
+| h128 / `channels-700` | 12 | +0.1090 | **+0.1122** | 12/12 |
+| h128 / `published-10ms` | 12 | +0.1491 | **+0.0959** | 12/12 |
+
+| Registered hypothesis | Bar | Verdict |
+|---|---|---|
+| **H21-1** the mechanism is not unique to h128 | DiD ≥ +0.03 and ≥ 9/12 positive at **each** of h256, h384, h512 | **MET** |
+| **H21-2** where the gain inverts, the shuffle cost collapses | DiD(h1024) ≤ +0.02 | **NOT MET** |
+| **H21-3** the shuffle cost tracks the gain across width | Spearman ρ ≥ **+0.829** over six rungs | **NOT MET** (ρ = **−0.1430**) |
+| **H21-4** the mechanism survives a change of binning | DiD ≥ +0.03 and ≥ 9/12 at **both** points | **MET** |
+
+**Reading, and the second row is the one that constrains the paper.** The
+mechanism generalises: coverage goes from **2 to 9 of 21** operating points and
+the DiD clears its bar at every one. Its **size does not track the gain** — h768
+carries the smallest positive gain on the ladder and the largest DiD in the wave
+— so the contrast is a property of the read-out and **not** a decomposition of
+the gain. At h1024 the read-out consumes temporal order while *harming* accuracy,
+which no account in this package permits.
+
+**The `Gain` and `DiD` columns are over the same seeds everywhere except h1024.**
+There the DiD is over the 12 quadruples and the gain over the 20 intact pairs
+waves 18–19 extended that width to; over the twelve quadruple seeds the h1024
+gain is **−0.1618**. The rank is unchanged, so H21-3's ρ is unaffected. This is
+`analyse_wave21.py`'s documented `gain()` contract, not a defect.
+([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md);
+[`VERDICTS_W21.md`](shd_attention_campaign_v2/VERDICTS_W21.md))
+
 ## Table SHD-3 — Width ladder and the h1024 threshold
 
 Six rungs, `published-2ms` / `adjacent-sum-5` / e400 / d32/L4, seed-paired,

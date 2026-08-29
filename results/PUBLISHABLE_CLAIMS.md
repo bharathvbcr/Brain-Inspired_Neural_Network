@@ -79,7 +79,8 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 | Rank | Claim | Strength | Object under test |
 |---:|---|---|---|
-| **1 (lead)** | On SHD, the **attention read-out's marginal contribution is the order-dependent one**: its bin-shuffle cost is **+0.1347** against the rate read-out's own **+0.0142** on the same seeds and splits — **9.5×**, **32/32** positive. A difference-in-differences on the **gain**, not on accuracy | **Strongest / measured (registered n=12, confirmed n=32)** | Which component's contribution depends on temporal order |
+| **1 (lead)** | On SHD, the **attention read-out's marginal contribution is the order-dependent one**: its bin-shuffle cost is **+0.1347** against the rate read-out's own **+0.0142** on the same seeds and splits — **9.5×**, **32/32** positive. A difference-in-differences on the **gain**, not on accuracy. **Measured at 9 of 21 operating points**, widths 128–1024 and both contracts and geometries, clearing its +0.03 bar at every one | **Strongest / measured (registered n=12, confirmed n=32, generalised at n=12 per point)** | Which component's contribution depends on temporal order |
+| **1a (limit on the lead)** | The effect's **size is not the gain**: Spearman ρ over the six per-width rungs is **−0.1430** against a registered bar of **+0.829**. h768 carries the smallest gain (+0.0560) and the largest DiD (+0.1881) | **Measured — a registered NOT MET, and it bounds the lead** | Whether the gain *decomposes* into an order-dependent share |
 | **1b (supporting)** | Same instrument, headline accuracy: `ff+fixed+attn` at `d32/L4` reaches **0.8332** against `ff+fixed` **0.7057** (gain **+0.1275**, **32/32** positive, **32/32** at or above 0.80) | **Measured — and explicitly *not* competitive** (frontier 95–96.4%) | Attention read-out on a LIF substrate |
 | **2 (secondary)** | On an identical dense-LIF forward, **broadcast ±1 three-factor** (surrogate eligibility × ±1) does not clear the matched-arch gate vs SuperSpike BPTT, on **both** forward graphs at n=20 | **Strong / clean negative** | Rule topology only (±1 broadcast) |
 | **2b (contrast)** | On the matched forward, graded DFA, REINFORCE×frozen-`B_i`, broadcast-graded **and a discrete spike-adjoint** all clear the gate — against a reference at 1.0000, so each pass reduces to "above 0.75" | **Weak — the task saturates; no ordering may be claimed** | Credit richness / locality |
@@ -114,7 +115,18 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
    n=32 is the confirmation, and the two must be reported as such.** Twenty
    seeds beyond the registered twelve move the shuffle cost by **+0.0010**.
    ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
-3. **Headline accuracy — supporting, not the claim.** `ff+fixed+attn` at
+3. **The mechanism is not unique to the anchor.** The same operator, seeds and
+   pinned binary at seven further operating points — 168 cells, **zero
+   divergences, zero voided**, every point above the registered floor of nine
+   seed-paired quadruples. DiD clears **+0.03** at **12/12** seeds at h256
+   (**+0.0862**), h384 (**+0.0767**) and h512 (**+0.0968**), and at both
+   alternative binnings — `channels-700` (**+0.1122**) and `published-10ms`
+   (**+0.0959**). Coverage **2 → 9 of 21** operating points.
+   **What may NOT be claimed from it:** that the DiD tracks the gain (ρ =
+   **−0.1430** against **+0.829**, NOT MET), and anything about h1024 other than
+   that the order-dependence persists there while the gain is negative.
+   ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
+4. **Headline accuracy — supporting, not the claim.** `ff+fixed+attn` at
    `d32/L4` / `e400` reaches **0.8332** against `ff+fixed`'s **0.7057**, gain
    **+0.1275**, positive in **32/32** seeds, **32/32 at or above 0.80**.
    Registered at n=12 as **0.8320** against **0.7062**, gain **+0.1258**,
@@ -123,14 +135,14 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
    ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md);
    [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md);
    [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
-4. **Sample efficiency.** The attention read-out reaches **98.1%** of its e400
+5. **Sample efficiency.** The attention read-out reaches **98.1%** of its e400
    accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]`.
    **The denominator is the `d32/L1` arm at convergence (0.7483), not the
    `d32/L4` headline** — against the headline's 0.8320 the same cell is
    **88.2%**, and the L1 ladder's e400 gain is **+0.0421**, not +0.1258.
    ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md);
    [`SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md`](SUMMARY_2026-08-20_ATTENTION_CAMPAIGN.md))
-5. **The read-out does not substitute for temporal state in the substrate.**
+6. **The read-out does not substitute for temporal state in the substrate.**
    Adaptation is inert at the anchor: the gain is **+0.1258** on `ff+fixed` and
    **+0.1285** on `ff+alif`, a difference of **+0.0027** against a two-sided bar
    of 0.03 and positive in **6 of 12** seeds. On the recurrent substrate the
@@ -186,7 +198,16 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
   epoch-mean gradient norm from **55.494** to **11.660** — a real effect in the
   intended direction — and accuracy did not follow. **Nothing in this package
   offers a mechanism for the collapse**, and the parsimonious alternative
-  (overfitting on 8,156 training samples) is not excluded.
+  (overfitting on 8,156 training samples) is not excluded — **and is not
+  supported either**. A registered prediction said that if the collapse and the
+  temporal-order account were the same phenomenon, the shuffle cost should
+  vanish where the gain does. It **did not**: DiD(h1024) = **+0.1122** in 10 of
+  12 seeds against a ceiling of **+0.02**, with the gain over those same twelve
+  seeds at **−0.1618**. The read-out consumes temporal order while performing
+  worse than no read-out at all. Per the preregistration this is the package's
+  **leading open problem**, and the overfitting argument is left exactly where
+  it was, because it was conditional on a collapse that did not occur.
+  ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
   ([`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md);
   [`PREREG_2026-08-25_THE_H1024_COLLAPSE.md`](PREREG_2026-08-25_THE_H1024_COLLAPSE.md))
 - **No monotonicity in width.** h384 and h512 are not distinguishable at twelve

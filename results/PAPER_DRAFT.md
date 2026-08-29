@@ -25,7 +25,7 @@
 > experiments either side of the repair. They no longer resolve, deliberately.
 >
 > `scripts/record_checks.sh` machine-checks the **SHD attention-campaign**
-> numbers — **66 assertions**, recomputed from the archived cells by
+> numbers — **125 assertions**, recomputed from the archived cells by
 > `scripts/verify_published_numbers.py` against the wave-8, wave-9, wave-15/17
 > and d32/L4 headline result documents, of which **13** are prose checks on
 > this draft. The
@@ -56,6 +56,24 @@ and two 2025 studies reach the same conclusion with model-side and spike-time
 operators. What has not been measured is which *component's* contribution is the
 order-dependent one. This is a difference-in-differences on the **gain**, not on
 accuracy, and it is what the read-out is for.
+
+**The contrast is not confined to the configuration it was registered at.** A
+preregistered wave carried the same destruction control to seven further
+operating points: the difference-in-differences clears its +0.03 bar in **12 of
+12 seeds** at h256 (**+0.0862**), h384 (**+0.0767**) and h512 (**+0.0968**), and
+at both alternative binnings — `channels-700` (**+0.1122**) and `published-10ms`
+(**+0.0959**). Coverage goes from **2 of 21 operating points to 9**, spanning
+every width from 128 to 1024 and two contracts and geometries. The read-out's
+contribution is order-dependent across the design space, not at a point.
+
+**What that wave also refuted is ours.** The same preregistration asked whether
+the shuffle cost *tracks* the gain across width, and it does not: Spearman
+**ρ = −0.1430** over the six rungs against a bar of **+0.829**, the n = 6
+one-tailed critical value. h768 carries the **smallest** positive gain on the
+ladder (+0.0560) and the **largest** difference-in-differences in the wave
+(**+0.1881**). So *"the read-out's contribution is order-dependent"* survives and
+is now measured at nine points; *"the gain is made of temporal order"* does not
+survive as a quantitative account, and this paper does not assert it.
 
 We report three scope limits against it. The gain **inverts at width h1024**
 (−0.1618), and on a six-rung ladder that inversion is a threshold — a 0.2178
@@ -132,6 +150,12 @@ The contrast in §3.5 is a difference-in-differences — attention's shuffle cos
 against the rate read-out's own, on the same seeds, same splits, same
 destruction operator — and we find no published equivalent for any read-out on
 any neuromorphic benchmark.
+
+**The claim is about presence, not proportion.** Measured across nine operating
+points, the order-dependence is present everywhere and its *size* is uncorrelated
+with the gain (§3.5). The contribution is therefore a statement about what the
+read-out consumes, and explicitly not a decomposition of the gain into an
+order-dependent share and a remainder.
 
 **New, and unsupported in either direction: the width collapse.** No published
 work reports an attention read-out degrading with hidden width, and none reports
@@ -221,10 +245,28 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
 
 1. **Headline accuracy** (Figure 2): `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062). ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md)) **Confirmed at n=32**: 0.8332 against 0.7057, gain **+0.1275**, positive in **32/32** and **32/32 at or above 0.80**. Twenty seeds beyond the registered twelve move the gain by +0.0017. ([`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
 2. **Temporal order is the mechanism** (Figure 1): under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0050; **96% of the readout benefit is contingent on temporal order** (94.5% at n=32, where the advantage falls +0.1275 → +0.0070). ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md)) **Confirmed at n=32**: the attention arm's shuffle cost is **+0.1347**, positive in **32/32**, against the rate arm's +0.0142 — a **9.5× factor**. Twenty further seeds move it by +0.0010. ([`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
+
+   **The mechanism is not unique to the anchor.** A preregistered wave carried the same operator, the same seeds and the same pinned binary to seven further operating points — 168 cells, **zero divergences and zero voided**, every point clearing the registered floor of nine seed-paired quadruples:
+
+   | operating point | quadruples | gain | **DiD** | positive |
+   |---|---:|---:|---:|---:|
+   | h256 | 12 | +0.0966 | **+0.0862** | 12/12 |
+   | h384 | 12 | +0.0760 | **+0.0767** | 12/12 |
+   | h512 | 12 | +0.0876 | **+0.0968** | 12/12 |
+   | h768 | 12 | +0.0560 | **+0.1881** | 12/12 |
+   | h1024 | 12 | −0.1318 | **+0.1122** | 10/12 |
+   | h128 / `channels-700` | 12 | +0.1090 | **+0.1122** | 12/12 |
+   | h128 / `published-10ms` | 12 | +0.1491 | **+0.0959** | 12/12 |
+
+   **The `gain` and `DiD` columns are over the same seeds everywhere except h1024**, where the DiD is over the twelve quadruples and the gain over the twenty intact pairs waves 18–19 extended that width to; over the twelve quadruple seeds the h1024 gain is **−0.1618**. The rank is identical either way.
+
+   **The size of the effect is not the gain.** Spearman ρ between the six per-width gains and their DiDs is **−0.1430** against a preregistered bar of **+0.829**, the n = 6 one-tailed critical value — not a weak positive, absent and faintly negative. h768 buys the least on the ladder and carries the largest DiD in the wave. The registered reading is that the difference-in-differences is a property of the read-out and **not a quantitative account of what the gain is made of**. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
 3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. **The denominator is the `d32/L1` arm at convergence (0.7483), not the `d32/L4` headline** — against the headline's 0.8320 the same cell is 88.2%. The two operating points differ: the L1 ladder's e400 gain is +0.0421, not +0.1258. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
 4. **Scope limits** (Figure 3): gain inverts at width h1024, and on a six-rung ladder that inversion is a **threshold rather than a continuing slope**: +0.1258 (h128), +0.0966 (h256), +0.0760 (h384), +0.0876 (h512), +0.0560 (h768), −0.1618 (h1024). The drop into h1024 is **0.2178**, **6.9×** the largest gap below it (0.0316) and more than twice the registered 3× bar, so the collapse sits between **h768 and h1024** and the rungs below it remain positive. **Every rung of this ladder is measured at `d32/L4`, and the inversion is a property of that read-out depth rather than of the width.** At h1024 and the same budget, `d32/L2` gains **+0.0405** in **20/20** seeds and `d32/L3` gains **+0.0371** in 18/20, against L4's −0.1318 in 3/20; the optimum in depth at that width is interior, and it is not established which of L2 or L3 holds it — they differ by 0.0034. So this row bounds *deep* read-outs at h1024 and does not bound h1024. What makes an arm collapse is still unexplained: L3 sits above the registered gradient-norm sickness threshold at 1.347 and gains anyway, which is why the numerical account was refused ([`RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md`](RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md)). The decay above the collapse is **not strictly ordered** — h384 and h512 are not distinguishable at twelve seeds (paired difference −0.0116, sd 0.0253, negative in 7 of 12) — so no monotonicity is claimed. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md); [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
 
    **What the h1024 collapse is not.** Three preregistered levers — surrogate scale 0.5 and 0.25, and gradient clipping at 1000.0 — were run at h1024/d32/L4 to test whether the inversion is an optimisation failure. All three are **negative and worse than the arm they were meant to rescue** (−0.2106, −0.2565, −0.0904). Clipping moves the median epoch-mean gradient norm from 55.494 to 11.660, a real effect in the intended direction, and accuracy does not follow. **The collapse is located but not explained**; nothing in this paper offers a mechanism for it.
+
+   **And it is not the temporal-order account in disguise.** If the inversion and the mechanism were the same phenomenon, then where the read-out buys nothing there should be no order-dependent benefit left to destroy. That prediction was registered before the cells existed and it **failed**: at h1024 the difference-in-differences is **+0.1122** in **10 of 12** seeds against a registered ceiling of +0.02, while the gain over those same twelve seeds is **−0.1618**. The read-out consumes temporal order while performing worse than no read-out at all. Nothing in this paper's account permits that, and per the preregistration it is the paper's **leading open problem** rather than a caveat. It also leaves the overfitting alternative exactly where it was: that argument was conditional on the shuffle cost collapsing, and it did not. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
 5. **Temporal resolution is an axis, and the gain falls as bins get finer** (Figure 4). The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
 
    | contract | bin | `ff+fixed` | d32/L4 | gain | gain > 0 | ≥ 0.80 |
@@ -353,7 +395,14 @@ Continual forgetting (C2 / Gate G3 FAIL), multi-area scaling (R2 / Gate G4 **NO-
 
 ### 4.6 Neuromorphic benchmark scope and non-claims
 
-The SHD attention readout results are scoped to **h128 / `published-2ms` / `adjacent-sum-5`**. We do not claim calibration, and the reason has changed.
+The SHD attention readout results are anchored at **h128 / `published-2ms` /
+`adjacent-sum-5`**, and the **mechanism** result is no longer scoped to it: the
+destruction control exists at **9 of 21 operating points**, covering widths 128
+through 1024, both contracts and both geometries, and
+`scripts/mechanism_coverage.py` recomputes that on every gate run. Twelve
+operating points still carry intact arms with no `bin-shuffled` twin, and no
+mechanism claim is made at those. We do not claim calibration, and the reason has
+changed.
 
 Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
 

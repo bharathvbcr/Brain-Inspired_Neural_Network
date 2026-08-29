@@ -27,8 +27,9 @@ Two programs, in this order:
    `bin-shuffled` input, seed-paired. Evidence is the `shd-attention-campaign-v2`
    wave series; the mechanism control's coverage is recomputed on every run of
    the evidence gate by `scripts/mechanism_coverage.py`, and is currently
-   **one width (h128)** — a scope limit that has to reach the main text, not a
-   footnote.
+   **9 of 21 operating points**, spanning every width from 128 to 1024 and both
+   contracts and geometries. Until 2026-08-29 it was **one width (h128)**, and
+   the disclosure below has been rewritten accordingly rather than deleted.
 2. **Secondary — the matched-architecture kill gate.** Broadcast ±1 three-factor
    fails a task every other rule tested saturates; live muted-θ / k-WTA transfer
    fails. This is the program the old version of this file was written about.
@@ -55,9 +56,10 @@ home for the paper this file used to describe.
 - [x] Cite-every-number table ([`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md))
 - [x] Prose draft with §3.1 ↔ §4.2 honesty ([`PAPER_DRAFT.md`](PAPER_DRAFT.md))
 - [x] Bibliography stubs ([`references.bib`](references.bib))
-- [x] Every number in the manuscript checked — 72 derived from cells, 7 named in
-      `ELSEWHERE`, 40 traced to a named primary record
-      (`scripts/check_every_number.py`)
+- [x] Every number in the manuscript checked — **76** derived from cells, **14**
+      named in `ELSEWHERE`, **40** traced to a named primary record
+      (`scripts/check_every_number.py`); **125/125** published numbers
+      independently recomputed (`scripts/verify_published_numbers.py`)
 - [x] **Lead-program figures: all four drawn** on 2026-08-27, by the same
       generator as the secondary program's, each checked against the Table SHD-N
       it cites and against every ban its spec section names
@@ -77,9 +79,24 @@ home for the paper this file used to describe.
 
 **Lead program**
 
-1. The mechanism control exists at **one width (h128)**. Every statement about
-   the difference-in-differences generalising beyond it is unsupported by the
-   corpus, and `scripts/mechanism_coverage.py` recomputes this on every gate run.
+1. **What the difference-in-differences does and does not generalise over.**
+   The control exists at **9 of 21 operating points** (widths 128–1024, both
+   contracts, both geometries) and clears its registered bar at every one of
+   them, so the mechanism is no longer a single-configuration result.
+   **Twelve operating points still carry intact arms with no `bin-shuffled`
+   twin** and no mechanism claim is made at those.
+   `scripts/mechanism_coverage.py` recomputes this on every gate run.
+1b. **The effect's SIZE is not the gain, and this must not be softened.**
+   Spearman ρ between the six per-width gains and their DiDs is **−0.1430**
+   against a registered bar of **+0.829**. The claim is that the read-out's
+   contribution *is* order-dependent, **not** that the gain decomposes into an
+   order-dependent share and a remainder. Any sentence implying the latter is
+   unsupported.
+1c. **At h1024 the read-out consumes temporal order while harming accuracy** —
+   DiD **+0.1122** in 10 of 12 seeds against a registered ceiling of +0.02,
+   with a gain of **−0.1618** over those same seeds. The paper's own registered
+   prediction failed here, and per the preregistration this is the **leading
+   open problem**, not a caveat.
 2. **Cross-machine Gate F FAILs macOS-vs-Linux by design.** No claim rests on a
    comparison against a macOS-recorded number; every contrast is against a
    control that ran beside its treatment on the same machine.
