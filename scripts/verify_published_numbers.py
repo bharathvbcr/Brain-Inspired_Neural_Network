@@ -28,7 +28,7 @@ ANCHOR = "published-2ms__adjacent-sum-5"
 
 #: The number of checks this script must run. See the floor test at the end of
 #: `main` for why a count that only ever prints itself is not a check.
-MIN_CHECKS = 82
+MIN_CHECKS = 125
 
 
 def acc(root: Path, stem: str) -> list[float]:
@@ -585,6 +585,191 @@ def main() -> int:
         ok = needle in draft
         print(f"  [{'ok  ' if ok else 'FAIL'}] draft states {label}")
         results.append(ok)
+
+    # ---- wave 21: the difference-in-differences away from h128 ------------
+    #
+    # The statistic is a DiD over FOUR arms, and the only way to get it wrong
+    # that this cross-check exists to catch is to average four independently
+    # populated means instead of intersecting their seeds. That is exactly the
+    # error caught in wave 20 (+0.1568 pooled against +0.1551 paired), so the
+    # intersection below is over all four arms and the subtraction is per seed.
+    #
+    # Arms are resolved from CELL CONTENT, never from the wave prefix in the
+    # filename: wave 21's intact halves are reused from waves 8, 15, 16 and 18,
+    # and a prefix-based lookup returns an empty arm and a plausible wrong
+    # answer. The four content filters below are the DEFINITION of the arm
+    # (budget, no clipping, default surrogate scale, d32/L4 for attention) and
+    # mirroring them is not a loss of independence; the arithmetic is what must
+    # not be shared, and none of it is.
+    W21 = "RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md"
+
+    def w21_index():
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from cell_validity import validity_problems
+        seed_re = re.compile(r"__s(\d+)\.json$")
+        depth_re = re.compile(r"__(d\d+l\d+)")
+        out = {}
+        for root in (V2, V1):
+            if not root.is_dir():
+                continue
+            for path in sorted(root.glob("*.json")):
+                found = seed_re.search(path.name)
+                if not found:
+                    continue
+                try:
+                    cell = json.loads(path.read_text())
+                except ValueError:
+                    continue
+                if not (isinstance(cell, dict) and "accuracy" in cell):
+                    continue
+                if cell.get("epochs") != 400 or cell.get("clip_grad_norm") is not None:
+                    continue
+                if cell.get("surrogate_scale") not in (1.0, None):
+                    continue
+                arm = cell.get("arm")
+                depth = depth_re.search(path.name)
+                if arm == "ff+fixed+attn":
+                    if not depth or depth.group(1) != "d32l4":
+                        continue
+                elif arm == "ff+fixed":
+                    if depth:
+                        continue
+                else:
+                    continue
+                if validity_problems(cell):
+                    continue
+                key = (cell.get("hidden"), cell.get("contract"),
+                       cell.get("geometry"), arm,
+                       cell.get("temporal_condition") or "intact")
+                out.setdefault(key, {}).setdefault(int(found.group(1)),
+                                                   cell["accuracy"])
+        return out
+
+    w21 = w21_index()
+
+    def w21_point(hidden, contract, geometry):
+        """(quadruples, intact pairs, gain, DiD, positive) at one point.
+
+        TWO seed sets, deliberately, because the published table has two.
+        The DiD is paired across all four arms. The gain is paired across the
+        two INTACT arms, which is what the frozen analyser's `gain()` computes
+        and documents -- it is H21-3's corpus covariate and carries its own
+        count.
+
+        At seven of the eight rungs the sets coincide. At h1024 they do not:
+        waves 18 and 19 extended the intact arms to twenty seeds and only
+        twelve carry a shuffled twin, so the gain is over 20 (-0.1318) and the
+        DiD over 12 (the same seeds give a gain of -0.1618). Computing the gain
+        over the quadruples here, which the first version of this check did,
+        reports a real disagreement with a correct document. Both counts are
+        returned so the table cannot silently present one population as two.
+        """
+        def arm(name, temporal):
+            return w21.get((hidden, contract, geometry, name, temporal), {})
+        r_int = arm("ff+fixed", "intact")
+        r_shf = arm("ff+fixed", "bin-shuffled")
+        a_int = arm("ff+fixed+attn", "intact")
+        a_shf = arm("ff+fixed+attn", "bin-shuffled")
+        quad = sorted(set(r_int) & set(r_shf) & set(a_int) & set(a_shf))
+        intact = sorted(set(a_int) & set(r_int))
+        if not quad:
+            raise SystemExit(f"no complete quadruple at h{hidden}/{contract}/{geometry}")
+        dids = [(a_int[s] - a_shf[s]) - (r_int[s] - r_shf[s]) for s in quad]
+        gain = sum(a_int[s] - r_int[s] for s in intact) / len(intact)
+        return (len(quad), len(intact), gain, sum(dids) / len(dids),
+                sum(1 for d in dids if d > 0))
+
+    W21_POINTS = (
+        ("h128 anchor", 128, "published-2ms", "adjacent-sum-5"),
+        ("h256", 256, "published-2ms", "adjacent-sum-5"),
+        ("h384", 384, "published-2ms", "adjacent-sum-5"),
+        ("h512", 512, "published-2ms", "adjacent-sum-5"),
+        ("h768", 768, "published-2ms", "adjacent-sum-5"),
+        ("h1024", 1024, "published-2ms", "adjacent-sum-5"),
+        ("h128 channels-700", 128, "published-2ms", "channels-700"),
+        ("h128 published-10ms", 128, "published-10ms", "adjacent-sum-5"),
+    )
+    # Both value columns may be bolded and either may carry a Unicode minus:
+    # the h1024 row is the only one with a negative gain and it is emphasised,
+    # so a pattern that assumed plain ASCII silently matched seven rows of eight.
+    # Both count columns and both value columns may be bolded, and either value
+    # may carry a Unicode minus: the h1024 row is the only one with a negative
+    # gain and a differing intact count, and it is emphasised on both.
+    row = (r"\| h{h} / `{c}` / `{g}` \| (\d+) \| \*{{0,2}}(\d+)\*{{0,2}} \| "
+           r"\*{{0,2}}([+−-]?\d\.\d+)\*{{0,2}} \| "
+           r"\*{{0,2}}([+−-]\d\.\d+)\*{{0,2}} \| (\d+)/\d+ \|")
+    ladder_gain, ladder_did = [], []
+    split_rungs = 0
+    for label, hidden, contract, geometry in W21_POINTS:
+        n_quad, n_intact, gain, did, positive = w21_point(hidden, contract, geometry)
+        text = (ROOT / "results" / W21).read_text()
+        pattern = row.format(h=hidden, c=contract, g=geometry)
+        found = re.search(pattern, text)
+        if not found:
+            raise SystemExit(f"no published row for {label} in {W21}")
+        norm = lambda s: float(s.replace("−", "-").replace("+", ""))
+        results.append(check(f"W21 {label} quadruples", float(n_quad),
+                             float(found.group(1)), tol=0.5))
+        results.append(check(f"W21 {label} intact pairs", float(n_intact),
+                             float(found.group(2)), tol=0.5))
+        results.append(check(f"W21 {label} gain", gain, norm(found.group(3))))
+        results.append(check(f"W21 {label} DiD", did, norm(found.group(4))))
+        results.append(check(f"W21 {label} seeds positive", float(positive),
+                             float(found.group(5)), tol=0.5))
+        if n_quad != n_intact:
+            split_rungs += 1
+        if geometry == "adjacent-sum-5" and contract == "published-2ms":
+            ladder_gain.append(gain)
+            ladder_did.append(did)
+
+    # The disclosure in the document is load-bearing, so assert the condition
+    # that makes it necessary still holds. If a later wave fills h1024's
+    # shuffled arms to twenty, the two columns converge and the paragraph
+    # explaining why they differ becomes false -- silently, unless this fires.
+    results.append(check("W21 rungs where the two seed sets differ",
+                         float(split_rungs), 1.0, tol=0.5))
+    quad_gain = {}
+    for _, hidden, contract, geometry in W21_POINTS:
+        def a(name, temporal):
+            return w21.get((hidden, contract, geometry, name, temporal), {})
+        q = sorted(set(a("ff+fixed", "intact")) & set(a("ff+fixed", "bin-shuffled"))
+                   & set(a("ff+fixed+attn", "intact"))
+                   & set(a("ff+fixed+attn", "bin-shuffled")))
+        quad_gain[hidden] = sum(a("ff+fixed+attn", "intact")[s]
+                                - a("ff+fixed", "intact")[s] for s in q) / len(q)
+    results.append(check("W21 h1024 gain over the quadruple seeds", quad_gain[1024],
+                         published(W21, r"h1024 gain is \*\*(−\d\.\d+)\*\*")))
+
+    # H21-3's rho, recomputed. Written out longhand rather than imported,
+    # because "the correlation is absent" is the verdict and a shared
+    # implementation would make the check agree with the analyser for the same
+    # reason rather than independently.
+    def w21_rho(xs, ys):
+        n = len(xs)
+        def ranks(values):
+            order = sorted(range(n), key=lambda i: values[i])
+            out = [0.0] * n
+            i = 0
+            while i < n:
+                j = i
+                while j + 1 < n and values[order[j + 1]] == values[order[i]]:
+                    j += 1
+                for k in range(i, j + 1):
+                    out[order[k]] = (i + j) / 2
+                i = j + 1
+            return out
+        rx, ry = ranks(xs), ranks(ys)
+        mx, my = sum(rx) / n, sum(ry) / n
+        num = sum((a - mx) * (b - my) for a, b in zip(rx, ry))
+        den = (sum((a - mx) ** 2 for a in rx)
+               * sum((b - my) ** 2 for b in ry)) ** 0.5
+        return num / den if den else None
+
+    if len(ladder_gain) != 6:
+        raise SystemExit(f"H21-3 needs six width rungs, indexed {len(ladder_gain)}")
+    results.append(check("H21-3 Spearman rho over the six widths",
+                         w21_rho(ladder_gain, ladder_did),
+                         published(W21, r"ρ = \*\*(−?\d\.\d+)\*\*"), tol=5e-4))
 
     bad = results.count(False)
     print(f"\n{len(results) - bad}/{len(results)} published numbers reproduce from the cells.")

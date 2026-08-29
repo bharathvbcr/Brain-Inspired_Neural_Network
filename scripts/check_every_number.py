@@ -137,6 +137,18 @@ KNOWN_COINCIDENCE = {
     "0.1411": "M-2, a difference OF gains. This sweep deliberately generates no "
               "second-order quantities, so a `pooled` match cannot be the same "
               "computation.",
+    # Both surfaced on 2026-08-29 when wave 21's 168 cells enlarged the derived
+    # set. Neither number moved; the generator grew until it happened to reach
+    # them, which is what a 22%-dense `paired` set does as a corpus grows.
+    "0.0253": "a standard DEVIATION — the sd of the seed-paired h384−h512 "
+              "difference. This sweep derives no variances at all, so whatever "
+              "`paired` value collides with it is a mean difference and not "
+              "the same quantity.",
+    "0.9013": "the SuperSpike BPTT reference at e80 on the MATCHED dense-LIF "
+              "coincidence task (`RESULT_2026-08-19_A6_CEILING_HEALTH.md`). "
+              "That program shares no task, no corpus and no arm with the SHD "
+              "instrument, so no cell swept here can produce it — the same "
+              "reasoning as 0.9390 and 0.6775 above.",
 }
 
 #: Tier C. `(value, primary record, what the number is there)`.
@@ -286,6 +298,24 @@ ELSEWHERE = [
     ("0.7767", "H18-1 L2 attention median at h1024"),
     ("0.7838", "H18-1 L3 attention median at h1024, the rung whose norm of "
                "1.347 breaks H18-2"),
+    # Wave 21. Every DiD is a difference OF gains over a FOUR-arm seed
+    # intersection, which is second order twice over and exactly what this
+    # sweep refuses to generate for the coincidence-rate reason above. All
+    # eight are listed, not only the three the sweep could not reach: the other
+    # five happen to coincide with a value some pair of arms produces, and
+    # without an entry here they would be credited to a generator that did not
+    # produce them. That is the 0.9390 relabelling defect, and the precedence
+    # rule that fixed it only works if the value is named. Each is recomputed
+    # by name in verify_published_numbers.py, seed-paired across all four arms.
+    ("0.1205", "W21 DiD at h128, the registered anchor"),
+    ("0.0862", "W21 DiD at h256 (H21-1)"),
+    ("0.0767", "W21 DiD at h384 (H21-1)"),
+    ("0.0968", "W21 DiD at h512 (H21-1)"),
+    ("0.1881", "W21 DiD at h768, the largest in the wave against the smallest "
+               "positive gain — the clearest single case of H21-3 failing"),
+    ("0.1122", "W21 DiD at h1024 (H21-2, NOT MET) and at h128/channels-700 "
+               "(H21-4); the two operating points agree to four places"),
+    ("0.0959", "W21 DiD at h128/published-10ms (H21-4)"),
     ("0.6093", "H18-1 L4 attention median at h1024"),
     # Wave 20. Merged `w13rec`/`w14sub` + `w20rec` arms and one difference OF
     # gains — the two shapes this sweep does not generate, for the same reasons
@@ -654,6 +684,11 @@ def main() -> int:
     seen_allowed: set[str] = set()
     checked = 0
     silent: list[str] = []
+    #: (document, value, generator) for wave-result numbers that have a named
+    #: source AND are reachable by a generator. Reported rather than hidden: an
+    #: entry that has become genuinely derivable should be retired, and only a
+    #: human can tell that from a coincidence.
+    wave_coincident: list[tuple[str, str, str]] = []
 
     print(f"{len(known)} distinct quantities derivable from {len(groups)} "
           f"configurations, by generator:")
@@ -675,13 +710,30 @@ def main() -> int:
         for text in numbers:
             checked += 1
             value = round(abs(float(text.replace("−", "-").replace("+", ""))), 4)
-            generator = explain(value, tiers)
-            if generator:
-                by_tier[generator] += 1
-                continue
             plain = f"{value:.4f}"
+            # A NAMED source outranks a derivation here for the same reason it
+            # does in `sweep_paper` — and until 2026-08-29 this loop had the
+            # precedence the other way round.
+            #
+            # `sweep_paper` was fixed when a published result from ANOTHER paper
+            # (0.9390) was reported as "derived from the cells". The identical
+            # defect survived here, unexamined, because no wave result had yet
+            # quoted a number that was both named in ELSEWHERE and reachable by
+            # coincidence. Wave 21 quotes five: its DiDs at h256, h384, h512,
+            # h1024 and h128/channels-700 are all reachable by the `paired`
+            # generator, which at 22% density reaches roughly one value in four
+            # by accident and which this file explicitly REFUSES to let generate
+            # a difference of gains. Crediting them to the cells would have
+            # relabelled the campaign's lead statistic as something the sweep
+            # had derived, in the one document where that matters most.
+            generator = explain(value, tiers)
             if plain in allowed:
                 seen_allowed.add(plain)
+                if generator:
+                    wave_coincident.append((doc.name, plain, generator))
+                continue
+            if generator:
+                by_tier[generator] += 1
                 continue
             bad.append(text)
         if bad:
@@ -700,6 +752,16 @@ def main() -> int:
                                if by_tier[name])
         print(f"  [{mark}] {doc.name[:64]:<64} {status}")
         unexplained += [(doc.name, b) for b in bad]
+
+    if wave_coincident:
+        print()
+        for doc_name, plain, generator in sorted(wave_coincident):
+            print(f"  PROVENANCE: {plain} in {doc_name[:52]} has a named source "
+                  f"AND is reachable by `{generator}`. Credited to the source. "
+                  f"Retire the ELSEWHERE entry if the derivation is genuine; "
+                  f"declare it if it is a coincidence.")
+        print(f"  {len(wave_coincident)} wave-result value(s) credited to a "
+              f"named source that a generator also reaches.")
 
     paper_cells, paper_elsewhere, paper_traced, paper_bad, paper_complaints = \
         sweep_paper(tiers, allowed)

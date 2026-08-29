@@ -256,17 +256,40 @@ class ProjectionTest(unittest.TestCase):
 class LiveCorpusTest(unittest.TestCase):
     """What the real corpus says, pinned so a silent narrowing is visible."""
 
-    def test_the_contrast_exists_at_exactly_one_width(self):
+    def test_the_contrast_spans_the_whole_width_ladder(self):
+        """Wave 21 landed on 2026-08-29 and moved this from [128].
+
+        The previous assertion was `== [128]`, with a message saying coverage
+        had moved and the scope limits needed rereading. It fired, they were
+        reread, and this is the state it moved to. Kept as an equality rather
+        than relaxed to a subset test: the one-width scope limit was the
+        campaign's largest disclosure and its replacement should be pinned just
+        as tightly.
+        """
         rows = MC.coverage(MC.read(MC.DEFAULT_ROOTS))
         widths = sorted({r[0][0] for r in rows if r[6]})
-        self.assertEqual(widths, [128],
-                         "coverage moved; PAPER_DRAFT's scope limit and "
-                         "PREREG ...THE_MECHANISM_CONTROL... need rereading")
+        self.assertEqual(widths, [128, 256, 384, 512, 768, 1024],
+                         "coverage moved; PAPER_DRAFT's scope limit, "
+                         "PUBLISHABLE_CLAIMS and VENUE_FORMATTING all quote it")
 
-    def test_most_operating_points_have_no_control_at_all(self):
+    def test_the_contrast_spans_more_than_one_geometry_and_contract(self):
+        """Width is not the only axis the scope limit named."""
         rows = MC.coverage(MC.read(MC.DEFAULT_ROOTS))
         covered = [r for r in rows if r[6]]
-        self.assertLess(len(covered), len(rows) / 2)
+        self.assertGreater(len({r[0][1] for r in covered}), 1)
+        self.assertGreater(len({r[0][2] for r in covered}), 1)
+
+    def test_uncovered_operating_points_still_exist(self):
+        """Coverage grew; it is not complete, and the difference matters.
+
+        Nine of twenty-one carry the control. Asserting the remainder is
+        non-empty stops "coverage improved" being read as "coverage is done"
+        by a later reader of this file.
+        """
+        rows = MC.coverage(MC.read(MC.DEFAULT_ROOTS))
+        covered = [r for r in rows if r[6]]
+        self.assertGreater(len(covered), 1)
+        self.assertLess(len(covered), len(rows))
 
 
 if __name__ == "__main__":

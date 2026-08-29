@@ -209,14 +209,25 @@ class LiveCorpusTest(unittest.TestCase):
         self.assertEqual(positive, 32)
         self.assertAlmostEqual(value, 0.1205, places=4)
 
-    def test_no_other_operating_point_has_a_contrast_yet(self):
-        """Pinned so that the day wave 21 lands, this test is what changes."""
+    def test_every_ladder_width_now_carries_a_contrast(self):
+        """Wave 21 landed on 2026-08-29 and this test is what changed.
+
+        It used to assert the opposite -- that no width above h128 had a
+        contrast at all -- and was pinned so that landing the wave would force
+        someone to look at it. Inverted rather than deleted: the assertion that
+        coverage exists is exactly as load-bearing as the assertion that it did
+        not, and a wave that silently lost an operating point would otherwise
+        look like a clean run.
+        """
         cells, _ = W21.index([W21.ARCHIVE_V2, W21.ARCHIVE_V1])
         for hidden in W21.LADDER[1:]:
             with self.subTest(hidden):
-                self.assertEqual(
-                    W21.did(cells, hidden, "published-2ms", "adjacent-sum-5")[2],
-                    0)
+                pairs = W21.did(cells, hidden, "published-2ms",
+                                "adjacent-sum-5")[2]
+                self.assertGreaterEqual(
+                    pairs, W21.MIN_PAIRS,
+                    f"h{hidden} carries {pairs} quadruples, below the "
+                    f"registered floor of {W21.MIN_PAIRS}")
 
 
 if __name__ == "__main__":

@@ -1613,8 +1613,15 @@ CORPUS_BASELINE = {
     #: 74 cells added, all valid. 619 -> 693 and 609 -> 683, both +74, so the
     #: ten invalid are still the same ten `w13rec` cells. 0 modified and 0
     #: deleted. Wave 21 is still in flight and is not landed here.
+    #:
+    #: Re-frozen 2026-08-29 on wave 21 settling 168/168 with zero divergences
+    #: and zero voided cells: 168 cells added, all valid. 693 -> 861 and
+    #: 683 -> 851, both +168, so the ten invalid are still the same ten
+    #: `w13rec` cells and no archived verdict moved. 0 modified and 0 deleted
+    #: under this corpus. See
+    #: `RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`.
     "shd_attention_campaign_v2":
-        (693, 683, "c50a4a3119c45c31"),
+        (861, 851, "51c819498e1d10bb"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":
