@@ -64,7 +64,13 @@ home for the paper this file used to describe.
       generator as the secondary program's, each checked against the Table SHD-N
       it cites and against every ban its spec section names
 - [ ] Lead-program graphical abstract — the spec records `TODO(source needed)`;
-      this is the last unspecified piece of figure work in the package
+      the last *unspecified* piece of figure work in the package
+- [ ] **Figure 1 Panel D and the Figure 3 annotation are specified and NOT
+      DRAWN** (added 2026-08-29 for wave 21). Panel D is the eight-point
+      difference-in-differences ladder — the answer to "does it generalise?",
+      and a table is a weak way to give it. The Figure 3 annotation stops the
+      width ladder implying the mechanism tracks the gain, which ρ = −0.1430
+      says it does not. Both need `binn-lab/src/paper_figures.rs`
 - [ ] Secondary-program artwork: four of nine files current, two stale — see the
       table below
 - [ ] Venue template applied (NeurIPS/ICML/TMLR/… `.sty` / Overleaf)
@@ -134,9 +140,9 @@ that sheet is the owner, and this table used to contradict it by ticking
 | fig0 | `…/fig0_claim_axis_legend.*` | present, unaffected by the re-run |
 | figD | `…/figD_diff_closure.*` | present, unaffected |
 | fig5 (Figure 9) | `…/fig5_xor_locality.*` | present, unaffected |
-| **lead Figure 1** | `…/leadfig1_the_conditional.*` | **drawn 2026-08-27** — the difference-in-differences |
+| **lead Figure 1** | `…/leadfig1_the_conditional.*` | **Panels A–C drawn 2026-08-27**; **Panel D specified 2026-08-29, not drawn** |
 | **lead Figure 2** | `…/leadfig2_headline_accuracy.*` | **drawn 2026-08-27** — headline, on one axis with the field |
-| **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27** — the threshold at h1024 |
+| **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27**; **required "the mechanism does not track this curve" annotation specified 2026-08-29, not drawn** |
 | **lead Figure 4** | `…/leadfig4_resolution_ladder.*` | **drawn 2026-08-27** — the resolution ladder |
 | lead graphical abstract | — | `TODO(source needed)` — the last unspecified piece |
 

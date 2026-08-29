@@ -34,6 +34,7 @@ A–F.
 |---|---|---|
 | SHD headline and the 0.80 gate | **Table SHD-1** | [`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md) · [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md) §6 |
 | SHD bin-shuffle difference-in-differences | **Table SHD-2** | [`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md) · W15/17 §6 |
+| SHD difference-in-differences **across the design space** | **Table SHD-2b** | [`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md) |
 | SHD width ladder and the h1024 threshold | **Tables SHD-3, SHD-4** | W15/17 §5 and §2 |
 | SHD geometry scope | **Table SHD-5** | [`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md) |
 | SHD resolution ladder (`fixed-tN`) | **Table SHD-6** | [`RESULT_2026-08-22_W10_RESOLUTION_LADDER.md`](RESULT_2026-08-22_W10_RESOLUTION_LADDER.md) |
@@ -194,6 +195,47 @@ faint control rather than half the measurement.
 
 ---
 
+### Panel D — the contrast across the design space (**required; NOT YET DRAWN**)
+
+**Status: specified 2026-08-29, no generator.** `binn-lab/src/paper_figures.rs`
+draws Panels A–C only. This panel is the strongest single answer to *"does the
+result generalise?"*, which was the campaign's largest scope limit until wave 21
+closed it, and a table is a weak way to say it.
+
+**Plot:** the seed-paired DiD at each of the eight operating points, as a
+horizontal dot/bar with the registered **+0.03** bar drawn as a rule. `n = 12`
+per point except the anchor at `n = 32`.
+
+| operating point | quadruples | **DiD** | positive |
+|---|---:|---:|---:|
+| h128 *(anchor)* | 32 | **+0.1205** | 32/32 |
+| h256 | 12 | **+0.0862** | 12/12 |
+| h384 | 12 | **+0.0767** | 12/12 |
+| h512 | 12 | **+0.0968** | 12/12 |
+| h768 | 12 | **+0.1881** | 12/12 |
+| h1024 | 12 | **+0.1122** | 10/12 |
+| h128 / `channels-700` | 12 | **+0.1122** | 12/12 |
+| h128 / `published-10ms` | 12 | **+0.0959** | 12/12 |
+
+Source: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) **Table SHD-2b**.
+
+**Bans on this panel, and they are the point of specifying it rather than
+leaving it to whoever draws it.**
+
+1. **Do not order the points by DiD.** Plot them in ladder order (h128 → h1024,
+   then the two alternative binnings). Sorting by effect size manufactures a
+   trend the wave explicitly refuted.
+2. **Do not draw the gain on the same axis, and do not connect the points.**
+   Spearman ρ between the per-width gains and these DiDs is **−0.1430** against
+   a registered bar of **+0.829**. Any shared axis or connecting line asserts a
+   relationship that is **NOT MET**.
+3. **h1024 must be marked as the arm whose gain is negative.** It carries a DiD
+   as large as the anchor's while the read-out *harms* accuracy there. A panel
+   that shows only the DiD column reads as "the mechanism is healthy at every
+   width", which is not what this point says.
+4. **Do not annotate 12 of 21 uncovered operating points out of existence.** The
+   caption states coverage as **9 of 21**, not "every width".
+
 ## Figure 2 — Headline accuracy and the 0.80 clearance
 
 **Message:** The read-out takes the instrument from **0.7057** to **0.8332**
@@ -329,6 +371,20 @@ the registered 3× bar (**0.0947**). Source:
 §5 (H16-1 **NOT MET**, H16-2 **MET**) · [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md)
 **Table SHD-3**, registered in
 [`PREREG_2026-08-25_THE_H1024_COLLAPSE.md`](PREREG_2026-08-25_THE_H1024_COLLAPSE.md).
+
+**Required annotation, added 2026-08-29 (NOT YET DRAWN).** This ladder plots the
+**gain**, and a reader who has seen Figure 1 will assume the order-dependence
+rises and falls with it. **It does not.** Spearman ρ between these six rungs and
+their difference-in-differences is **−0.1430** against a registered bar of
+**+0.829** — h768 carries the *smallest* positive gain here and the *largest*
+DiD in the campaign (**+0.1881**). The figure must carry one line saying the
+mechanism does not track this curve, and must not imply otherwise by shared
+axis, shared colour ramp, or adjacency without a caption.
+
+**Ban 6 (new).** Do not plot the DiD as a second series on this figure. One
+quantity per figure, and the DiD ladder is Figure 1 Panel D. The two must not be
+superimposed precisely *because* they are uncorrelated: superimposing them
+invites the eye to find the relationship the statistic rejects.
 
 ### Panel B — located, and not explained: three preregistered levers at h1024/`d32/L4`
 
