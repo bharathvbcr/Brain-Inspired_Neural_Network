@@ -2,7 +2,7 @@
 
 # Record index
 
-326 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+327 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -18,7 +18,7 @@
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
 | Paper | 3 | 5 |
-| Campaign control | 3 | 0 |
+| Campaign control | 4 | 0 |
 | Writing | 2 | 0 |
 | Gates | 1 | 0 |
 | Open work | 1 | 0 |
@@ -295,6 +295,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-30 | [CAMPAIGN_2026-08-30_WAVE_23_LAUNCHED.md](CAMPAIGN_2026-08-30_WAVE_23_LAUNCHED.md) | Campaign — wave 23 launched into wave 22's queue |
 | 2026-08-30 | [CAMPAIGN_2026-08-30_WAVE_22_LAUNCHED.md](CAMPAIGN_2026-08-30_WAVE_22_LAUNCHED.md) | Campaign — wave 22 launched |
 | 2026-07-23 | [CAMPAIGN_2026-07-23_CLAIM_FREEZE.md](CAMPAIGN_2026-07-23_CLAIM_FREEZE.md) | Campaign claim freeze |
 | — | [CAMPAIGN_TRANSFER_GAP_PLAN.md](CAMPAIGN_TRANSFER_GAP_PLAN.md) | Campaign plan — the matched-to-live transfer gap |
