@@ -96,12 +96,59 @@ def ensure_bucket(bucket: str, region: str) -> None:
     print(f"  bucket {bucket} created")
 
 
+def bucket_policy(bucket: str) -> str:
+    return json.dumps({
+        "Version": "2012-10-17",
+        "Statement": [
+            {"Effect": "Allow",
+             "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
+             "Resource": [f"arn:aws:s3:::{bucket}", f"arn:aws:s3:::{bucket}/*"]},
+        ],
+    })
+
+
 def ensure_role(bucket: str) -> str:
-    """Least-privilege worker role: this bucket, plus SSM for debugging."""
+    """Least-privilege worker role: this bucket, plus SSM for debugging.
+
+    # The early return used to skip the policy, and the docstring lied
+
+    This returned as soon as the instance profile existed, which is correct for
+    the profile and wrong for the POLICY attached to it: the policy names a
+    bucket, and it kept naming whichever bucket the profile was first created
+    for. Launching into any other bucket produced workers that could not read
+    it.
+
+    That is not a hypothetical. On 2026-08-30 wave 22 launched into a second
+    bucket -- deliberately, to leave the original pinned binary untouched -- and
+    both instances came up unable to fetch `bootstrap.sh`. S3 returned 403, the
+    instance wrote the XML error body to `/tmp/bootstrap.sh`, and bash tried to
+    execute it:
+
+        /tmp/bootstrap.sh: line 1: `<?xml version="1.0" encoding="UTF-8"?>'
+
+    cloud-init finished in 7.6 seconds and two c7g.16xlarge sat running and idle
+    until they were terminated by hand. Nothing in the launch output said
+    anything was wrong -- it printed "instance profile ... exists" and then
+    "2 instance(s)", both true.
+
+    `put-role-policy` overwrites by policy name and is idempotent, so it is now
+    applied on every launch. The policy stays scoped to exactly one bucket, as
+    "least-privilege" says: a later launch into a different bucket re-scopes it
+    to that one, which is the intended behaviour and the reason it is safe to
+    re-apply unconditionally.
+    """
     probe = aws("iam", "get-instance-profile", "--instance-profile-name", PROFILE,
                 check=False, parse=False)
     if probe.returncode == 0:
         print(f"  instance profile {PROFILE} exists")
+        aws("iam", "put-role-policy", "--role-name", ROLE,
+            "--policy-name", "campaign-bucket",
+            "--policy-document", bucket_policy(bucket))
+        print(f"  role policy re-scoped to {bucket}")
+        # IAM is eventually consistent, and a worker that reads the stale policy
+        # fails exactly as described above. The launch below is not worth the
+        # seconds saved by skipping this.
+        time.sleep(10)
         return PROFILE
 
     trust = json.dumps({
@@ -113,16 +160,8 @@ def ensure_role(bucket: str) -> str:
     aws("iam", "create-role", "--role-name", ROLE,
         "--assume-role-policy-document", trust,
         "--tags", f"Key=Project,Value={TAG}")
-    policy = json.dumps({
-        "Version": "2012-10-17",
-        "Statement": [
-            {"Effect": "Allow",
-             "Action": ["s3:GetObject", "s3:PutObject", "s3:ListBucket"],
-             "Resource": [f"arn:aws:s3:::{bucket}", f"arn:aws:s3:::{bucket}/*"]},
-        ],
-    })
     aws("iam", "put-role-policy", "--role-name", ROLE,
-        "--policy-name", "campaign-bucket", "--policy-document", policy)
+        "--policy-name", "campaign-bucket", "--policy-document", bucket_policy(bucket))
     aws("iam", "attach-role-policy", "--role-name", ROLE,
         "--policy-arn", "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
     aws("iam", "create-instance-profile", "--instance-profile-name", PROFILE)

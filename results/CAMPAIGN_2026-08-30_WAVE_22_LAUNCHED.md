@@ -16,7 +16,7 @@ correct pre-launch state.
 | | |
 |---|---|
 | plan | 504 cells — 288 attention, 216 rate |
-| fleet | 2 × `c7g.16xlarge`, `i-01c9dc277aa06dc28` and `i-0a5a0ed4dbdfadccd` |
+| fleet | 2 × `c7g.16xlarge`, `i-03fbc9c8bd557f748` and `i-09e51d77bb6fbebd5` |
 | bucket | `binn-campaign-v2-511192439661-us-east-1` |
 | estimated | $124 spot; the estimator over-predicts ~3×, so expect $35–45 |
 
@@ -35,6 +35,35 @@ first instance builds and publishes the guarded binary, and every later instance
 downloads exactly that. The corpus was copied server-side from the old bucket,
 so `train.events` and `test.events` are byte-identical to what every previous
 wave ran against.
+
+## The first launch failed, and the launcher was the reason
+
+The first attempt (`i-01c9dc277aa06dc28`, `i-0a5a0ed4dbdfadccd`) came up unable
+to fetch `bootstrap.sh`. S3 answered **403**, the instance wrote the XML error
+body to `/tmp/bootstrap.sh`, and bash tried to execute it:
+
+    /tmp/bootstrap.sh: line 1: `<?xml version="1.0" encoding="UTF-8"?>`
+
+cloud-init finished in **7.6 seconds** and two `c7g.16xlarge` sat running and
+idle until they were terminated by hand.
+
+**The cause was `launch.py::ensure_role`.** It returned as soon as the instance
+profile existed — correct for the profile, wrong for the IAM policy attached to
+it. The policy names a bucket, and it went on naming
+`binn-campaign-511192439661-us-east-1`, the bucket it was first created for.
+Confirmed against the live policy before changing anything. So the deliberate
+choice to use a second bucket was exactly what tripped it.
+
+Nothing in the launch output said anything was wrong. It printed
+`instance profile binn-campaign-worker exists` and then `2 instance(s)`, and
+both were true. **That is the failure mode this repository exists to hunt: a
+step that could not do its job reporting the same thing as one that did.**
+
+Fixed — `put-role-policy` overwrites by name and is idempotent, so it is applied
+on every launch and the policy stays scoped to exactly one bucket. Three tests
+in `test_campaign_tooling.py::WorkerRolePolicyTest` pin it, negative-tested by
+restoring the early return. The relaunch printed the line that had been missing:
+`role policy re-scoped to binn-campaign-v2-...`.
 
 ## The binary this wave runs
 

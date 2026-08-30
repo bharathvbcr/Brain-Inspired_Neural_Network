@@ -1650,6 +1650,78 @@ CORPUS_BASELINE = {
 }
 
 
+class WorkerRolePolicyTest(unittest.TestCase):
+    """The worker role must grant the bucket THIS launch uses.
+
+    `ensure_role` returned as soon as the instance profile existed, which is
+    right for the profile and wrong for the policy attached to it: the policy
+    names a bucket, and it went on naming whichever bucket the profile was first
+    created for.
+
+    On 2026-08-30 wave 22 launched into a second bucket -- deliberately, to
+    leave the original pinned binary untouched -- and both c7g.16xlarge came up
+    unable to fetch `bootstrap.sh`. S3 answered 403, the instance wrote the XML
+    error body to /tmp/bootstrap.sh, and bash tried to run it. cloud-init
+    finished in 7.6 seconds; the instances sat idle until terminated by hand.
+    The launch printed "instance profile ... exists" and "2 instance(s)" and
+    both were true, which is why nothing caught it.
+    """
+
+    def _ensure_role(self, bucket, profile_exists):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "launch_mod", ROOT / "scripts/aws/launch.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        calls = []
+
+        def handler(argv):
+            calls.append(argv)
+            if "get-instance-profile" in argv:
+                return (0 if profile_exists else 1), "{}", ""
+            return 0, "{}", ""
+
+        mod.time.sleep = lambda _s: None
+        fake = FakeAws(handler)
+        buf = io.StringIO()
+        original, mod.subprocess.run = mod.subprocess.run, fake
+        try:
+            with contextlib.redirect_stdout(buf):
+                mod.ensure_role(bucket)
+        finally:
+            mod.subprocess.run = original
+        return calls
+
+    def test_an_existing_profile_still_gets_its_policy_rescoped(self):
+        calls = self._ensure_role("bucket-two", profile_exists=True)
+        puts = [c for c in calls if "put-role-policy" in c]
+        self.assertEqual(len(puts), 1,
+                         "an existing profile skipped put-role-policy; workers "
+                         "would keep the previous bucket's grant")
+        document = puts[0][puts[0].index("--policy-document") + 1]
+        self.assertIn("arn:aws:s3:::bucket-two", document)
+
+    def test_a_fresh_profile_gets_the_policy_too(self):
+        calls = self._ensure_role("bucket-one", profile_exists=False)
+        puts = [c for c in calls if "put-role-policy" in c]
+        self.assertEqual(len(puts), 1)
+        self.assertIn("arn:aws:s3:::bucket-one",
+                      puts[0][puts[0].index("--policy-document") + 1])
+
+    def test_the_policy_names_exactly_one_bucket(self):
+        """Least-privilege: re-scoping, not accumulating. A policy that grew a
+        bucket per launch would end up granting every campaign at once."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "launch_mod", ROOT / "scripts/aws/launch.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        document = json.loads(mod.bucket_policy("only-this-one"))
+        resources = document["Statement"][0]["Resource"]
+        self.assertEqual(sorted(resources), [
+            "arn:aws:s3:::only-this-one", "arn:aws:s3:::only-this-one/*"])
+
+
 class AccuracyAndNonFiniteGateTest(unittest.TestCase):
     """The gate must read the field every published number comes from.
 
