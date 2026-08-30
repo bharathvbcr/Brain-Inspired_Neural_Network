@@ -114,6 +114,12 @@ cites and against every ban its spec section names. What remains here is prose.
 - **Coverage is 9 of 21 operating points**, recomputed by
   `scripts/mechanism_coverage.py` on every gate run. Twelve points carry intact
   arms with no `bin-shuffled` twin and claim nothing. Widening it is compute.
+- **§6's audit debt is smaller than it reads.** The ~8,000 unswept lines in
+  `binn-engine` / `binn-areas` / `binn-core` are **not on the cell path** — the
+  instrument references those crates zero times. The two unswept files that
+  *were* live, `shd_alif.rs` and `shared_bptt.rs`, were swept on 2026-08-30 and
+  yielded two defects, both fixed
+  ([`AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md`](AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md)).
 - The standing register in
   [`TODO_2026-08-07_OPEN_WORK.md`](TODO_2026-08-07_OPEN_WORK.md) — the transfer-gap
   decomposition preregistration (§3), the SHD scope qualifiers (§4), the ~8,000

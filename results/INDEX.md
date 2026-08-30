@@ -2,7 +2,7 @@
 
 # Record index
 
-327 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+328 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -13,7 +13,7 @@
 | Amendments | 15 | 1 |
 | Defects | 6 | 0 |
 | Hardening | 9 | 0 |
-| Audits | 2 | 0 |
+| Audits | 3 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
@@ -245,6 +245,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-30 | [AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md](AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md) | Audit — `shd_alif.rs` and `shared_bptt.rs` |
 | 2026-08-07 | [AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md](AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md) | Audit — the July campaign's scoring path, starting from the arms that score 1.0000 |
 | 2026-08-03 | [AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md](AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md) | Rust defect register and audit coverage |
 

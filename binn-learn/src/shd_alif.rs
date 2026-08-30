@@ -245,14 +245,80 @@ fn alif_eligibility_step(
 ///
 /// Without this guard, learned readout weights can grow while DFA feedback
 /// stays frozen, silently changing the effective hidden-layer learning rate.
+/// Sum of squares, widened to f64 **only when the f32 sum overflows**.
+///
+/// The pattern and the reason are
+/// `AMENDMENT_2026-08-03_L2_NORM_CONDITIONAL_WIDENING.md`, applied here on
+/// 2026-08-29: `f32::MAX` is ~3.4e38, so a sum of squares overflows once
+/// entries reach ~1e19, while the RMS itself — ~1e19 — stays comfortably
+/// representable.
+///
+/// Widening unconditionally would be tidier and is deliberately not what this
+/// does: a different summation order moves the result in the last ulp for every
+/// call, and these values steer the DFA update. Gating on `!is_finite()` leaves
+/// every representable value **bit-identical** and replaces only the ones that
+/// were already wrong.
+/// `sqrt(sum(v^2) / divisor)`, widened to f64 **only when the f32 sum overflows**.
+///
+/// The root and the division happen **before** the cast back to f32, and that
+/// is the whole point rather than a detail. A first version of this returned
+/// the widened *sum* and cast that: for entries around 3e19 the sum is ~2.3e39,
+/// which is beyond `f32::MAX`, so it overflowed a second time and the widening
+/// bought nothing. The test that caught it is
+/// `a_modulator_whose_rms_overflows_is_not_zeroed`, but only after it was
+/// strengthened to assert the target RMS instead of merely "not zeroed" —
+/// the weaker form passed with the widening reverted entirely.
+fn root_mean_square(values: &[f32], divisor: f32) -> f32 {
+    let sum = values.iter().map(|v| v * v).sum::<f32>();
+    if sum.is_finite() {
+        return (sum / divisor).sqrt();
+    }
+    let wide: f64 = values
+        .iter()
+        .map(|v| {
+            let wide = f64::from(*v);
+            wide * wide
+        })
+        .sum();
+    (wide / f64::from(divisor)).sqrt() as f32
+}
+
+/// Match the realised RMS of a transported output-error vector to the RMS
+/// implied by the frozen initial transport scale. Direction is preserved.
+///
+/// Without this guard, learned readout weights can grow while DFA feedback
+/// stays frozen, silently changing the effective hidden-layer learning rate.
+///
+/// # The overflow that zeroed the learning signal
+///
+/// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b named this site and left it
+/// unfixed for 26 days, correctly noting there was no bit-identity suite here
+/// to show a change harmless. It is fixed now because the conditional-widening
+/// pattern *is* that proof: it cannot move a value f32 could already represent.
+///
+/// `actual_rms` overflowing to `inf` passed the old guard — `inf > f32::EPSILON`
+/// is true — and produced `scale = target_rms / inf = 0.0`, which multiplied
+/// every entry by zero. **The whole DFA update for that example became exactly
+/// zero, the step proceeded, and nothing recorded it.** That is a dynamics
+/// corruption, not a reporting one, which makes it worse than the `l2_norm`
+/// overflow the amendment above was written for.
+///
+/// Two changes, and the second matters even after the first:
+///
+/// 1. Both sums are conditionally widened, so an RMS f32 can represent is
+///    computed rather than becoming `inf`.
+/// 2. `actual_rms.is_finite()` joins the guard. A norm genuinely beyond
+///    `f32::MAX` is still `inf` after widening, and the function must then
+///    **leave `mods` alone** rather than scale them by zero — failing closed,
+///    exactly as the existing `target_rms.is_finite()` arm already did.
 fn normalize_hidden_modulator(mods: &mut [f32], output_delta: &[f32], hidden: usize) {
     if mods.is_empty() || output_delta.is_empty() {
         return;
     }
-    let delta_l2 = output_delta.iter().map(|d| d * d).sum::<f32>().sqrt();
+    let delta_l2 = root_mean_square(output_delta, 1.0);
     let target_rms = shd_out_scale(hidden) * delta_l2 / 3.0f32.sqrt();
-    let actual_rms = (mods.iter().map(|m| m * m).sum::<f32>() / mods.len() as f32).sqrt();
-    if actual_rms > f32::EPSILON && target_rms.is_finite() {
+    let actual_rms = root_mean_square(mods, mods.len() as f32);
+    if actual_rms > f32::EPSILON && actual_rms.is_finite() && target_rms.is_finite() {
         let scale = target_rms / actual_rms;
         for value in mods {
             *value *= scale;
@@ -1282,6 +1348,115 @@ mod tests {
         for (new, old) in mods.iter().zip(before) {
             assert_eq!(new.signum(), old.signum());
         }
+    }
+
+    /// Widening must not move a single value f32 could already represent.
+    ///
+    /// This is the property that made the fix safe to make at all. The register
+    /// declined to touch this file because it has no bit-identity suite, so a
+    /// change could not be shown harmless. Conditional widening supplies the
+    /// proof in the code: below the overflow threshold the f64 branch is never
+    /// entered, so the result is the same bits, and that is asserted by
+    /// `to_bits()` rather than by a tolerance.
+    #[test]
+    fn widening_is_bit_identical_below_the_overflow_threshold() {
+        let cases: [&[f32]; 5] = [
+            &[2.0, -4.0, 1.0, -2.0],
+            &[1e-8, -3e-9, 7e-8],
+            &[1.0e18, -2.0e18],
+            &[f32::MIN_POSITIVE, -f32::MIN_POSITIVE],
+            &[0.0, 0.0, 0.0],
+        ];
+        for values in cases {
+            let naive = values.iter().map(|v| v * v).sum::<f32>();
+            assert!(naive.is_finite(), "case must not overflow: {values:?}");
+            for divisor in [1.0_f32, values.len() as f32] {
+                assert_eq!(
+                    root_mean_square(values, divisor).to_bits(),
+                    (naive / divisor).sqrt().to_bits(),
+                    "widening moved a representable value: {values:?} / {divisor}"
+                );
+            }
+        }
+    }
+
+    /// After widening, the RMS of any FINITE f32 vector is representable —
+    /// `rms <= max|v| <= f32::MAX` — so the only way `actual_rms` can still be
+    /// non-finite is a non-finite **entry**. That is the case the
+    /// `is_finite()` guard actually covers, and it must fail closed: leave the
+    /// modulator alone rather than scale it by zero.
+    ///
+    /// The first version of this test used `f32::MAX` entries and asserted the
+    /// RMS stayed infinite. Correcting the widening to take the root in f64
+    /// made that false, which is the property above stated as a failure.
+    #[test]
+    fn a_non_finite_entry_leaves_the_modulator_untouched() {
+        let mut mods = vec![1.0_f32, f32::INFINITY, -2.0, 0.5];
+        let before = mods.clone();
+        let hidden = mods.len();
+        assert!(
+            !root_mean_square(&mods, hidden as f32).is_finite(),
+            "a non-finite entry must make the RMS non-finite"
+        );
+        normalize_hidden_modulator(&mut mods, &[0.25, -0.75, 0.5], hidden);
+        assert_eq!(mods, before, "the modulator was scaled by a zero factor");
+    }
+
+    /// The RMS of a finite vector is always representable once the root is
+    /// taken in f64, even at the extreme of the range. Stated as its own test
+    /// because it is the reason the guard above is about entries and not about
+    /// magnitudes.
+    #[test]
+    fn the_rms_of_any_finite_vector_is_representable() {
+        let extreme = vec![f32::MAX, -f32::MAX, f32::MAX, -f32::MAX];
+        let rms = root_mean_square(&extreme, extreme.len() as f32);
+        assert!(rms.is_finite(), "RMS of f32::MAX entries came back {rms}");
+        assert!((rms - f32::MAX).abs() <= f32::MAX * 1e-6, "RMS {rms} != f32::MAX");
+    }
+
+    /// A modulator whose RMS overflows f32 must not be silently zeroed.
+    ///
+    /// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b names this site: *"If
+    /// `actual_rms` overflows while `target_rms` is finite, `scale` becomes 0
+    /// and `mods` is zeroed — silent, and not covered by the existing guard.
+    /// The `actual_rms` sub-case is the one worth fixing first if anyone does."*
+    ///
+    /// It is worse than the `l2_norm` overflow that amendment fixed. That one
+    /// corrupted a *reported* number; this one destroys the **learning signal**
+    /// — every DFA update for the example becomes exactly zero, the step
+    /// proceeds, and nothing anywhere records that it happened.
+    ///
+    /// The entries here are finite and their RMS, ~1.7e19, is comfortably
+    /// representable. Only the intermediate sum of squares is not.
+    #[test]
+    fn a_modulator_whose_rms_overflows_is_not_zeroed() {
+        let mut mods = vec![3.0e19_f32, -3.0e19, 1.0e19, -2.0e19];
+        assert!(mods.iter().all(|m| m.is_finite()), "the entries must be finite");
+        assert!(
+            !mods.iter().map(|m| m * m).sum::<f32>().is_finite(),
+            "the fixture must overflow the SUM, or it tests nothing"
+        );
+        let delta = [0.25, -0.75, 0.5];
+        let hidden = mods.len();
+        normalize_hidden_modulator(&mut mods, &delta, hidden);
+        assert!(
+            mods.iter().any(|m| *m != 0.0),
+            "the modulator was zeroed: every DFA update for this example is now \
+             exactly zero and nothing reports it"
+        );
+        // Not zeroed is not enough, and asserting only that is how this test
+        // first passed with the widening reverted: the fail-closed guard alone
+        // satisfies it by SKIPPING normalisation, leaving the modulator
+        // un-normalised — which is the one thing this function exists to
+        // prevent. So the target RMS is asserted, which needs the widening.
+        let target = shd_out_scale(hidden) * delta.iter().map(|d| d * d).sum::<f32>().sqrt()
+            / 3.0f32.sqrt();
+        let rms = (mods.iter().map(|m| m * m).sum::<f32>() / mods.len() as f32).sqrt();
+        assert!(
+            (rms - target).abs() <= target * 1e-4,
+            "RMS {rms} was not normalised to {target}; the overflow path skipped \
+             the normalisation instead of recovering it"
+        );
     }
 
     /// A collapsed arm must be detectable. Without this, a recurrent net that

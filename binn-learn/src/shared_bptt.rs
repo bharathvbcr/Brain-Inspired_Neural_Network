@@ -114,12 +114,49 @@ impl SharedGradients {
         out
     }
 
+    /// The gradient's global L2 norm, widened to f64 **only on overflow**.
+    ///
+    /// # Why the fallback exists
+    ///
+    /// `f32::MAX` is ~3.4e38, so a sum of squares overflows once entries reach
+    /// ~1e19 — while the norm itself, ~1e19, is comfortably representable. This
+    /// is not a diagnostic: `Adam::update` clips against it, so an `inf` here
+    /// took the branch
+    ///
+    /// ```text
+    /// inf > GRADIENT_CLIP_NORM  ->  scale(GRADIENT_CLIP_NORM / inf) == scale(0.0)
+    /// ```
+    ///
+    /// and multiplied **every** gradient entry by zero. Adam then stepped on an
+    /// all-zero gradient. That is not what clipping to a norm means, and nothing
+    /// recorded that the step did nothing — `StepDiagnostics` stores the norms
+    /// but no caller gates on their finiteness.
+    ///
+    /// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b listed this file's f32
+    /// sum-of-squares sites and assessed the RMS helper as diagnostic. It is,
+    /// and this one is not; the two were not separated. Swept 2026-08-29.
+    ///
+    /// # Why conditional rather than always-f64
+    ///
+    /// `AMENDMENT_2026-08-03_L2_NORM_CONDITIONAL_WIDENING.md`, applied verbatim.
+    /// Widening unconditionally changes the summation order for every call and
+    /// so moves results in the last ulp; gating on `!is_finite()` leaves every
+    /// representable norm **bit-identical** and replaces only the ones that were
+    /// already wrong. A norm genuinely above `f32::MAX` still returns infinity.
     pub fn global_norm(&self) -> f32 {
-        self.flat()
+        let flat = self.flat();
+        let sum = flat.iter().map(|value| value * value).sum::<f32>();
+        if sum.is_finite() {
+            return sum.sqrt();
+        }
+        let wide: f64 = flat
             .iter()
-            .map(|value| value * value)
-            .sum::<f32>()
-            .sqrt()
+            .map(|value| {
+                let value = f64::from(*value);
+                value * value
+            })
+            .sum();
+        wide.sqrt() as f32
     }
 
     fn scale(&mut self, factor: f32) {
@@ -917,6 +954,67 @@ fn rms(values: &[f32]) -> f32 {
 
 #[cfg(test)]
 mod tests {
+
+    /// A gradient whose norm overflows f32 must be CLIPPED, not zeroed.
+    ///
+    /// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b listed `shared_bptt.rs`
+    /// among the unswept f32 sum-of-squares sites and assessed the one at the
+    /// RMS helper as diagnostic. **`global_norm` is not diagnostic** — it drives
+    /// gradient clipping in `Adam::update`, so this is the load-bearing member
+    /// of that list and it was not separated out.
+    ///
+    /// `f32::MAX` is ~3.4e38, so the sum of squares overflows once entries reach
+    /// ~1e19 while the norm itself stays representable. The old code then did:
+    ///
+    ///     unclipped = inf;  inf > 5.0;  scale(5.0 / inf) == scale(0.0)
+    ///
+    /// which multiplies **every** gradient entry by zero. Adam then takes a step
+    /// on an all-zero gradient. That is not what "clip to norm 5" means, and
+    /// nothing anywhere reports that the step did nothing.
+    #[test]
+    fn a_gradient_whose_norm_overflows_is_clipped_not_zeroed() {
+        let mut gradients = SharedGradients {
+            layer_weights: vec![vec![3.0e19_f32, -3.0e19]],
+            layer_bias: vec![vec![1.0e19]],
+            readout: vec![2.0e19, -1.0e19],
+            readout_bias: vec![0.0],
+        };
+        assert!(
+            gradients.flat().iter().all(|v| v.is_finite()),
+            "every entry must be finite; only the SUM may overflow"
+        );
+        let norm = gradients.global_norm();
+        assert!(
+            norm.is_finite(),
+            "global_norm returned {norm} for a gradient whose true norm is ~5e19, \
+             which f32 can represent"
+        );
+        gradients.scale(GRADIENT_CLIP_NORM / norm);
+        let after = gradients.global_norm();
+        assert!(
+            after > GRADIENT_CLIP_NORM * 0.5 && after < GRADIENT_CLIP_NORM * 1.5,
+            "clipped norm {after} is not near {GRADIENT_CLIP_NORM}; the gradient was destroyed"
+        );
+    }
+
+    /// Widening must not move a norm f32 could already represent.
+    #[test]
+    fn global_norm_is_bit_identical_below_the_overflow_threshold() {
+        let gradients = SharedGradients {
+            layer_weights: vec![vec![0.5_f32, -0.25], vec![1e-7, 3.0]],
+            layer_bias: vec![vec![0.125], vec![-2.0]],
+            readout: vec![1.5, -0.75, 1e18],
+            readout_bias: vec![0.0625],
+        };
+        let flat = gradients.flat();
+        let naive = flat.iter().map(|v| v * v).sum::<f32>().sqrt();
+        assert!(naive.is_finite(), "the case must not overflow");
+        assert_eq!(
+            gradients.global_norm().to_bits(),
+            naive.to_bits(),
+            "widening moved a representable norm"
+        );
+    }
     use super::*;
 
     fn example(label: u32) -> DenseTemporalExample {

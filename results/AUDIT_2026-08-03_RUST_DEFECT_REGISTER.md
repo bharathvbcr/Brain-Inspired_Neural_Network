@@ -82,9 +82,9 @@ defined semantics — not a silently shortened request like `read_event_cache`.
 | site | role | assessment |
 |---|---|---|
 | `shd_alif.rs:220` `delta_l2` | **load-bearing** — scales `mods` | **fails closed.** `target_rms.is_finite()` is checked before scaling, so an overflow skips normalisation rather than corrupting weights |
-| `shd_alif.rs:222` `actual_rms` | divisor of that scale | **partially unguarded.** If `actual_rms` overflows while `target_rms` is finite, `scale` becomes 0 and `mods` is zeroed — silent, and not covered by the existing guard |
+| `shd_alif.rs:222` `actual_rms` | divisor of that scale | **FIXED 2026-08-30.** The prediction here was exact: `scale` became 0 and the whole DFA update for the example became zero. Conditional widening + `actual_rms.is_finite()` in the guard |
 | `shd_alif.rs:1044,1046` | same pattern, second site | same |
-| `shared_bptt.rs:878` | RMS helper | diagnostic |
+| `shared_bptt.rs:878` | RMS helper | diagnostic — **and this assessment hid a second site.** `global_norm` in the same file is **not** diagnostic: `Adam::update` clips against it, and an overflow scaled every gradient entry by zero. FIXED 2026-08-30 |
 | `matched_deep_gradient.rs:490` | post-update RMS | diagnostic |
 | `shd_eprop_baseline.rs:846` | RMS closure | diagnostic |
 
@@ -110,8 +110,8 @@ it.
 | area | lines | swept? | risk |
 |---|---:|---|---|
 | `binn-engine/`, `binn-areas/`, `binn-core/` | large | **NO** | Not on the instrument path, so no current result depends on them — but BINN proper lives here, and any future BINN claim rests on unaudited code |
-| `binn-learn/src/shd_alif.rs` | 1219 | **NO** | Adjacent to the instrument; `MATCHED_DEFAULT_TAU_A`/`BETA_A` mirror it |
-| `binn-learn/src/shared_bptt.rs` | 1120 | **NO** | — |
+| `binn-learn/src/shd_alif.rs` | 1453 | **SWEPT 2026-08-30** | [`AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md`](AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md) — **1 defect**, the `actual_rms` sub-case §2b predicted, fixed |
+| `binn-learn/src/shared_bptt.rs` | 1254 | **SWEPT 2026-08-30** | same — **1 defect**: `global_norm` is not diagnostic, it drives gradient clipping, and an overflow zeroed the step |
 | other ~20 `binn-lab/experiments/*` binaries | ~8000 | **NO** | Several produced results in `results/` that nothing here re-verified |
 | all `scripts/*.py` | — | **NO — deferred by instruction** | The python arm is superseded, but `gate_f_rust.py` and the calibration runner are live tooling |
 
