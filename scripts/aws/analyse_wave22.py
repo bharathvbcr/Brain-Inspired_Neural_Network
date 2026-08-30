@@ -86,6 +86,18 @@ POINTS = (
 DEPTH_POINTS = ((128, "d32l2"), (128, "d64l4"), (256, "d32l1"),
                 (512, "d32l1"), (768, "d32l2"))
 
+#: This wave is SELF-CONTAINED and only its own cells may enter.
+#:
+#: The corpus was produced by pinned binary `22d97c51ab02...`, which predates
+#: the 2026-08-29 forward-finiteness guard. Wave 22 runs on a new pinned binary,
+#: so an archived intact cell and a wave-22 intact cell at the same operating
+#: point and seed are DIFFERENT experiments that share every key field. Loading
+#: both, `setdefault` would keep whichever the filesystem sorted first — a
+#: silent mix of two binaries inside one difference-of-differences, decided by
+#: filename order. Requiring the wave label makes that impossible rather than
+#: unlikely.
+WAVE = "w22cov"
+
 SEED = re.compile(r"__s(\d+)\.json$")
 DEPTH = re.compile(r"__(d\d+l\d+)")
 
@@ -95,6 +107,10 @@ def index(roots):
 
     `depth` is `None` for the rate arm and the `dNlM` token otherwise. Keying on
     it is what stops two read-out depths being averaged into one contrast.
+
+    Only `WAVE` cells enter. See the note at `WAVE` for why an archived cell at
+    the same operating point is not an acceptable substitute here, even though
+    wave 21's analyser accepted exactly that.
     """
     out = collections.defaultdict(dict)
     voided = collections.Counter()
@@ -103,6 +119,8 @@ def index(roots):
         if not root.is_dir():
             continue
         for path in sorted(root.glob("*.json")):
+            if not path.name.startswith(f"{WAVE}__"):
+                continue
             seed = SEED.search(path.name)
             if not seed:
                 continue

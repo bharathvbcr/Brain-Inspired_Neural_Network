@@ -63,8 +63,8 @@ class DepthKeyingTest(unittest.TestCase):
 
     def test_two_read_out_depths_do_not_share_a_key(self):
         cells, _ = corpus([
-            (f"w__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83)),
-            (f"w__ff-fixed-attn__h128__d32l2__s{SEEDS[0]}.json", cell(0.70)),
+            (f"w22cov__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83)),
+            (f"w22cov__ff-fixed-attn__h128__d32l2__s{SEEDS[0]}.json", cell(0.70)),
         ])
         keys = {k for k in cells if k[3] == "ff+fixed+attn"}
         depths = {k[4] for k in keys}
@@ -77,11 +77,11 @@ class DepthKeyingTest(unittest.TestCase):
         entries = []
         for seed in SEEDS:
             entries += [
-                (f"a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
-                (f"b__ff-fixed-attn__h128__d32l2__bin-shuffled__s{seed}.json",
+                (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
+                (f"w22cov__b__ff-fixed-attn__h128__d32l2__bin-shuffled__s{seed}.json",
                  cell(0.60, temporal="bin-shuffled")),
-                (f"c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
-                (f"d__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                (f"w22cov__c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w22cov__d__ff-fixed__h128__bin-shuffled__s{seed}.json",
                  cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
             ]
         cells, _ = corpus(entries)
@@ -96,11 +96,11 @@ class DepthKeyingTest(unittest.TestCase):
         entries = []
         for seed in SEEDS:
             entries += [
-                (f"a__ff-fixed-attn__h128__d32l2__s{seed}.json", cell(0.80)),
-                (f"b__ff-fixed-attn__h128__d32l2__bin-shuffled__s{seed}.json",
+                (f"w22cov__a__ff-fixed-attn__h128__d32l2__s{seed}.json", cell(0.80)),
+                (f"w22cov__b__ff-fixed-attn__h128__d32l2__bin-shuffled__s{seed}.json",
                  cell(0.60, temporal="bin-shuffled")),
-                (f"c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
-                (f"d__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                (f"w22cov__c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w22cov__d__ff-fixed__h128__bin-shuffled__s{seed}.json",
                  cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
             ]
         cells, _ = corpus(entries)
@@ -119,9 +119,9 @@ class PairingTest(unittest.TestCase):
         entries = []
         for seed in SEEDS:
             entries += [
-                (f"a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
-                (f"c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
-                (f"d__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
+                (f"w22cov__c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w22cov__d__ff-fixed__h128__bin-shuffled__s{seed}.json",
                  cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
             ]
         cells, _ = corpus(entries)
@@ -132,14 +132,14 @@ class PairingTest(unittest.TestCase):
         entries = []
         for i, seed in enumerate(SEEDS):
             entries += [
-                (f"a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
-                (f"c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
-                (f"d__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
+                (f"w22cov__c__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w22cov__d__ff-fixed__h128__bin-shuffled__s{seed}.json",
                  cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
             ]
             if i < 5:  # only five seeds get the fourth arm
                 entries.append(
-                    (f"b__ff-fixed-attn__h128__d32l4__bin-shuffled__s{seed}.json",
+                    (f"w22cov__b__ff-fixed-attn__h128__d32l4__bin-shuffled__s{seed}.json",
                      cell(0.60, temporal="bin-shuffled")))
         cells, _ = corpus(entries)
         _, _, pairs = w22.did(cells, 128, "published-2ms", "adjacent-sum-5", "d32l4")
@@ -157,13 +157,13 @@ class ExclusionTest(unittest.TestCase):
             poisoned = cell(0.55)
             poisoned["clip_grad_norm"] = 1000.0
             entries.append(
-                (f"a__ff-fixed-attn__h1024__d32l4__clip1000.0__s{seed}.json", poisoned))
+                (f"w22cov__a__ff-fixed-attn__h1024__d32l4__clip1000.0__s{seed}.json", poisoned))
         cells, _ = corpus(entries)
         self.assertEqual(len(cells), 0, "a clipped cell entered the wave's index")
 
     def test_a_wrong_budget_cell_is_not_admitted(self):
         cells, _ = corpus([
-            (f"a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83, epochs=100)),
+            (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83, epochs=100)),
         ])
         self.assertEqual(len(cells), 0)
 
@@ -171,7 +171,7 @@ class ExclusionTest(unittest.TestCase):
         broken = cell(0.83)
         broken["classes_predicted"] = 1
         cells, voided = corpus([
-            (f"a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", broken),
+            (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", broken),
         ])
         self.assertEqual(len(cells), 0)
         self.assertEqual(sum(voided.values()), 1)
@@ -183,7 +183,7 @@ class ExclusionTest(unittest.TestCase):
         poisoned = cell(0.83)
         poisoned["non_finite_forward"] = 4
         cells, voided = corpus([
-            (f"a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", poisoned),
+            (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", poisoned),
         ])
         self.assertEqual(len(cells), 0, "a poisoned forward was scored")
         self.assertEqual(sum(voided.values()), 1)
@@ -192,7 +192,7 @@ class ExclusionTest(unittest.TestCase):
         """The corpus is 861 cells that carry no `non_finite_forward`. Voiding
         them would delete the campaign."""
         cells, voided = corpus([
-            (f"a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83)),
+            (f"w22cov__a__ff-fixed-attn__h128__d32l4__s{SEEDS[0]}.json", cell(0.83)),
         ])
         self.assertEqual(sum(voided.values()), 0)
         self.assertEqual(len(cells), 1)
@@ -221,6 +221,59 @@ class RegistrationTest(unittest.TestCase):
         import gate_f_rust
         measurements = set(gate_f_rust.COMPARED_FIELDS) - {"n_train", "n_test"}
         self.assertEqual(measurements - set(w22.SCIENTIFIC_FIELDS), set())
+
+
+class WaveIsolationTest(unittest.TestCase):
+    """This wave is self-contained: only its own cells may form a contrast.
+
+    Wave 22 runs on a new pinned binary because the corpus predates the
+    forward-finiteness guard. An archived intact cell and a wave-22 intact cell
+    at the same operating point and seed share every key field and are different
+    experiments, so admitting both would let filename order decide which binary
+    a published DiD was built from.
+    """
+
+    def test_an_archived_cell_at_the_same_point_is_not_admitted(self):
+        entries = []
+        for seed in SEEDS:
+            entries += [
+                (f"w21mec__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
+                (f"w21mec__ff-fixed-attn__h128__d32l4__bin-shuffled__s{seed}.json",
+                 cell(0.60, temporal="bin-shuffled")),
+                (f"w21mec__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w21mec__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                 cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
+            ]
+        cells, _ = corpus(entries)
+        self.assertEqual(len(cells), 0, "wave-21 cells entered wave 22's index")
+        _, _, pairs = w22.did(cells, 128, "published-2ms", "adjacent-sum-5", "d32l4")
+        self.assertEqual(pairs, 0)
+
+    def test_a_wave_22_cell_beside_an_archived_twin_wins_unambiguously(self):
+        """The collision the label prevents: same point, same seed, two binaries.
+        Without the filter `setdefault` keeps whichever sorted first."""
+        entries = []
+        for seed in SEEDS:
+            entries += [
+                # Archived, sorts BEFORE the wave-22 cell alphabetically.
+                (f"a_w21mec__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.99)),
+                (f"w22cov__ff-fixed-attn__h128__d32l4__s{seed}.json", cell(0.83)),
+                (f"w22cov__ff-fixed-attn__h128__d32l4__bin-shuffled__s{seed}.json",
+                 cell(0.60, temporal="bin-shuffled")),
+                (f"w22cov__ff-fixed__h128__s{seed}.json", cell(0.70, arm="ff+fixed")),
+                (f"w22cov__ff-fixed__h128__bin-shuffled__s{seed}.json",
+                 cell(0.69, arm="ff+fixed", temporal="bin-shuffled")),
+            ]
+        cells, _ = corpus(entries)
+        value, _, pairs = w22.did(cells, 128, "published-2ms", "adjacent-sum-5", "d32l4")
+        self.assertEqual(pairs, 12)
+        # (0.83 - 0.60) - (0.70 - 0.69) = 0.22, built from the wave-22 intact
+        # cell. Had the archived 0.99 won the key it would be 0.38, so the
+        # value discriminates and is not merely "some number".
+        self.assertAlmostEqual(value, 0.22, places=6)
+
+    def test_the_wave_label_is_declared(self):
+        self.assertEqual(w22.WAVE, "w22cov")
 
 
 if __name__ == "__main__":

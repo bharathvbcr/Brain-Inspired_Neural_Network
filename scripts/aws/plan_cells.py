@@ -765,49 +765,55 @@ def wave22_the_mechanism_at_every_operating_point():
 
     `scripts/mechanism_coverage.py` recomputes on every gate run where the
     difference-in-differences can actually be formed. Wave 21 took that from 2
-    of 21 operating points to 9. This is the remaining twelve, and the point of
-    it is to replace the manuscript's "9 of 21" and its "twelve claim nothing"
-    disclosure by measurement rather than by rewording.
+    of 21 operating points to 9. This is the remaining twelve.
 
-    The rate arm carries no read-out depth, so ONE `ff+fixed` bin-shuffled cell
-    serves every depth at a given (width, contract, geometry). That is why nine
-    of the twelve points need only the attention arm: their rate twin is already
-    in the corpus. Getting this wrong in either direction is expensive -
-    planning the rate arm nine extra times wastes a third of the wave, and
-    omitting it in group A would leave three points still uncoverable after
-    paying for them.
+    # Why this wave is SELF-CONTAINED, at twice the cells it needed to be
 
-    Group A is the three `fixed-tN` contracts, which have no shuffled arm at
-    all. It is also the group that can surprise: Figure 4 reports the GAIN
-    falling as bins get finer and nothing is known about the shuffle cost on
-    that axis.
+    The first draft of this wave planned the shuffled arms only, and paired them
+    against intact halves already in the corpus - 180 cells instead of 504.
+    That was correct as long as every cell in the contrast came from one binary,
+    and it stopped being correct on 2026-08-29, when `shd_instrument.rs` gained
+    the forward-finiteness guard
+    (`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`).
+
+    The corpus was produced by pinned binary `22d97c51ab02...`, which predates
+    that guard. Running the shuffled halves on a NEW binary and pairing them
+    against archived intact halves would build every DiD out of two binaries,
+    and `bootstrap.sh` says why that is not allowed: "a campaign whose cells
+    came from more than one binary is not one experiment."
+
+    So all four arms run here. The wave costs more and answers for itself, and
+    it re-measures twelve archived intact points as a side effect - an
+    independent reproduction the corpus has never had.
+
+    The rate arm carries no read-out depth, so ONE `ff+fixed` pair serves every
+    depth at a given (width, contract, geometry). Nine distinct geometries
+    across twelve points, which is why the rate arms number 216 and not 288.
     """
     cells = []
-    # (contract) at h128 / adjacent-sum-5 / d32-L4, both arms.
-    for contract in ("fixed-t100", "fixed-t250", "fixed-t500"):
+    # (hidden, contract, geometry) -> the read-out depths measured there.
+    points = {
+        (128, "fixed-t100", ANCHOR[1]): [(32, 4)],
+        (128, "fixed-t250", ANCHOR[1]): [(32, 4)],
+        (128, "fixed-t500", ANCHOR[1]): [(32, 4)],
+        (128, ANCHOR[0], ANCHOR[1]): [(32, 2), (64, 4)],
+        (128, ANCHOR[0], "channels-700"): [(32, 1)],
+        (256, ANCHOR[0], ANCHOR[1]): [(32, 1)],
+        (512, ANCHOR[0], ANCHOR[1]): [(32, 1)],
+        (768, ANCHOR[0], ANCHOR[1]): [(32, 2)],
+        (1024, ANCHOR[0], ANCHOR[1]): [(32, 1), (32, 2), (32, 3)],
+    }
+    for (hidden, contract, geometry), depths in points.items():
         for seed in SEEDS:
-            cells.append(cell("w22cov", "ff+fixed", 128, 400, seed,
-                              contract=contract, temporal="bin-shuffled"))
-            cells.append(cell("w22cov", "ff+fixed+attn", 128, 400, seed,
-                              contract=contract, attn_dim=32, attn_layers=4,
-                              temporal="bin-shuffled"))
-    # (hidden, geometry, attn_dim, attn_layers) whose rate twin already exists.
-    depths = [
-        (128, ANCHOR[1], 32, 2),
-        (128, ANCHOR[1], 64, 4),
-        (128, "channels-700", 32, 1),
-        (256, ANCHOR[1], 32, 1),
-        (512, ANCHOR[1], 32, 1),
-        (768, ANCHOR[1], 32, 2),
-        (1024, ANCHOR[1], 32, 1),
-        (1024, ANCHOR[1], 32, 2),
-        (1024, ANCHOR[1], 32, 3),
-    ]
-    for hidden, geometry, attn_dim, attn_layers in depths:
-        for seed in SEEDS:
-            cells.append(cell("w22cov", "ff+fixed+attn", hidden, 400, seed,
-                              geometry=geometry, attn_dim=attn_dim,
-                              attn_layers=attn_layers, temporal="bin-shuffled"))
+            for temporal in ("intact", "bin-shuffled"):
+                cells.append(cell("w22cov", "ff+fixed", hidden, 400, seed,
+                                  contract=contract, geometry=geometry,
+                                  temporal=temporal))
+                for attn_dim, attn_layers in depths:
+                    cells.append(cell("w22cov", "ff+fixed+attn", hidden, 400, seed,
+                                      contract=contract, geometry=geometry,
+                                      attn_dim=attn_dim, attn_layers=attn_layers,
+                                      temporal=temporal))
     return cells
 
 

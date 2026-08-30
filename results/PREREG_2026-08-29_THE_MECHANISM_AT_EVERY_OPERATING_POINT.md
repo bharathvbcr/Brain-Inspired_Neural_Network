@@ -25,38 +25,57 @@ that sentence by measurement rather than by rewording.
 
 ## 2. Design
 
-Twelve points, `e400`, 12 seeds, pinned binary. The rate arm carries no read-out
-depth, so one `ff+fixed` bin-shuffled cell serves every depth at a given
-`(width, contract, geometry)` — which is why nine of the twelve points need
-only the attention arm.
+> **Amended before any cell existed, and the amendment is the whole design.**
+> The first draft planned the **shuffled arms only** — 180 cells — and paired
+> them against intact halves already in the corpus. That was correct as long as
+> every cell in a contrast came from one binary, and it stopped being correct
+> on 2026-08-29, when `shd_instrument.rs` gained the forward-finiteness guard
+> ([`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md)).
+>
+> The corpus was produced by pinned binary `22d97c51ab02…`, which predates that
+> guard. Running the shuffled halves on a new binary and pairing them against
+> archived intact halves would build every difference-in-differences out of
+> **two binaries**, and `scripts/aws/bootstrap.sh` states the rule: *"a campaign
+> whose cells came from more than one binary is not one experiment."*
+>
+> **So this wave runs all four arms and answers for itself: 504 cells.** It
+> costs 2.8× what it needed to and, as a side effect, re-measures twelve
+> archived intact points on a second binary — an independent reproduction the
+> corpus has never had. `analyse_wave22.py` admits only `w22cov` cells, so an
+> archived cell at the same operating point and seed cannot be substituted by
+> filename order.
 
-**Group A — three contracts with no shuffled arm at all** (`h128`,
-`adjacent-sum-5`, `d32/L4`). Both arms: `ff+fixed` and `ff+fixed+attn`.
+Twelve points, `e400`, 12 seeds, on a new pinned binary carrying the guard. The
+rate arm carries no read-out depth, so one `ff+fixed` pair serves every depth at
+a given `(width, contract, geometry)`; there are **nine** distinct geometries
+across the twelve points, which is why the rate arms number 216 and not 288.
 
-| contract | cells |
-|---|---:|
-| `fixed-t100` | 24 |
-| `fixed-t250` | 24 |
-| `fixed-t500` | 24 |
+The Group A / Group B split the first draft used is gone with it: it existed to
+say which points needed one arm and which needed two, and now every point needs
+all four. What remains is the nine geometries and the depths measured at each.
 
-**Group B — nine read-out depths whose rate twin already exists.** Attention arm
-only.
+| geometry | read-out depths | attention cells | rate cells |
+|---|---|---:|---:|
+| `h128` / `fixed-t100` / `adjacent-sum-5` | `d32/L4` | 24 | 24 |
+| `h128` / `fixed-t250` / `adjacent-sum-5` | `d32/L4` | 24 | 24 |
+| `h128` / `fixed-t500` / `adjacent-sum-5` | `d32/L4` | 24 | 24 |
+| `h128` / `published-2ms` / `adjacent-sum-5` | `d32/L2`, `d64/L4` | 48 | 24 |
+| `h128` / `published-2ms` / `channels-700` | `d32/L1` | 24 | 24 |
+| `h256` / `published-2ms` / `adjacent-sum-5` | `d32/L1` | 24 | 24 |
+| `h512` / `published-2ms` / `adjacent-sum-5` | `d32/L1` | 24 | 24 |
+| `h768` / `published-2ms` / `adjacent-sum-5` | `d32/L2` | 24 | 24 |
+| `h1024` / `published-2ms` / `adjacent-sum-5` | `d32/L1`, `d32/L2`, `d32/L3` | 72 | 24 |
 
-| point | read-out | cells |
-|---|---|---:|
-| `h128` / `published-2ms` / `adjacent-sum-5` | `d32/L2` | 12 |
-| `h128` / `published-2ms` / `adjacent-sum-5` | `d64/L4` | 12 |
-| `h128` / `published-2ms` / `channels-700` | `d32/L1` | 12 |
-| `h256` / `published-2ms` / `adjacent-sum-5` | `d32/L1` | 12 |
-| `h512` / `published-2ms` / `adjacent-sum-5` | `d32/L1` | 12 |
-| `h768` / `published-2ms` / `adjacent-sum-5` | `d32/L2` | 12 |
-| `h1024` / `published-2ms` / `adjacent-sum-5` | `d32/L1` | 12 |
-| `h1024` / `published-2ms` / `adjacent-sum-5` | `d32/L2` | 12 |
-| `h1024` / `published-2ms` / `adjacent-sum-5` | `d32/L3` | 12 |
+Each cell count is 12 seeds × 2 temporal conditions per arm.
 
-**180 cells.** Every intact half already exists in the corpus at ≥ 12 seeds,
-from the same pinned binary and the same seeds, which is what makes these
-pairable.
+**504 cells**: 288 attention (12 points × 2 conditions × 12 seeds) and 216 rate
+(9 geometries × 2 conditions × 12 seeds). Every arm of every contrast is
+produced by this wave on one binary.
+
+The archived intact halves are **not** used for any verdict. They are compared
+against the new ones descriptively, as a reproduction check, and that comparison
+carries no registered hypothesis — it crosses two binaries by construction and
+is reported as an observation, not a result.
 
 ### The `fixed-tN` group is the one that can surprise
 
@@ -104,7 +123,7 @@ verdict.
 
 ## 5. Stopping rule
 
-180 cells, once. **No point is re-run to improve its verdict**, and no seed is
+504 cells, once. **No point is re-run to improve its verdict**, and no seed is
 added beyond twelve at any point — the campaign's n=32 confirmations exist only
 at the anchor and are not extended here. A point whose cells fail
 `scripts/cell_validity.py` is reported with its exclusion count, not topped up.
