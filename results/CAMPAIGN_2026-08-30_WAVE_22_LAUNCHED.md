@@ -80,6 +80,31 @@ Linux/Graviton build's equivalence to `22d97c51ab02…` is **inferred, not
 measured**, and no verdict in this wave rests on it — the wave is self-contained
 precisely so it does not have to.
 
+## Boot outcome
+
+Booted 06:10Z on the relaunch. The guarded binary built and published on
+Graviton as **`3afd4434431a75a26cc9d5fa46831341fc2f1dd0ef08dc308e18ca139b576364`**,
+and `collect.py` confirms **one binary across the campaign** — the pin is doing
+its job.
+
+**Cross-machine Gate F: FAIL on both instances. This is the documented
+expectation, not a fault.** `bootstrap.sh` says why: the recorded cells were
+produced on macOS/aarch64, `exp`/`sin`/`cos`/`powf`/`ln` come from libm, and
+glibc's are not obliged to agree with Apple's to the last ulp — one ulp flips a
+spike and compounds through Adam. `VENUE_FORMATTING.md` carries it as a required
+main-text disclosure: *"Cross-machine Gate F FAILs macOS-vs-Linux by design. No
+claim rests on a comparison against a macOS-recorded number."*
+
+It is recorded either way, because "the check could not run" and "the check ran
+and passed" must never look the same downstream. **No verdict in this wave rests
+on it**: every arm of every contrast here runs on this fleet, on this binary,
+beside its own control — which is what "self-contained" was for.
+
+Note this is a *different* question from the local Gate F that passed before
+launch. That one asked whether the guard changed the computation **on one
+machine**, and answered no across 21 cells. This one asks whether two machines
+agree, and has always answered no.
+
 ## Monitoring
 
 ```bash
