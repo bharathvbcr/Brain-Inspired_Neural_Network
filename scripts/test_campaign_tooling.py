@@ -1620,8 +1620,29 @@ CORPUS_BASELINE = {
     #: `w13rec` cells and no archived verdict moved. 0 modified and 0 deleted
     #: under this corpus. See
     #: `RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`.
+    #: Re-frozen 2026-08-30 on landing waves 22-23: 288 cells added, all valid.
+    #: 861 -> 1149 and 851 -> 1139, both +288, so the ten invalid are still the
+    #: same ten `w13rec` cells and no archived verdict moved. Checked as an
+    #: ADDITION rather than assumed to be one: every tracked cell under this
+    #: corpus was diffed against HEAD and zero changed validity.
+    #:
+    #: These are the first cells in the corpus produced by a binary that checks
+    #: its evaluation forward for finiteness, and every one carries
+    #: `non_finite_forward: 0`. Wave 22 is still in flight; only its settled
+    #: cells are here, and the rest land on the next freeze.
+    #: Re-frozen 2026-08-30 on landing wave 23 and wave 22's settled cells: 288
+    #: added, all valid. 861 -> 1149 and 851 -> 1139, both +288, so the ten
+    #: invalid are still the same ten `w13rec` cells and no archived verdict
+    #: moved. Checked as an ADDITION rather than assumed to be one: every
+    #: tracked cell under this corpus was diffed against HEAD and zero changed
+    #: validity, and exactly 288 files are new.
+    #:
+    #: These are the first cells in the corpus produced by a binary that checks
+    #: its evaluation forward for finiteness, and every one carries
+    #: `non_finite_forward: 0`. Wave 22 is still in flight; only its settled
+    #: cells are here and the rest land on the next freeze.
     "shd_attention_campaign_v2":
-        (861, 851, "51c819498e1d10bb"),
+        (1149, 1139, "2ac22fed7b71071e"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":

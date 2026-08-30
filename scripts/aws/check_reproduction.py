@@ -123,6 +123,7 @@ def collect(roots) -> tuple[dict, list[str], int]:
 def sweep(index):
     """(agreements, disagreements, values compared) over every duplicated cell."""
     agree, differ, values = [], [], 0
+    gaps: set = set()
     for config, by_seed in sorted(index.items(), key=lambda kv: repr(kv[0])):
         for seed, by_wave in sorted(by_seed.items()):
             if len(by_wave) < 2:
@@ -130,11 +131,16 @@ def sweep(index):
             waves = sorted(by_wave)
             base = by_wave[waves[0]][1]
             for other in waves[1:]:
-                count, differing = compare_pair(by_wave[other][1], base)
+                # `compare_pair` gained a third return on 2026-08-30: fields
+                # one side cannot carry because its schema predates them. They
+                # are reported, never counted as disagreement -- see
+                # `SCHEMA_ADDITIONS` there for why the two must stay distinct.
+                count, differing, schema_only = compare_pair(by_wave[other][1], base)
                 values += count
+                gaps.update(f.split("[", 1)[0].split(".", 1)[0] for f in schema_only)
                 record = (config, seed, waves[0], other, differing)
                 (differ if differing else agree).append(record)
-    return agree, differ, values
+    return agree, differ, values, gaps
 
 
 def label(config) -> str:
@@ -161,7 +167,7 @@ def main() -> int:
     roots += [Path(r) for r in args.results]
     index, unreadable, sidecars = collect(roots)
     cells = sum(len(w) for s in index.values() for w in s.values())
-    agree, differ, values = sweep(index)
+    agree, differ, values, schema_gaps = sweep(index)
 
     print(f"roots: {len(roots)}   cells indexed: {cells}   "
           f"configurations: {len(index)}   sidecars skipped: {sidecars}")
@@ -182,6 +188,13 @@ def main() -> int:
     for (waves, config), n in sorted(collections.Counter(
             ((a, b), label(c)) for c, _, a, b, _ in agree).items()):
         print(f"  [ ok ] {n:3d} cell(s)  {waves[0]} vs {waves[1]}  {config}")
+
+    if schema_gaps:
+        # Reported, never counted as disagreement, and never silent: a field
+        # one side cannot carry is a provenance fact, and hiding it would let
+        # "compared fewer fields" drift into "agreed".
+        print(f"\n{len(schema_gaps)} declared schema addition(s) skipped: "
+              f"{', '.join(sorted(schema_gaps))}")
 
     if differ:
         print(f"\nREPRODUCTION FAILED — {len(differ)} of "

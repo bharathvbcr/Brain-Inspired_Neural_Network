@@ -145,6 +145,23 @@ KNOWN_COINCIDENCE = {
     # 4dp number 24.9% of the time does to six quoted values. Each is
     # recomputed by name from the cells in verify_published_numbers.py, which
     # is the check that actually establishes them.
+    # Two further collisions appeared on 2026-08-30, when wave 23 landed and 288
+    # cells joined the corpus. Neither number is new and neither moved: the
+    # GENERATOR SETS grew, which is exactly how this gate is supposed to behave
+    # as evidence accumulates. Both are judged below on the precedents directly
+    # above them, not on convenience.
+    "0.1881": "H21-3, the seed-paired DiD at h768 — the largest in the "
+              "campaign, and the one Figure 3's annotation names. Identical in "
+              "class to the four DiDs below and judged the same way: a DiD is a "
+              "difference OF paired differences and this sweep generates no "
+              "second-order quantity, so `paired` cannot hold the same "
+              "computation. It is recomputed by name in "
+              "verify_published_numbers.py, which is what establishes it.",
+    "0.6638": "v23 finite-θ under structured B, a July C1 / Gate G2 LOCAL "
+              "accuracy from the matched-architecture program — which does not "
+              "run on the SHD instrument at all. Same reasoning as 0.6775 and "
+              "0.2370 above, and 0.2370 is the gap LCB from the SAME TABLE ROW "
+              "as this number, already declared a coincidence on those grounds.",
     "0.0862": "H21-1, the seed-paired DiD at h256. Second-order; see above.",
     "0.0767": "H21-1, the seed-paired DiD at h384. Second-order; see above.",
     "0.0968": "H21-1, the seed-paired DiD at h512. Second-order; see above.",
@@ -294,6 +311,12 @@ ELSEWHERE = [
     ("0.1411", "M-2, a difference OF gains across the substrate; checked by "
                "name in verify_published_numbers.py"),
     ("0.1207", "W6-3, gain(e20) − gain(e400): second order"),
+    ("0.2145", "H23-2, gain(e100) − gain(e400) at h1024/d32L4: a difference OF "
+               "gains across the budget axis, and second order for the same "
+               "reason 0.0453 and 0.1411 are. Both halves ARE cell quantities "
+               "and both are swept: +0.0827 from wave 23 and the archived "
+               "-0.1318 from wave 18. It is their difference this sweep does "
+               "not generate"),
     ("0.1430", "H21-3, the Spearman rank correlation between the six per-width "
                "gains and their DiDs. A rank statistic over a ladder is not a "
                "cell quantity and this sweep generates no such thing; it is "

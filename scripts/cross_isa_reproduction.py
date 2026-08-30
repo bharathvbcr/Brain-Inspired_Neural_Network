@@ -107,16 +107,50 @@ def leaves(cell: dict) -> dict[str, object]:
     return flat
 
 
-def compare_pair(left: dict, right: dict) -> tuple[int, list[str]]:
-    """Leaves compared, and the ones that differ. `repr` so 1.0 != 1."""
+#: Fields the cell schema GAINED after some cells were already written.
+#:
+#: An absent field is not agreement, and that guard must survive: a truncated
+#: or thin cell has to fail rather than pass by having less to disagree about.
+#: But a field that simply did not exist when the older cell was written is a
+#: different thing, and until 2026-08-30 the two were indistinguishable here —
+#: every schema addition made this gate print "REPRODUCTION FAILED", which
+#: reads as a scientific disagreement and was not one. Worse, a real mismatch
+#: would have been one line among hundreds of false ones.
+#:
+#: So each addition is DECLARED, with when and why. An undeclared missing field
+#: still fails, which is the property `test_a_missing_field_is_a_disagreement`
+#: pins. This list may only grow forward, and every entry is a field that a
+#: newer cell has and an older one cannot.
+SCHEMA_ADDITIONS = {
+    "emitted_unix_s": "2026-08-27, provenance: when the cell was produced",
+    "emitted_utc": "2026-08-27, the same timestamp in readable form",
+    "seed": "2026-08-27, provenance for attentive arms",
+    "clip_sample_grad_norm": "per-sample clipping, absent before it existed",
+    "clipped_samples": "the counter for the above",
+    "non_finite_forward": "2026-08-29, the forward-finiteness guard "
+                          "(DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md). "
+                          "No cell written before that date can carry it.",
+}
+
+
+def compare_pair(left: dict, right: dict) -> tuple[int, list[str], list[str]]:
+    """Leaves compared, the ones that differ, and declared schema gaps.
+
+    `repr` so 1.0 != 1.
+    """
     a, b = leaves(left), leaves(right)
     shared = sorted(set(a) & set(b))
     differing = [k for k in shared if repr(a[k]) != repr(b[k])]
-    # An absent field is not agreement. Report it as a difference so a cell
-    # written by a leaner schema cannot pass by having less to disagree about.
+    schema_only = []
     for key in sorted(set(a) ^ set(b)):
-        differing.append(f"{key} (present in one cell only)")
-    return len(shared), differing
+        # `epoch_mean_loss[3]` and friends flatten to an indexed leaf; the
+        # declaration is on the field, not on every index of it.
+        field = key.split("[", 1)[0].split(".", 1)[0]
+        if field in SCHEMA_ADDITIONS:
+            schema_only.append(key)
+        else:
+            differing.append(f"{key} (present in one cell only)")
+    return len(shared), differing, schema_only
 
 
 def main() -> int:
@@ -128,6 +162,7 @@ def main() -> int:
     azure, aws = load([AZURE]), load(AWS)
     rows: dict[tuple, list] = collections.defaultdict(lambda: [0, 0, []])
     unmatched: collections.Counter = collections.Counter()
+    schema_gaps: set = set()
 
     for config, seeds in sorted(azure.items()):
         for seed, (_, cell) in sorted(seeds.items()):
@@ -135,7 +170,8 @@ def main() -> int:
             if twin is None:
                 unmatched[config] += 1
                 continue
-            count, differing = compare_pair(cell, twin[1])
+            count, differing, schema_only = compare_pair(cell, twin[1])
+            schema_gaps.update(f.split("[", 1)[0].split(".", 1)[0] for f in schema_only)
             row = rows[config]
             row[0] += 1
             row[1] += count
@@ -170,8 +206,20 @@ def main() -> int:
         problems.append(f"{len(rows)} configurations, floor {MIN_CONFIGURATIONS}")
     if differ:
         problems.append(f"{differ} differing value(s)")
-        for line in sorted(x for row in rows.values() for x in row[2])[:10]:
+        lines = sorted(x for row in rows.values() for x in row[2])
+        for line in lines[:10]:
             problems.append(f"  {line}")
+        # The cap used to be silent, and a silent cap reads as the whole list.
+        if len(lines) > 10:
+            problems.append(f"  ... and {len(lines) - 10} more not shown")
+    # Declared schema additions are NOT failures and are NOT hidden either. A
+    # field one side cannot carry is a fact about provenance, and the reader is
+    # told which so "compared fewer fields" can never quietly become "agreed".
+    if schema_gaps:
+        print(f"\n{len(schema_gaps)} declared schema addition(s) skipped, present "
+              f"on one side only and not counted as disagreement:")
+        for field in sorted(schema_gaps):
+            print(f"  {field}  — {SCHEMA_ADDITIONS[field]}")
     if problems:
         print("\nCROSS-ISA REPRODUCTION FAILED")
         for line in problems:

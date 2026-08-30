@@ -48,6 +48,8 @@ PAIRS = [
      "RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md"),
     ("VERDICTS_W21.md",
      "RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md"),
+    ("VERDICTS_W23.md",
+     "RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md"),
 ]
 
 #: Wave results this check CANNOT cross-check, each with the reason.
