@@ -51,7 +51,7 @@ Workspace root for commands: `binn/` (crate workspace). Do not change G2 thresho
 - [x] Must disclose DFA-schedule broadcast-graded contrast (0.9863) when discussing coincidence locality
 - [x] Lead FAIL labeled **broadcast ±1 three-factor** (not bare “broadcast credit topology”)
 - [x] XOR cited as locality evidence; Figure M **spec** wired in [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) (camp artwork present — see §G)
-- [x] Discussion / Limitations covers F1/F2/F5, appendix-only G3/G4/H0, discrete EventProp **FAIL** (`c1-eventprop-5bb083d5e88d0ad2`), v131 matched-only honesty, falsifier ([`PAPER_DRAFT.md`](PAPER_DRAFT.md) §4)
+- [x] Discussion / Limitations covers F1/F2/F5, appendix-only G3/G4/H0, discrete EventProp — the **FAIL is WITHDRAWN**, and the retired hash `c1-eventprop-5bb083d5e88d0ad2` with it; it PASSes at 0.9450 ff / 0.8900 rec and remains discrete, with no comparison to continuous Wunderlich–Pehle claimed in either direction — v131 matched-only honesty, falsifier ([`PAPER_DRAFT.md`](PAPER_DRAFT.md) §4)
 - [x] No new experiment hashes remassaging frozen G2 in MUST packaging pass
 - [x] Hybrid T=2.0 ≠ live v21 (T=1) disclosed where soft-WTA is discussed
 - [x] v131 / `live-transfer-rescue` relabeled matched-only (not live k-WTA PASS)
@@ -71,16 +71,32 @@ cargo fmt --all -- --check
 
 ## A. Matched-arch (primary)
 
+> **The three commands here could not run, and were published for four days.**
+> Until 2026-08-29 they passed `c1-match-5dc6822e71229e9e`,
+> `c1-dfa-c8c4fe0899908b84` and `c1-rl-42eddc9c801308e9`. Those hashes were
+> **deliberately retired** on 2026-08-25 — `MATCHED_INPUT_SCALE` was not mixed
+> into them, so each named two different experiments either side of the
+> silent-initialisation repair — and `from_hash` returns `None` for all three
+> ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md) §8).
+> This is the document a reviewer runs, and its headline section named hashes
+> the binary rejects. `scripts/test_published_hashes_resolve.py` now fails on
+> any `--config-hash` in the record that names a retired hash.
+
 ```bash
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch \
-  --config-hash c1-match-5dc6822e71229e9e --out results/c1_match_replay.md
+  --config-hash c1-match-6f6000f148f7d30c --out results/c1_match_replay.md
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa \
-  --config-hash c1-dfa-c8c4fe0899908b84 --out results/c1_dfa_replay.md
+  --config-hash c1-dfa-f79c01ea36fe27d7 --out results/c1_dfa_replay.md
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl \
-  --config-hash c1-rl-42eddc9c801308e9 --out results/c1_rl_replay.md
+  --config-hash c1-rl-d35e13c758e522f8 --out results/c1_rl_replay.md
 ```
 
-Ship notes: `c1_match.md`, `c1_dfa.md`, `c1_rl.md` (+ control docs).
+Each hash above is the one its config's frozen-hash test asserts, and each of
+those tests also asserts `from_hash(&hash) == Some(&scientific())` — so a green
+`cargo test -p binn-lab` is what establishes these three commands resolve.
+
+Ship notes: `matched_rerun_2026-08-25/`. The July `c1_match.md`, `c1_dfa.md`
+and `c1_rl.md` are the **pre-repair** run records and are read as history.
 
 ---
 
@@ -191,9 +207,9 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 | Hash | Role |
 |---|---|
 | `c1-118207fbc3eaba53` | Canonical C1 v2 FAIL |
-| `c1-match-5dc6822e71229e9e` | Matched broadcast ±1 three-factor FAIL |
-| `c1-dfa-c8c4fe0899908b84` | Matched DFA PASS (disclose broadcast-graded 0.9863) |
-| `c1-rl-42eddc9c801308e9` | Matched RL reinforce_fb PASS |
+| `c1-match-6f6000f148f7d30c` | Matched broadcast ±1 three-factor FAIL (0.5000 ff / 0.5100 rec) |
+| `c1-dfa-f79c01ea36fe27d7` | Matched DFA PASS (disclose broadcast-graded 0.9975) |
+| `c1-rl-d35e13c758e522f8` | Matched RL reinforce_fb PASS |
 | `c1-rl-ef504db58916720d` | Archived RL graded FAIL |
 | `c1-660401d74db3c88d` | Live RFB v13 FAIL |
 | `c1-714c115e14a3eeed` | Gap-close v14 FAIL |
@@ -211,7 +227,11 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 | `c1-8ec031907a3426d0` | Isolation FAIL |
 | `c1-a49deeaedb495a09` | Temporal-PC FAIL |
 | `c1x-dfa-spike-true-dfa-a911e793e590b0ed` | Spiking DFA FAIL |
-| `c1-eventprop-5bb083d5e88d0ad2` | Discrete EventProp-style H2H FAIL (≠ continuous Wunderlich–Pehle) |
+| `c1-eventprop-f1e841c29755b1c8` | Discrete EventProp-style H2H **PASS** — the archived FAIL is withdrawn (≠ continuous Wunderlich–Pehle) |
+| `c1-match-5dc6822e71229e9e` | **RETIRED** 2026-08-25 — pre-repair, does not resolve; superseded by `c1-match-6f6000f148f7d30c` |
+| `c1-dfa-c8c4fe0899908b84` | **RETIRED** 2026-08-25 — pre-repair, does not resolve; superseded by `c1-dfa-f79c01ea36fe27d7` |
+| `c1-rl-42eddc9c801308e9` | **RETIRED** 2026-08-25 — pre-repair, does not resolve; superseded by `c1-rl-d35e13c758e522f8` |
+| `c1-eventprop-5bb083d5e88d0ad2` | **RETIRED** 2026-08-25 — pre-repair, does not resolve; superseded by `c1-eventprop-f1e841c29755b1c8`, and the FAIL it carried is withdrawn |
 | `track-b-rescue` | **WITHDRAWN** under v131 (`INVALID_HARNESS` from ceiling-inverted warnings; `RESULT_2026-08-19_TRACK_B_V130_PASS_WITHDRAWN.md`) |
 
 ---
@@ -252,7 +272,10 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 
 ```bash
 cargo run --locked --release -p binn-lab --bin c1 -- --eventprop \
-  --config-hash c1-eventprop-5bb083d5e88d0ad2 --out results/c1_eventprop_replay.md
+  --config-hash c1-eventprop-f1e841c29755b1c8 --out results/c1_eventprop_replay.md
 ```
 
-Ship note: `c1_eventprop.md`.
+The **archived** hash `c1-eventprop-5bb083d5e88d0ad2` is retired and does not
+resolve. It named a run on a forward that emitted no spikes, which is why a
+spike-adjoint method scored 0.5000 there; the arm PASSes at 0.9450 ff / 0.8900
+rec on a forward that can spike. Ship note: `matched_rerun_2026-08-25/`.

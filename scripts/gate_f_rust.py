@@ -95,6 +95,24 @@ COMPARED_FIELDS = (
     "n_train",
     "n_test",
 )
+# `non_finite_forward` is DELIBERATELY NOT HERE, and this note exists so the
+# omission is not read as an oversight and quietly corrected.
+#
+# It was added to the cell schema on 2026-08-29 with the forward-finiteness
+# guard, and adding it here was the first instinct. It cannot go here: this
+# tuple is coupled to the FROZEN per-wave analysers by
+# `test_reproduction_check.py::test_no_analyser_drops_a_field_gate_f_compares`,
+# whose invariant is that an analyser may check more than Gate F and never
+# less. `analyse_wave15` and `analyse_wave18` were registered with their
+# preregistrations before their first cell existed and are not editable after
+# the fact, so a field added here would either break that gate or force an edit
+# to a frozen authority.
+#
+# Nothing is lost. No archived cell carries the field, so comparing it would
+# compare nothing today; the guard's teeth are the pass predicate in the
+# instrument and `cell_validity.py`, which is live rather than frozen. A wave
+# analyser written from now on should carry it, and when every analyser Gate F
+# is coupled to does, it belongs in the tuple above.
 # Traces are compared when both sides carry them. Cells recorded before the
 # convergence-telemetry change have no trace, and their absence is not a failure.
 COMPARED_TRACES = (

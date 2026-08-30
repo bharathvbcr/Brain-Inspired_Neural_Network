@@ -63,18 +63,35 @@ home for the paper this file used to describe.
 - [x] **Lead-program figures: all four drawn** on 2026-08-27, by the same
       generator as the secondary program's, each checked against the Table SHD-N
       it cites and against every ban its spec section names
-- [ ] Lead-program graphical abstract — the spec records `TODO(source needed)`;
-      the last *unspecified* piece of figure work in the package
+- [x] **Lead-program graphical abstract specified and drawn** 2026-08-29. It was
+      the last *unspecified* piece of figure work in the package, and it was an
+      **authoring** task rather than a missing number: every value it draws was
+      already published. The decision about what the paper's front image says
+      is written into [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) so it can
+      be argued with, and ten tests pin its four bans, each negative-tested
+- [x] **Figure S drawn** 2026-08-29 — the substrate panel behind §3.7. It was
+      the last piece of unspecified figure work in the package, and it had been
+      hidden behind a wrong label: the skeleton's map called it "Fig. 4", which
+      is the resolution ladder. **Every figure this package specifies is now
+      drawn, and every one by the same generator**
 - [x] **Figure 1 Panel D and the Figure 3 annotation drawn** 2026-08-29 for
       wave 21. Panel D is the eight-point difference-in-differences ladder;
       the Figure 3 annotation stops the width ladder implying the mechanism
       tracks the gain, which ρ = −0.1430 says it does not. Nine new tests pin
       the bans on both, each negative-tested
-- [ ] Secondary-program artwork: four of nine files current, two stale — see the
-      table below
+- [x] **Secondary-program artwork: all nine files current** as of 2026-08-29.
+      `fig2_matched_means` (Figure 6) and `fig4_transfer_ladder` (Figure 8) were
+      the last two, and they were the hard case: unlike the rest they had **no
+      generator**, so the 2026-08-27 re-run could not reach them and one of them
+      had been drawing the superseded value block at camera-ready quality since
+      24 July. Both are now owned by `binn-lab/src/paper_figures.rs`, and
+      `scripts/test_paper_figures_match_the_spec.py` checks each against the
+      Table it cites and asserts every ban its spec section names
 - [ ] Venue template applied (NeurIPS/ICML/TMLR/… `.sty` / Overleaf)
 - [ ] Anonymous PDF build
-- [ ] Caption pass against [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md)
+- [ ] Caption pass against [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) —
+      Figures 1 and 6 carry **required wording** in the spec and the rest do
+      not; writing the remaining seven is the open half
 - [ ] Page budget / appendix split (G3/G4/H0 appendix-only)
 - [ ] Final copy-edit for "broadcast ±1 three-factor" terminology consistency
 
@@ -114,8 +131,17 @@ home for the paper this file used to describe.
    schedule a broadcast-*graded* contrast reaches **0.9975**, and ±1 broadcast
    REINFORCE reaches **0.7775**. Neither is a PASS and neither erases the FAIL.
 5. Live transfer = **v13–v24 FAIL**; v131 is matched-only.
-6. Discrete EventProp H2H **FAIL** `c1-eventprop-5bb083d5e88d0ad2` ≠ continuous
-   Wunderlich–Pehle.
+6. **The discrete EventProp H2H FAIL is WITHDRAWN, and this instruction used to
+   require printing it.** It read "Discrete EventProp H2H **FAIL**
+   `c1-eventprop-5bb083d5e88d0ad2` ≠ continuous Wunderlich–Pehle" — a
+   *required main-text disclosure* of a result the 2026-08-25 re-run withdrew,
+   under a hash that was **retired** the same day and no longer resolves. It
+   survived the 2026-08-27 rewrite of this file, inside the section headed
+   "do not drop". What must be disclosed now is the **withdrawal**: the arm
+   PASSes at **0.9450 ff / 0.8900 rec**, the archived 0.5000 was a spike-adjoint
+   method with no spikes to differentiate through, it remains **discrete**, and
+   **no comparison to continuous Wunderlich–Pehle is claimed in either
+   direction** ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
 7. Integrity appendix for canonical C1 (H1/H2/θ=∞/`project`).
 8. F1 / F2 / F5 efficiency honesty.
 9. Non-claims: biology, AC PASS, impossibility, neuromorphic HW.
@@ -134,8 +160,8 @@ that sheet is the owner, and this table used to contradict it by ticking
 | fig1 (Figure 5) | `…/fig1_matched_rule_swap.*` | **current 2026-08-27** |
 | fig3 (Figure 7) | `…/fig3_engine_c1_means.*` | **current 2026-08-27** |
 | **graphical abstract** | `…/graphical_abstract.*` | **current 2026-08-27** (secondary program only) |
-| fig2 (Figure 6) | `…/fig2_matched_means.*` | **stale** — plots the superseded block; no generator |
-| fig4 (Figure 8) | `…/fig4_transfer_ladder.*` | **stale at rung 1**; no generator |
+| **fig2 (Figure 6)** | `…/fig2_matched_means.*` | **authored and drawn 2026-08-29** — grouped by verdict, with the gap-LCB half of the gate beneath. Had no generator until then |
+| **fig4 (Figure 8)** | `…/fig4_transfer_ladder.*` | **authored and drawn 2026-08-29** — rung 1 current, two gate axes, and a substrate break above the live arms. Had no generator until then |
 | fig0 | `…/fig0_claim_axis_legend.*` | present, unaffected by the re-run |
 | figD | `…/figD_diff_closure.*` | present, unaffected |
 | fig5 (Figure 9) | `…/fig5_xor_locality.*` | present, unaffected |
@@ -143,7 +169,8 @@ that sheet is the owner, and this table used to contradict it by ticking
 | **lead Figure 2** | `…/leadfig2_headline_accuracy.*` | **drawn 2026-08-27** — headline, on one axis with the field |
 | **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27**, annotated 2026-08-29 — the mechanism does not track this curve |
 | **lead Figure 4** | `…/leadfig4_resolution_ladder.*` | **drawn 2026-08-27** — the resolution ladder |
-| lead graphical abstract | — | `TODO(source needed)` — the last unspecified piece |
+| **lead Figure S** | `…/figS_substrate.*` | **specified and drawn 2026-08-29** — §3.7 had three waves behind it and no figure in any sheet. Lettered beside Figure M rather than renumbering the secondary program |
+| **lead graphical abstract** | `…/lead_graphical_abstract.*` | **specified and drawn 2026-08-29** — the pair of costs at equal weight, coverage at 9 of 21, and the ρ = −0.1430 strip that stops it reading as a decomposition of the gain. A separate file from `graphical_abstract`, which is the secondary program's |
 
 The four current files have one owner, `binn-lab/src/paper_figures.rs`:
 
@@ -153,8 +180,9 @@ cargo run --locked --release -p binn-lab --features plots --bin paper-figures --
 ```
 
 `scripts/test_paper_figures_match_the_spec.py` fails if the generator's numbers
-and the spec sheet disagree. The two stale files have **no** generator, so they
-are authoring work rather than a re-run.
+and the spec sheet disagree. Until 2026-08-29 two files had **no** generator and
+so could not be brought current by a re-run at all; both now have one, and every
+`.png`/`.pdf` in the camp is written by that single binary.
 
 Orphans under `results/fig1_ladder.png` etc. are **not** camp MUST artwork.
 

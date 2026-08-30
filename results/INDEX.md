@@ -2,22 +2,22 @@
 
 # Record index
 
-320 documents. **11 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+325 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 39 | 0 |
+| Preregistrations | 41 | 0 |
 | Results | 37 | 2 |
-| Findings | 13 | 0 |
+| Findings | 14 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
-| Defects | 5 | 0 |
+| Defects | 6 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 2 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
-| Paper | 5 | 2 |
+| Paper | 3 | 5 |
 | Campaign control | 2 | 0 |
 | Writing | 2 | 0 |
 | Gates | 1 | 0 |
@@ -40,8 +40,11 @@ Read these only through the document that retired them.
 |---|---|
 | [AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md](AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md) | 2026-08-03 — the diagnosis in §1 was incomplete and the |
 | [HANDOFF_2026-08-02.md](HANDOFF_2026-08-02.md) | IN PART, 2026-08-03 / 2026-08-04 — read this before acting on anything below |
+| [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | IN PART — 2026-08-25 matched-architecture re-run, banner added |
 | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) | IN PART — 2026-08-25 matched-architecture re-run |
 | [PAPER_SKELETON.md](PAPER_SKELETON.md) | IN PART — 2026-08-25 matched-architecture re-run |
+| [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) | 2026-08-29 by [`PAPER_GAPS_2026-08-29.md`](PAPER_GAPS_2026-08-29.md), |
+| [PAPER_VERIFY.md](PAPER_VERIFY.md) | IN PART — 2026-08-25 matched-architecture re-run, banner added |
 | [PUBLISHABLE_CLAIMS.md](PUBLISHABLE_CLAIMS.md) | IN PART — 2026-08-25 matched-architecture re-run |
 | [RESULT_2026-08-19_SHD_ATTENTION_READOUT_PILOT.md](RESULT_2026-08-19_SHD_ATTENTION_READOUT_PILOT.md) | 2026-08-19 — the headline does not replicate at convergence |
 | [RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md](RESULT_2026-08-20_W4_RECURRENT_ARM_IS_UNUSABLE.md) | 2026-08-22 — this result measured a protocol parameter, not the arm. |
@@ -56,6 +59,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-29 | [PREREG_2026-08-29_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md](PREREG_2026-08-29_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md) | Preregistration — the mechanism control at the twelve operating points that lack it |
+| 2026-08-29 | [PREREG_2026-08-29_THE_COLLAPSE_IS_LATE.md](PREREG_2026-08-29_THE_COLLAPSE_IS_LATE.md) | Preregistration — is the h1024 collapse late, and does stopping early avoid it? |
 | 2026-08-27 | [PREREG_2026-08-27_THE_RECURRENT_CLAIM_AT_THIRTY_TWO_SEEDS.md](PREREG_2026-08-27_THE_RECURRENT_CLAIM_AT_THIRTY_TWO_SEEDS.md) | Preregistration — the recurrent comparison at n=32, and whether survivorship is inflating it |
 | 2026-08-27 | [PREREG_2026-08-27_THE_MECHANISM_ACROSS_THE_DESIGN_SPACE.md](PREREG_2026-08-27_THE_MECHANISM_ACROSS_THE_DESIGN_SPACE.md) | Preregistration — does the temporal-order mechanism exist anywhere but h128? |
 | 2026-08-27 | [PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md](PREREG_2026-08-27_DEPTH_IS_NOT_MONOTONE_AT_H1024.md) | Preregistration — read-out depth at h1024, and what the collapse is actually made of |
@@ -148,6 +153,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-29 | [FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md](FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md) | Finding — the h1024 collapse is a lost fit, not overfitting |
 | 2026-08-24 | [FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md](FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md) | Finding — the reference is a temporal-convolutional SNN and the instrument is a pointwise one |
 | 2026-08-23 | [FINDING_2026-08-23_THE_SUITE_NEVER_TESTED_THE_SHIPPING_PROFILE.md](FINDING_2026-08-23_THE_SUITE_NEVER_TESTED_THE_SHIPPING_PROFILE.md) | The suite has never tested the profile that produces the results |
 | 2026-08-23 | [FINDING_2026-08-23_THE_REFERENCE_REPRODUCES_BIT_EXACTLY.md](FINDING_2026-08-23_THE_REFERENCE_REPRODUCES_BIT_EXACTLY.md) | Finding — the archived reference was genuine, and reproduces bit-exactly a month later |
@@ -210,6 +216,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-29 | [DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md) | Defect — a cell's accuracy was never checked for a non-finite forward |
 | 2026-08-23 | [DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md](DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md) | Defect — concurrent reference cells race on one git checkout, and two died silently |
 | 2026-08-20 | [DEFECT_2026-08-20_THRESHOLDS_ANCHORED_TO_UNLICENSED_REFERENCES.md](DEFECT_2026-08-20_THRESHOLDS_ANCHORED_TO_UNLICENSED_REFERENCES.md) | Four registered thresholds were anchored to macOS reference values this campaign is not licensed to compare against |
 | 2026-08-20 | [DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md](DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md) | `shd-scientific-sweep` never touched SHD |
@@ -273,11 +280,12 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
-| 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) | What is left for the paper — 2026-08-20 |
-| — | [PAPER_VERIFY.md](PAPER_VERIFY.md) | Paper scientific verify — 2026-07-23 |
+| 2026-08-29 | [PAPER_GAPS_2026-08-29.md](PAPER_GAPS_2026-08-29.md) | The paper's gaps, consolidated — 2026-08-29 |
+| 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) **[retired]** | What is left for the paper — 2026-08-20 |
+| — | [PAPER_VERIFY.md](PAPER_VERIFY.md) **[retired]** | Paper scientific verify — 2026-07-23 |
 | — | [PAPER_SKELETON.md](PAPER_SKELETON.md) **[retired]** | BINN paper skeleton — SHD attention read-out (primary) + matched-architecture kill gate (secondary) |
 | — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) **[retired]** | BINN — camera-ready results table |
-| — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | PAPER_METRICS_FULL — hardened harvest |
+| — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) **[retired]** | PAPER_METRICS_FULL — hardened harvest |
 | — | [PAPER_FIGURE_SPEC.md](PAPER_FIGURE_SPEC.md) | BINN — figure / table specs (camera-ready) |
 | — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | What a time-axis read-out buys is temporal order: a difference-in-differences on SHD |
 

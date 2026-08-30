@@ -47,22 +47,47 @@ records the n = 32 bin-shuffled **cost** and prints `—` for the n = 32 shuffle
 **accuracy**; only the n = 12 absolute means (0.6983 / 0.6934) exist. Any
 absolute-accuracy shuffle panel is therefore n = 12 or `TODO(source needed)`.
 
-**No artwork exists for any figure in the lead program.** Nothing in
+**Artwork status, rewritten 2026-08-29.** This paragraph read "**No artwork
+exists for any figure in the lead program**" and "every file in that directory
+is dated 24 July", which was true when written on 2026-08-27 and stopped being
+true later the same day. Every figure in
 [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
-is an SHD figure; every file in that directory is dated 24 July in the working
-tree, which is before both the 2026-08-25 matched re-run and the 2026-08-27
-waves, so the secondary program's artwork on disk is stale against its own
-specs as well.
+that any section below specifies is now **drawn by one generator**,
+`binn-lab/src/paper_figures.rs`, run as the command in
+[`VENUE_FORMATTING.md`](VENUE_FORMATTING.md); each is checked against the
+`Table` it cites and against every ban its section names by
+`scripts/test_paper_figures_match_the_spec.py`. The three files that generator
+does **not** write — `fig0_claim_axis_legend`, `figD_diff_closure` and
+`fig5_xor_locality` — are the ones no re-run affects, and they are named as
+present rather than as current. **Every figure and both graphical abstracts
+this sheet specifies are now drawn.** The lead-program graphical abstract was
+the last `TODO(source needed)` and was specified and drawn on 2026-08-29; the
+one remaining piece of unspecified figure work in the package is the
+**substrate panel** (Table SHD-7, waves 12–14), which no sheet specifies and
+which is recorded as open in
+[`PAPER_GAPS_2026-08-29.md`](PAPER_GAPS_2026-08-29.md) §2.2.
 
-**A naming collision, flagged and not resolved here.**
-[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) calls the SHD read-out
-**“The read-out program (lead)”** and the matched gate **“The matched-gate program (secondary)”**;
-[`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) calls the SHD read-out
-**“the read-out program”** and the matched gate **“the matched-gate program”**. The two schemes disagree
-on which letter/number belongs to which program. **This file therefore names
-neither**, and refers to them only as *the SHD attention read-out* and *the
-matched-architecture kill gate*. One of the two sheets should be changed before
-submission; that is not this file's edit to make.
+**The naming collision flagged here on 2026-08-27 does not exist. Checked and
+withdrawn 2026-08-29.** This paragraph used to say that
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) and
+[`PUBLISHABLE_CLAIMS.md`](PUBLISHABLE_CLAIMS.md) "disagree on which
+letter/number belongs to which program", and instructed that "one of the two
+sheets should be changed before submission". Both sheets use the **same two
+names** — *the read-out program* for the SHD lead, *the matched-gate program*
+for the matched kill gate — and they were given those names in the same commit
+that wrote this warning. There is no letter or number to disagree about:
+`PAPER_RESULTS_TABLE.md` owns `SHD-1 … SHD-7` and `A`–`E`, and
+`PUBLISHABLE_CLAIMS.md` defines **no table labels at all**. The instruction
+would have had someone rename a sheet to fix nothing.
+
+The **real** ambiguity is the one named two paragraphs above and it stands: a
+bare letter is ambiguous between `PAPER_RESULTS_TABLE.md`'s `A`–`E` and
+[`PAPER_METRICS_FULL.md`](PAPER_METRICS_FULL.md)'s own `A`–`F`, which are
+different tables under the same letters. Cite the sheet by name.
+
+This file still names neither program by label, and refers to them only as *the
+SHD attention read-out* and *the matched-architecture kill gate*, which needs no
+collision to justify it.
 
 ---
 
@@ -548,6 +573,190 @@ to make the gain trend look cleaner.
 
 ---
 
+## Figure S — Substrate: the read-out does not substitute for temporal state (required MUST)
+
+> **Specified and drawn 2026-08-29.** §3.7 of
+> [`PAPER_DRAFT.md`](PAPER_DRAFT.md) is a lead-program section with three waves
+> behind it and **no figure specified in any sheet**. It surfaced when
+> [`PAPER_SKELETON.md`](PAPER_SKELETON.md)'s map was corrected: that map had
+> called this the "Fig. 4 substrate panel", which is the resolution ladder's
+> number, so the omission was hidden behind a wrong label.
+>
+> **Lettered, deliberately.** The lead program's figures are 1–4 and the
+> matched program's are 5–9. A fifth lead figure would renumber the secondary
+> program to 6–10, one day after the 2026-08-27 renumber and for one figure;
+> the renumbering note above records that lettered figures "keep their letters
+> and do not move", and that is the escape hatch this uses. `S` for substrate,
+> beside `M` for mechanism.
+
+**Message:** §3.5's gain has two readings the anchor campaign could not
+separate, because all 720 of its cells sat on one substrate: the read-out
+**adds** temporal structure no such substrate represents, or it **substitutes**
+for the adaptation and recurrence `ff+fixed` happens not to have. ETLP's
+conclusion makes the second reading the live one. **Substitution is refuted on
+both axes** — the advantage is *indifferent* to adaptation and *larger* where
+the substrate is recurrent. That is a claim about what the read-out **consumes**,
+not about a deficiency of one substrate.
+
+**Layout:** three panels, top to bottom.
+
+### Panel A — the four substrate rows, `n` as paired seeds
+
+| substrate | scale | pairs | rate | + attention `d32/L4` | gain |
+|---|---:|---:|---:|---:|---:|
+| `ff+fixed` *(anchor)* | 1.0 | 12 | 0.7062 | 0.8320 | **+0.1258** |
+| `ff+alif` *(threshold adaptation)* | 1.0 | 12 | 0.7018 | 0.8303 | **+0.1285** |
+| `rec+alif` *(recurrent + adaptation)* | 0.4 | **10** | 0.5262 | 0.7874 | **+0.2612** |
+| `ff+fixed` *(scale-matched control)* | 0.4 | 12 | 0.7088 | 0.8289 | **+0.1201** |
+
+Source: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) **Table SHD-7**.
+
+### Panel B — the registered contrasts, each against its bar
+
+| quantity | value | positive | bar | verdict |
+|---|---:|---:|---|---|
+| gain(`ff+alif`) − gain(`ff+fixed`) | **+0.0027** | 6 of 12 | two-sided 0.03 | **A-1** — a coin flip |
+| gain(`rec+alif`) − gain(`ff+fixed`) at 0.4 | **+0.1411** | **10 of 10** | two-sided 0.03 | **M-2 SUPPORTED** |
+| scale confound: `ff+fixed` 0.4 vs 1.0 | **+0.0026** | — | — | **M-4** — the scale is not doing the work |
+| headroom-normalised ratio *(**post-hoc, not registered**)* | 0.551 vs 0.412 = **1.34×**, down from 2.2× | — | — | the ordering survives; most of its apparent size does not |
+
+### Panel C — usability, which had to be measured before any of Panel A
+
+| arm | scale | completed | voided | diverged |
+|---|---:|---:|---:|---:|
+| `rec+alif` | **0.4** | **11/12** (bar 11/12) | 0 | 1 |
+| `rec+alif` | 1.0 | 8/12 | 0 | 4 |
+| `rec+fixed` | 0.4 | 7/12 | **5** | 0 |
+| `rec+fixed` | 1.0 | 5/12 | **5** | 2 |
+
+`rec+fixed`'s ten voided cells all failed by **saturation** — `saturated_fraction`
+0.055 to **0.523**, up to 52% of hidden units pinned at maximum firing — and none
+by divergence at scale 0.4. **On the recurrent substrate adaptation is
+stabilising**, the opposite of the sign that wave's own hypothesis name asserted
+(R-2, +7 on a two-sided bar of 6).
+
+**Four things this figure must not be allowed to say.** Every one is a limit
+[`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.7 already calls load-bearing.
+
+1. **It must not let the recurrent substrate read as a win.** `rec+alif+attn`
+   reaches **0.7874** against `ff+fixed+attn`'s **0.8289** at the same scale, and
+   the paper issues **no verdict on that ordering**. Attention closes most of the
+   gap the substrate gives away and not all of it. So: no sort by gain, no
+   podium, and the two attention accuracies must be comparable by eye on one
+   axis. A figure that ends on the recurrent pair as its climax asserts the
+   ordering the record refuses.
+2. **It must not quote +0.2612 or +0.1411 without the headroom normalisation.**
+   `rec+alif` starts **0.18 lower**, with **0.4738** of headroom against
+   **0.2912**; normalised, the ratio falls **2.2× → 1.34×**. Both readings go on
+   the figure, and the normalisation is labelled **post-hoc and not registered**
+   — it is not licence to prefer whichever number is more convenient in either
+   direction.
+3. **It must not hide the ten pairs.** The recurrent comparison rests on **ten**,
+   the registered minimum; the two arms lost different seeds and **one further
+   loss on either would have made it unreportable**. Survivorship is *reduced*
+   by seed-pairing, **not removed** — the surviving pairs are those that did not
+   diverge, and divergence is not random. Panel A prints `n` per row and Panel C
+   is why.
+4. **It must not draw adaptation as inert full stop.** A-1 is inert **at this
+   operating point**, on the feed-forward substrate. On the *recurrent*
+   substrate adaptation is what prevents saturation — that is Panel C, and
+   dropping Panel C would turn a scoped null into a general one.
+
+**Caption (required wording):**
+“The read-out does not substitute for temporal state. Attention's gain is
+**+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif` — a difference of
+**+0.0027** against a two-sided bar of 0.03, positive in 6 of 12 seeds, so
+threshold adaptation makes no difference to it at this operating point. On a
+recurrent substrate the gain roughly doubles, **+0.2612** against **+0.1201**
+with every arm at surrogate scale 0.4 so substrate and scale cannot be
+confounded (**+0.1411**, positive in **10 of 10**). **The recurrent substrate
+does not win**: `rec+alif+attn` reaches 0.7874 against `ff+fixed+attn`'s 0.8289,
+and no verdict is issued on that ordering. The recurrent gain is measured from a
+base 0.18 lower, and a **post-hoc, unregistered** headroom normalisation takes
+the ratio from 2.2× to **1.34×** — the ordering survives, most of its apparent
+size does not. Ten paired seeds, the registered minimum.”
+
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figS_substrate.{png,pdf}`
+— **drawn 2026-08-29**. Owner: `binn-lab/src/paper_figures.rs`
+(`draw_fig_s_substrate`); `scripts/test_paper_figures_match_the_spec.py` checks
+every value against **Table SHD-7** of
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) and asserts all four bans.
+
+**Avoid:** "recurrence is better", "adaptation is unnecessary", any ranking of
+substrates, the headroom ratio alone, the raw ratio alone, and any framing in
+which Panel C is a methods footnote rather than the reason Panel A's third row
+exists at one scale only.
+
+---
+
+## Graphical abstract — lead program (required)
+
+> **Specified and drawn 2026-08-29.** This was `TODO(source needed)` from
+> 2026-08-27, the last unspecified piece of figure work in the package, and it
+> was correctly recorded as an **authoring** task rather than a missing number:
+> every quantity below already existed in Tables SHD-1, SHD-2 and SHD-2b. What
+> was missing was a decision about what the paper's front image says. That
+> decision is written down here so it can be argued with.
+
+**Message:** three sentences, in this order and no other.
+1. A time-axis read-out raises SHD accuracy — **and that is not the result**.
+2. Destroy temporal order in the input and the read-out's advantage goes with
+   it, while the rate arm's own cost barely moves. **That** is the result: a
+   difference-in-differences on the *gain*.
+3. It is measured at **9 of 21** operating points, not at one.
+
+**Layout (left → right), one row:**
+
+1. **The operation, drawn on the data.** A box labelled *input*, not *model*:
+   bin-shuffle applied independently per sample **in both the training and test
+   splits**, so the task itself becomes rate-solvable. Nothing is removed from
+   the network, and no arrow may point at a model component.
+2. **The pair of costs, at equal weight — the centre of the image.** Attention
+   `d32/L4` **+0.1347** beside rate `ff+fixed` **+0.0142**, `n = 32`, `h128`,
+   `published-2ms`, `e400`, seed-paired, **32/32** positive, ratio **9.5×**.
+3. **The coverage strip.** **9 of 21** operating points carry the control and
+   **every one clears its +0.03 bar**; widths 128–1024, both contracts, both
+   geometries. Twelve operating points carry intact arms with no shuffled twin.
+
+**Four things it must not be allowed to say.** The first three are Figure 1's
+bans and carry over unchanged — an abstract is a compression of the figure, not
+a licence to say something the figure may not.
+
+1. **It must not read as "SHD is temporal."** Prior art, and named on the image:
+   Cramer et al. 2022 (≤60% spike-count-only), the Neuromorphic Sequential
+   Arena (86.48 → 68.51, model-side), Yu et al. 2025 (spike-time). Three
+   independent destruction operators, one conclusion, all of it prior. The rate
+   arm is half the measurement and must be drawn at the attention arm's weight.
+2. **It must not be drawn as an ablation.** The shuffle is applied to the data,
+   in both splits. No "attention off" label and no model-component axis.
+3. **It must not quote +0.1577** — the wave-17 merged-depth value, 17% high.
+4. **It must not imply the difference-in-differences IS the gain, or a share of
+   it.** Spearman ρ between the six per-width gains and their DiDs is
+   **−0.1430** against a bar of **+0.829**: the claim is that the read-out's
+   contribution *is* order-dependent, not that the gain decomposes. So the
+   abstract carries **no headline accuracy as its largest number**, no arrow
+   from 0.8332 to a shuffled value, and no percentage-of-gain framing beyond the
+   published **94.5%** collapse of the *advantage*, which is a different
+   quantity and is labelled as one.
+
+**Also required on the image, because an abstract travels alone:** that
+**0.8332 is not competitive** — the SHD frontier is 95–96.4% — and that the
+**h1024 inversion** exists. An abstract that omits both reads as a results
+claim about SHD, which the paper explicitly does not make.
+
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/lead_graphical_abstract.{png,pdf}`
+— **drawn 2026-08-29**. Owner: `binn-lab/src/paper_figures.rs`
+(`draw_lead_graphical_abstract`); `scripts/test_paper_figures_match_the_spec.py`
+checks its values against **Tables SHD-1 and SHD-2** and asserts all four bans.
+Deliberately **not** named `graphical_abstract` — that file exists and depicts
+the **secondary** program.
+
+**Avoid:** brain or ear iconography, "solved", a single big accuracy number, a
+before/after arrow on the attention arm alone, and any framing in which the rate
+arm is a faint control.
+
+---
+
 # Secondary program — matched-architecture kill gate
 
 > **Artwork status for everything below, updated 2026-08-27.** **All four lead
@@ -555,9 +764,10 @@ to make the gain trend look cleaner.
 > `leadfig2_headline_accuracy`, `leadfig3_width_ladder` and
 > `leadfig4_resolution_ladder`, all new files drawn by the same generator, each
 > checked by `scripts/test_paper_figures_match_the_spec.py` against the
-> `Table SHD-N` it cites and against every ban its section names. A
-> lead-program graphical abstract remains `TODO(source needed)` and is the only
-> unspecified piece of figure work left.
+> `Table SHD-N` it cites and against every ban its section names. The
+> lead-program graphical abstract, which this note recorded on 2026-08-27 as
+> the only unspecified piece of figure work left, was **specified and drawn
+> 2026-08-29** — see §"Graphical abstract — lead program" above.
 >
 > Of the nine secondary-program files in
 > [`runs/2026-07-23-paper-hard-both/figures/`](runs/2026-07-23-paper-hard-both/figures/)
@@ -583,11 +793,12 @@ to make the gain trend look cleaner.
 
 ## Graphical abstract (required)
 
-> **Scope note added 2026-08-27.** This abstract depicts the **secondary**
-> program only. The manuscript now leads with the SHD read-out, and no
-> graphical abstract has been specified for the lead program:
-> `TODO(source needed)` — a lead-program graphical abstract is an open
-> authoring task, not a missing number.
+> **Scope note added 2026-08-27, updated 2026-08-29.** This abstract depicts
+> the **secondary** program only, and keeps the filename `graphical_abstract`.
+> The manuscript leads with the SHD read-out, whose own graphical abstract was
+> `TODO(source needed)` when this note was written and is now specified and
+> drawn as `lead_graphical_abstract` — a **separate file**, deliberately, since
+> repointing this one would have deleted the secondary program's front image.
 
 **Message:** Same forward → ±1 × surrogate eligibility fails; every other rule tested passes against a reference at 1.0000; live k-WTA transfer fails. Disclose broadcast-graded 0.9975 elsewhere (Figure M), not as a PASS that erases the lead FAIL — and do not draw the passes as an ordering.
 
@@ -702,11 +913,51 @@ broadcast ±1 **0.0000 / −0.0192**; DFA **0.9689 / 0.9509**; RL **0.9765 /
 specifically; on the DFA schedule the broadcast-*graded* contrast reaches
 **0.9975** (shown primarily in Figure M).
 
-**This figure must not rank the passing arms.** With the reference at 1.0000
-every PASS reduces to “the arm scored above 0.75”, and no ordering among them
-may be claimed. Encode pass / fail / at-chance, as Figure M does.
+**Four things this figure must not be allowed to say.**
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig2_matched_means.{png,pdf}` — **exists but is stale**: it plots the superseded value block above. **No generator produces this file**, so unlike Figure M it cannot be brought current by a re-run; it has to be authored. Not renamed.
+1. **It must not rank the passing arms.** With the reference at 1.0000 every
+   PASS reduces to “the arm scored above 0.75”, and no ordering among them may
+   be claimed. Encode pass / fail / at-chance, as Figure M does — no bar
+   height, no forest position, no sort by mean. The row order is the order of
+   the sheet's own table and the figure says so on its face.
+2. **It must not draw the contrasts as a fourth verdict.** Broadcast-graded,
+   RL graded-reward and RL ±1 broadcast were **measured and not gated**. A
+   figure that colours them like passes converts three ungated measurements
+   into six passing arms; one that colours them like failures converts the
+   0.9975 disclosure into evidence for the FAIL it exists to qualify.
+3. **It must not let the recurrent column go missing.** Every row is
+   `feed-forward / recurrent` and the lead FAIL is a FAIL **on both graphs at
+   n = 20** — that is the claim's strength and a single-column figure drops it.
+   The one place the two graphs disagree in sign is the broadcast ±1 gap LCB
+   (**0.0000 ff / −0.0192 rec**), which must be drawn rather than clipped at
+   zero.
+4. **It must not present the gate as a single bar.** The gate is
+   *primary mean ≥ 0.65 **and** gap LCB > 0.5*, and the second panel exists
+   because “cleared the floor” and “cleared the gate” are different sentences
+   throughout this package.
+
+**Caption (required wording):**
+“Matched dense-LIF kill gate, 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`,
+n = 20, feed-forward / recurrent. **Broadcast ±1 three-factor** — ±1 reward ×
+surrogate eligibility — is the only rule tested that does not clear the gate,
+and it fails on **both** forward graphs (0.5000 / 0.5100, gap LCB 0.0000 /
+−0.0192). Every other rule clears it against a SuperSpike BPTT reference at
+1.0000, so each PASS reduces to ‘above 0.75’ and **no ordering among the
+passing arms is claimed or drawn**. The three contrasts were measured and not
+gated; the broadcast-*graded* contrast reaches **0.9975**, which is why the
+lead negative is stated as ±1 three-factor and not as ‘any broadcast’.”
+
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig2_matched_means.{png,pdf}`
+— **authored and drawn 2026-08-29**. It had been stale since the 2026-08-25
+re-run and, unlike Figure M, **no generator produced it**, so it could not be
+brought current by a re-run: it plotted the superseded value block quoted above
+at camera-ready quality with nothing anywhere to say so. Owner is now
+`binn-lab/src/paper_figures.rs` (`draw_fig6_matched_means`), the same generator
+as the rest of the package, and `scripts/test_paper_figures_match_the_spec.py`
+checks every value in it against **Table A** of
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md) — the sheet, not this file's
+restatement of it — and asserts each of the four bans above. The `fig2_` name is
+historical and is **not** renamed to `fig6_`.
 
 ## Figure 7 — Engine C1 condition means *(was Figure 3)*
 
@@ -732,7 +983,35 @@ Dashed line at acc 0.65 and gap LCB 0.5.
 > Table A). Rungs 2–4 are live-transfer rows and are **unaffected** by the
 > matched re-run — none of them runs on the matched dense-LIF forward.
 
-**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig4_transfer_ladder.{png,pdf}` — **exists but is stale at rung 1**. **No generator produces this file**; bringing rung 1 current is an authoring task. `fig4_` name is historical and not renamed.
+**Three things this figure must not be allowed to say.**
+
+1. **It must not draw one substrate.** Rung 1 runs on the **matched dense-LIF**
+   forward; rungs 2–4 run on the **live event-driven muted-θ / k-WTA** engine.
+   Nothing in the ladder is the same system at four settings, and a continuous
+   descent — one connected line, one shared axis with no break — reads as a
+   single system degrading, which is the interpretation the transfer gap exists
+   to refuse. The substrate change is drawn as a break and named.
+2. **It must not draw accuracy alone.** The gate is *acc ≥ 0.65* **and**
+   *gap LCB > 0.5*. On accuracy alone v15 (0.7262), v18 (0.7125) and v20
+   (0.7325) read as near-misses of one bar; against the second bar the best
+   gap LCB anywhere below rung 1 is v17's **0.3127**, which is not close.
+   **Floor cleared ≠ gate cleared**, and both bars are on the figure.
+3. **It must not rank the gap-close and break-it arms.** v14–v24 are a
+   **sequential exploratory family**: each new hypothesis minted a new protocol
+   version and hash, and there is no multiplicity-corrected family-wise claim
+   ([`PAPER_METRICS_FULL.md`](PAPER_METRICS_FULL.md), statistical paragraph).
+   They are drawn in protocol order, and “best” is used only for the two the
+   spec names — v15 on accuracy, v17 on gap LCB — as landmarks, never as a
+   podium.
+
+**Artwork target:** `runs/2026-07-23-paper-hard-both/figures/fig4_transfer_ladder.{png,pdf}`
+— **authored and drawn 2026-08-29**, rung 1 at the current matched RL figures.
+It had been stale at rung 1 since the 2026-08-25 re-run and **no generator
+produced it**. Owner is now `binn-lab/src/paper_figures.rs`
+(`draw_fig8_transfer_ladder`), and `scripts/test_paper_figures_match_the_spec.py`
+checks rung 1 against **Table A** and rungs 2–4 against **Table C** of
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md), and asserts each of the
+three bans above. `fig4_` name is historical and not renamed.
 
 ## Figure 0 — Claim-axis legend
 

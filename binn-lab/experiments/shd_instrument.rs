@@ -965,7 +965,11 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         && evaluation.majority_prediction < 0.30
         && evaluation.silent_fraction <= 0.95
         && evaluation.saturated_fraction <= 0.05
-        && diagnostics.non_finite_events == 0;
+        && diagnostics.non_finite_events == 0
+        // A forward that produced NaN or infinite logits cannot have produced a
+        // meaningful accuracy, and `non_finite_events` above does not see it:
+        // it counts gradient and update excursions during TRAINING.
+        && evaluation.non_finite_forward == 0;
     // Appended, never inserted, and absent for the four base arms, so Gate F's
     // explicit `COMPARED_FIELDS` list and every recorded cell are unaffected.
     // Present when the arm is attentive so that a cell can never be read as a
@@ -990,7 +994,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"accuracy\":{:.9},\"classes_predicted\":{},\"majority_prediction\":{:.9},\
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
-         \"non_finite_events\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
+         \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
          \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}}}\n",
         weights.arm.label(),
         contract.id(),
@@ -1009,6 +1013,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         json_scalar(diagnostics.gradient_norm_sum / diagnostics.optimizer_steps.max(1) as f64),
         json_scalar(diagnostics.update_rms_sum / diagnostics.optimizer_steps.max(1) as f64),
         diagnostics.non_finite_events,
+        evaluation.non_finite_forward,
         surrogate_scale,
         clip_grad_norm.map_or("null".to_string(), |v| format!("{v:.9}")),
         diagnostics.clipped_steps,
@@ -1074,6 +1079,29 @@ struct Evaluation {
     mean_firing_rate: f64,
     silent_fraction: f64,
     saturated_fraction: f64,
+    /// Test samples whose forward produced a non-finite logit.
+    ///
+    /// # The hole this closes
+    ///
+    /// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §3 records it verbatim and it
+    /// went unfixed until 2026-08-29: *"a cell whose logits are non-finite
+    /// still reports a `prediction` and an `accuracy` as if meaningful.
+    /// `non_finite_events` counts gradient/update excursions, not forward
+    /// ones."*
+    ///
+    /// `argmax` orders by `total_cmp`, under which NaN sorts **above** every
+    /// real, so a NaN logit does not crash and does not abstain — it wins, and
+    /// its class is counted as a prediction. The fully-degenerate case was
+    /// already caught downstream, because every sample then predicts one class
+    /// and the pass predicate requires `classes_predicted == n_classes`. **The
+    /// partial case was not caught by anything**: a minority of poisoned
+    /// samples leaves the class histogram healthy and silently moves
+    /// `accuracy`, which is the campaign's primary quantity, beside
+    /// `non_finite_events: 0`.
+    ///
+    /// This is the register's dominant failure class — a guard that cannot fire
+    /// — in the one field every published number is built from.
+    non_finite_forward: usize,
 }
 
 fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Evaluation, String> {
@@ -1086,8 +1114,14 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
     // care, but `unit_rate` is a float sum and would drift with thread count if
     // the order were not pinned. It feeds `mean_firing_rate`, `silent_fraction`
     // and `saturated_fraction` — three Gate F compared fields.
+    let mut non_finite_forward = 0usize;
     for chunk in samples.chunks(PARALLEL_CHUNK) {
-        let computed: Vec<Result<(usize, Vec<f32>), String>> = chunk
+        // Finiteness is decided inside the closure, on the logits themselves,
+        // and returned as a flag rather than by carrying `logits` out — the
+        // vector is `n_classes` long per sample and cloning it would cost the
+        // evaluation pass for a boolean. The count is an integer, so unlike
+        // `unit_rate` it does not depend on accumulation order.
+        let computed: Vec<Result<(usize, Vec<f32>, bool), String>> = chunk
             .par_iter()
             .map(|sample| {
                 shd_matched_loss_and_gradient_arm_scaled_prepared(
@@ -1096,11 +1130,17 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
                     sample,
                     1.0,
                 )
-                .map(|(forward, _)| (forward.prediction, forward.rates))
+                .map(|(forward, _)| {
+                    let finite = forward.logits.iter().all(|value| value.is_finite());
+                    (forward.prediction, forward.rates, finite)
+                })
             })
             .collect();
         for (sample, outcome) in chunk.iter().zip(computed) {
-            let (prediction, rates) = outcome?;
+            let (prediction, rates, logits_finite) = outcome?;
+            if !logits_finite {
+                non_finite_forward += 1;
+            }
             correct += usize::from(prediction == sample.label as usize);
             predictions[prediction] += 1;
             for (unit, rate) in unit_rate.iter_mut().zip(rates) {
@@ -1126,6 +1166,7 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
         mean_firing_rate,
         silent_fraction,
         saturated_fraction,
+        non_finite_forward,
     })
 }
 
@@ -1546,6 +1587,108 @@ mod tests {
                 bits
             })
             .collect()
+    }
+
+    /// A forward that overflows must not be scored as if it had not.
+    ///
+    /// `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §3 named this and it stayed
+    /// open until 2026-08-29. The fixture is deliberately the REALISTIC shape —
+    /// every weight finite, the logits overflowing during accumulation — rather
+    /// than a NaN poked into a weight vector, because that is what h1024
+    /// actually does at peak gradient norms of 4.9e32, and because a
+    /// non-finite *weight* is already rejected at construction.
+    ///
+    /// Two assertions, and the second is the one that matters. `argmax` orders
+    /// by `total_cmp`, under which NaN outranks every real: an overflowing
+    /// forward does not crash and does not abstain, it wins and is counted. So
+    /// the pre-fix code returned a well-formed accuracy here, and the only way
+    /// to see the difference is to look at the new counter.
+    #[test]
+    fn a_forward_that_overflows_is_counted_rather_than_scored() {
+        let samples: Vec<_> = (0..8).map(sample).collect();
+
+        let healthy = ShdArmWeights::new(
+            ShdMatchedWeights::deterministic(40, 8, 4, 7),
+            MatchedArm::ALL[0],
+            Vec::new(),
+        )
+        .expect("arm");
+        let clean = evaluate(&healthy, &samples).expect("evaluate");
+        assert_eq!(
+            clean.non_finite_forward, 0,
+            "the healthy fixture already overflows; it cannot show the defect"
+        );
+
+        // Every other field, pinned to the value the PRE-FIX code produced.
+        //
+        // These six numbers were captured by running this fixture through
+        // `evaluate` at the commit before the guard existed, not by reading
+        // them back off the new implementation. That is the whole point: the
+        // guard reads `forward.logits`, which the forward already computed and
+        // returned, and adds an integer count — so a healthy cell's
+        // measurements must be untouched. Gate F would normally establish that
+        // over archived cells, and it cannot run in a worktree without the
+        // initialization artefacts, so the property is pinned here instead of
+        // being argued from the diff.
+        assert_eq!(clean.accuracy, 0.125);
+        assert_eq!(clean.classes_predicted, 3);
+        assert_eq!(clean.majority_prediction, 0.5);
+        assert_eq!(clean.mean_firing_rate, 0.04817708465270698);
+        assert_eq!(clean.silent_fraction, 0.375);
+        assert_eq!(clean.saturated_fraction, 0.0);
+
+        // Finite weights near the top of f32's range, in the READ-OUT only.
+        //
+        // Inflating `w_in` instead does not work, and the reason is worth
+        // keeping: the membrane goes to `inf` on the first frame, the next step
+        // computes `alpha * inf * (1.0 - 1.0)` and gets NaN, and `NaN >=
+        // threshold` is false — so the neuron simply stops spiking and the
+        // read-out stays finite. The spiking nonlinearity absorbs an input-side
+        // overflow. It cannot absorb an output-side one: rates are healthy, in
+        // [0, 1], and `b_out + sum(w_out * rate)` leaves f32's range.
+        // `w_in` is raised only enough to make every unit fire every frame, so
+        // the rates are ~1.0 and the read-out sum is eight terms of 3e38 rather
+        // than eight terms of 3e38 times a small duty cycle. At the
+        // deterministic init the rates are low enough that the sum stays inside
+        // f32 and the fixture silently stops demonstrating anything — which it
+        // did on the first attempt, so the firing rate is asserted below.
+        let mut base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+        for value in &mut base.w_in {
+            *value = 1.0;
+        }
+        for value in &mut base.w_out {
+            *value = 3.0e38;
+        }
+        assert!(
+            base.w_in.iter().chain(base.w_out.iter()).all(|v| v.is_finite()),
+            "the fixture must overflow in the FORWARD, not in the weights"
+        );
+        let overflowing =
+            ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
+
+        let poisoned = evaluate(&overflowing, &samples).expect("evaluate");
+        // The fixture's own precondition: if the units stop firing, the
+        // read-out sum shrinks back inside f32 and the assertion below would
+        // pass or fail for a reason that has nothing to do with the guard.
+        assert!(
+            poisoned.mean_firing_rate > 0.5,
+            "fixture fires at {:.4}; the read-out sum will not leave f32's range",
+            poisoned.mean_firing_rate
+        );
+        assert_eq!(
+            poisoned.non_finite_forward,
+            samples.len(),
+            "every sample's logits are non-finite and every one must be counted"
+        );
+        // The defect, stated as an assertion: the accuracy is still a
+        // well-formed number in [0, 1]. Nothing about the value itself reveals
+        // that it was computed over poisoned forwards, which is exactly why the
+        // count has to exist and has to reach the pass predicate.
+        assert!(
+            (0.0..=1.0).contains(&poisoned.accuracy),
+            "accuracy {} is not in [0, 1]",
+            poisoned.accuracy
+        );
     }
 
     /// Thread-count independence, for **every arm** and at prime thread counts.

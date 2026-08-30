@@ -1,5 +1,28 @@
 # PAPER_METRICS_FULL — hardened harvest
 
+> **SUPERSEDED IN PART — 2026-08-25 matched-architecture re-run, banner added
+> 2026-08-29.** **Table A was the superseded pre-repair block**, published as
+> current: DFA `0.9387` / gap LCB `0.6894` and RL `0.9200` / `0.6846`, under
+> three hashes that were **retired** on 2026-08-25 and that `from_hash` no
+> longer resolves. Those are the exact values
+> [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) §"Figure 6" names as
+> "superseded and not for drawing" — from a forward pass that emitted **zero
+> spikes at any seed** — and the figure generator is machine-checked against
+> drawing them while this sheet went on printing them.
+>
+> Table A below is now the re-run. The archived block is kept beneath it,
+> marked, because a withdrawal that leaves no trace is indistinguishable from a
+> claim that was never made.
+>
+> **Tables B–F are unaffected.** None of those arms runs on the matched
+> dense-LIF forward; the C1, live-transfer, break-it and XOR rows are the same
+> measurements they were.
+>
+> This document sits in `PAPER_SIDE` — the paper's own downstream artefacts,
+> which `check_every_number.py` deliberately does not sweep — so no number check
+> reached it. `scripts/test_published_hashes_resolve.py`, written 2026-08-29,
+> is what found it.
+
 **Authority:** on-disk notes only. Dual gap on live arms; gate unchanged.  
 **Companions:** [`HARD_AUDIT.md`](HARD_AUDIT.md) · [`CLAIM_AXIS.md`](CLAIM_AXIS.md) · [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md) · camp [`runs/2026-07-23-paper-hard-both/`](runs/2026-07-23-paper-hard-both/)
 
@@ -7,14 +30,39 @@ Gate: local ≥ 0.65 **and** dense-local gap LCB > 0.5. Chance-normalized gap is
 
 ---
 
-## Table A — Matched dense-LIF
+## Table A — Matched dense-LIF (2026-08-25 re-run, `MATCHED_INPUT_SCALE = 2.0`, n = 20)
 
-| Arm | Hash | Axis | Verdict | Primary | Gap LCB | Source |
+Feed-forward / recurrent, both graphs. Row-by-row provenance is **Table A** of
+[`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md), which carries the per-graph
+hashes; this sheet lists the hash whose frozen-hash test asserts it.
+
+| Arm | Hash | Axis | Verdict | Primary (ff / rec) | Gap LCB (ff / rec) | Source |
 |---|---|---|---|---:|---:|---|
-| Broadcast 3F (v4) | `c1-match-5dc6822e71229e9e` | Novel-CS | **FAIL** | 0.5000 | 0.0000 | [`c1_match.md`](c1_match.md) |
-| DFA (v5) | `c1-dfa-c8c4fe0899908b84` | Novel-CS | **PASS** | 0.9387 | 0.6894 | [`c1_dfa.md`](c1_dfa.md) |
-| RL×B (v12) | `c1-rl-42eddc9c801308e9` | Novel-CS | **PASS** | 0.9200 | 0.6846 | [`c1_rl.md`](c1_rl.md) |
+| Broadcast ±1 3F (v4) | `c1-match-6f6000f148f7d30c` | Novel-CS | **FAIL** both | 0.5000 / 0.5100 | 0.0000 / −0.0192 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
+| DFA (v5) | `c1-dfa-f79c01ea36fe27d7` | Novel-CS | **PASS** both | 0.9925 / 0.9875 | 0.9689 / 0.9509 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
+| RL×B (v12) | `c1-rl-d35e13c758e522f8` | Novel-CS | **PASS** both | 0.9950 / 0.9812 | 0.9765 / 0.9079 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
+| Discrete EventProp (v28) | `c1-eventprop-f1e841c29755b1c8` | Novel-CS | **PASS** both | 0.9450 / 0.8900 | 0.7911 / 0.6494 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
 | Undertrain 4×ep (v22) | `c1-match-b46b23549b37d90a` | Integrity | **FAIL** | 0.5000 | 0.0000 | [`c1_match_ep4.md`](c1_match_ep4.md) |
+
+**The gate no longer ranks this field.** The SuperSpike reference saturates at
+**1.0000** on both graphs, so every PASS above reduces to "the arm scored above
+0.75" and no ordering among them may be claimed — see
+[`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) Figure 6 ban 1, which the figure
+generator is tested against. Contrasts, measured and **not gated**:
+broadcast-graded 0.9975 / 0.9975, RL graded-reward 0.8787 / 0.9100, RL ±1
+broadcast 0.7775 / 0.7962.
+
+### Table A (archived) — the pre-repair block, retired and not citable as current
+
+Kept because a withdrawal that leaves no trace is indistinguishable from a claim
+that was never made. Every hash here is **retired** and does not resolve; every
+number is from a forward that emitted no spikes.
+
+| Arm | Retired hash | Verdict as recorded | Primary | Gap LCB | Source |
+|---|---|---|---:|---:|---|
+| Broadcast 3F (v4) | `c1-match-5dc6822e71229e9e` | FAIL | 0.5000 | 0.0000 | [`c1_match.md`](c1_match.md) |
+| DFA (v5) | `c1-dfa-c8c4fe0899908b84` | PASS | 0.9387 | 0.6894 | [`c1_dfa.md`](c1_dfa.md) |
+| RL×B (v12) | `c1-rl-42eddc9c801308e9` | PASS | 0.9200 | 0.6846 | [`c1_rl.md`](c1_rl.md) |
 
 ---
 

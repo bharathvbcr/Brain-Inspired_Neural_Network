@@ -119,12 +119,22 @@ it.
 
 1. **Other f32 accumulations.** `#6` was fixed at `l2_norm`. `softmax` is
    correctly max-subtracted in both copies, and `ArmAdam::update` already
-   accumulates in f64. Not audited: the `evaluate()` rate/silent/saturated
-   statistics, and `binn-data` framing accumulations.
-2. **Non-finite logits.** `argmax` is now deterministic under NaN, but a cell
-   whose logits are non-finite still reports a `prediction` and an `accuracy`
-   as if meaningful. `non_finite_events` counts gradient/update excursions, not
-   forward ones.
+   accumulates in f64. Not audited: `binn-data` framing accumulations. **The
+   `evaluate()` rate/silent/saturated statistics were audited 2026-08-29 and
+   are clean** — `unit_rate` accumulates in `f64` and the sample-order
+   discipline is documented at the loop, because it feeds three Gate F compared
+   fields.
+2. **Non-finite logits. CLOSED 2026-08-29** —
+   [`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md).
+   It read: *"`argmax` is now deterministic under NaN, but a cell whose logits
+   are non-finite still reports a `prediction` and an `accuracy` as if
+   meaningful. `non_finite_events` counts gradient/update excursions, not
+   forward ones."* Open for 26 days, and it was the highest-risk entry in this
+   section: the accuracy is the field every published number is built from, and
+   the total case was caught downstream while the **partial** case — a minority
+   of poisoned samples, class histogram intact — was caught by nothing.
+   `evaluate` now counts non-finite forwards, the pass predicate requires zero,
+   and `cell_validity.py` voids a cell carrying any.
 3. **Gate E / G7.** No cross-backend recurrent fixture exists. rust↔python
    recurrent agreement is **argued, not measured** — and this is a
    divergence-class gap (#8, #9), the class with the worst track record here.

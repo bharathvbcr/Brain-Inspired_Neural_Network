@@ -208,7 +208,7 @@ The benchmark tests temporal structure preservation across depth ($L \in \{1, 2,
 
 ### 3.1 Matched-architecture primary results
 
-All figures below are the 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`, n = 20, reported on both forward graphs because the arms were historically split across two and the difference exceeds the registered 0.02 bar on two of them ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
+All figures below are the 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`, n = 20, reported on both forward graphs. The forward is held fixed and only the update rule changes (Figure 5); the arm means and both halves of the gate are drawn by verdict rather than ranked (Figure 6) because the arms were historically split across two and the difference exceeds the registered 0.02 bar on two of them ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
 
 | arm | feed-forward | recurrent | verdict |
 |---|---:|---:|---|
@@ -229,15 +229,15 @@ Honesty note required in the main text: on the DFA matched schedule, a broadcast
 
 ### 3.2 Engine C1 secondary results
 
-Canonical C1 fails Gate G2 (local 0.4912, gap LCB −0.0048). Trial isolation and temporal positive-control sensitivities fail without clearing the accuracy floor. Capacity sensitivity clears the accuracy floor (0.6775) but leaves gap LCB at 0.0000 versus dense/gradient references—descriptive only, not a G2 PASS.
+Canonical C1 fails Gate G2 (local 0.4912, gap LCB −0.0048) (Figure 7); local-assembly and dense-local are **at chance on a two-class task**, which the figure marks with an explicit 0.50 line rather than letting bars from a zero baseline read as half the reference. Trial isolation and temporal positive-control sensitivities fail without clearing the accuracy floor. Capacity sensitivity clears the accuracy floor (0.6775) but leaves gap LCB at 0.0000 versus dense/gradient references—descriptive only, not a G2 PASS.
 
 ### 3.3 Live transfer, gap-close, and break-it
 
-Live opt-in REINFORCE feedback fails G2 (local 0.4900, gap LCB 0.0737). Epoch matching alone does not rescue random-B live RFB (local 0.4838). Structured frozen B clears the accuracy floor (0.7262) with gap LCB 0.2567 but still fails the gap bar. Stacking epochs under structured B regresses (0.5200). Structured B on a capacity substrate yields the best gap LCB in the prior suite (0.3127) while clearing the floor (0.6825), remaining short of 0.5. Eligibility×REINFORCE and restored target teach clear the floor but do not beat structured B alone. Break-it protocols close remaining differentials without remassage: live graded DFA (v20) reaches local 0.7325 with gate LCB 0.2601 and chance LCB 0.3321—floor yes, gate no. Soft-WTA × structured B (v21) regresses to chance (0.5025). Matched three-factor under 4× epochs (v22) stays at 0.5000. Finite-θ under SFB (v23) clears the floor (0.6638) with LCB 0.2370. Continuous structured B (v24) does not beat sign-truncated v15 (0.6437 / 0.1380). Spiking-path true DFA rescue fails in one honest attempt (0.6513, gap LCB 0.0733). Differential closure: [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md).
+The ladder from the matched PASS down through every live arm (Figure 8) is drawn on **two** axes — the 0.65 accuracy floor and the 0.5 gap-LCB gate — because clearing the floor is not clearing the gate, and with a substrate break between rung 1 and the rest, because rung 1 is the matched dense-LIF forward and nothing below it is. Live opt-in REINFORCE feedback fails G2 (local 0.4900, gap LCB 0.0737). Epoch matching alone does not rescue random-B live RFB (local 0.4838). Structured frozen B clears the accuracy floor (0.7262) with gap LCB 0.2567 but still fails the gap bar. Stacking epochs under structured B regresses (0.5200). Structured B on a capacity substrate yields the best gap LCB in the prior suite (0.3127) while clearing the floor (0.6825), remaining short of 0.5. Eligibility×REINFORCE and restored target teach clear the floor but do not beat structured B alone. Break-it protocols close remaining differentials without remassage: live graded DFA (v20) reaches local 0.7325 with gate LCB 0.2601 and chance LCB 0.3321—floor yes, gate no. Soft-WTA × structured B (v21) regresses to chance (0.5025). Matched three-factor under 4× epochs (v22) stays at 0.5000. Finite-θ under SFB (v23) clears the floor (0.6638) with LCB 0.2370. Continuous structured B (v24) does not beat sign-truncated v15 (0.6437 / 0.1380). Spiking-path true DFA rescue fails in one honest attempt (0.6513, gap LCB 0.0733). Differential closure: [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md).
 
 ### 3.4 Task evidence
 
-On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip. On mid-init two-layer depth locality, broadcast also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
+On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip (Figure 9). On mid-init two-layer depth locality, broadcast also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
 
 ### 3.5 SHD attention read-out and mechanism
 
@@ -320,7 +320,7 @@ order of magnitude larger than that drift.)*
 
 ### 3.7 The read-out does not substitute for temporal state in the substrate
 
-The +0.1258 of §3.5 has two readings the campaign could not separate, because every one of its 720 cells sat on a single substrate, `ff+fixed`: the read-out **adds** temporal structure no substrate of this kind represents, or it **substitutes** for the threshold adaptation and recurrence that `ff+fixed` happens not to have. ETLP's conclusion — that adaptation and a recurrent topology are what a spiking network needs for rich temporal structure — makes the second reading the live one. Three waves settle it.
+The +0.1258 of §3.5 has two readings the campaign could not separate, because every one of its 720 cells sat on a single substrate, `ff+fixed`: the read-out **adds** temporal structure no substrate of this kind represents, or it **substitutes** for the threshold adaptation and recurrence that `ff+fixed` happens not to have. ETLP's conclusion — that adaptation and a recurrent topology are what a spiking network needs for rich temporal structure — makes the second reading the live one. Three waves settle it (Figure S), and the limits below travel on the figure rather than in its caption alone.
 
 **Adaptation makes no difference to the gain, or to anything else.** At the anchor (h128, `published-2ms`, `adjacent-sum-5`, e400, d32/L4, n=12), attention's gain is **+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif`. The difference is **+0.0027** against a two-sided bar of 0.03, and is positive in **6 of 12** seeds — a coin flip. Adaptation alone does not help either: `ff+alif` reaches **0.7018** against `ff+fixed`'s 0.7062, better in **3 of 12** seeds, with **0 of 12** over the 0.80 gate. At this operating point threshold adaptation is inert. ([`RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md`](RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md))
 

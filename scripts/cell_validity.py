@@ -177,9 +177,40 @@ def validity_problems(cell: dict, spec: dict | None = None) -> list[str]:
     if accuracy is not None and not 0.0 <= accuracy <= 1.0:
         problems.append(f"accuracy={accuracy} is outside [0, 1]")
 
+    # `non_finite_forward` counts test samples whose logits left f32's range.
+    # `non_finite_events` beside it does NOT see them: it counts gradient and
+    # update excursions during training, so until 2026-08-29 a cell could score
+    # a minority of poisoned forwards into `accuracy` and report zero of
+    # everything. `argmax` orders by `total_cmp`, under which NaN outranks every
+    # real, so such a sample does not abstain -- it predicts, and is counted.
+    #
+    # Absence is NOT a problem here, unlike every other field above, and the
+    # asymmetry is deliberate: the 861 archived cells predate the guard, and
+    # running them through `_number` would void the entire corpus at a stroke.
+    # What absence means is "this cell was produced before the forward was
+    # checked", which is a provenance fact rather than a defect -- and
+    # `pre_guard_cells()` below exists so that fact stays countable instead of
+    # becoming a silent hole.
+    if "non_finite_forward" in cell:
+        forward = _number(cell, "non_finite_forward", problems)
+        if forward is not None and forward != 0:
+            problems.append(f"non_finite_forward={forward}")
+
     problems.extend(_temporal_problems(cell, spec))
     problems.extend(_gradient_problems(cell))
     return problems
+
+
+def pre_guard_cells(cells) -> int:
+    """How many cells predate the forward-finiteness guard.
+
+    A cell without `non_finite_forward` was produced before the evaluation
+    forward was checked for finiteness, so its `accuracy` carries one fewer
+    guarantee than a cell recorded after 2026-08-29. That is not a defect and
+    it does not void anything -- but it must be countable, because a check that
+    could not run must never be reported as a check that ran and passed.
+    """
+    return sum(1 for cell in cells if "non_finite_forward" not in cell)
 
 
 def _temporal_problems(cell: dict, spec: dict | None) -> list[str]:

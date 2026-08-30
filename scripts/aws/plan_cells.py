@@ -758,6 +758,88 @@ def wave21_the_mechanism_across_the_design_space():
     return cells
 
 
+def wave22_the_mechanism_at_every_operating_point():
+    """W22 - the twelve operating points that carry no `bin-shuffled` twin.
+
+    Registered in `PREREG_2026-08-29_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`.
+
+    `scripts/mechanism_coverage.py` recomputes on every gate run where the
+    difference-in-differences can actually be formed. Wave 21 took that from 2
+    of 21 operating points to 9. This is the remaining twelve, and the point of
+    it is to replace the manuscript's "9 of 21" and its "twelve claim nothing"
+    disclosure by measurement rather than by rewording.
+
+    The rate arm carries no read-out depth, so ONE `ff+fixed` bin-shuffled cell
+    serves every depth at a given (width, contract, geometry). That is why nine
+    of the twelve points need only the attention arm: their rate twin is already
+    in the corpus. Getting this wrong in either direction is expensive -
+    planning the rate arm nine extra times wastes a third of the wave, and
+    omitting it in group A would leave three points still uncoverable after
+    paying for them.
+
+    Group A is the three `fixed-tN` contracts, which have no shuffled arm at
+    all. It is also the group that can surprise: Figure 4 reports the GAIN
+    falling as bins get finer and nothing is known about the shuffle cost on
+    that axis.
+    """
+    cells = []
+    # (contract) at h128 / adjacent-sum-5 / d32-L4, both arms.
+    for contract in ("fixed-t100", "fixed-t250", "fixed-t500"):
+        for seed in SEEDS:
+            cells.append(cell("w22cov", "ff+fixed", 128, 400, seed,
+                              contract=contract, temporal="bin-shuffled"))
+            cells.append(cell("w22cov", "ff+fixed+attn", 128, 400, seed,
+                              contract=contract, attn_dim=32, attn_layers=4,
+                              temporal="bin-shuffled"))
+    # (hidden, geometry, attn_dim, attn_layers) whose rate twin already exists.
+    depths = [
+        (128, ANCHOR[1], 32, 2),
+        (128, ANCHOR[1], 64, 4),
+        (128, "channels-700", 32, 1),
+        (256, ANCHOR[1], 32, 1),
+        (512, ANCHOR[1], 32, 1),
+        (768, ANCHOR[1], 32, 2),
+        (1024, ANCHOR[1], 32, 1),
+        (1024, ANCHOR[1], 32, 2),
+        (1024, ANCHOR[1], 32, 3),
+    ]
+    for hidden, geometry, attn_dim, attn_layers in depths:
+        for seed in SEEDS:
+            cells.append(cell("w22cov", "ff+fixed+attn", hidden, 400, seed,
+                              geometry=geometry, attn_dim=attn_dim,
+                              attn_layers=attn_layers, temporal="bin-shuffled"))
+    return cells
+
+
+def wave23_the_collapse_is_late():
+    """W23 - is the h1024 collapse late, and does stopping early avoid it?
+
+    Registered in `PREREG_2026-08-29_THE_COLLAPSE_IS_LATE.md`, motivated by the
+    POST-HOC `FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md`: at
+    h1024/d32L4, 63 of 68 intact cells reach a training-loss minimum around
+    epoch 39-99 and end 56x above it, while d32L1 (0/20), d32L2 (4/32) and the
+    rate arm (0/32) hold theirs.
+
+    No cell at h1024/d32L4 has ever run at any budget but e400, so the budget
+    axis is untested exactly where the collapse is.
+
+    The d32L2 arm is the control and is NOT optional. If truncating improves L4
+    and leaves L2 alone, the effect is specific to the collapsing arm. If it
+    improves both, e400 is simply past the optimum for every deep read-out at
+    this width and nothing has been learned about the collapse. Without L2 those
+    two outcomes are indistinguishable and the wave cannot fail informatively.
+    """
+    cells = []
+    for epochs in (100, 200):
+        for seed in SEEDS:
+            cells.append(cell("w23bud", "ff+fixed", 1024, epochs, seed))
+            cells.append(cell("w23bud", "ff+fixed+attn", 1024, epochs, seed,
+                              attn_dim=32, attn_layers=4))
+            cells.append(cell("w23bud", "ff+fixed+attn", 1024, epochs, seed,
+                              attn_dim=32, attn_layers=2))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -780,6 +862,8 @@ WAVES = {
     "w19": wave19_does_the_optimum_move_with_width,
     "w20": wave20_the_recurrent_claim_at_thirty_two_seeds,
     "w21": wave21_the_mechanism_across_the_design_space,
+    "w22": wave22_the_mechanism_at_every_operating_point,
+    "w23": wave23_the_collapse_is_late,
 }
 
 

@@ -292,13 +292,22 @@ shuffle cost (+0.0142) in the same sentence as attention's (+0.1347), always.
 **`Uncalibrated`**; criterion 5 (the Python mirror of the attention axis) does not
 exist. The `shd-scientific-sweep` suite is **withdrawn** (it never loaded SHD).
 
-> **Figure-numbering note.** [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) still
-> uses the pre-reframe numbering, in which `Figure 1`–`Figure 4` are the matched /
-> C1 / transfer figures, and it contains **no entry for any SHD figure**. Under the
-> new order, Figures 1–4 above are the SHD figures and the matched-program figures
-> shift to 5–8 (§4–§6 below give the map). **TODO(source needed): Figures 1–4 have
-> no spec entry and no artwork on disk; `PAPER_FIGURE_SPEC.md` must be renumbered
-> and extended separately.** No artwork path is asserted here for them.
+> **Figure-numbering note — rewritten 2026-08-29, because it described a spec
+> that no longer exists.** It said [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md)
+> "still uses the pre-reframe numbering" and "contains **no entry for any SHD
+> figure**", and carried a `TODO(source needed)` saying Figures 1–4 had no spec
+> entry and no artwork. All of that was true when written and none of it has
+> been true since **2026-08-27**, when the spec was renumbered and all four lead
+> figures were specified and drawn; Figure 1 gained Panel D and Figure 3 its
+> annotation on 2026-08-29.
+>
+> The spec now numbers the SHD read-out figures **1–4** and the matched program
+> **5–9**, exactly as this section assumed. Two corrections travel with that:
+> the matched program is **5–9 and not 5–8** — the XOR locality figure is
+> Figure 9 — and **Figure 4 is the resolution ladder**, not the substrate
+> panel this file's map called it. The substrate comparison (Table SHD-7,
+> waves 12–14) has **no figure specified in any sheet**; it is not Figure 4 and
+> it is not drawn.
 
 ---
 
@@ -567,17 +576,42 @@ cited row-by-row in [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md).
 
 ## Figure ↔ binary / hash map
 
-| Figure / table | Binary | Hash / note |
-|---|---|---|
-| **Fig. 1 difference-in-differences** | `shd-instrument init` + `train-cell`, `--arm ff+fixed[+attn]`, `--temporal intact\|bin-shuffled` | §9.1 commands; cells in [`shd_attention_campaign_v2/`](shd_attention_campaign_v2/) (`w17hdl`) — **TODO(source needed): no `PAPER_FIGURE_SPEC.md` entry, no artwork on disk** |
-| **Fig. 2 headline + seed distribution** | same, `--temporal intact` | `w17hdl` at n=32 — **TODO(source needed): no spec entry, no artwork** |
-| **Fig. 3 width ladder + threshold** | same, `--hidden 128…1024`; levers `--surrogate-scale` / `--clip-grad-norm` | `w8wid`, `w15col`, `w16lad` — **TODO(source needed): no spec entry, no artwork** |
-| **Fig. 4 substrate panel** | same, `--arm ff+alif[+attn]` / `rec+alif[+attn]`, `--w-rec-scale` | waves 12–14 — **TODO(source needed): no spec entry, no artwork** |
-| Fig. 5 matched means schematic *(spec `Figure 1`)* | `c1 --matched-arch/--matched-dfa/--matched-rl/--eventprop` | §4 hashes |
-| Fig. 6 matched means *(spec `Figure 2`)* | same | §4 hashes; redraw against a 1.0000 reference |
-| **Fig. M mechanism** | matched + XOR deep suite | broadcast-graded **0.9975** from [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/); XOR from [`deep_xor_thresh.json`](deep_xor_thresh.json) |
-| Fig. 7 C1 conditions *(spec `Figure 3`)* | `c1` | `c1-118207fbc3eaba53` → [`c1_g2.md`](c1_g2.md) |
-| Fig. 8 transfer ladder *(spec `Figure 4`)* | `c1 --reinforce-fb` / gap-close flags | §6 hashes → [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md) |
-| Table credit arms | `credit-assignment` | `c1x-*` in [`credit_assignment.md`](credit_assignment.md) |
+The `*(spec `Figure N`)*` annotations this table used to carry are gone: they
+pointed at the **pre-reframe** numbering and the spec was renumbered on
+2026-08-27, so every one of them named the wrong section. Figure numbers here
+are the spec's, which is the owner. Artwork stems are the files on disk, whose
+`fig1_`/`fig2_`… names are historical and deliberately **not** renamed.
+
+| Figure / table | Binary | Hash / note | Artwork |
+|---|---|---|---|
+| **Fig. 1 difference-in-differences** | `shd-instrument init` + `train-cell`, `--arm ff+fixed[+attn]`, `--temporal intact\|bin-shuffled` | §9.1 commands; cells in [`shd_attention_campaign_v2/`](shd_attention_campaign_v2/) (`w17hdl`); Panel D from `w21gen` | `leadfig1_the_conditional` |
+| **Fig. 2 headline + seed distribution** | same, `--temporal intact` | `w17hdl` at n=32 | `leadfig2_headline_accuracy` |
+| **Fig. 3 width ladder + threshold** | same, `--hidden 128…1024`; levers `--surrogate-scale` / `--clip-grad-norm` | `w8wid`, `w15col`, `w16lad` | `leadfig3_width_ladder` |
+| **Fig. 4 resolution ladder (`fixed-tN`)** | same, `--contract fixed-t100\|fixed-t250\|fixed-t500` | `w10res` → Table SHD-6 | `leadfig4_resolution_ladder` |
+| Fig. 5 matched rule-swap schematic | `c1 --matched-arch/--matched-dfa/--matched-rl/--eventprop` | §4 hashes | `fig1_matched_rule_swap` |
+| Fig. 6 matched means | same | §4 hashes; grouped by verdict against a 1.0000 reference, and **not ranked** | `fig2_matched_means` |
+| **Fig. S substrate** | `shd-instrument`, `--arm ff+alif[+attn]` / `rec+alif[+attn]`, `--w-rec-scale` on `init` | waves 12–14 → Table SHD-7 | `figS_substrate` |
+| **Fig. M mechanism** | matched + XOR deep suite | broadcast-graded **0.9975** from [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/); XOR from [`deep_xor_thresh.json`](deep_xor_thresh.json) | `figM_mechanism_richness_addressability` |
+| Fig. 7 C1 conditions | `c1` | `c1-118207fbc3eaba53` → [`c1_g2.md`](c1_g2.md) | `fig3_engine_c1_means` |
+| Fig. 8 transfer ladder | `c1 --reinforce-fb` / gap-close flags | §6 hashes → [`GAP_CLOSE_RFB_TRANSFER.md`](GAP_CLOSE_RFB_TRANSFER.md) | `fig4_transfer_ladder` |
+| Fig. 9 XOR locality | deep XOR suite | [`deep_xor_thresh.json`](deep_xor_thresh.json) → Table D | `fig5_xor_locality` |
+| Graphical abstract *(secondary program only)* | matched + live transfer | §4 and §6 hashes | `graphical_abstract` |
+| Graphical abstract *(lead program)* | `shd-instrument` waves 9 / 15–17 / 21 | Tables SHD-1, SHD-2, SHD-2b | `lead_graphical_abstract` |
+| Table credit arms | `credit-assignment` | `c1x-*` in [`credit_assignment.md`](credit_assignment.md) | — |
+
+**The substrate panel is Figure S**, specified and drawn 2026-08-29. It was
+listed above as "Fig. 4" until then — the resolution ladder's number — so the
+map looked complete while naming a figure that did not exist, and correcting
+Figure 4's identity is what surfaced it. It is **lettered**, beside Figure M: a
+fifth lead figure would have renumbered the secondary program 5–9 → 6–10 one day
+after the 2026-08-27 renumber, for one figure.
+
+**Every figure this package specifies is now drawn**, and every one by
+`binn-lab/src/paper_figures.rs`.
+
+Every stem in the artwork column is written by
+`binn-lab/src/paper_figures.rs`, and
+`scripts/test_paper_figures_match_the_spec.py` fails if this table and the
+generator's stem list disagree.
 
 Where a draft needs a number not yet pasted: write **“fill from replay”** and run the hash command — do not invent.

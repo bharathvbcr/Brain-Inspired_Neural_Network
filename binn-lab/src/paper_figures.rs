@@ -47,10 +47,76 @@ mod nums {
     pub const DFA: Both = (0.9925, 0.9875);
     /// `MatchedBroadcastGradedError` — the contrast the honesty note is about.
     pub const BROADCAST_GRADED: Both = (0.9975, 0.9975);
+    /// `MatchedEventProp` — discrete EventProp-style spike-adjoint. **PASS on
+    /// both graphs, and the archived FAIL is WITHDRAWN**: at
+    /// `MATCHED_INPUT_SCALE = 0.5` a spike-adjoint method had no spikes to
+    /// differentiate through, and the 0.5000 that produced was a property of
+    /// the forward rather than of the rule.
+    pub const EVENTPROP: Both = (0.9450, 0.8900);
+    /// `MatchedRlGraded` — RL graded-reward broadcast. Measured, not gated.
+    pub const RL_GRADED: Both = (0.8787, 0.9100);
     /// SuperSpike BPTT. Saturates in every suite on both graphs, which is what
     /// makes the passing arms unrankable: every one of them reduces to
     /// "above 0.75" against a reference at 1.
     pub const CEILING: Both = (1.0000, 1.0000);
+
+    /// Figure 6 Panel B — the gate quantity, `(arm, ff, rec)`, Table A.
+    ///
+    /// Not `Both`, deliberately: the broadcast row is **negative on the
+    /// recurrent graph** and a `Both` here would be silently excluded from the
+    /// spec-parity check, which only reads unsigned pairs. Ban 3 requires that
+    /// value be drawn rather than clipped at zero, so it gets a shape that
+    /// carries a sign.
+    ///
+    /// Row order is Table A's, not sorted: ban 1 forbids an ordering among the
+    /// passing arms and a sorted second panel would supply one.
+    pub const GAP_LCB: [(&str, f64, f64); 4] = [
+        ("broadcast ±1 three-factor", 0.0000, -0.0192),
+        ("graded DFA", 0.9689, 0.9509),
+        ("REINFORCE × frozen B_i", 0.9765, 0.9079),
+        ("discrete EventProp spike-adjoint", 0.7911, 0.6494),
+    ];
+    /// The gate: primary mean ≥ `GATE_FLOOR` **and** gap LCB > `GATE_LCB`.
+    /// Both are drawn, on both figures that report against them, because
+    /// "cleared the floor" and "cleared the gate" are different sentences and
+    /// this package keeps them apart everywhere else.
+    pub const GATE_FLOOR: f64 = 0.65;
+    pub const GATE_LCB: f64 = 0.5;
+
+    // --- Figure 8: the transfer ladder (Table A rung 1, Table C rungs 2-4) ---
+    //
+    // Rung 1 is the matched dense-LIF forward. Rungs 2-4 are the live
+    // event-driven muted-θ / k-WTA engine. They are NOT one system at four
+    // settings, and ban 1 turns on that.
+
+    /// `(protocol, local, gap LCB)` in **protocol order**, from Table C.
+    ///
+    /// v14-v19, the gap-close family. Sorting these would assert a ranking over
+    /// a sequential exploratory family that has no multiplicity-corrected
+    /// claim, which is ban 3.
+    pub const GAP_CLOSE: [(&str, f64, f64); 6] = [
+        ("v14 epoch", 0.4838, -0.0100),
+        ("v15 structured B", 0.7262, 0.2567),
+        ("v16 structured × epoch", 0.5200, 0.0844),
+        ("v17 structured × capacity", 0.6825, 0.3127),
+        ("v18 elig × REINFORCE", 0.7125, 0.2351),
+        ("v19 structured × teach", 0.6700, 0.2238),
+    ];
+    /// v20-v24, the break-it family, protocol order, from Table C.
+    pub const BREAK_IT: [(&str, f64, f64); 5] = [
+        ("v20 live DFA", 0.7325, 0.2601),
+        ("v21 soft-WTA × SFB", 0.5025, 0.0406),
+        ("v22 match 4× epochs", 0.5000, 0.0000),
+        ("v23 finite-θ SFB", 0.6638, 0.2370),
+        ("v24 continuous B", 0.6437, 0.1380),
+    ];
+    /// Rung 2, the arm the ladder descends to: v13 live RFB.
+    pub const LIVE_RFB_LCB: f64 = 0.0737;
+    /// The two landmarks the spec names, and the only two. v15 carries the best
+    /// local below rung 1 among the gap-close family; v17 the best gap LCB
+    /// anywhere below rung 1 — and 0.3127 against a bar of 0.5 is not close.
+    pub const BEST_LOCAL_GAP_CLOSE: f64 = 0.7262;
+    pub const BEST_LCB_ANYWHERE: f64 = 0.3127;
 
     // --- LEAD PROGRAM: the SHD read-out, Table SHD-2 -------------------------
     //
@@ -215,6 +281,60 @@ mod nums {
     /// attention arm degrading rather than the rate arm catching up.
     pub const RESOLUTION_BASELINE_DRIFT: f64 = 0.0397;
 
+    // --- Figure S: the substrate panel (Table SHD-7) -------------------------
+    //
+    // The anchor campaign's 720 cells all sat on ONE substrate, so its gain had
+    // two readings it could not separate: the read-out ADDS temporal structure
+    // no such substrate represents, or it SUBSTITUTES for the adaptation and
+    // recurrence `ff+fixed` happens not to have. Three waves settle it.
+
+    /// `(substrate, note, surrogate scale, pairs, rate, attention, gain)`.
+    ///
+    /// Row order is Table SHD-7's, which is also the order the waves ran in.
+    /// Ban 1 forbids sorting by gain: that would put `rec+alif` last as a
+    /// climax and assert the ordering the record explicitly refuses.
+    pub const SUBSTRATE: [(&str, &str, f64, u32, f64, f64, f64); 4] = [
+        ("ff+fixed", "the anchor", 1.0, 12, 0.7062, 0.8320, 0.1258),
+        ("ff+alif", "threshold adaptation", 1.0, 12, 0.7018, 0.8303, 0.1285),
+        ("rec+alif", "recurrent + adaptation", 0.4, 10, 0.5262, 0.7874, 0.2612),
+        ("ff+fixed", "scale-matched control", 0.4, 12, 0.7088, 0.8289, 0.1201),
+    ];
+    /// A-1: gain(`ff+alif`) − gain(`ff+fixed`), against a two-sided 0.03 bar.
+    /// Positive in 6 of 12 — a coin flip, and inert AT THIS OPERATING POINT
+    /// only, which is ban 4.
+    pub const SUBSTRATE_A1: f64 = 0.0027;
+    /// M-2: gain(`rec+alif`) − gain(`ff+fixed`) at matched scale 0.4.
+    pub const SUBSTRATE_M2: f64 = 0.1411;
+    /// M-4: `ff+fixed` at scale 0.4 against the same arm archived at 1.0. The
+    /// scale is not doing the work.
+    pub const SUBSTRATE_M4: f64 = 0.0026;
+    pub const SUBSTRATE_BAR: f64 = 0.03;
+    /// Ban 2. `rec+alif` starts 0.18 lower and has this much room to recover;
+    /// gain/headroom is 0.551 against 0.412 and the ratio falls 2.2x -> 1.34x.
+    /// **Post-hoc and not registered**, and the figure says so — it is not a
+    /// licence to prefer whichever number is more convenient in either
+    /// direction, so both go on.
+    pub const HEADROOM_REC: f64 = 0.4738;
+    pub const HEADROOM_FF: f64 = 0.2912;
+    pub const HEADROOM_RATIO_REC: f64 = 0.551;
+    pub const HEADROOM_RATIO_FF: f64 = 0.412;
+    pub const RAW_RATIO: f64 = 2.2;
+    pub const NORMALISED_RATIO: f64 = 1.34;
+
+    /// Panel C: `(arm, scale, completed, voided, diverged)` of 12.
+    ///
+    /// This had to be measured before any of Panel A could be, and dropping it
+    /// would turn A-1's scoped null into a general one: `rec+fixed`'s ten voids
+    /// are all SATURATION, so on the recurrent substrate adaptation is
+    /// stabilising — the opposite of the sign that wave's hypothesis asserted.
+    pub const USABILITY: [(&str, f64, u32, u32, u32); 4] = [
+        ("rec+alif", 0.4, 11, 0, 1),
+        ("rec+alif", 1.0, 8, 0, 4),
+        ("rec+fixed", 0.4, 7, 5, 0),
+        ("rec+fixed", 1.0, 5, 5, 2),
+    ];
+    pub const SATURATED_FRACTION_MAX: f64 = 0.523;
+
     // --- XOR locality flip, 1-layer `xor_thresh` (Table D) -------------------
     pub const XOR_BCAST: f64 = 0.5008;
     pub const XOR_DFA: f64 = 0.8267;
@@ -276,6 +396,14 @@ impl Verdict {
     }
 }
 
+/// One verdict group of Figure 6: the verdict, its heading, and its arms as
+/// `(rule, mechanism, ff/rec)`.
+///
+/// Figure 6 groups by verdict rather than listing arms flat, because the spec
+/// forbids any encoding that orders the passing arms and grouping is the
+/// categorical alternative it names.
+type VerdictGroup<'a> = (Verdict, &'a str, &'a [(&'a str, &'a str, nums::Both)]);
+
 fn both(v: nums::Both) -> String {
     format!("{:.4} ff  /  {:.4} rec", v.0, v.1)
 }
@@ -287,9 +415,23 @@ const H: u32 = 900;
 /// three finished panels to fit a fourth, this figure alone is taller.
 const H_LEAD1: u32 = 1380;
 /// Figure 3 gained wave 21's two-line "the mechanism does not track this curve"
-/// annotation, which pushed Panel B and its closing statement down by 60px.
-/// At the standard 900 the last line was drawn at y=900 and was invisible.
+/// annotation, which pushed Panel B and its computed base down by 60px. At the
+/// standard 900 the last line was drawn at y=900 and was invisible.
 const H_LEAD3: u32 = 980;
+/// Figure 6 groups eight arms by verdict and then draws the gap-LCB half of the
+/// gate beneath them. Grouping is the requirement -- the spec bans any encoding
+/// that orders the passing arms -- and eight cards plus four group headings plus
+/// a second panel do not fit 900.
+const H_FIG6: u32 = 1390;
+/// Figure S stacks three panels: four substrate rows on a shared accuracy axis,
+/// three registered contrasts against their bar, and the usability table that
+/// had to be measured before any of Panel A could be. Panel C is a ban, not a
+/// footnote, so it is not the panel that gets compressed to fit 900.
+const H_FIG_S: u32 = 1000;
+/// Figure 8 carries twelve live-engine rows under a substrate break that must
+/// not be compressed away: the break is the figure's first ban, and a divider
+/// squeezed to fit reads as a section heading rather than as a change of system.
+const H_FIG8: u32 = 1020;
 
 /// Generate required camera-ready figures into `out_dir`.
 pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
@@ -311,13 +453,48 @@ pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
         H_LEAD3,
     )?);
     written.extend(write_pair(out_dir, "leadfig4_resolution_ladder", draw_lead_fig4)?);
+    // Deliberately NOT `graphical_abstract`: that file exists and depicts the
+    // SECONDARY program. This one was `TODO(source needed)` until 2026-08-29 --
+    // an authoring task rather than a missing number, since every value it
+    // draws was already published.
+    // Figure S is lettered, beside Figure M: it belongs to the LEAD program and
+    // a fifth lead figure would renumber the secondary program 5-9 -> 6-10 one
+    // day after the 2026-08-27 renumber, for one figure.
+    written.extend(write_pair_sized(
+        out_dir,
+        "figS_substrate",
+        draw_fig_s_substrate,
+        H_FIG_S,
+    )?);
+    written.extend(write_pair(
+        out_dir,
+        "lead_graphical_abstract",
+        draw_lead_graphical_abstract,
+    )?);
     written.extend(write_pair(
         out_dir,
         "figM_mechanism_richness_addressability",
         draw_fig_m,
     )?);
     written.extend(write_pair(out_dir, "fig1_matched_rule_swap", draw_fig1)?);
+    // Figures 6 and 8. Both files existed on disk from 24 July with NO
+    // generator, so the 2026-08-27 re-run that brought the rest of the package
+    // current could not touch them: fig2_ plotted the superseded value block and
+    // fig4_ was stale at rung 1. Authored 2026-08-29; the `fig2_`/`fig4_` stems
+    // are historical and are deliberately not renamed to `fig6_`/`fig8_`.
+    written.extend(write_pair_sized(
+        out_dir,
+        "fig2_matched_means",
+        draw_fig6_matched_means,
+        H_FIG6,
+    )?);
     written.extend(write_pair(out_dir, "fig3_engine_c1_means", draw_fig3)?);
+    written.extend(write_pair_sized(
+        out_dir,
+        "fig4_transfer_ladder",
+        draw_fig8_transfer_ladder,
+        H_FIG8,
+    )?);
     written.extend(write_pair(
         out_dir,
         "graphical_abstract",
@@ -1863,6 +2040,903 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     Ok(())
 }
 
+/// Figure S — the substrate panel.
+///
+/// # Why this had no figure until 2026-08-29
+///
+/// §3.7 of `PAPER_DRAFT.md` is a lead-program section with three waves behind
+/// it, and no sheet specified a figure for it. The omission was hidden behind a
+/// wrong label: `PAPER_SKELETON.md`'s figure map called this the "Fig. 4
+/// substrate panel", and Figure 4 is the resolution ladder, so the map looked
+/// complete while naming something that did not exist. Correcting Figure 4's
+/// identity is what surfaced it.
+///
+/// Lettered rather than numbered, beside Figure M: a fifth lead figure would
+/// renumber the secondary program 5-9 -> 6-10 one day after the 2026-08-27
+/// renumber, for one figure.
+///
+/// # Four bans, all of them limits the draft already calls load-bearing
+///
+/// 1. **The recurrent substrate must not read as a win.** `rec+alif+attn`
+///    reaches 0.7874 against `ff+fixed+attn`'s 0.8289 at the same scale and the
+///    paper issues NO VERDICT on that ordering. So: Table SHD-7's row order, no
+///    sort by gain, and both attention accuracies on one shared axis where a
+///    reader can see which is higher.
+/// 2. **Neither ratio may be quoted alone.** The recurrent gain is measured
+///    from a base 0.18 lower; headroom-normalised the ratio falls 2.2x -> 1.34x,
+///    and that normalisation is POST-HOC and NOT REGISTERED. Both go on the
+///    figure with the status labelled.
+/// 3. **Ten pairs, the registered minimum**, and one further loss on either arm
+///    would have made the comparison unreportable. `n` is printed per row.
+/// 4. **Adaptation is inert AT THIS OPERATING POINT, not in general.** Panel C
+///    is why: on the recurrent substrate adaptation is what prevents
+///    saturation, so dropping it would turn a scoped null into a general one.
+fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 16),
+        "Figure S — Substrate: the read-out does not substitute for temporal state",
+        26,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 50),
+        "h128 / published-2ms / adjacent-sum-5 / e400 / d32-L4, seed-paired. The anchor campaign's 720 cells all sat on ff+fixed, so its gain had two readings it could not separate.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (36, 72),
+        "ADDS temporal structure no such substrate represents, or SUBSTITUTES for the adaptation and recurrence ff+fixed happens not to have. ETLP makes the second reading the live one.",
+        13,
+        RGBColor(110, 110, 110),
+    )?;
+
+    // --- Panel A ------------------------------------------------------------
+    label(
+        root,
+        (36, 108),
+        "Panel A — one shared accuracy axis, in the row order of Table SHD-7. NOT sorted by gain.",
+        15,
+        BLACK,
+    )?;
+
+    let (lo, hi) = (0.45, 0.90);
+    let (x0, x1) = (430, 1180);
+    let at_x = |v: f64| x0 + (((v - lo) / (hi - lo)) * (x1 - x0) as f64).round() as i32;
+    let (top, bottom) = (150, 380);
+
+    for k in 0..=9 {
+        let v = lo + 0.05 * k as f64;
+        let x = at_x(v);
+        map_draw(root.draw(&PathElement::new(
+            vec![(x, top), (x, bottom)],
+            RGBColor(238, 238, 242).stroke_width(1),
+        )))?;
+        centered(root, (x, bottom + 14), &format!("{v:.2}"), 11, RGBColor(140, 140, 140))?;
+    }
+
+    let rate_col = RGBColor(200, 140, 60);
+    let attn_col = RGBColor(70, 100, 180);
+    for (i, (substrate, note, scale, pairs, rate, attn, gain)) in
+        nums::SUBSTRATE.into_iter().enumerate()
+    {
+        let y = top + 26 + (i as i32) * 54;
+        label(root, (36, y - 18), substrate, 16, BLACK)?;
+        label(
+            root,
+            (36, y + 2),
+            &format!("{note} · scale {scale:.1} · n = {pairs} pairs"),
+            12,
+            RGBColor(110, 110, 110),
+        )?;
+        // Rate -> attention on one axis. The connector is within a row only:
+        // the comparison this figure makes is horizontal, and joining rows
+        // would draw the substrate ordering ban 1 refuses.
+        map_draw(root.draw(&PathElement::new(
+            vec![(at_x(rate), y), (at_x(attn), y)],
+            RGBColor(160, 160, 168).stroke_width(2),
+        )))?;
+        map_draw(root.draw(&Circle::new((at_x(rate), y), 8, rate_col.filled())))?;
+        map_draw(root.draw(&Circle::new((at_x(attn), y), 8, attn_col.filled())))?;
+        label(
+            root,
+            (at_x(rate) - 56, y - 8),
+            &format!("{rate:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        label(
+            root,
+            (at_x(attn) + 14, y - 8),
+            &format!("{attn:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        label(root, (1224, y - 8), &format!("gain +{gain:.4}"), 14, BLACK)?;
+    }
+    // Below the header, not level with it: the header line runs past x=430.
+    label(root, (430, 128), "● rate read-out", 12, rate_col)?;
+    label(root, (560, 128), "● + attention d32/L4", 12, attn_col)?;
+
+    // Ban 1, drawn where the eye already is: a vertical marker at the
+    // feed-forward attention arm, so the recurrent one is visibly BELOW it.
+    let ff_attn = nums::SUBSTRATE[3].5;
+    let rec_attn = nums::SUBSTRATE[2].5;
+    let mark = at_x(ff_attn);
+    let mut my = top;
+    while my < bottom {
+        map_draw(root.draw(&PathElement::new(
+            vec![(mark, my), (mark, (my + 10).min(bottom))],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        my += 20;
+    }
+    label(
+        root,
+        (36, bottom + 40),
+        &format!(
+            "THE RECURRENT SUBSTRATE DOES NOT WIN. rec+alif+attn reaches {rec_attn:.4} against ff+fixed+attn's {ff_attn:.4} at the same scale — attention closes most of the gap the",
+        ),
+        14,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, bottom + 62),
+        "substrate gives away, and not all of it. NO VERDICT IS ISSUED ON THAT ORDERING, and nothing here is sorted by gain.",
+        14,
+        BLACK,
+    )?;
+
+    // --- Panel B ------------------------------------------------------------
+    label(
+        root,
+        (36, 496),
+        "Panel B — the registered contrasts, each against its two-sided bar",
+        15,
+        BLACK,
+    )?;
+    let contrasts = [
+        (
+            "A-1  gain(ff+alif) − gain(ff+fixed)",
+            nums::SUBSTRATE_A1,
+            "6 of 12",
+            Verdict::Fail,
+            "a coin flip — adaptation makes no difference to the gain HERE",
+        ),
+        (
+            "M-2  gain(rec+alif) − gain(ff+fixed), both at scale 0.4",
+            nums::SUBSTRATE_M2,
+            "10 of 10",
+            Verdict::Pass,
+            "SUPPORTED — the gain roughly doubles on the recurrent substrate",
+        ),
+        (
+            "M-4  ff+fixed at scale 0.4 vs archived at 1.0",
+            nums::SUBSTRATE_M4,
+            "—",
+            Verdict::Contrast,
+            "the scale is not doing the work",
+        ),
+    ];
+    let (bx0, bx1) = (700, 1000);
+    let at_b = |v: f64| bx0 + ((v / 0.20) * (bx1 - bx0) as f64).round() as i32;
+    let bar_x = at_b(nums::SUBSTRATE_BAR);
+    for (i, (name, value, positive, verdict, reading)) in contrasts.into_iter().enumerate() {
+        let y = 534 + (i as i32) * 46;
+        label(root, (36, y - 8), name, 13, BLACK)?;
+        map_draw(root.draw(&Circle::new(
+            (at_b(value), y),
+            7,
+            verdict.border().filled(),
+        )))?;
+        // A value short of the bar sits within ~45px of the axis origin, and
+        // a right-hand label then runs straight through the dashed bar. Label
+        // those on the left.
+        let text = format!("+{value:.4}   {positive}");
+        let left = value < nums::SUBSTRATE_BAR;
+        label(
+            root,
+            (if left { at_b(value) - 132 } else { at_b(value) + 14 }, y - 8),
+            &text,
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        label(root, (1080, y - 8), reading, 12, RGBColor(110, 110, 110))?;
+    }
+    let mut by = 520;
+    while by < 640 {
+        map_draw(root.draw(&PathElement::new(
+            vec![(bar_x, by), (bar_x, (by + 10).min(640))],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        by += 20;
+    }
+    centered(
+        root,
+        (bar_x, 508),
+        &format!("bar ±{:.2}", nums::SUBSTRATE_BAR),
+        12,
+        RGBColor(100, 100, 100),
+    )?;
+
+    // Ban 2. Both readings, and the status of the second stated on its face.
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 664), (1364, 752)],
+        RGBColor(253, 246, 224).filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 664), (1364, 752)],
+        RGBColor(200, 160, 60).stroke_width(2),
+    )))?;
+    label(
+        root,
+        (48, 674),
+        &format!(
+            "BOTH READINGS OF “THE GAIN DOUBLES”, because neither may be quoted alone. rec+alif starts 0.18 LOWER, with {:.4} of headroom against {:.4}.",
+            nums::HEADROOM_REC,
+            nums::HEADROOM_FF
+        ),
+        14,
+        BLACK,
+    )?;
+    label(
+        root,
+        (48, 698),
+        &format!(
+            "Gain / headroom is {:.3} against {:.3}, so the ratio falls {:.1}× → {:.2}×. The ORDERING SURVIVES; most of its apparent size does not.",
+            nums::HEADROOM_RATIO_REC,
+            nums::HEADROOM_RATIO_FF,
+            nums::RAW_RATIO,
+            nums::NORMALISED_RATIO
+        ),
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (48, 722),
+        "That normalisation is POST-HOC AND NOT REGISTERED, and saying so is not licence to prefer whichever of the two numbers is more convenient, in either direction.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+
+    // --- Panel C ------------------------------------------------------------
+    label(
+        root,
+        (36, 782),
+        "Panel C — usability, which had to be measured before any row of Panel A could be. This is why the recurrent row exists at one scale only.",
+        15,
+        BLACK,
+    )?;
+    label(root, (36, 812), "arm", 12, RGBColor(110, 110, 110))?;
+    label(root, (230, 812), "scale", 12, RGBColor(110, 110, 110))?;
+    label(root, (330, 812), "completed", 12, RGBColor(110, 110, 110))?;
+    label(root, (460, 812), "voided", 12, RGBColor(110, 110, 110))?;
+    label(root, (570, 812), "diverged", 12, RGBColor(110, 110, 110))?;
+    for (i, (arm, scale, completed, voided, diverged)) in nums::USABILITY.into_iter().enumerate()
+    {
+        let y = 836 + (i as i32) * 24;
+        label(root, (36, y), arm, 13, BLACK)?;
+        label(root, (230, y), &format!("{scale:.1}"), 13, BLACK)?;
+        label(root, (330, y), &format!("{completed} / 12"), 13, BLACK)?;
+        label(
+            root,
+            (460, y),
+            &format!("{voided}"),
+            13,
+            if voided > 0 { Verdict::Fail.border() } else { BLACK },
+        )?;
+        label(
+            root,
+            (570, y),
+            &format!("{diverged}"),
+            13,
+            if diverged > 0 { Verdict::Fail.border() } else { BLACK },
+        )?;
+    }
+    label(
+        root,
+        (700, 836),
+        &format!(
+            "rec+fixed's ten voids are ALL SATURATION — up to {:.1}% of hidden units pinned at",
+            nums::SATURATED_FRACTION_MAX * 100.0
+        ),
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (700, 858),
+        "maximum firing — and NONE is divergence at scale 0.4. So on the recurrent substrate",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (700, 880),
+        "ADAPTATION IS STABILISING, the opposite of the sign that wave's own hypothesis asserted.",
+        13,
+        BLACK,
+    )?;
+    label(
+        root,
+        (700, 906),
+        "A-1 above is therefore inert AT THIS OPERATING POINT, on this substrate — not in general.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+
+    // Ban 3, last line, where a reader leaves the figure.
+    label(
+        root,
+        (36, 948),
+        // The count comes from the row it describes rather than from the
+        // sentence: "TEN" and an array that says 9 would disagree silently.
+        &format!(
+            "TEN PAIRS ({} of 12), THE REGISTERED MINIMUM. The two recurrent arms lost different seeds and one further loss on either would have made M-2 unreportable. Pairing REDUCES",
+            nums::SUBSTRATE[2].3
+        ),
+        13,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, 970),
+        "survivorship rather than removing it: the surviving pairs are those that did not diverge, and divergence is not random. The feed-forward rows carry no such exposure at 12/12.",
+        13,
+        RGBColor(120, 120, 120),
+    )?;
+    Ok(())
+}
+
+/// The lead program's graphical abstract.
+///
+/// # What was open here, and why it was not a missing number
+///
+/// This was `TODO(source needed)` from 2026-08-27 and
+/// `VENUE_FORMATTING.md` called it "the last *unspecified* piece of figure work
+/// in the package". Every quantity it draws already existed; what was missing
+/// was a decision about what the paper's front image says, and that decision is
+/// written into `PAPER_FIGURE_SPEC.md` §"Graphical abstract — lead program"
+/// rather than into this function, so it can be argued with.
+///
+/// # Four bans, three of them Figure 1's
+///
+/// An abstract is a compression of the figure, not a licence to say something
+/// the figure may not, so bans 1-3 carry over unchanged: not "SHD is temporal"
+/// (prior art, named on the image, rate arm at equal weight), not an ablation
+/// (the shuffle is done to the DATA, in both splits), and never +0.1577.
+///
+/// The fourth is this figure's own and is the reason the headline accuracy is
+/// **not** the largest number on it. rho = -0.1430 against a bar of +0.829: the
+/// difference-in-differences is not the gain and not a share of it, so there is
+/// no 0.8332-to-shuffled arrow and no percentage-of-gain framing. The one
+/// percentage drawn is the 94.5% collapse of the *advantage*, which is a
+/// different quantity and is labelled as one.
+///
+/// Two disclosures the spec requires because an abstract travels alone: 0.8332
+/// is **not competitive** against a 95-96.4% frontier, and the gain **inverts
+/// at h1024**. Without them the image reads as a results claim about SHD.
+fn draw_lead_graphical_abstract(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+) -> Result<(), DrawErr> {
+    label(
+        root,
+        (36, 16),
+        "What a time-axis read-out buys is temporal order",
+        30,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, 56),
+        "A difference-in-differences on the GAIN, on SHD. Seed-paired, n = 32 at the anchor, h128 / published-2ms / d32-L4 / e400.",
+        14,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // Ban 1, first and largest, because it is the reading the image is least
+    // entitled to and the one a reader arrives with.
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 88), (1364, 162)],
+        RGBColor(245, 245, 248).filled(),
+    )))?;
+    label(
+        root,
+        (48, 96),
+        "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 could not exceed 60% on spike-count-only SHD;",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (48, 118),
+        "the Neuromorphic Sequential Arena removes temporal processing model-side and reports 86.48 → 68.51; Yu et al. 2025 randomise spike times at fixed counts.",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (48, 140),
+        "Three independent destruction operators, one conclusion, all of it prior to this work. What is measured here is WHICH COMPONENT'S contribution is the order-dependent one.",
+        13,
+        RGBColor(60, 60, 60),
+    )?;
+
+    // --- 1. the operation, on the data --------------------------------------
+    box_card(
+        root,
+        (36, 216, 356, 496),
+        RGBColor(246, 243, 236),
+        RGBColor(180, 150, 70),
+        "The operation — on the INPUT",
+        &[
+            "permute time bins,",
+            "independently per sample,",
+            "in BOTH the training and",
+            "test splits",
+            "",
+            "the task becomes",
+            "rate-solvable",
+        ],
+    )?;
+    label(
+        root,
+        (36, 510),
+        "Nothing is removed from the model.",
+        13,
+        RGBColor(60, 60, 60),
+    )?;
+    label(
+        root,
+        (36, 532),
+        "This is not an ablation of the read-out,",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, 552),
+        "and no arrow here points at a component.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    // --- 2. the pair of costs, the centre ------------------------------------
+    label(
+        root,
+        (410, 196),
+        "Each arm's OWN shuffle cost — the pair is the measurement",
+        16,
+        BLACK,
+    )?;
+    let base = 496;
+    let height = 200;
+    let scale = 0.16;
+    cost_bar(
+        root,
+        (440, base, 150, height),
+        scale,
+        nums::SHUFFLE_COST_ATTN_32,
+        RGBColor(70, 100, 180),
+        "time-axis attention",
+        "d32 / L4 read-out",
+        "32 / 32 seed pairs positive",
+    )?;
+    cost_bar(
+        root,
+        (660, base, 150, height),
+        scale,
+        nums::SHUFFLE_COST_RATE_32,
+        RGBColor(200, 140, 60),
+        "rate read-out",
+        "ff+fixed — half the measurement,",
+        "not a faint control",
+    )?;
+    centered(
+        root,
+        (625, base - 80),
+        &format!("{:.1}×", nums::SHUFFLE_COST_RATIO_32),
+        30,
+        BLACK,
+    )?;
+    centered(
+        root,
+        (625, base + 94),
+        &format!(
+            "The read-out's advantage over the rate arm falls +{:.4} → +{:.4}: {:.1}% of it is contingent on temporal order.",
+            nums::ADVANTAGE_INTACT_32, nums::ADVANTAGE_SHUFFLED_32, nums::CONTINGENT_PCT_32
+        ),
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    centered(
+        root,
+        (625, base + 116),
+        "That is the collapse of the ADVANTAGE, which is not the gain and not a share of it — see the strip below.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+
+    // --- 3. coverage ---------------------------------------------------------
+    box_card(
+        root,
+        (900, 216, 1364, 496),
+        RGBColor(233, 248, 237),
+        RGBColor(90, 170, 110),
+        "Measured across the design space",
+        &[
+            &format!(
+                "{} of {} operating points carry",
+                nums::COVERAGE_COVERED,
+                nums::COVERAGE_TOTAL
+            ),
+            "the control, and EVERY ONE",
+            &format!("clears its +{:.2} bar", nums::DID_BAR),
+            "",
+            "widths 128 → 1024,",
+            "both contracts, both geometries",
+            "",
+            &format!(
+                "{} points carry intact arms with",
+                nums::COVERAGE_TOTAL - nums::COVERAGE_COVERED
+            ),
+            "no shuffled twin, and claim nothing",
+        ],
+    )?;
+
+    // --- ban 4: the DiD is not the gain -------------------------------------
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 634), (1364, 716)],
+        RGBColor(253, 246, 224).filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 634), (1364, 716)],
+        RGBColor(200, 160, 60).stroke_width(2),
+    )))?;
+    label(
+        root,
+        (48, 644),
+        &format!(
+            "THE EFFECT'S SIZE IS NOT THE GAIN. Spearman ρ between the six per-width gains and their difference-in-differences is {:.4}, against a registered bar of +{:.3}.",
+            nums::DID_RHO, nums::DID_RHO_BAR
+        ),
+        14,
+        BLACK,
+    )?;
+    label(
+        root,
+        (48, 668),
+        &format!(
+            "h768 carries the SMALLEST positive gain on the ladder (+{:.4}) and the LARGEST difference-in-differences in the campaign (+{:.4}).",
+            nums::GAIN_H768, nums::DID_H768
+        ),
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (48, 690),
+        "The claim is that the read-out's contribution IS order-dependent. It is NOT that the gain decomposes into an order-dependent share and a remainder.",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+
+    // --- the two disclosures an abstract cannot travel without ---------------
+    label(
+        root,
+        (36, 734),
+        &format!(
+            "Accuracy, for scale and no more: the read-out reaches {:.4} against the rate arm's {:.4}. It is NOT COMPETITIVE — the SHD frontier is {:.0}–{:.1}% via learned delays,",
+            nums::HEAD_ATTN_32,
+            nums::HEAD_RATE_32,
+            nums::FIELD_FRONTIER_LO * 100.0,
+            nums::FIELD_FRONTIER_HI * 100.0
+        ),
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (36, 756),
+        "adaptation and spiking transformers, and this instrument carries no temporal kernel of any kind. No accuracy claim is made and none is drawn larger than the costs above.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+    label(
+        root,
+        (36, 786),
+        &format!(
+            "SCOPE, on the image because an abstract travels alone: the gain INVERTS at width h1024 ({:.4} at d32/L4), the collapse there is LOCATED BUT UNEXPLAINED, and 0.80",
+            nums::LADDER[5].3
+        ),
+        13,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, 808),
+        "clearance is geometry-specific. Three preregistered rescue levers at h1024 all failed and every one is worse than the arm it was meant to rescue.",
+        13,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, 846),
+        "No biology, no cortex, no neuromorphic-hardware claim, and no claim that attention makes a network temporal.",
+        12,
+        RGBColor(140, 140, 140),
+    )?;
+    Ok(())
+}
+
+/// Figure 6 of the secondary program — the matched means, by verdict.
+///
+/// # Why this function did not exist until 2026-08-29
+///
+/// `fig2_matched_means.{png,pdf}` has been on disk since 24 July and **nothing
+/// generated it**. It plots the value block `PAPER_FIGURE_SPEC.md` names as
+/// "superseded and not for drawing" — DFA 0.9387, RL 0.9200, a gradient ceiling
+/// at 0.8963 — pre-repair figures from a forward pass that emitted zero spikes
+/// at any seed. Figure M, Figure 5, Figure 7 and the graphical abstract were
+/// brought current by re-running this binary on 2026-08-27; this one could not
+/// be, because it had no owner. It is authored here rather than re-run.
+///
+/// # Four things the spec forbids, and where each is handled
+///
+/// 1. **No ranking of the passing arms.** With the reference at 1.0000 every
+///    PASS reduces to "above 0.75". Nothing here maps accuracy to a length, a
+///    position or a sort: the arms are cards grouped by verdict, in the row
+///    order of Table A, and the panel says so on its face.
+/// 2. **The contrasts are not a fourth verdict.** They were measured and not
+///    gated, so they get their own labelled group rather than a pass colour
+///    (which would make six passing arms out of three) or a fail colour (which
+///    would turn the 0.9975 disclosure into evidence for the FAIL it qualifies).
+/// 3. **The recurrent column never goes missing.** Every card carries
+///    `ff / rec`, because the lead FAIL is a FAIL on BOTH graphs at n = 20 and
+///    that is the claim's strength. Panel B draws the broadcast gap LCB at
+///    −0.0192 with its sign rather than clipping it at zero.
+/// 4. **The gate is not one bar.** Panel A is the accuracy half and Panel B the
+///    gap-LCB half, each with its own threshold drawn, because "cleared the
+///    floor" and "cleared the gate" are different sentences everywhere else in
+///    this package.
+fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(root, (36, 16), "Figure 6 — Matched means, by verdict", 26, BLACK)?;
+    label(
+        root,
+        (36, 50),
+        "Matched dense-LIF forward, n = 20 per arm, 2026-08-25 re-run at MATCHED_INPUT_SCALE = 2.0. Every value is feed-forward / recurrent. Gate: primary mean ≥ 0.65 AND gap LCB > 0.5.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // The reference leads, as it does in Figure M, because it is the reason the
+    // passing arms cannot be ordered rather than an aside about the ceiling.
+    let reference = Verdict::Reference;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 74), (1364, 112)],
+        reference.fill().filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 74), (1364, 112)],
+        reference.border().stroke_width(2),
+    )))?;
+    label(
+        root,
+        (48, 84),
+        &format!(
+            "SuperSpike BPTT reference saturates at {:.4} ff / {:.4} rec. Against it every PASS below reduces to “the arm scored above 0.75”, so this figure does not rank them: rows are in the order of Table A.",
+            nums::CEILING.0,
+            nums::CEILING.1
+        ),
+        13,
+        BLACK,
+    )?;
+
+    label(
+        root,
+        (36, 128),
+        "Panel A — primary mean, grouped by verdict. Accuracy is printed, never encoded as a length or a position.",
+        15,
+        BLACK,
+    )?;
+
+    // Grouped by verdict, and the contrast group is labelled as ungated in the
+    // group header itself rather than only in the chip.
+    let groups: [VerdictGroup<'_>; 4] = [
+        (
+            Verdict::Fail,
+            "Does not clear the gate — the lead negative, and the only one",
+            &[(
+                "broadcast ±1 three-factor",
+                "MatchedLocal — ±1 reward × surrogate eligibility. At chance on both graphs.",
+                nums::BROADCAST_PM1,
+            )],
+        ),
+        (
+            Verdict::Pass,
+            "Clears the gate — unordered, and not orderable against a saturated reference",
+            &[
+                (
+                    "graded DFA",
+                    "MatchedDfaGradedError — graded error through fixed random feedback",
+                    nums::DFA,
+                ),
+                (
+                    "REINFORCE × frozen B_i",
+                    "MatchedRlReinforceFb — the same ±1 reward, addressed",
+                    nums::RL_FB,
+                ),
+                (
+                    "discrete EventProp-style spike-adjoint",
+                    "MatchedEventProp — the archived FAIL is WITHDRAWN; it had no spikes to differentiate through",
+                    nums::EVENTPROP,
+                ),
+            ],
+        ),
+        (
+            Verdict::Contrast,
+            "Measured and NOT gated — neither passes to be counted nor failures to be explained away",
+            &[
+                (
+                    "broadcast graded error",
+                    "MatchedBroadcastGradedError — why the lead negative says “±1 three-factor” and not “any broadcast”",
+                    nums::BROADCAST_GRADED,
+                ),
+                (
+                    "RL graded-reward broadcast",
+                    "MatchedRlGraded — richness without addressing",
+                    nums::RL_GRADED,
+                ),
+                (
+                    "RL ±1 broadcast",
+                    "MatchedRlFlat — same reward and topology as the lead FAIL, 0.28 above it",
+                    nums::RL_FLAT,
+                ),
+            ],
+        ),
+        (
+            Verdict::Reference,
+            "The ceiling every arm above is measured against",
+            &[(
+                "SuperSpike BPTT",
+                "saturates in every suite, on both forward graphs",
+                nums::CEILING,
+            )],
+        ),
+    ];
+
+    // `rule_card` writes its value line at y0 + 66 in a 15px face, so a card
+    // shorter than 92 puts that line on its own bottom border. It did, at 76.
+    const CARD_H: i32 = 92;
+    let mut y = 152;
+    for (verdict, heading, arms) in groups {
+        label(root, (36, y), heading, 13, verdict.border())?;
+        y += 22;
+        for (rule, mechanism, value) in arms {
+            rule_card(root, (36, y, 1364, y + CARD_H), verdict, rule, mechanism, *value)?;
+            y += CARD_H + 8;
+        }
+        y += 14;
+    }
+
+    // --- Panel B — the gate quantity ---------------------------------------
+    //
+    // Every coordinate below is derived from where the group loop ENDED, not
+    // written down. The 2026-08-29 lead-figure pass lost a line to exactly this:
+    // a shift moved the literal label positions and left a computed base behind,
+    // and the panel it belonged to landed on top of the row above it.
+    let panel_b = y + 20;
+    label(
+        root,
+        (36, panel_b),
+        "Panel B — gap LCB against the > 0.5 gate. Same row order; the second half of the gate, drawn because clearing the floor and clearing the gate are different sentences.",
+        15,
+        BLACK,
+    )?;
+
+    let (lcb_lo, lcb_hi) = (-0.25, 1.05);
+    let (lx0, lx1) = (470, 1330);
+    let at_lcb = |v: f64| {
+        lx0 + (((v - lcb_lo) / (lcb_hi - lcb_lo)) * (lx1 - lx0) as f64).round() as i32
+    };
+
+    // Zero, then the gate. Zero is drawn because the broadcast recurrent value
+    // is below it and a reader needs to see which side of nothing it is on.
+    let strip_top = panel_b + 48;
+    let strip_bottom = strip_top + 4 * 34;
+    let zero = at_lcb(0.0);
+    map_draw(root.draw(&PathElement::new(
+        vec![(zero, strip_top), (zero, strip_bottom)],
+        RGBColor(170, 170, 176).stroke_width(1),
+    )))?;
+    label(root, (zero - 8, strip_bottom + 4), "0", 12, RGBColor(140, 140, 140))?;
+    let gate = at_lcb(nums::GATE_LCB);
+    let mut gy = strip_top;
+    while gy < strip_bottom {
+        map_draw(root.draw(&PathElement::new(
+            vec![(gate, gy), (gate, (gy + 12).min(strip_bottom))],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        gy += 24;
+    }
+    centered(
+        root,
+        (gate, strip_top - 14),
+        &format!("gate: gap LCB > {:.1}", nums::GATE_LCB),
+        13,
+        RGBColor(100, 100, 100),
+    )?;
+
+    for (i, (arm, ff, rec)) in nums::GAP_LCB.into_iter().enumerate() {
+        let y = strip_top + 22 + (i as i32) * 34;
+        let verdict = if ff > nums::GATE_LCB {
+            Verdict::Pass
+        } else {
+            Verdict::Fail
+        };
+        label(root, (36, y - 8), arm, 14, BLACK)?;
+        map_draw(root.draw(&PathElement::new(
+            vec![(at_lcb(ff.min(rec)), y), (at_lcb(ff.max(rec)), y)],
+            verdict.border().stroke_width(2),
+        )))?;
+        map_draw(root.draw(&Circle::new(
+            (at_lcb(ff), y),
+            7,
+            verdict.border().filled(),
+        )))?;
+        map_draw(root.draw(&Circle::new((at_lcb(rec), y), 7, verdict.border().stroke_width(2))))?;
+        let (left, right) = if ff <= rec { (ff, rec) } else { (rec, ff) };
+        label(
+            root,
+            (at_lcb(left) - 66, y - 8),
+            &format!("{left:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        label(
+            root,
+            (at_lcb(right) + 14, y - 8),
+            &format!("{right:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+    }
+    label(
+        root,
+        (940, strip_bottom + 28),
+        "● feed-forward   ○ recurrent",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, strip_bottom + 28),
+        &format!(
+            "Broadcast ±1 is BELOW ZERO on the recurrent graph ({:.4}), not merely short of the gate.",
+            nums::GAP_LCB[0].2
+        ),
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, strip_bottom + 52),
+        &format!(
+            "Disclose with this figure: the broadcast-GRADED contrast reaches {:.4} and ±1 broadcast REINFORCE reaches {:.4}. Neither is a PASS and neither erases the ±1 × eligibility FAIL.",
+            nums::BROADCAST_GRADED.0,
+            nums::RL_FLAT.0
+        ),
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    Ok(())
+}
+
 fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
@@ -1907,6 +2981,264 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
             "θ=∞ mute",
             "project unused on v2",
         ],
+    )?;
+    Ok(())
+}
+
+/// Figure 8 of the secondary program — the transfer ladder.
+///
+/// # Why this function did not exist until 2026-08-29
+///
+/// Like Figure 6, `fig4_transfer_ladder.{png,pdf}` had no generator and was
+/// stale at rung 1: it drew matched RL at 0.9200 with a gap LCB of 0.6846, the
+/// superseded pre-repair block. The current figures are 0.9950 ff / 0.9812 rec
+/// and 0.9765 / 0.9079. Rungs 2-4 are **unaffected** by the matched re-run —
+/// none of them runs on the matched dense-LIF forward — which is also the whole
+/// point of ban 1.
+///
+/// # Three things the spec forbids, and where each is handled
+///
+/// 1. **Not one substrate.** Rung 1 is the matched dense-LIF forward; rungs 2-4
+///    are the live event-driven muted-θ / k-WTA engine. Rung 1 is a card with
+///    its own values; the axes below it carry only live-engine arms, and the
+///    break between them is drawn and named. Nothing connects across it.
+/// 2. **Not accuracy alone.** Two axes, each with its own gate: acc ≥ 0.65 and
+///    gap LCB > 0.5. On accuracy alone v15, v18 and v20 read as near-misses of
+///    one bar; the best gap LCB anywhere below rung 1 is v17's 0.3127.
+/// 3. **No ranking of v14-v24.** They are a sequential exploratory family with
+///    no family-wise claim, so they are drawn in protocol order and the only
+///    two called out are the two the spec names as landmarks.
+fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    label(root, (36, 16), "Figure 8 — The transfer ladder", 26, BLACK)?;
+    label(
+        root,
+        (36, 50),
+        "A rule that clears the matched gate does not clear it on the live engine. Gate: local acc ≥ 0.65 AND gap LCB > 0.5 — both, which is why both axes are drawn.",
+        13,
+        RGBColor(70, 70, 70),
+    )?;
+
+    // --- Rung 1: a different substrate, and therefore a card and not a point.
+    label(
+        root,
+        (36, 88),
+        "Rung 1 — matched dense-LIF forward, n = 20",
+        14,
+        Verdict::Pass.border(),
+    )?;
+    // 92, not 76: `rule_card` writes its value line at y0 + 66 in a 15px face
+    // and a shorter card puts that line on its own bottom border.
+    rule_card(
+        root,
+        (36, 110, 1364, 202),
+        Verdict::Pass,
+        "matched REINFORCE × frozen B_i (v12)",
+        "gap LCB 0.9765 ff / 0.9079 rec — clears both halves of the gate on both forward graphs",
+        nums::RL_FB,
+    )?;
+
+    // --- The break. Everything below runs on a different engine.
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 222), (1364, 284)],
+        RGBColor(246, 243, 236).filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(36, 222), (1364, 284)],
+        RGBColor(180, 150, 70).stroke_width(2),
+    )))?;
+    label(
+        root,
+        (48, 232),
+        "THE SUBSTRATE CHANGES HERE. Everything below runs on the live event-driven muted-θ / k-WTA engine, not on the matched dense-LIF forward above.",
+        14,
+        BLACK,
+    )?;
+    label(
+        root,
+        (48, 256),
+        "This ladder is NOT one system at twelve settings, and nothing is drawn across the break. Rungs 2-4 are unaffected by the 2026-08-25 matched re-run: none of them runs on that forward.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+
+    // --- Rungs 2-4, on two axes, one substrate ------------------------------
+    let (acc_lo, acc_hi) = (0.40, 0.80);
+    let (ax0, ax1) = (400, 800);
+    let at_acc =
+        |v: f64| ax0 + (((v - acc_lo) / (acc_hi - acc_lo)) * (ax1 - ax0) as f64).round() as i32;
+    let (lcb_lo, lcb_hi) = (-0.05, 0.55);
+    let (bx0, bx1) = (940, 1340);
+    let at_lcb =
+        |v: f64| bx0 + (((v - lcb_lo) / (lcb_hi - lcb_lo)) * (bx1 - bx0) as f64).round() as i32;
+
+    let (top, bottom) = (338, 808);
+    centered(root, ((ax0 + ax1) / 2, 308), "local accuracy", 15, BLACK)?;
+    centered(root, ((bx0 + bx1) / 2, 308), "gap LCB", 15, BLACK)?;
+
+    for (x, level, caption) in [
+        (at_acc(nums::GATE_FLOOR), nums::GATE_FLOOR, "floor 0.65"),
+        (at_lcb(nums::GATE_LCB), nums::GATE_LCB, "gate 0.5"),
+    ] {
+        let _ = level;
+        let mut y = top - 6;
+        while y < bottom {
+            map_draw(root.draw(&PathElement::new(
+                vec![(x, y), (x, (y + 12).min(bottom))],
+                RGBColor(120, 120, 120).stroke_width(2),
+            )))?;
+            y += 24;
+        }
+        centered(root, (x, 328), caption, 12, RGBColor(100, 100, 100))?;
+    }
+
+    // One row per protocol, in protocol order. `at_acc`/`at_lcb` place the two
+    // dots; nothing is sorted and nothing is joined between rows.
+    let mut y = top + 18;
+    let row = |root: &DrawingArea<SVGBackend<'_>, Shift>,
+                   y: i32,
+                   name: &str,
+                   local: f64,
+                   lcb: f64|
+     -> Result<(), DrawErr> {
+        // Colour is the GATE outcome, and every one of these is a FAIL. The
+        // floor-cleared arms are marked separately so "cleared the floor" stays
+        // visible without being mistaken for "cleared the gate".
+        let cleared_floor = local >= nums::GATE_FLOOR;
+        label(root, (36, y - 9), name, 14, BLACK)?;
+        map_draw(root.draw(&Circle::new(
+            (at_acc(local), y),
+            7,
+            if cleared_floor {
+                RGBColor(200, 160, 60).filled()
+            } else {
+                Verdict::Fail.border().filled()
+            },
+        )))?;
+        label(
+            root,
+            (at_acc(local) + 14, y - 8),
+            &format!("{local:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        map_draw(root.draw(&Circle::new(
+            (at_lcb(lcb), y),
+            7,
+            Verdict::Fail.border().filled(),
+        )))?;
+        label(
+            root,
+            (at_lcb(lcb) + 14, y - 8),
+            &format!("{lcb:.4}"),
+            12,
+            RGBColor(80, 80, 80),
+        )?;
+        label(root, (1352, y - 8), "FAIL", 12, Verdict::Fail.border())?;
+        Ok(())
+    };
+
+    label(root, (36, y - 30), "Rung 2 — live REINFORCE transfer", 13, RGBColor(90, 90, 90))?;
+    row(root, y, "v13 live RFB", nums::LIVE_RFB, nums::LIVE_RFB_LCB)?;
+    y += 46;
+
+    label(
+        root,
+        (36, y - 22),
+        "Rung 3 — gap-close family, in protocol order (v14–v19)",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    y += 4;
+    for (name, local, lcb) in nums::GAP_CLOSE {
+        row(root, y, name, local, lcb)?;
+        y += 32;
+    }
+
+    y += 16;
+    label(
+        root,
+        (36, y - 22),
+        "Rung 4 — break-it family, in protocol order (v20–v24)",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    y += 4;
+    for (name, local, lcb) in nums::BREAK_IT {
+        row(root, y, name, local, lcb)?;
+        y += 32;
+    }
+
+    // Drawn as circles rather than written as "●", which was the first version
+    // and carried no colour at all: the whole distinction the legend exists for
+    // is the fill, and a text bullet renders in the label's own grey.
+    let legend_y = bottom + 28;
+    map_draw(root.draw(&Circle::new((400, legend_y), 7, RGBColor(200, 160, 60).filled())))?;
+    label(root, (414, legend_y - 8), "cleared the 0.65 accuracy floor", 12, RGBColor(110, 110, 110))?;
+    map_draw(root.draw(&Circle::new(
+        (660, legend_y),
+        7,
+        Verdict::Fail.border().filled(),
+    )))?;
+    label(root, (674, legend_y - 8), "did not", 12, RGBColor(110, 110, 110))?;
+    label(
+        root,
+        (880, legend_y - 8),
+        "Every gap-LCB dot is a FAIL, so that column carries no second colour.",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, legend_y + 30),
+        // Counted, never written down. A literal "six" here would go on reading
+        // "six" if an arm were added, corrected or withdrawn from either array
+        // -- and the arrays are the same ones the dots come from, so the prose
+        // and the picture would then disagree with nothing to notice it.
+        &format!(
+            "EVERY ARM BELOW THE BREAK FAILS THE GATE. {} of {} clear the {:.2} accuracy floor; the best gap LCB anywhere below rung 1 is v17's {:.4}, against a bar of {:.1}.",
+            std::iter::once(nums::LIVE_RFB)
+                .chain(nums::GAP_CLOSE.iter().map(|(_, local, _)| *local))
+                .chain(nums::BREAK_IT.iter().map(|(_, local, _)| *local))
+                .filter(|local| *local >= nums::GATE_FLOOR)
+                .count(),
+            1 + nums::GAP_CLOSE.len() + nums::BREAK_IT.len(),
+            nums::GATE_FLOOR,
+            nums::BEST_LCB_ANYWHERE,
+            nums::GATE_LCB
+        ),
+        15,
+        BLACK,
+    )?;
+    label(
+        root,
+        (36, legend_y + 58),
+        &format!(
+            "Floor cleared is not gate cleared, and the two axes exist so that cannot be read off one. The best local below the break is v15's {:.4} — on accuracy alone it looks like a near miss.",
+            nums::BEST_LOCAL_GAP_CLOSE
+        ),
+        13,
+        RGBColor(90, 90, 90),
+    )?;
+    label(
+        root,
+        (36, legend_y + 94),
+        "NOT A RANKING. v14–v24 are a SEQUENTIAL EXPLORATORY family: each new hypothesis minted a new protocol version and hash, and there is no multiplicity-corrected family-wise claim over them.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, legend_y + 118),
+        "v15 and v17 are named as landmarks because the specification names them, not as winners. Rows are in protocol order and are never sorted by either quantity.",
+        12,
+        RGBColor(120, 120, 120),
+    )?;
+    label(
+        root,
+        (36, legend_y + 154),
+        "NO MECHANISM. Four suspects for the transfer gap — sticky last_spike, partial membrane reset, θ=∞ muting, hard k-WTA — have never been tested individually, and this figure does not attribute the gap to any of them.",
+        12,
+        RGBColor(120, 120, 120),
     )?;
     Ok(())
 }
@@ -2047,11 +3379,15 @@ mod tests {
     fn generates_required_stems() {
         let dir = temp_dir().join(format!("binn_paper_figs_{}", std::process::id()));
         let written = generate_all(&dir).expect("generate");
-        assert!(written.len() >= 8);
+        assert!(written.len() >= 12);
         for stem in [
+            "figS_substrate",
+            "lead_graphical_abstract",
             "figM_mechanism_richness_addressability",
             "fig1_matched_rule_swap",
+            "fig2_matched_means",
             "fig3_engine_c1_means",
+            "fig4_transfer_ladder",
             "graphical_abstract",
         ] {
             assert!(dir.join(format!("{stem}.png")).is_file(), "{stem}.png");

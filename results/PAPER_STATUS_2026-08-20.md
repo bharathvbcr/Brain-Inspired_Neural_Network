@@ -1,5 +1,26 @@
 # What is left for the paper — 2026-08-20
 
+> **SUPERSEDED 2026-08-29 by [`PAPER_GAPS_2026-08-29.md`](PAPER_GAPS_2026-08-29.md),
+> which is the same register nine days later.** Read this only through that
+> document. Four of its statements have since become false, and each is the
+> shape of thing that goes stale without ever looking wrong:
+>
+> * §5 **"A8 — LaTeX + figures | not started"**. Figures are complete: every
+>   figure and both graphical abstracts the package specifies are drawn, by one
+>   generator, each checked against the sheet it cites and against every ban its
+>   spec section names. LaTeX remains open and is blocked on the venue choice.
+> * §5 **"A1 — commit the dirty tree… `git remote -v` is empty"**. `origin` is
+>   set and the record has been committed since 2026-08-23; every
+>   preregistration, amendment, result and analyser since has been committed
+>   before the data it governs existed.
+> * §6 **"waves 1–9 complete… wave 10 in flight"**. Waves 1–21 have landed.
+> * §4 **"retire vs rename `shd-scientific-sweep`"** still stands, and is now a
+>   one-file question: the target name reaches `binn-lab/Cargo.toml` only.
+>
+> What it says about the §1 record repair, the three at-chance gradient
+> references, and the withdrawn claims is unaffected and still the clearest
+> account of them.
+
 Written after §1 closed. Everything below is either **done**, **blocked on one
 named thing**, or **a decision for the author**. Nothing on this list is waiting
 on compute.

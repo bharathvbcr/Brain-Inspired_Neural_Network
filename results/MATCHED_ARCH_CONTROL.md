@@ -100,13 +100,24 @@ under the protocol-v4 hash supersedes this preview.
 
 **Verdict: FAIL** (Outcome A). On an identical dense-LIF forward with matched exposure, broadcast three-factor stays at chance while the gradient ceiling learns. Hardens U-NEG toward rule insufficiency on this architecture. Does **not** reopen `c1-118207fbc3eaba53`.
 
+> **The registered hash above is retired; the replay command below is not.**
+> This preregistration was registered under `c1-match-5dc6822e71229e9e` and that
+> is left as written, because a preregistration records the hash a protocol was
+> registered under and rewriting one would falsify the record. But
+> `MATCHED_INPUT_SCALE` was not mixed into that hash, so it named two different
+> experiments either side of the 2026-08-25 silent-initialisation repair, and
+> `from_hash` now returns `None` for it. The replay line was updated on
+> 2026-08-29 to `c1-match-6f6000f148f7d30c`, which resolves. **The verdict is
+> unchanged on the re-run** — 0.5000 ff / 0.5100 rec, FAIL on both forward
+> graphs ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
+
 ```bash
 # quick pilot (not a scientific verdict)
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --quick
 # full n=20 scientific schedule → writes results note
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --out results/c1_match.md
 # hash replay
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --config-hash c1-match-5dc6822e71229e9e --out results/c1_match.md
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --config-hash c1-match-6f6000f148f7d30c --out results/c1_match.md
 ```
 
 Run from the `binn/` crate workspace (or monorepo root with `-p binn-lab`).

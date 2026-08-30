@@ -42,6 +42,8 @@ MATCHED = {
     "RL_FB": "REINFORCE × frozen `B_i`",
     "DFA": "Graded DFA",
     "BROADCAST_GRADED": "Broadcast graded error",
+    "EVENTPROP": "Discrete EventProp-style spike-adjoint",
+    "RL_GRADED": "RL graded-reward broadcast",
     "CEILING": "SuperSpike BPTT ceiling",
 }
 
@@ -595,6 +597,486 @@ class PanelAEncodingTest(unittest.TestCase):
         self.assertIn("Some(0.5)", self.fig_m)
 
 
+def figure_s_table() -> str:
+    """Table SHD-7, which is the last SHD table before the matched program."""
+    text = (ROOT / "results/PAPER_RESULTS_TABLE.md").read_text()
+    start = text.index("## Table SHD-7")
+    return text[start:text.index("# The matched-gate program", start)]
+
+
+def tuples(const: str, arity: int) -> list[tuple[str, ...]]:
+    """A fixed-arity `[( ... ); N]` constant, as strings."""
+    text = SOURCE.read_text()
+    block = text[text.index(f"pub const {const}"):]
+    block = block[:block.index("];")]
+    field = r'"([^"]*)"|(-?[\d.]+)'
+    rows = []
+    for line in block.splitlines():
+        line = line.strip()
+        if not line.startswith("("):
+            continue
+        found = [a or b for a, b in re.findall(field, line)]
+        if len(found) == arity:
+            rows.append(tuple(found))
+    return rows
+
+
+class FigureSTest(unittest.TestCase):
+    """The substrate panel, against Table SHD-7 and its four bans.
+
+    §3.7 of the draft is a lead-program section with three waves behind it and
+    **no figure was specified in any sheet**. The omission was hidden behind a
+    wrong label: `PAPER_SKELETON.md`'s figure map called this the "Fig. 4
+    substrate panel", and Figure 4 is the resolution ladder, so the map looked
+    complete while naming something that did not exist.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_fig_s_substrate",
+                              "/// The lead program's graphical abstract")
+        cls.table = figure_s_table()
+
+    def test_the_table_was_found(self):
+        self.assertIn("Substrate comparison", self.table)
+
+    def test_the_rows_were_parsed(self):
+        """A parser matching nothing would pass every test below."""
+        self.assertEqual(len(tuples("SUBSTRATE", 7)), 4, tuples("SUBSTRATE", 7))
+        self.assertEqual(len(tuples("USABILITY", 5)), 4, tuples("USABILITY", 5))
+
+    def test_every_substrate_row_is_in_table_shd_7(self):
+        for row in tuples("SUBSTRATE", 7):
+            substrate, _note, _scale, pairs, rate, attn, gain = row
+            with self.subTest(substrate=f"{substrate}/{_scale}"):
+                for value in (rate, attn, gain):
+                    self.assertIn(value, self.table,
+                                  f"{substrate}: {value} is not in Table SHD-7")
+                self.assertIn(f"| {pairs} |", self.table.replace("**", ""),
+                              f"{substrate}: n = {pairs} is not in Table SHD-7")
+
+    def test_every_contrast_and_headroom_value_is_in_table_shd_7(self):
+        scalars = source_scalars()
+        for const in ("SUBSTRATE_A1", "SUBSTRATE_M2", "SUBSTRATE_M4",
+                      "HEADROOM_REC", "HEADROOM_FF", "HEADROOM_RATIO_REC",
+                      "HEADROOM_RATIO_FF", "NORMALISED_RATIO",
+                      "SATURATED_FRACTION_MAX"):
+            with self.subTest(const=const):
+                self.assertIn(scalars[const], self.table,
+                              f"{const} = {scalars[const]} is not in Table SHD-7")
+
+    def test_every_usability_row_is_in_table_shd_7(self):
+        for arm, scale, completed, voided, diverged in tuples("USABILITY", 5):
+            with self.subTest(arm=f"{arm}/{scale}"):
+                self.assertIn(f"{completed}/12", self.table.replace("**", ""),
+                              f"{arm} at {scale}: {completed}/12 is not in the sheet")
+                self.assertIn(f"| {voided} | {diverged} |",
+                              self.table.replace("**", ""),
+                              f"{arm} at {scale}: {voided}/{diverged} is not in the sheet")
+
+    def test_ban_1_the_recurrent_substrate_is_not_drawn_as_a_win(self):
+        """rec+alif+attn 0.7874 against ff+fixed+attn 0.8289 at the same scale,
+        and the paper issues NO VERDICT on that ordering."""
+        self.assertIn("THE RECURRENT SUBSTRATE DOES NOT WIN", self.fig)
+        self.assertIn("NO VERDICT IS ISSUED ON THAT ORDERING", self.fig)
+        # The marker is placed at the feed-forward attention arm so the
+        # recurrent one is visibly below it, and it comes from the array rather
+        # than being written down.
+        self.assertIn("let ff_attn = nums::SUBSTRATE[3].5;", self.fig)
+        self.assertIn("let rec_attn = nums::SUBSTRATE[2].5;", self.fig)
+
+    def test_ban_1_the_rows_are_in_sheet_order_not_sorted_by_gain(self):
+        gains = [float(r[6]) for r in tuples("SUBSTRATE", 7)]
+        self.assertNotEqual(gains, sorted(gains), "rows are sorted by gain")
+        self.assertNotEqual(gains, sorted(gains, reverse=True),
+                            "rows are reverse-sorted by gain")
+        self.assertEqual([r[0] for r in tuples("SUBSTRATE", 7)],
+                         ["ff+fixed", "ff+alif", "rec+alif", "ff+fixed"])
+        self.assertIn("NOT sorted by gain", self.fig)
+
+    def test_ban_1_nothing_is_joined_between_rows(self):
+        """The comparison this figure makes is horizontal, within a row. A
+        connector across rows would draw the substrate ordering."""
+        for line in drawable(self.fig).splitlines():
+            if "PathElement" in line:
+                self.assertNotIn("SUBSTRATE", line)
+
+    def test_ban_2_both_readings_of_the_doubling_are_drawn(self):
+        """The recurrent gain is measured from a base 0.18 lower. Neither the
+        raw ratio nor the normalised one may be quoted alone."""
+        self.assertIn("BOTH READINGS", self.fig)
+        for const in ("RAW_RATIO", "NORMALISED_RATIO", "HEADROOM_REC",
+                      "HEADROOM_FF"):
+            self.assertIn(f"nums::{const}", self.fig)
+
+    def test_ban_2_the_normalisation_is_labelled_post_hoc(self):
+        self.assertIn("POST-HOC AND NOT REGISTERED", self.fig)
+        self.assertIn("not licence to prefer whichever", self.fig)
+
+    def test_ban_3_the_ten_pairs_are_on_the_figure(self):
+        """The registered minimum, and one further loss on either arm would
+        have made M-2 unreportable."""
+        self.assertIn("TEN PAIRS", self.fig)
+        self.assertIn("THE REGISTERED MINIMUM", self.fig)
+        # The count is interpolated from the row it describes, not written into
+        # the sentence: "TEN" beside an array saying 9 would disagree silently.
+        self.assertIn("nums::SUBSTRATE[2].3", self.fig)
+        self.assertEqual(tuples("SUBSTRATE", 7)[2][3], "10")
+        self.assertIn("unreportable", self.fig)
+        self.assertIn("divergence is not random", self.fig)
+        self.assertIn("n = {pairs} pairs", self.fig, "n is not printed per row")
+
+    def test_ban_4_adaptation_is_inert_at_this_operating_point_only(self):
+        """Panel C is why: on the recurrent substrate adaptation is what
+        prevents saturation, so dropping it turns a scoped null into a general
+        one."""
+        self.assertIn("Panel C", self.fig)
+        self.assertIn("nums::USABILITY", self.fig)
+        self.assertIn("ADAPTATION IS STABILISING", self.fig)
+        self.assertIn("inert AT THIS OPERATING POINT", self.fig)
+        for banned in ("adaptation is unnecessary", "adaptation does nothing",
+                       "recurrence is better"):
+            self.assertNotIn(banned, self.fig.lower())
+
+    def test_it_is_lettered_rather_than_numbered(self):
+        """A fifth lead figure would renumber the secondary program 5-9 -> 6-10
+        one day after the 2026-08-27 renumber, for one figure."""
+        self.assertIn('"figS_substrate"', self.text)
+        spec = SPEC.read_text()
+        self.assertIn("## Figure S — Substrate", spec)
+        self.assertNotIn("## Figure 10", spec)
+
+    def test_the_manuscript_cites_it(self):
+        draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
+        self.assertEqual(len(re.findall(r"\(Figure S\)", draft)), 1)
+
+
+class LeadGraphicalAbstractTest(unittest.TestCase):
+    """The lead program's graphical abstract, against its four bans.
+
+    It was `TODO(source needed)` from 2026-08-27 to 2026-08-29 and correctly
+    recorded as an **authoring** task, not a missing number: every quantity it
+    draws was already published. What it needed was a decision about what the
+    paper's front image says, and the point of this class is that the decision
+    can now be broken by an edit rather than only disagreed with.
+
+    Bans 1-3 are Figure 1's, unchanged. An abstract is a compression of the
+    figure, not a licence to say something the figure may not.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_lead_graphical_abstract",
+                              "/// Figure 6 of the secondary program")
+        cls.shd1 = shd_table("SHD-1", "SHD-2")
+        cls.shd2 = shd_table("SHD-2", "SHD-3")
+
+    def test_every_value_is_in_the_sheet(self):
+        """Each against the Table the spec cites for it, not against Figure 1's
+        restatement of the same numbers."""
+        scalars = source_scalars()
+        expected = {
+            "SHUFFLE_COST_ATTN_32": self.shd2,
+            "SHUFFLE_COST_RATE_32": self.shd2,
+            "ADVANTAGE_INTACT_32": self.shd2,
+            "ADVANTAGE_SHUFFLED_32": self.shd2,
+            "HEAD_ATTN_32": self.shd1,
+            "HEAD_RATE_32": self.shd1,
+        }
+        for const, table in expected.items():
+            with self.subTest(const=const):
+                self.assertIn(f"nums::{const}", self.fig,
+                              f"{const} is no longer drawn")
+                self.assertIn(scalars[const], table,
+                              f"{const} = {scalars[const]} is not in its sheet")
+
+    def test_ban_1_the_prior_art_is_named_on_the_image(self):
+        """Without it an abstract that travels alone reads as the claim it is
+        least entitled to: that this work shows SHD depends on temporal order."""
+        for marker in ("NOT SHOWN HERE, AND NOT CLAIMED", "Cramer",
+                       "Neuromorphic Sequential Arena", "Yu et al"):
+            self.assertIn(marker, self.fig)
+
+    def test_ban_1_both_arms_are_drawn_at_equal_weight(self):
+        """The rate arm is half the measurement. Same helper, same bar width,
+        same scale — a faint control would make this "shuffling hurts the
+        attention model", which is prior art."""
+        self.assertEqual(self.fig.count("cost_bar("), 2)
+        boxes = re.findall(r"\((\d+), base, (\d+), height\)", self.fig)
+        self.assertEqual(len(boxes), 2, boxes)
+        self.assertEqual(boxes[0][1], boxes[1][1], f"bar widths differ: {boxes}")
+        self.assertEqual(self.fig.count("scale,"), 2, "one shared scale")
+
+    def test_ban_2_the_shuffle_is_described_as_done_to_the_data(self):
+        self.assertIn("on the INPUT", self.fig)
+        self.assertIn("BOTH the training and", self.fig)
+        self.assertIn("Nothing is removed from the model", self.fig)
+        for banned in ("attention off", "ablation of the read-out.",
+                       "component axis"):
+            self.assertNotIn(banned, self.fig)
+
+    def test_ban_3_the_inflated_cost_is_not_here_either(self):
+        self.assertNotIn("0.1577", drawable(self.fig))
+
+    def test_ban_4_the_did_is_not_presented_as_the_gain(self):
+        """rho = -0.1430 against +0.829. The abstract must not imply the gain
+        decomposes into an order-dependent share and a remainder."""
+        self.assertIn("THE EFFECT'S SIZE IS NOT THE GAIN", self.fig)
+        self.assertIn("nums::DID_RHO", self.fig)
+        self.assertIn("nums::DID_RHO_BAR", self.fig)
+        self.assertIn("NOT that the gain decomposes", self.fig)
+
+    def test_ban_4_the_headline_accuracy_is_not_the_largest_number(self):
+        """The 0.8332 is on the image for scale and is drawn at body size; the
+        costs and the ratio are the large type. Sizes are asserted rather than
+        eyeballed, because "for scale and no more" is a layout promise."""
+        head = re.search(r"Accuracy, for scale and no more.*?\n\s*(\d+),",
+                         self.fig, re.S)
+        self.assertIsNotNone(head, "the accuracy line is gone")
+        ratio = re.search(r"SHUFFLE_COST_RATIO_32\),\n\s*(\d+),", self.fig)
+        self.assertIsNotNone(ratio, "the ratio is gone")
+        self.assertGreater(int(ratio.group(1)), int(head.group(1)))
+        for banned in ("share of the gain", "% of the gain", "decomposes into"):
+            self.assertNotIn(banned, self.fig.replace(
+                "NOT that the gain decomposes into", ""))
+
+    def test_the_two_disclosures_an_abstract_cannot_travel_without(self):
+        """0.8332 is not competitive, and the gain inverts at h1024. Omitting
+        either turns the image into a results claim about SHD."""
+        self.assertIn("NOT COMPETITIVE", self.fig)
+        self.assertIn("FIELD_FRONTIER_LO", self.fig)
+        self.assertIn("INVERTS at width h1024", self.fig)
+        self.assertIn("LOCATED BUT UNEXPLAINED", self.fig)
+
+    def test_it_is_a_separate_file_from_the_secondary_abstract(self):
+        """`graphical_abstract` exists and depicts the matched kill gate.
+        Repointing it would have deleted the secondary program's front image."""
+        self.assertIn('"lead_graphical_abstract"', self.text)
+        self.assertIn('"graphical_abstract"', self.text)
+        self.assertIn("lead_graphical_abstract", SPEC.read_text())
+
+    def test_the_coverage_is_stated_as_measured(self):
+        self.assertIn("nums::COVERAGE_COVERED", self.fig)
+        self.assertIn("nums::COVERAGE_TOTAL", self.fig)
+        self.assertIn("claim nothing", self.fig)
+
+
+def matched_table(name: str, next_name: str) -> str:
+    """One lettered `## Table X` block of `PAPER_RESULTS_TABLE.md`."""
+    text = (ROOT / "results/PAPER_RESULTS_TABLE.md").read_text()
+    start = text.index(f"## Table {name} —")
+    return text[start:text.index(f"## Table {next_name} —", start)]
+
+
+def triples(const: str) -> list[tuple[str, str, str]]:
+    """A `[(&str, f64, f64); N]` constant, as (name, first, second) strings."""
+    text = SOURCE.read_text()
+    block = text[text.index(f"pub const {const}"):]
+    block = block[:block.index("];")]
+    return re.findall(r'\("([^"]+)",\s*(-?[\d.]+),\s*(-?[\d.]+)\)', block)
+
+
+class Figure6Test(unittest.TestCase):
+    """Figure 6, against Table A and its four bans.
+
+    This figure had **no generator at all** until 2026-08-29. The file on disk
+    was drawn on 24 July and plotted the superseded value block; the 2026-08-27
+    pass that brought Figure M, Figure 5, Figure 7 and the graphical abstract
+    current could not reach it, because a re-run cannot regenerate something
+    nothing generates. Every assertion here is therefore new ground rather than
+    a guard against drift.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_fig6_matched_means", "fn draw_fig3(")
+        cls.table_a = matched_table("A", "B")
+
+    def test_the_table_was_found(self):
+        self.assertIn("Matched dense-LIF kill gate", self.table_a)
+
+    def test_every_drawn_mean_is_in_table_a(self):
+        """The spec's Figure 6 block is this file's restatement of the sheet;
+        the sheet is what the numbers have to survive."""
+        for const in MATCHED:
+            ff, rec = source_pairs()[const]
+            with self.subTest(const=const):
+                self.assertIn(ff, self.table_a, f"{const} ff {ff} is not in Table A")
+                self.assertIn(rec, self.table_a, f"{const} rec {rec} is not in Table A")
+
+    def test_every_gap_lcb_is_in_table_a(self):
+        rows = triples("GAP_LCB")
+        self.assertEqual(len(rows), 4, rows)
+        for arm, ff, rec in rows:
+            with self.subTest(arm=arm):
+                self.assertIn(ff, self.table_a, f"{arm} ff {ff} is not in Table A")
+                self.assertIn(rec.lstrip("-"), self.table_a,
+                              f"{arm} rec {rec} is not in Table A")
+
+    def test_ban_1_no_accuracy_is_encoded_as_a_length_or_a_position(self):
+        """With the reference at 1.0000 every PASS reduces to "above 0.75". A
+        bar row, a forest, or any sort over the means supplies an ordering the
+        task cannot support."""
+        self.assertNotIn("draw_bar_row(", self.fig)
+        self.assertIn("does not rank them", self.fig)
+        for banned in ("sort", "rank(", "best arm"):
+            self.assertNotIn(banned, drawable(self.fig).lower())
+
+    def test_ban_1_the_row_order_is_the_sheets_and_is_stated(self):
+        """Grouping by verdict is the encoding the spec asks for; within a group
+        the order is Table A's and the figure says which it is."""
+        self.assertIn("rows are in the order of Table A", self.fig)
+        self.assertIn("grouped by verdict", self.fig)
+
+    def test_ban_2_the_contrasts_are_their_own_group(self):
+        """Three ungated measurements coloured like passes would make six
+        passing arms; coloured like failures they would become evidence for the
+        FAIL the 0.9975 disclosure exists to qualify."""
+        self.assertIn("Verdict::Contrast", self.fig)
+        self.assertIn("Measured and NOT gated", self.fig)
+        for const in ("BROADCAST_GRADED", "RL_GRADED", "RL_FLAT"):
+            self.assertIn(f"nums::{const}", self.fig)
+
+    def test_ban_3_the_recurrent_column_is_on_every_row(self):
+        """The lead FAIL is a FAIL on BOTH graphs at n = 20, which is the
+        claim's strength; a single-column figure drops it."""
+        self.assertEqual(self.fig.count("rule_card("), 1,
+                         "the cards are drawn by one loop over one array")
+        self.assertIn("feed-forward / recurrent", self.fig)
+        self.assertIn("● feed-forward   ○ recurrent", self.fig)
+
+    def test_ban_3_the_negative_gap_lcb_keeps_its_sign(self):
+        """−0.0192 is below zero, not merely short of the gate. A `Both` would
+        have hidden it: the spec-parity parser only reads unsigned pairs."""
+        self.assertEqual(triples("GAP_LCB")[0][2], "-0.0192")
+        self.assertIn("BELOW ZERO", self.fig)
+        self.assertIn("at_lcb(0.0)", self.fig)
+
+    def test_ban_4_both_halves_of_the_gate_are_drawn(self):
+        """acc ≥ 0.65 AND gap LCB > 0.5. Panel B exists because "cleared the
+        floor" and "cleared the gate" are different sentences."""
+        self.assertIn("Panel A", self.fig)
+        self.assertIn("Panel B", self.fig)
+        self.assertIn("nums::GATE_LCB", self.fig)
+        self.assertIn("GATE_FLOOR: f64 = 0.65", self.text)
+        self.assertIn("GATE_LCB: f64 = 0.5", self.text)
+
+    def test_panel_b_is_positioned_from_the_loop_that_precedes_it(self):
+        """The 2026-08-29 lead-figure pass lost a line to a hardcoded base left
+        behind by a coordinate shift. Panel B derives its origin instead."""
+        self.assertIn("let panel_b = y + 20;", self.fig)
+        self.assertIn("let strip_top = panel_b + 48;", self.fig)
+
+
+class Figure8Test(unittest.TestCase):
+    """The transfer ladder, against Tables A and C and its three bans."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = SOURCE.read_text()
+        cls.fig = figure_body("draw_fig8_transfer_ladder",
+                              "fn draw_graphical_abstract(")
+        cls.table_a = matched_table("A", "B")
+        cls.table_c = matched_table("C", "D")
+
+    def test_the_tables_were_found(self):
+        self.assertIn("Live REINFORCE transfer", self.table_c)
+
+    def test_rung_1_is_the_current_matched_figures_from_table_a(self):
+        """It was stale here, at 0.9200 / 0.6846 — the superseded block."""
+        self.assertIn("nums::RL_FB", self.fig)
+        self.assertIn("0.9765 ff / 0.9079 rec", self.fig)
+        for value in ("0.9950", "0.9812", "0.9765", "0.9079"):
+            self.assertIn(value, self.table_a, f"{value} is not in Table A")
+
+    def test_every_rung_below_the_break_is_in_table_c(self):
+        rows = triples("GAP_CLOSE") + triples("BREAK_IT")
+        self.assertEqual(len(rows), 11, rows)
+        for name, local, lcb in rows:
+            with self.subTest(protocol=name):
+                self.assertIn(local, self.table_c, f"{name}: {local} is not in Table C")
+                self.assertIn(lcb.lstrip("-"), self.table_c,
+                              f"{name}: {lcb} is not in Table C")
+
+    def test_rung_2_is_in_table_c(self):
+        scalars = source_scalars()
+        self.assertEqual(scalars["LIVE_RFB"], "0.4900")
+        self.assertEqual(scalars["LIVE_RFB_LCB"], "0.0737")
+        for value in ("0.4900", "0.0737"):
+            self.assertIn(value, self.table_c)
+
+    def test_ban_1_the_substrate_change_is_drawn_and_named(self):
+        """Rung 1 is the matched dense-LIF forward; rungs 2–4 are the live
+        muted-θ / k-WTA engine. One connected descent would read as a single
+        system degrading, which is the reading the transfer gap refuses."""
+        self.assertIn("THE SUBSTRATE CHANGES HERE", self.fig)
+        self.assertIn("NOT one system at twelve settings", self.fig)
+
+    def test_ban_1_nothing_is_drawn_across_the_break(self):
+        """Rung 1 is a card. The axes below it are built from `at_acc`/`at_lcb`,
+        whose domains stop at 0.80 and 0.55 — rung 1's 0.9950 and 0.9765 are not
+        on them and cannot be, which is the point."""
+        self.assertIn("let (acc_lo, acc_hi) = (0.40, 0.80);", self.fig)
+        self.assertIn("let (lcb_lo, lcb_hi) = (-0.05, 0.55);", self.fig)
+        body = drawable(self.fig)
+        for line in body.splitlines():
+            if "PathElement" in line:
+                self.assertNotIn("GAP_CLOSE", line)
+                self.assertNotIn("BREAK_IT", line)
+
+    def test_ban_2_both_gates_are_drawn(self):
+        """On accuracy alone v15, v18 and v20 read as near-misses of one bar."""
+        self.assertIn("nums::GATE_FLOOR", self.fig)
+        self.assertIn("nums::GATE_LCB", self.fig)
+        self.assertIn("local accuracy", self.fig)
+        self.assertIn("gap LCB", self.fig)
+        self.assertIn("Floor cleared is not gate cleared", self.fig)
+
+    def test_ban_2_the_floor_count_is_counted_and_not_written_down(self):
+        """A literal would go on reading "six" after an arm was added,
+        corrected or withdrawn from the arrays the dots come from."""
+        self.assertIn(".filter(|local| *local >= nums::GATE_FLOOR)", self.fig)
+        self.assertIn(".count()", self.fig)
+        for banned in ("Six clear", "six clear", "6 of 12"):
+            self.assertNotIn(banned, self.fig)
+
+    def test_ban_3_the_arms_are_in_protocol_order(self):
+        """A sequential exploratory family with no family-wise claim. Sorting
+        by either quantity asserts a ranking the statistics do not carry."""
+        self.assertEqual([n.split()[0] for n, *_ in triples("GAP_CLOSE")],
+                         ["v14", "v15", "v16", "v17", "v18", "v19"])
+        self.assertEqual([n.split()[0] for n, *_ in triples("BREAK_IT")],
+                         ["v20", "v21", "v22", "v23", "v24"])
+        for series in ("GAP_CLOSE", "BREAK_IT"):
+            values = [float(local) for _, local, _ in triples(series)]
+            self.assertNotEqual(values, sorted(values), f"{series} is sorted")
+            self.assertNotEqual(values, sorted(values, reverse=True),
+                                f"{series} is reverse-sorted")
+        self.assertIn("NOT A RANKING", self.fig)
+
+    def test_ban_3_only_the_two_landmarks_the_spec_names_are_called_out(self):
+        self.assertIn("named as landmarks because the specification names them",
+                      self.fig)
+        self.assertEqual(source_scalars()["BEST_LOCAL_GAP_CLOSE"], "0.7262")
+        self.assertEqual(source_scalars()["BEST_LCB_ANYWHERE"], "0.3127")
+
+    def test_no_mechanism_is_attributed(self):
+        """The four suspects have never been tested individually
+        (`DESIGN_TRANSFER_GAP_DECOMPOSITION.md`), so the figure names them as
+        untested rather than as an explanation."""
+        self.assertIn("NO MECHANISM", self.fig)
+        self.assertIn("never been tested individually", self.fig)
+
+    def test_the_legend_carries_colour_rather_than_a_text_bullet(self):
+        """The first version wrote "●" twice in one grey label, so the only
+        distinction the legend existed for was absent from it."""
+        self.assertIn("cleared the 0.65 accuracy floor", self.fig)
+        self.assertNotIn('"● cleared', self.fig)
+
+
 class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
     """A figure nothing cites does not appear in a submission.
 
@@ -604,19 +1086,24 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
     the manuscript pointed at none of them — which is the same failure as
     artwork that does not exist, arriving one step later.
 
-    Scoped to the lead program and Figure M. The secondary program's figures
-    are numbered 5–9 in the spec and the draft does not call them out; that is
-    a live authoring gap, not something this file should assert away.
+    This class was scoped to the lead program and Figure M until 2026-08-29,
+    with a note that the secondary program's Figures 5–9 were uncited and that
+    that was "a live authoring gap, not something this file should assert away".
+    Two of those five had no artwork to cite; both now do, so the gap is closed
+    rather than scoped around and the assertion covers the whole package.
     """
 
     DRAFT = ROOT / "results/PAPER_DRAFT.md"
+    #: Every numbered figure the spec carries. Lettered figures (0, D, M) are
+    #: legend and appendix material and are checked separately.
+    NUMBERED = tuple(range(1, 10))
 
     @classmethod
     def setUpClass(cls):
         cls.text = cls.DRAFT.read_text()
 
-    def test_each_lead_figure_is_cited(self):
-        for n in (1, 2, 3, 4):
+    def test_every_numbered_figure_is_cited(self):
+        for n in self.NUMBERED:
             with self.subTest(figure=n):
                 self.assertRegex(
                     self.text, rf"\(Figure {n}\)",
@@ -625,13 +1112,31 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
     def test_figure_m_is_cited(self):
         self.assertIn("Figure M", self.text)
 
-    def test_no_lead_figure_is_cited_more_than_its_home(self):
+    def test_no_figure_is_cited_more_than_its_home(self):
         """Each is placed once, at the claim a reader meets it on. Repeating a
         callout in the abstract and again in the discussion is a layout
         decision, not something to accrue by accident."""
-        for n in (1, 2, 3, 4):
+        for n in self.NUMBERED:
             with self.subTest(figure=n):
                 self.assertEqual(len(re.findall(rf"\(Figure {n}\)", self.text)), 1)
+
+    def test_the_spec_numbers_the_same_nine_figures(self):
+        """The range above is asserted against the sheet that owns it, so a
+        tenth figure cannot be specified and left uncited.
+
+        Figure 0 is excluded because the spec groups it with the LETTERED
+        figures — "Lettered; unaffected by the renumbering" — and D and M say
+        the same. It carries a numeral and is not part of the sequence, which
+        is exactly the kind of thing a bare `\\d` sweep gets wrong, so the
+        grouping is asserted here rather than assumed.
+        """
+        spec = SPEC.read_text()
+        headings = re.findall(r"^## Figure (\d)(?: \(optional\))? — (.+)$", spec, re.M)
+        self.assertIn("Lettered; unaffected by the renumbering",
+                      spec[spec.index("## Figure 0 — "):],
+                      "Figure 0 is no longer grouped with the lettered figures")
+        numbered = {int(n) for n, _ in headings} - {0}
+        self.assertEqual(numbered, set(self.NUMBERED), sorted(numbered))
 
     def test_every_lead_figure_the_generator_writes_has_a_number(self):
         """The map from stem to manuscript number, asserted rather than assumed:
@@ -646,13 +1151,89 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
             "and list it here")
 
 
+class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
+    """`PAPER_SKELETON.md`'s figure ↔ binary map, against the artwork that exists.
+
+    On 2026-08-29 that map still carried four `TODO(source needed): no spec
+    entry, no artwork` rows for the **lead** figures — two days after all four
+    were specified and drawn — and a numbering note saying the spec "contains no
+    entry for any SHD figure". It also called Figure 4 the *substrate panel*,
+    where the spec and the draft both call it the resolution ladder, so the
+    package disagreed with itself about what Figure 4 is.
+
+    None of that would have been caught by anything: the figure tests read the
+    spec and the draft, and the skeleton is a third document that describes both.
+    """
+
+    SKELETON = ROOT / "results/PAPER_SKELETON.md"
+
+    @classmethod
+    def setUpClass(cls):
+        text = cls.SKELETON.read_text()
+        cls.text = text
+        cls.map = text[text.index("## Figure ↔ binary / hash map"):]
+
+    def test_the_map_was_found(self):
+        self.assertIn("Fig. 1 difference-in-differences", self.map)
+
+    def test_no_drawn_figure_is_recorded_as_having_no_artwork(self):
+        """The failure this class exists for. A `TODO(source needed)` is a
+        useful marker and a stale one is worse than none: it tells a reader to
+        go and make something that already exists."""
+        for stem in TheGeneratorOwnsTheArtworkTest.STEMS:
+            with self.subTest(stem=stem):
+                self.assertIn(stem, self.map,
+                              f"{stem} is drawn but the skeleton's map does not "
+                              f"name it")
+        self.assertNotIn("no artwork", self.map)
+        self.assertNotIn("no spec entry", self.map)
+
+    def test_the_map_names_every_stem_the_generator_writes(self):
+        """The generator's stem list and this class's STEMS must not drift.
+        Asserted here rather than in the map test, so a stem added to the
+        generator and to neither list cannot slip through both."""
+        source = SOURCE.read_text()
+        stems = set(re.findall(r'write_pair(?:_sized)?\(\s*out_dir,\s*"([\w]+)"',
+                               source))
+        self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
+                         sorted(stems))
+
+    def test_figure_4_is_the_resolution_ladder_here_too(self):
+        """The spec and the draft both call it that; the skeleton called it the
+        substrate panel, which is a different measurement on different waves."""
+        self.assertIn("Fig. 4 resolution ladder", self.map)
+        self.assertNotIn("Fig. 4 substrate panel", self.map)
+
+    def test_the_substrate_panel_has_a_figure_and_the_map_names_it(self):
+        """Correcting Figure 4's identity left the substrate comparison with no
+        figure at all — §3.7 is a lead-program section with three waves behind
+        it and nothing drawn. This assertion was the opposite of itself for
+        part of 2026-08-29: it required the map to say "no figure is specified",
+        which was true for as long as it took to draw one. What it pins now is
+        that the row cannot go back to naming the resolution ladder's number.
+        """
+        self.assertIn("Fig. S substrate", self.map)
+        self.assertIn("figS_substrate", self.map)
+        self.assertIn("Table SHD-7", self.map)
+        self.assertNotIn("no figure is specified", self.map.lower())
+
+    def test_the_numbering_note_no_longer_claims_the_spec_has_no_shd_entry(self):
+        note = self.text[self.text.index("> **Figure-numbering note"):]
+        note = note[:note.index("\n\n---")]
+        self.assertNotIn("no spec entry", note)
+        self.assertIn("2026-08-27", note)
+        self.assertIn("5–9", note, "the matched program is Figures 5-9, not 5-8")
+
+
 class TheGeneratorOwnsTheArtworkTest(unittest.TestCase):
     """The committed files and the generator's stem list must not drift apart."""
 
     STEMS = ("leadfig1_the_conditional", "leadfig2_headline_accuracy",
              "leadfig3_width_ladder", "leadfig4_resolution_ladder",
+             "figS_substrate", "lead_graphical_abstract",
              "figM_mechanism_richness_addressability", "fig1_matched_rule_swap",
-             "fig3_engine_c1_means", "graphical_abstract")
+             "fig2_matched_means", "fig3_engine_c1_means",
+             "fig4_transfer_ladder", "graphical_abstract")
     FIGURES = ROOT / "results/runs/2026-07-23-paper-hard-both/figures"
 
     def test_each_generated_stem_exists_on_disk(self):
