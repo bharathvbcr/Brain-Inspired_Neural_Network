@@ -1630,8 +1630,23 @@ CORPUS_BASELINE = {
         (2, 0, "d4c60ea1943ff78e"),
     "shd_instrument_v3":
         (2, 0, "9d7b0d15e0aea17a"),
+    #: Re-frozen 2026-08-29 after running Gate F against the guarded binary
+    #: (`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`).
+    #: 830 -> 835 and 128 -> 133, both +5: Gate F wrote replay artefacts for
+    #: five cells it had not previously replayed, and every one is valid.
+    #:
+    #: This is an ADDITION, not a re-scoring, and it was checked as one rather
+    #: than assumed: every tracked cell under this corpus was diffed against
+    #: HEAD and **zero** changed validity. That is the distinction this test
+    #: exists to make, so it is the distinction that was measured before the
+    #: numbers below were touched.
+    #:
+    #: The added files are Gate F's own output under `gate-f-rust/`, which are
+    #: byte-identical replays of archived cells by construction -- that is what
+    #: its PASS means. They land in this corpus because the scan above matches
+    #: any `shd-cal-cell*` schema anywhere under `results/`.
     "shd_instrument_v4":
-        (830, 128, "b473c02013161ffe"),
+        (835, 133, "bc0c4c474d2178e0"),
 }
 
 

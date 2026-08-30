@@ -109,7 +109,43 @@ The test also asserts the accuracy is still a well-formed number in `[0, 1]`
 under poisoning. That is the defect stated as an assertion: nothing about the
 value reveals how it was computed.
 
-### Bit-identity, and its limit
+### Bit-identity — MEASURED 2026-08-29, and it passes
+
+**Gate F: 21 distinct recorded cells, all bit-identical, zero failures, zero
+unrunnable.** Run against the guarded binary
+`8f66c71535b708462ac7ccfd311173cef68ade95e21441ee0257cba7bb8fb1f3`:
+
+| coverage | what was spanned |
+|---|---|
+| contracts | `fixed-t100`, `fixed-t250`, `fixed-t500`, `published-2ms`, `published-4ms`, `published-10ms` |
+| widths | h128, h256 |
+| arms | `ff+fixed`, **`ff+fixed+attn` `d32/L1`**, **`ff+alif`** |
+| comparisons | 12 scientific fields per cell, plus 3 epoch traces on each of the two non-default arms |
+
+The two non-default arms are the ones that matter: `ff+fixed+attn` is the path
+waves 22 and 23 mostly run, and `ff+alif` is Figure S's substrate row.
+
+**How it was run without leaving the worktree.** The blocker below was that
+`*.orders` and the SHD corpus are gitignored and absent here. They exist in the
+main checkout, and they are **read-only inputs**, so they were symlinked in;
+Gate F's output directory is the worktree's own and nothing was written to the
+main checkout. The symlinked paths are themselves gitignored, so the tree stays
+clean.
+
+### What is measured and what is inferred
+
+**Measured:** on macOS/aarch64, this source change is computationally inert. It
+reproduces the recorded corpus bit-exactly on every cell tried.
+
+**Inferred, not measured:** that a Linux/Graviton build from this source
+therefore computes identically to a Linux build from the pre-change source —
+i.e. to pinned binary `22d97c51ab02…`. The inference is strong (the change is a
+read of a value the forward already returned, plus an integer count) but it is
+an inference. Cross-machine Gate F FAILs macOS-vs-Linux **by design**, so the
+Linux equivalence is not directly checkable from here and no claim rests on it:
+wave 22 is self-contained precisely so that it does not have to.
+
+### The unit-level pin, which came first
 
 The six other fields `evaluate` returns are **pinned to values captured by
 running this fixture through the pre-fix code**, not read back off the new
@@ -119,15 +155,11 @@ implementation:
     mean_firing_rate 0.04817708465270698 · silent_fraction 0.375
     saturated_fraction 0.0
 
-**Gate F would normally establish this over archived cells and it could not
-run.** The initialization artefacts are gitignored (`*.orders`,
-`results/**/orders/`) and absent from a fresh worktree, and the real SHD `.h5`
-data is gitignored too — `data/shd/fixture` is a CI stub the instrument rejects
-with "bad SHD event magic". So end-to-end bit-identity over real cells is
-**unverified here** and is stated as unverified rather than argued from the
-diff. The pinned unit-level values are what stands in its place. Running
-`python3 scripts/gate_f_rust.py --cheapest 6` in the main checkout, where the
-artefacts live, is what would close it.
+These were captured before Gate F could run, when end-to-end bit-identity was
+**unverified** and was stated as unverified rather than argued from the diff.
+Gate F has since run and passed on 21 cells, so they are now corroborated rather
+than load-bearing — but they stay, because they are the only check of this that
+runs on every `cargo test` without the gitignored artefacts present.
 
 ## 5. What this does not establish
 
