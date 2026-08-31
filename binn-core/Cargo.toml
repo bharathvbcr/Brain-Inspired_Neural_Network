@@ -27,3 +27,7 @@ criterion = { workspace = true }
 name = "simd_leak_integrate"
 harness = false
 path = "benches/simd_leak_integrate.rs"
+
+[[example]]
+name = "w0_gpu_crossover"
+required-features = ["gpu"]
