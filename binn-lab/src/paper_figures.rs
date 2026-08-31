@@ -195,9 +195,21 @@ mod nums {
     /// Figure 2 Panel C, the geometry ladder (Table SHD-5). The 0.80 clearance
     /// is geometry-specific; the gain is not.
     pub const GEOM: [(&str, f64, f64, f64, &str); 3] = [
-        ("adjacent-sum-5 / published-2ms (anchor)", 0.7062, 0.8320, 0.1258, "12/12"),
+        (
+            "adjacent-sum-5 / published-2ms (anchor)",
+            0.7062,
+            0.8320,
+            0.1258,
+            "12/12",
+        ),
         ("published-10ms", 0.6734, 0.8225, 0.1491, "10/12"),
-        ("channels-700 (standard 700-channel input)", 0.6774, 0.7864, 0.1090, "6/12"),
+        (
+            "channels-700 (standard 700-channel input)",
+            0.6774,
+            0.7864,
+            0.1090,
+            "6/12",
+        ),
     ];
 
     // --- Figure 3: the width ladder (Table SHD-3, Table SHD-4) ---------------
@@ -262,7 +274,12 @@ mod nums {
         ("surrogate scale 0.5", -0.2106, "0/12", 142.009),
         ("surrogate scale 0.25", -0.2565, "0/12", 151.391),
         ("clip-grad-norm 1000.0", -0.0904, "1/12", 11.660),
-        ("(the unclipped arm they were to rescue)", -0.1618, "1/12", 55.494),
+        (
+            "(the unclipped arm they were to rescue)",
+            -0.1618,
+            "1/12",
+            55.494,
+        ),
     ];
 
     // --- Figure 4: the resolution ladder (Table SHD-6) -----------------------
@@ -295,9 +312,33 @@ mod nums {
     /// climax and assert the ordering the record explicitly refuses.
     pub const SUBSTRATE: [(&str, &str, f64, u32, f64, f64, f64); 4] = [
         ("ff+fixed", "the anchor", 1.0, 12, 0.7062, 0.8320, 0.1258),
-        ("ff+alif", "threshold adaptation", 1.0, 12, 0.7018, 0.8303, 0.1285),
-        ("rec+alif", "recurrent + adaptation", 0.4, 10, 0.5262, 0.7874, 0.2612),
-        ("ff+fixed", "scale-matched control", 0.4, 12, 0.7088, 0.8289, 0.1201),
+        (
+            "ff+alif",
+            "threshold adaptation",
+            1.0,
+            12,
+            0.7018,
+            0.8303,
+            0.1285,
+        ),
+        (
+            "rec+alif",
+            "recurrent + adaptation",
+            0.4,
+            10,
+            0.5262,
+            0.7874,
+            0.2612,
+        ),
+        (
+            "ff+fixed",
+            "scale-matched control",
+            0.4,
+            12,
+            0.7088,
+            0.8289,
+            0.1201,
+        ),
     ];
     /// A-1: gain(`ff+alif`) − gain(`ff+fixed`), against a two-sided 0.03 bar.
     /// Positive in 6 of 12 — a coin flip, and inert AT THIS OPERATING POINT
@@ -445,14 +486,22 @@ pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
         draw_lead_fig1,
         H_LEAD1,
     )?);
-    written.extend(write_pair(out_dir, "leadfig2_headline_accuracy", draw_lead_fig2)?);
+    written.extend(write_pair(
+        out_dir,
+        "leadfig2_headline_accuracy",
+        draw_lead_fig2,
+    )?);
     written.extend(write_pair_sized(
         out_dir,
         "leadfig3_width_ladder",
         draw_lead_fig3,
         H_LEAD3,
     )?);
-    written.extend(write_pair(out_dir, "leadfig4_resolution_ladder", draw_lead_fig4)?);
+    written.extend(write_pair(
+        out_dir,
+        "leadfig4_resolution_ladder",
+        draw_lead_fig4,
+    )?);
     // Deliberately NOT `graphical_abstract`: that file exists and depicts the
     // SECONDARY program. This one was `TODO(source needed)` until 2026-08-29 --
     // an authoring task rather than a missing number, since every value it
@@ -849,7 +898,13 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         34,
         RGBColor(50, 50, 50),
     )?;
-    centered(root, (725, 336), "ratio of the two costs", 13, RGBColor(90, 90, 90))?;
+    centered(
+        root,
+        (725, 336),
+        "ratio of the two costs",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
 
     // --- Panel B ------------------------------------------------------------
     label(
@@ -1153,7 +1208,13 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     )))?;
     // Kept short so it fits over a band this narrow. The reading it supports is
     // in the footer, where there is room for a sentence.
-    centered(root, ((lo_b + hi_b) / 2, 298), "no-delay recurrent baseline", 12, BLACK)?;
+    centered(
+        root,
+        ((lo_b + hi_b) / 2, 298),
+        "no-delay recurrent baseline",
+        12,
+        BLACK,
+    )?;
     centered(
         root,
         ((lo_b + hi_b) / 2, 316),
@@ -1164,19 +1225,28 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
 
     // The frontier band.
     map_draw(root.draw(&Rectangle::new(
-        [(at(nums::FIELD_FRONTIER_LO), 296), (at(nums::FIELD_FRONTIER_HI), axis_y)],
+        [
+            (at(nums::FIELD_FRONTIER_LO), 296),
+            (at(nums::FIELD_FRONTIER_HI), axis_y),
+        ],
         RGBColor(226, 232, 244).filled(),
     )))?;
     centered(
         root,
-        ((at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2, 236),
+        (
+            (at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2,
+            236,
+        ),
         "SHD frontier",
         13,
         RGBColor(60, 80, 140),
     )?;
     centered(
         root,
-        ((at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2, 218),
+        (
+            (at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2,
+            218,
+        ),
         &format!(
             "{:.0}–{:.1}%",
             nums::FIELD_FRONTIER_LO * 100.0,
@@ -1197,7 +1267,13 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             vec![(at(v), axis_y), (at(v), axis_y + 8)],
             BLACK.stroke_width(1),
         )))?;
-        centered(root, (at(v), axis_y + 22), &format!("{v:.2}"), 12, RGBColor(90, 90, 90))?;
+        centered(
+            root,
+            (at(v), axis_y + 22),
+            &format!("{v:.2}"),
+            12,
+            RGBColor(90, 90, 90),
+        )?;
         tick += 5;
     }
     label(root, (36, axis_y - 8), "accuracy", 13, RGBColor(90, 90, 90))?;
@@ -1211,10 +1287,22 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         )))?;
         y += 20;
     }
-    label(root, (at(0.80) + 8, 446), "0.80 gate", 12, RGBColor(110, 110, 110))?;
+    label(
+        root,
+        (at(0.80) + 8, 446),
+        "0.80 gate",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
 
     // --- Panel A: this instrument, on that axis -----------------------------
-    label(root, (36, 92), "Panel A — this instrument, n = 32 seed-paired", 16, BLACK)?;
+    label(
+        root,
+        (36, 92),
+        "Panel A — this instrument, n = 32 seed-paired",
+        16,
+        BLACK,
+    )?;
     let rate = RGBColor(200, 140, 60);
     let attn = RGBColor(70, 100, 180);
     for (v, color, name, detail) in [
@@ -1291,8 +1379,16 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     // Staggered: at this scale the two markers are 1.3 points apart and their
     // labels collide on one line.
     for (v, name, text_y) in [
-        (nums::FIELD_TA_SNN, "TA-SNN 91.08 — attention over the time axis (ICCV 2021)", 250),
-        (nums::FIELD_STSC_SNN, "STSC-SNN 92.36 — attention inside the synapse (2022)", 272),
+        (
+            nums::FIELD_TA_SNN,
+            "TA-SNN 91.08 — attention over the time axis (ICCV 2021)",
+            250,
+        ),
+        (
+            nums::FIELD_STSC_SNN,
+            "STSC-SNN 92.36 — attention inside the synapse (2022)",
+            272,
+        ),
     ] {
         map_draw(root.draw(&PathElement::new(
             vec![(at(v), text_y + 12), (at(v), axis_y)],
@@ -1343,7 +1439,11 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             (1090, y),
             &format!("≥ 0.80 in {clears}"),
             13,
-            if clears == "12/12" { BLACK } else { RGBColor(170, 90, 60) },
+            if clears == "12/12" {
+                BLACK
+            } else {
+                RGBColor(170, 90, 60)
+            },
         )?;
     }
 
@@ -1425,8 +1525,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     let (top, bottom) = (110, 470);
     let x0 = 200;
     let step_x = 175;
-    let at_y =
-        |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
+    let at_y = |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
     let at_x = |i: usize| x0 + (i as i32) * step_x;
 
     for k in 0..8 {
@@ -1436,7 +1535,13 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             vec![(x0 - 60, y), (1330, y)],
             RGBColor(232, 232, 236).stroke_width(1),
         )))?;
-        label(root, (110, y - 9), &format!("{v:+.2}"), 12, RGBColor(120, 120, 120))?;
+        label(
+            root,
+            (110, y - 9),
+            &format!("{v:+.2}"),
+            12,
+            RGBColor(120, 120, 120),
+        )?;
     }
     let zero = at_y(0.0);
     map_draw(root.draw(&PathElement::new(
@@ -1455,8 +1560,20 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         )))?;
         y += 24;
     }
-    label(root, (break_x + 10, top + 4), "the step sits HERE,", 12, RGBColor(170, 90, 60))?;
-    label(root, (break_x + 10, top + 22), "between h768 and h1024", 12, RGBColor(170, 90, 60))?;
+    label(
+        root,
+        (break_x + 10, top + 4),
+        "the step sits HERE,",
+        12,
+        RGBColor(170, 90, 60),
+    )?;
+    label(
+        root,
+        (break_x + 10, top + 22),
+        "between h768 and h1024",
+        12,
+        RGBColor(170, 90, 60),
+    )?;
 
     for (i, (name, _rate, _attn, gain, positive)) in nums::LADDER.into_iter().enumerate() {
         let (x, y) = (at_x(i), at_y(gain));
@@ -1466,15 +1583,15 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             RGBColor(170, 90, 60)
         };
         map_draw(root.draw(&Circle::new((x, y), 10, color.filled())))?;
+        centered(root, (x, y - 26), &format!("{gain:+.4}"), 16, BLACK)?;
+        centered(root, (x, bottom + 20), name, 15, BLACK)?;
         centered(
             root,
-            (x, y - 26),
-            &format!("{gain:+.4}"),
-            16,
-            BLACK,
+            (x, bottom + 42),
+            positive,
+            12,
+            RGBColor(110, 110, 110),
         )?;
-        centered(root, (x, bottom + 20), name, 15, BLACK)?;
-        centered(root, (x, bottom + 42), positive, 12, RGBColor(110, 110, 110))?;
     }
 
     // h384 and h512 are not distinguishable, and the figure has to say so where
@@ -1482,7 +1599,12 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     let (b0, b1) = (at_x(2), at_x(3));
     let bracket_y = at_y(0.0) + 26;
     map_draw(root.draw(&PathElement::new(
-        vec![(b0, bracket_y - 8), (b0, bracket_y), (b1, bracket_y), (b1, bracket_y - 8)],
+        vec![
+            (b0, bracket_y - 8),
+            (b0, bracket_y),
+            (b1, bracket_y),
+            (b1, bracket_y - 8),
+        ],
         RGBColor(120, 120, 130).stroke_width(2),
     )))?;
     centered(
@@ -1573,9 +1695,19 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     for (i, (lever, gain, positive, norm)) in nums::LEVERS.into_iter().enumerate() {
         let y = 724 + (i as i32) * 34;
         let rescued = lever.starts_with('(');
-        let ink = if rescued { RGBColor(110, 110, 110) } else { BLACK };
+        let ink = if rescued {
+            RGBColor(110, 110, 110)
+        } else {
+            BLACK
+        };
         label(root, (48, y), lever, 14, ink)?;
-        label(root, (560, y), &format!("gain {gain:+.4}"), 14, RGBColor(170, 90, 60))?;
+        label(
+            root,
+            (560, y),
+            &format!("gain {gain:+.4}"),
+            14,
+            RGBColor(170, 90, 60),
+        )?;
         label(root, (760, y), &format!("positive {positive}"), 13, ink)?;
         label(
             root,
@@ -1634,8 +1766,7 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     let (top, bottom) = (130, 560);
     let x0 = 300;
     let step_x = 380;
-    let at_y =
-        |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
+    let at_y = |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
     let at_x = |i: usize| x0 + (i as i32) * step_x;
 
     for k in 0..7 {
@@ -1645,7 +1776,13 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             vec![(200, y), (1330, y)],
             RGBColor(234, 234, 238).stroke_width(1),
         )))?;
-        label(root, (146, y - 9), &format!("{v:.2}"), 12, RGBColor(120, 120, 120))?;
+        label(
+            root,
+            (146, y - 9),
+            &format!("{v:.2}"),
+            12,
+            RGBColor(120, 120, 120),
+        )?;
     }
     // The 0.80 gate, cleared 12/12 at every rung.
     let gate = at_y(0.80);
@@ -1657,17 +1794,26 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         )))?;
         x += 28;
     }
-    label(root, (1210, gate - 22), "0.80 gate — cleared 12/12 at every rung", 12, RGBColor(110, 110, 110))?;
-    label(root, (36, at_y(0.75) - 9), "accuracy", 13, RGBColor(90, 90, 90))?;
+    label(
+        root,
+        (1210, gate - 22),
+        "0.80 gate — cleared 12/12 at every rung",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
+    label(
+        root,
+        (36, at_y(0.75) - 9),
+        "accuracy",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
 
     let attn = RGBColor(70, 100, 180);
     let rate = RGBColor(200, 140, 60);
     // Both series, joined within themselves only. The comparison the figure
     // makes is vertical — the gap at each rung — not across rungs.
-    for (series, color, pick) in [
-        ("attention", attn, 1usize),
-        ("rate", rate, 0usize),
-    ] {
+    for (series, color, pick) in [("attention", attn, 1usize), ("rate", rate, 0usize)] {
         let _ = series;
         let points: Vec<(i32, i32)> = nums::RESOLUTION
             .iter()
@@ -1703,10 +1849,28 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             RGBColor(110, 110, 110),
         )?;
         centered(root, (x, bottom + 24), contract, 16, BLACK)?;
-        centered(root, (x, bottom + 46), &format!("{bin} bins"), 13, RGBColor(110, 110, 110))?;
+        centered(
+            root,
+            (x, bottom + 46),
+            &format!("{bin} bins"),
+            13,
+            RGBColor(110, 110, 110),
+        )?;
     }
-    centered(root, (at_x(0) - 130, bottom + 24), "coarse", 13, RGBColor(120, 120, 120))?;
-    centered(root, (at_x(2) + 130, bottom + 24), "fine", 13, RGBColor(120, 120, 120))?;
+    centered(
+        root,
+        (at_x(0) - 130, bottom + 24),
+        "coarse",
+        13,
+        RGBColor(120, 120, 120),
+    )?;
+    centered(
+        root,
+        (at_x(2) + 130, bottom + 24),
+        "fine",
+        13,
+        RGBColor(120, 120, 120),
+    )?;
     // Below the bin labels, not level with them.
     label(root, (36, 636), "time-axis read-out", 13, attn)?;
     label(root, (220, 636), "rate read-out", 13, rate)?;
@@ -1791,9 +1955,21 @@ fn rule_card(
         [(x0 + 10, y0 + 10), (x0 + 10 + chip, y0 + 32)],
         verdict.border().filled(),
     )))?;
-    centered(root, (x0 + 10 + chip / 2, y0 + 21), verdict.tag(), 12, WHITE)?;
+    centered(
+        root,
+        (x0 + 10 + chip / 2, y0 + 21),
+        verdict.tag(),
+        12,
+        WHITE,
+    )?;
     label(root, (x0 + 10 + chip + 14, y0 + 12), rule, 16, BLACK)?;
-    label(root, (x0 + 12, y0 + 44), mechanism, 12, RGBColor(90, 90, 90))?;
+    label(
+        root,
+        (x0 + 12, y0 + 44),
+        mechanism,
+        12,
+        RGBColor(90, 90, 90),
+    )?;
     label(root, (x0 + 12, y0 + 66), &both(value), 15, BLACK)?;
     Ok(())
 }
@@ -1838,7 +2014,13 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
         BLACK,
     )?;
 
-    label(root, (352, 126), "Low addressability (broadcast)", 15, BLACK)?;
+    label(
+        root,
+        (352, 126),
+        "Low addressability (broadcast)",
+        15,
+        BLACK,
+    )?;
     label(
         root,
         (930, 126),
@@ -1951,7 +2133,11 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
         170,
         Some(0.5),
         &[
-            ("Broadcast — at chance", nums::XOR_BCAST, Verdict::Fail.border()),
+            (
+                "Broadcast — at chance",
+                nums::XOR_BCAST,
+                Verdict::Fail.border(),
+            ),
             ("DFA — solves", nums::XOR_DFA, Verdict::Pass.border()),
             (
                 "Gradient — ceiling",
@@ -2035,7 +2221,14 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
             vec![(480, 335), (560, y + 55)],
             verdict.border().stroke_width(2),
         )))?;
-        rule_card(root, (560, y, 1300, y + 110), verdict, title, mechanism, value)?;
+        rule_card(
+            root,
+            (560, y, 1300, y + 110),
+            verdict,
+            title,
+            mechanism,
+            value,
+        )?;
     }
     Ok(())
 }
@@ -2115,7 +2308,13 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
             vec![(x, top), (x, bottom)],
             RGBColor(238, 238, 242).stroke_width(1),
         )))?;
-        centered(root, (x, bottom + 14), &format!("{v:.2}"), 11, RGBColor(140, 140, 140))?;
+        centered(
+            root,
+            (x, bottom + 14),
+            &format!("{v:.2}"),
+            11,
+            RGBColor(140, 140, 140),
+        )?;
     }
 
     let rate_col = RGBColor(200, 140, 60);
@@ -2228,11 +2427,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
     for (i, (name, value, positive, verdict, reading)) in contrasts.into_iter().enumerate() {
         let y = 534 + (i as i32) * 46;
         label(root, (36, y - 8), name, 13, BLACK)?;
-        map_draw(root.draw(&Circle::new(
-            (at_b(value), y),
-            7,
-            verdict.border().filled(),
-        )))?;
+        map_draw(root.draw(&Circle::new((at_b(value), y), 7, verdict.border().filled())))?;
         // A value short of the bar sits within ~45px of the axis origin, and
         // a right-hand label then runs straight through the dashed bar. Label
         // those on the left.
@@ -2240,7 +2435,14 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         let left = value < nums::SUBSTRATE_BAR;
         label(
             root,
-            (if left { at_b(value) - 132 } else { at_b(value) + 14 }, y - 8),
+            (
+                if left {
+                    at_b(value) - 132
+                } else {
+                    at_b(value) + 14
+                },
+                y - 8,
+            ),
             &text,
             12,
             RGBColor(80, 80, 80),
@@ -2317,8 +2519,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
     label(root, (330, 812), "completed", 12, RGBColor(110, 110, 110))?;
     label(root, (460, 812), "voided", 12, RGBColor(110, 110, 110))?;
     label(root, (570, 812), "diverged", 12, RGBColor(110, 110, 110))?;
-    for (i, (arm, scale, completed, voided, diverged)) in nums::USABILITY.into_iter().enumerate()
-    {
+    for (i, (arm, scale, completed, voided, diverged)) in nums::USABILITY.into_iter().enumerate() {
         let y = 836 + (i as i32) * 24;
         label(root, (36, y), arm, 13, BLACK)?;
         label(root, (230, y), &format!("{scale:.1}"), 13, BLACK)?;
@@ -2328,14 +2529,22 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
             (460, y),
             &format!("{voided}"),
             13,
-            if voided > 0 { Verdict::Fail.border() } else { BLACK },
+            if voided > 0 {
+                Verdict::Fail.border()
+            } else {
+                BLACK
+            },
         )?;
         label(
             root,
             (570, y),
             &format!("{diverged}"),
             13,
-            if diverged > 0 { Verdict::Fail.border() } else { BLACK },
+            if diverged > 0 {
+                Verdict::Fail.border()
+            } else {
+                BLACK
+            },
         )?;
     }
     label(
@@ -2421,9 +2630,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
 /// Two disclosures the spec requires because an abstract travels alone: 0.8332
 /// is **not competitive** against a 95-96.4% frontier, and the gain **inverts
 /// at h1024**. Without them the image reads as a results claim about SHD.
-fn draw_lead_graphical_abstract(
-    root: &DrawingArea<SVGBackend<'_>, Shift>,
-) -> Result<(), DrawErr> {
+fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
         (36, 16),
@@ -2705,7 +2912,13 @@ fn draw_lead_graphical_abstract(
 ///    floor" and "cleared the gate" are different sentences everywhere else in
 ///    this package.
 fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(root, (36, 16), "Figure 6 — Matched means, by verdict", 26, BLACK)?;
+    label(
+        root,
+        (36, 16),
+        "Figure 6 — Matched means, by verdict",
+        26,
+        BLACK,
+    )?;
     label(
         root,
         (36, 50),
@@ -2818,7 +3031,14 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
         label(root, (36, y), heading, 13, verdict.border())?;
         y += 22;
         for (rule, mechanism, value) in arms {
-            rule_card(root, (36, y, 1364, y + CARD_H), verdict, rule, mechanism, *value)?;
+            rule_card(
+                root,
+                (36, y, 1364, y + CARD_H),
+                verdict,
+                rule,
+                mechanism,
+                *value,
+            )?;
             y += CARD_H + 8;
         }
         y += 14;
@@ -2841,9 +3061,8 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
 
     let (lcb_lo, lcb_hi) = (-0.25, 1.05);
     let (lx0, lx1) = (470, 1330);
-    let at_lcb = |v: f64| {
-        lx0 + (((v - lcb_lo) / (lcb_hi - lcb_lo)) * (lx1 - lx0) as f64).round() as i32
-    };
+    let at_lcb =
+        |v: f64| lx0 + (((v - lcb_lo) / (lcb_hi - lcb_lo)) * (lx1 - lx0) as f64).round() as i32;
 
     // Zero, then the gate. Zero is drawn because the broadcast recurrent value
     // is below it and a reader needs to see which side of nothing it is on.
@@ -2854,7 +3073,13 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
         vec![(zero, strip_top), (zero, strip_bottom)],
         RGBColor(170, 170, 176).stroke_width(1),
     )))?;
-    label(root, (zero - 8, strip_bottom + 4), "0", 12, RGBColor(140, 140, 140))?;
+    label(
+        root,
+        (zero - 8, strip_bottom + 4),
+        "0",
+        12,
+        RGBColor(140, 140, 140),
+    )?;
     let gate = at_lcb(nums::GATE_LCB);
     let mut gy = strip_top;
     while gy < strip_bottom {
@@ -2884,12 +3109,12 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
             vec![(at_lcb(ff.min(rec)), y), (at_lcb(ff.max(rec)), y)],
             verdict.border().stroke_width(2),
         )))?;
+        map_draw(root.draw(&Circle::new((at_lcb(ff), y), 7, verdict.border().filled())))?;
         map_draw(root.draw(&Circle::new(
-            (at_lcb(ff), y),
+            (at_lcb(rec), y),
             7,
-            verdict.border().filled(),
+            verdict.border().stroke_width(2),
         )))?;
-        map_draw(root.draw(&Circle::new((at_lcb(rec), y), 7, verdict.border().stroke_width(2))))?;
         let (left, right) = if ff <= rec { (ff, rec) } else { (rec, ff) };
         label(
             root,
@@ -3095,10 +3320,10 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     // dots; nothing is sorted and nothing is joined between rows.
     let mut y = top + 18;
     let row = |root: &DrawingArea<SVGBackend<'_>, Shift>,
-                   y: i32,
-                   name: &str,
-                   local: f64,
-                   lcb: f64|
+               y: i32,
+               name: &str,
+               local: f64,
+               lcb: f64|
      -> Result<(), DrawErr> {
         // Colour is the GATE outcome, and every one of these is a FAIL. The
         // floor-cleared arms are marked separately so "cleared the floor" stays
@@ -3137,7 +3362,13 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
         Ok(())
     };
 
-    label(root, (36, y - 30), "Rung 2 — live REINFORCE transfer", 13, RGBColor(90, 90, 90))?;
+    label(
+        root,
+        (36, y - 30),
+        "Rung 2 — live REINFORCE transfer",
+        13,
+        RGBColor(90, 90, 90),
+    )?;
     row(root, y, "v13 live RFB", nums::LIVE_RFB, nums::LIVE_RFB_LCB)?;
     y += 46;
 
@@ -3172,14 +3403,30 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     // and carried no colour at all: the whole distinction the legend exists for
     // is the fill, and a text bullet renders in the label's own grey.
     let legend_y = bottom + 28;
-    map_draw(root.draw(&Circle::new((400, legend_y), 7, RGBColor(200, 160, 60).filled())))?;
-    label(root, (414, legend_y - 8), "cleared the 0.65 accuracy floor", 12, RGBColor(110, 110, 110))?;
+    map_draw(root.draw(&Circle::new(
+        (400, legend_y),
+        7,
+        RGBColor(200, 160, 60).filled(),
+    )))?;
+    label(
+        root,
+        (414, legend_y - 8),
+        "cleared the 0.65 accuracy floor",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
     map_draw(root.draw(&Circle::new(
         (660, legend_y),
         7,
         Verdict::Fail.border().filled(),
     )))?;
-    label(root, (674, legend_y - 8), "did not", 12, RGBColor(110, 110, 110))?;
+    label(
+        root,
+        (674, legend_y - 8),
+        "did not",
+        12,
+        RGBColor(110, 110, 110),
+    )?;
     label(
         root,
         (880, legend_y - 8),
@@ -3301,7 +3548,14 @@ fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     ];
     for (i, (verdict, title, mechanism, value)) in rules.into_iter().enumerate() {
         let y = 130 + (i as i32) * 170;
-        rule_card(root, (330, y, 970, y + 150), verdict, title, mechanism, value)?;
+        rule_card(
+            root,
+            (330, y, 970, y + 150),
+            verdict,
+            title,
+            mechanism,
+            value,
+        )?;
     }
     // The passes are stacked, not ranked: with the reference saturated there is
     // no ordering among them to draw.

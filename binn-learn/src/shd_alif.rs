@@ -1411,7 +1411,10 @@ mod tests {
         let extreme = vec![f32::MAX, -f32::MAX, f32::MAX, -f32::MAX];
         let rms = root_mean_square(&extreme, extreme.len() as f32);
         assert!(rms.is_finite(), "RMS of f32::MAX entries came back {rms}");
-        assert!((rms - f32::MAX).abs() <= f32::MAX * 1e-6, "RMS {rms} != f32::MAX");
+        assert!(
+            (rms - f32::MAX).abs() <= f32::MAX * 1e-6,
+            "RMS {rms} != f32::MAX"
+        );
     }
 
     /// A modulator whose RMS overflows f32 must not be silently zeroed.
@@ -1431,7 +1434,10 @@ mod tests {
     #[test]
     fn a_modulator_whose_rms_overflows_is_not_zeroed() {
         let mut mods = vec![3.0e19_f32, -3.0e19, 1.0e19, -2.0e19];
-        assert!(mods.iter().all(|m| m.is_finite()), "the entries must be finite");
+        assert!(
+            mods.iter().all(|m| m.is_finite()),
+            "the entries must be finite"
+        );
         assert!(
             !mods.iter().map(|m| m * m).sum::<f32>().is_finite(),
             "the fixture must overflow the SUM, or it tests nothing"
@@ -1449,8 +1455,8 @@ mod tests {
         // satisfies it by SKIPPING normalisation, leaving the modulator
         // un-normalised — which is the one thing this function exists to
         // prevent. So the target RMS is asserted, which needs the widening.
-        let target = shd_out_scale(hidden) * delta.iter().map(|d| d * d).sum::<f32>().sqrt()
-            / 3.0f32.sqrt();
+        let target =
+            shd_out_scale(hidden) * delta.iter().map(|d| d * d).sum::<f32>().sqrt() / 3.0f32.sqrt();
         let rms = (mods.iter().map(|m| m * m).sum::<f32>() / mods.len() as f32).sqrt();
         assert!(
             (rms - target).abs() <= target * 1e-4,

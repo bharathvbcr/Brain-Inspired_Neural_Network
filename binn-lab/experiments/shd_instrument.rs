@@ -276,6 +276,15 @@ fn init(args: &[String]) -> Result<(), String> {
     binn_learn::save_epoch_orders(&orders_path, &orders)
 }
 
+/// One sample's evaluation: its index, its per-class logits, and whether those
+/// logits were finite.
+///
+/// Named rather than written inline because `-D clippy::type_complexity`
+/// rejects the tuple, and because the shape does not read for itself: the
+/// boolean is a finiteness flag decided inside the evaluation closure, not a
+/// class label.
+type SampleEval = Result<(usize, Vec<f32>, bool), String>;
+
 /// How many samples are in flight at once inside a batch.
 ///
 /// Bounds peak memory to this many per-sample gradients. Larger than any core
@@ -1121,7 +1130,7 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
         // vector is `n_classes` long per sample and cloning it would cost the
         // evaluation pass for a boolean. The count is an integer, so unlike
         // `unit_rate` it does not depend on accumulation order.
-        let computed: Vec<Result<(usize, Vec<f32>, bool), String>> = chunk
+        let computed: Vec<SampleEval> = chunk
             .par_iter()
             .map(|sample| {
                 shd_matched_loss_and_gradient_arm_scaled_prepared(
@@ -1660,11 +1669,13 @@ mod tests {
             *value = 3.0e38;
         }
         assert!(
-            base.w_in.iter().chain(base.w_out.iter()).all(|v| v.is_finite()),
+            base.w_in
+                .iter()
+                .chain(base.w_out.iter())
+                .all(|v| v.is_finite()),
             "the fixture must overflow in the FORWARD, not in the weights"
         );
-        let overflowing =
-            ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
+        let overflowing = ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
 
         let poisoned = evaluate(&overflowing, &samples).expect("evaluate");
         // The fixture's own precondition: if the units stop firing, the

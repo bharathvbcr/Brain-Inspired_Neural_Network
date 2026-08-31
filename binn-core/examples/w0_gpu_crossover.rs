@@ -104,7 +104,16 @@ impl<'a> ResidentSpmv<'a> {
         let threads_per_group = (width * 4).min(max_group).max(width);
 
         (
-            Self { ctx, row_ptr, col, values, x: x_buf, y, n, threads_per_group },
+            Self {
+                ctx,
+                row_ptr,
+                col,
+                values,
+                x: x_buf,
+                y,
+                n,
+                threads_per_group,
+            },
             upload,
         )
     }
@@ -119,8 +128,16 @@ impl<'a> ResidentSpmv<'a> {
         enc.set_buffer(3, Some(&self.x), 0);
         enc.set_buffer(4, Some(&self.y), 0);
         enc.dispatch_threads(
-            MTLSize { width: self.n as u64, height: 1, depth: 1 },
-            MTLSize { width: self.threads_per_group, height: 1, depth: 1 },
+            MTLSize {
+                width: self.n as u64,
+                height: 1,
+                depth: 1,
+            },
+            MTLSize {
+                width: self.threads_per_group,
+                height: 1,
+                depth: 1,
+            },
         );
         enc.end_encoding();
         cb.commit();
@@ -131,6 +148,14 @@ impl<'a> ResidentSpmv<'a> {
     /// memcpy into shared storage rather than a bus transfer.
     fn write_x(&self, x: &[f32]) {
         assert_eq!(x.len(), self.n);
+        // SAFETY: `self.x` was allocated at `n * size_of::<f32>()` bytes with
+        // shared storage, so `contents()` is a valid, Metal-aligned host
+        // pointer for that many floats; the assert above pins `x.len() == n`,
+        // so the copy cannot overrun either side. `x` is a separate borrow, so
+        // source and destination cannot overlap. Every caller runs this between
+        // dispatches, after `wait_until_completed`, so no GPU command is
+        // reading the buffer concurrently.
+        // The invariant: `x.len() == n`, no aliasing, GPU idle.
         unsafe {
             std::ptr::copy_nonoverlapping(x.as_ptr(), self.x.contents() as *mut f32, x.len());
         }
@@ -138,12 +163,28 @@ impl<'a> ResidentSpmv<'a> {
 
     fn read_y(&self, out: &mut [f32]) {
         assert_eq!(out.len(), self.n);
+        // SAFETY: as `write_x`, in the other direction. `self.y` holds `n`
+        // floats and the assert pins `out.len() == n`. Callers read only after
+        // `wait_until_completed`, so the GPU has finished writing; a read that
+        // did race would observe a torn value rather than undefined behaviour,
+        // and the comparison against the CPU reference would fail rather than
+        // the read.
+        // The invariant: `out.len() == n`, no aliasing, GPU idle.
         unsafe {
-            std::ptr::copy_nonoverlapping(self.y.contents() as *const f32, out.as_mut_ptr(), out.len());
+            std::ptr::copy_nonoverlapping(
+                self.y.contents() as *const f32,
+                out.as_mut_ptr(),
+                out.len(),
+            );
         }
     }
 
     fn zero_y(&self) {
+        // SAFETY: `self.y` holds exactly `n` floats and nothing else aliases
+        // it. `write_bytes` counts elements of the pointee type, so `self.n`
+        // here is `n` floats, not `n` bytes — zeroing the whole buffer and no
+        // more. Called between dispatches, after the previous one completed.
+        // The invariant: `y` holds `n` floats, no aliasing, GPU idle.
         unsafe {
             std::ptr::write_bytes(self.y.contents() as *mut f32, 0, self.n);
         }
@@ -162,7 +203,14 @@ fn ms_per_iter(total: Duration, iters: usize) -> f64 {
 /// first, then all arms are timed twice in opposite orders.
 const RAMP: usize = 50;
 
-fn time_cpu(cpu: &SpmvBackend, csr: &Csr, weights: &[f32], x: &[f32], n: usize, iters: usize) -> f64 {
+fn time_cpu(
+    cpu: &SpmvBackend,
+    csr: &Csr,
+    weights: &[f32],
+    x: &[f32],
+    n: usize,
+    iters: usize,
+) -> f64 {
     let mut y = vec![0.0f32; n];
     let start = Instant::now();
     for _ in 0..iters {
