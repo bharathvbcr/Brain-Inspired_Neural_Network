@@ -61,6 +61,24 @@ jobs:
         # whose packages need protecting.
         run: python3 -m pip install --break-system-packages numpy
 
+      - name: Install numpy
+        # `test_gate_f_discharge.py` imports `shd_calibration.runner`, which
+        # imports numpy at module scope — and not decoratively: `arms.py`,
+        # `data.py` and `model.py` each build `np.float32` constants while the
+        # module is loading, so the existing `h5py` stub trick cannot be
+        # extended to it without faking a numeric type.
+        #
+        # torch is NOT needed. It appears only in `reference_clean_main.py`,
+        # which `runner.py` does not import, so CI does not carry a
+        # multi-hundred-megabyte dependency for a test that reads JSON.
+        #
+        # The ubuntu image shipped numpy; the macOS one does not. The fallback
+        # covers PEP 668: the runner's Python is Homebrew's and therefore
+        # externally managed, but the flag is harmless where it is not.
+        run: |
+          python3 -m pip install --break-system-packages numpy             || python3 -m pip install numpy
+          python3 -c 'import numpy; print("numpy", numpy.__version__)'
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
