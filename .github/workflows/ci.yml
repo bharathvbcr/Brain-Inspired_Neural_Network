@@ -18,9 +18,30 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # arm64 macOS, not x86_64 Linux, because two tests pin exact float bit
+    # patterns of kernel output and those patterns are a property of the ISA.
+    # x86_64 and aarch64 differ in FMA contraction and in libm, so
+    # `every_arm_forward_and_backward_is_bit_pinned` cannot pass on both from
+    # one set of pins. It failed on ubuntu for that reason, not because the
+    # kernels had moved. Running where the pins were recorded makes the gate
+    # test the platform it actually describes.
+    #
+    # `macos-latest` is macOS 26 arm64 today, matching the machine the pins
+    # come from. The label floats: when GitHub moves it to a newer image the
+    # pins may move with libm, and the fix then is to re-pin deliberately or to
+    # switch this to `macos-26`. GitHub announces those moves with lead time.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        # `rg` ships in the ubuntu image but not the macOS one, and
+        # `gc_checks.sh` calls it eleven times. Without this the guardrail step
+        # dies on "command not found" — a check that could not run, reported
+        # the same way as one that ran and failed. That is the exact confusion
+        # the GC suite exists to prevent, so it is installed rather than
+        # tolerated.
+        run: brew install ripgrep
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
