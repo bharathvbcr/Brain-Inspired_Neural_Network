@@ -44,39 +44,28 @@ jobs:
         run: brew install ripgrep
 
       - name: Install numpy
-        # Same shape as ripgrep above: the ubuntu image ships numpy, the macOS
-        # one does not, and `scripts/shd_calibration/runner.py` imports it. The
-        # final step died on `ModuleNotFoundError` after every Rust gate had
-        # already passed — again, a check that could not run rather than one
-        # that ran and failed.
+        # Same shape as ripgrep above: the ubuntu image ships numpy and the
+        # macOS one does not, so the final step died on `ModuleNotFoundError`
+        # after every Rust gate had already passed — a check that could not run,
+        # reported like one that ran and failed.
         #
-        # numpy only. `torch` appears in `scripts/`, but solely in
-        # `reference_clean_main.py`, which none of the five checks below reach —
-        # the CI traceback got as far as `runner.py:18`, proving the package
-        # imports without it. Installing it would add a large download for
-        # nothing.
+        # It cannot be stubbed the way `test_gate_f_discharge.py` stubs h5py.
+        # h5py is never touched on that path, so an empty module suffices;
+        # numpy is used *while the module loads*, with `arms.py`, `data.py` and
+        # `model.py` each building `np.float32` constants at import. Stubbing
+        # would mean faking a numeric type to make a test pass.
         #
-        # `--break-system-packages` because the runner's Python is
-        # PEP 668 externally managed; this is a throwaway runner, not a system
-        # whose packages need protecting.
-        run: python3 -m pip install --break-system-packages numpy
-
-      - name: Install numpy
-        # `test_gate_f_discharge.py` imports `shd_calibration.runner`, which
-        # imports numpy at module scope — and not decoratively: `arms.py`,
-        # `data.py` and `model.py` each build `np.float32` constants while the
-        # module is loading, so the existing `h5py` stub trick cannot be
-        # extended to it without faking a numeric type.
+        # numpy only — `torch` is imported solely by `reference_clean_main.py`,
+        # which `runner.py` does not import, so a test that reads JSON reports
+        # does not drag in several hundred megabytes.
         #
-        # torch is NOT needed. It appears only in `reference_clean_main.py`,
-        # which `runner.py` does not import, so CI does not carry a
-        # multi-hundred-megabyte dependency for a test that reads JSON.
-        #
-        # The ubuntu image shipped numpy; the macOS one does not. The fallback
-        # covers PEP 668: the runner's Python is Homebrew's and therefore
-        # externally managed, but the flag is harmless where it is not.
+        # The fallback covers PEP 668: the runner's Python is Homebrew's and so
+        # externally managed, but the flag is harmless where it is not. The
+        # import afterwards is the point — `pip install` reporting success is
+        # not the same as the module being importable.
         run: |
-          python3 -m pip install --break-system-packages numpy             || python3 -m pip install numpy
+          python3 -m pip install --break-system-packages numpy \
+            || python3 -m pip install numpy
           python3 -c 'import numpy; print("numpy", numpy.__version__)'
 
       - name: Install Rust toolchain
