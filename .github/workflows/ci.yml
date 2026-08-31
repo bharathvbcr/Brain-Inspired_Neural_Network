@@ -43,6 +43,24 @@ jobs:
         # tolerated.
         run: brew install ripgrep
 
+      - name: Install numpy
+        # Same shape as ripgrep above: the ubuntu image ships numpy, the macOS
+        # one does not, and `scripts/shd_calibration/runner.py` imports it. The
+        # final step died on `ModuleNotFoundError` after every Rust gate had
+        # already passed — again, a check that could not run rather than one
+        # that ran and failed.
+        #
+        # numpy only. `torch` appears in `scripts/`, but solely in
+        # `reference_clean_main.py`, which none of the five checks below reach —
+        # the CI traceback got as far as `runner.py:18`, proving the package
+        # imports without it. Installing it would add a large download for
+        # nothing.
+        #
+        # `--break-system-packages` because the runner's Python is
+        # PEP 668 externally managed; this is a throwaway runner, not a system
+        # whose packages need protecting.
+        run: python3 -m pip install --break-system-packages numpy
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
