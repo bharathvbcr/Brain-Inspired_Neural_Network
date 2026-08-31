@@ -542,9 +542,7 @@ mod tests {
     #[test]
     fn adaptive_hard_reset_raises_thresholds() {
         let mut bundle = bundle(8);
-        for value in &mut bundle.input_weights {
-            *value = 2.0;
-        }
+        bundle.input_weights.fill(2.0);
         let mut model = TransferModel::from_bundle(&bundle);
         let trace = model.micro_step(&bundle.train[0], TransferPole::live(), 0.001);
         assert!(trace.final_thresholds.iter().any(|&theta| theta > 1.0));

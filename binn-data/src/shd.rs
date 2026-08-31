@@ -260,10 +260,13 @@ fn read_bin_capped(path: &Path, max_samples: Option<usize>) -> Result<Vec<ShdSam
         let label = read_u32_io(&mut f)?;
         f.read_exact(&mut frame_bytes).map_err(|e| e.to_string())?;
         let mut frames = Vec::with_capacity(frame_len);
-        for chunk in frame_bytes.chunks_exact(4) {
-            frames.push(f32::from_bits(u32::from_le_bytes(
-                chunk.try_into().unwrap(),
-            )));
+        // `as_chunks` yields `&[u8; 4]` directly, so the `try_into().unwrap()`
+        // this used to need — a panic path that could never fire, but that a
+        // reader still has to rule out — is gone. `frame_len * 4` bytes were
+        // read above, so the remainder is empty by construction.
+        let (words, _remainder) = frame_bytes.as_chunks::<4>();
+        for word in words {
+            frames.push(f32::from_bits(u32::from_le_bytes(*word)));
         }
         out.push(ShdSample {
             frames,

@@ -90,9 +90,7 @@ impl ThreeFactor {
     /// Canonical C1 protocol v2 does **not** call this; isolation schedules
     /// (e.g. `c1-iso` / protocol v5) do.
     pub fn reset_pairing_state(&mut self) {
-        for slot in &mut self.last_spike {
-            *slot = None;
-        }
+        self.last_spike.fill(None);
     }
 
     /// Fully reset pairing state and spike cursor for clean trial boundaries.

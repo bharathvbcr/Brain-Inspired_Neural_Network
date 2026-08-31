@@ -1662,12 +1662,8 @@ mod tests {
         // f32 and the fixture silently stops demonstrating anything — which it
         // did on the first attempt, so the firing rate is asserted below.
         let mut base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
-        for value in &mut base.w_in {
-            *value = 1.0;
-        }
-        for value in &mut base.w_out {
-            *value = 3.0e38;
-        }
+        base.w_in.fill(1.0);
+        base.w_out.fill(3.0e38);
         assert!(
             base.w_in
                 .iter()

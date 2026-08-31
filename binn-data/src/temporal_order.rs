@@ -43,7 +43,8 @@ impl TemporalOrderExample {
     /// Per-channel rates. These are deliberately label-insufficient.
     pub fn rate_features(&self) -> [f32; TEMPORAL_ORDER_N_IN] {
         let mut out = [0.0f32; TEMPORAL_ORDER_N_IN];
-        for frame in self.frames.chunks_exact(TEMPORAL_ORDER_N_IN) {
+        let (frames, _remainder) = self.frames.as_chunks::<TEMPORAL_ORDER_N_IN>();
+        for frame in frames {
             for (dst, &value) in out.iter_mut().zip(frame) {
                 *dst += value / TEMPORAL_ORDER_T as f32;
             }
@@ -155,7 +156,8 @@ pub fn time_shuffle(examples: &[TemporalOrderExample], seed: u64) -> Vec<Tempora
     assert_eq!(examples.len() % TEMPORAL_ORDER_N_CLASSES, 0);
     let mut out = examples.to_vec();
     let mut rng = Rng::new(seed ^ 0x71AE_5A11_0000_0001);
-    for quartet in out.chunks_exact_mut(TEMPORAL_ORDER_N_CLASSES) {
+    let (quartets, _remainder) = out.as_chunks_mut::<TEMPORAL_ORDER_N_CLASSES>();
+    for quartet in quartets {
         let mut permutation: Vec<usize> = (0..TEMPORAL_ORDER_T).collect();
         for i in (1..permutation.len()).rev() {
             let j = rng.gen_index(i + 1);
@@ -276,7 +278,8 @@ mod tests {
     fn every_quartet_has_byte_identical_rate_features() {
         for difficulty in TEMPORAL_DIFFICULTIES {
             let split = TemporalOrderSplit::generate(40, 20, difficulty, 7).unwrap();
-            for quartet in split.train.chunks_exact(4) {
+            let (quartets, _remainder) = split.train.as_chunks::<4>();
+            for quartet in quartets {
                 let expected = quartet[0].rate_features();
                 for ex in &quartet[1..] {
                     assert_eq!(ex.rate_features(), expected);
@@ -359,7 +362,8 @@ mod tests {
                 RATE_ACCESSIBLE_MARKER_EVENTS as f32
             );
         }
-        for quartet in accessible.train.chunks_exact(TEMPORAL_ORDER_N_CLASSES) {
+        let (quartets, _remainder) = accessible.train.as_chunks::<TEMPORAL_ORDER_N_CLASSES>();
+        for quartet in quartets {
             let features: Vec<_> = quartet
                 .iter()
                 .map(TemporalOrderExample::rate_features)
