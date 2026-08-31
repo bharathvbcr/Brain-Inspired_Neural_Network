@@ -1232,10 +1232,7 @@ fn optional_arm(args: &[String]) -> Result<Option<MatchedArm>, String> {
 }
 
 fn parse_contract(value: &str) -> Result<ShdEventContract, String> {
-    if let Some(frame_ms) = value
-        .strip_prefix("published-")
-        .and_then(|value| value.strip_suffix("ms"))
-    {
+    if let Some(frame_ms) = value.strip_circumfix("published-", "ms") {
         return ShdEventContract::published(parse_u32(frame_ms, "published frame_ms")?);
     }
     if let Some(frames) = value.strip_prefix("fixed-t") {

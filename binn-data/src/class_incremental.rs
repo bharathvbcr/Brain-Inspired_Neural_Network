@@ -322,12 +322,31 @@ mod tests {
             std::mem::size_of_val(&large),
             "stream size depends on the dataset; something is being retained"
         );
-        assert_eq!(
-            std::mem::size_of::<ClassIncrementalStream>(),
-            std::mem::size_of::<ClassIncConfig>()
-                + std::mem::size_of::<Rng>()
-                + 2 * std::mem::size_of::<usize>(),
-            "the stream gained a field beyond config + RNG + two counters"
+        // A `repr(Rust)` struct is not guaranteed to be the sum of its
+        // fields: the compiler may pad and reorder, and how much it pads
+        // depends on the target. Asserting exact equality passed on
+        // aarch64-apple-darwin and failed on x86_64-unknown-linux-gnu, where
+        // the same four fields occupy 400 bytes against a 392-byte sum. That
+        // is 8 bytes of padding, not a retained buffer — the test was reading
+        // layout and reporting it as a leak.
+        //
+        // The bound is what the guarantee actually needs. One alignment unit
+        // covers any padding the compiler may insert, while the smallest thing
+        // that would breach the invariant — an owned `Vec<Sample>` — is three
+        // words, so it still cannot hide here.
+        let fields = std::mem::size_of::<ClassIncConfig>()
+            + std::mem::size_of::<Rng>()
+            + 2 * std::mem::size_of::<usize>();
+        let actual = std::mem::size_of::<ClassIncrementalStream>();
+        assert!(
+            actual <= fields + std::mem::align_of::<ClassIncrementalStream>(),
+            "the stream gained a field beyond config + RNG + two counters: \
+             {actual} bytes against {fields} of fields"
+        );
+        assert!(
+            actual < fields + std::mem::size_of::<Vec<u8>>(),
+            "the stream is large enough to be holding an owned collection: \
+             {actual} bytes against {fields} of fields"
         );
 
         // 2. Probes are regenerated, not served from a buffer. A stored buffer
