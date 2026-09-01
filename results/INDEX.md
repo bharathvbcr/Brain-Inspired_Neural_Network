@@ -2,16 +2,16 @@
 
 # Record index
 
-329 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+331 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 41 | 0 |
-| Results | 38 | 2 |
+| Results | 39 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
-| Defects | 6 | 0 |
+| Defects | 7 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 3 | 0 |
 | Blockers | 1 | 0 |
@@ -107,6 +107,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-01 | [RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md) | Result — wave 22: the mechanism is present at every operating point, and it is not the gain |
 | 2026-08-30 | [RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md) | Result — wave 23: the h1024 collapse is late, and stopping early avoids it |
 | 2026-08-29 | [RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md) | Result — wave 21: the temporal-order mechanism travels, and its size is not the gain |
 | 2026-08-28 | [RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md](RESULT_2026-08-28_W20_THE_RECURRENT_CLAIM_HOLDS_AT_THIRTY_TWO_SEEDS.md) | Result — wave 20: the recurrent claim survives a tripled sample, and survivorship is not shaping it |
@@ -217,6 +218,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-31 | [DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md) | Defect — wave 22 cannot evaluate H22-3, and no cell that lands will change it |
 | 2026-08-29 | [DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md) | Defect — a cell's accuracy was never checked for a non-finite forward |
 | 2026-08-23 | [DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md](DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md) | Defect — concurrent reference cells race on one git checkout, and two died silently |
 | 2026-08-20 | [DEFECT_2026-08-20_THRESHOLDS_ANCHORED_TO_UNLICENSED_REFERENCES.md](DEFECT_2026-08-20_THRESHOLDS_ANCHORED_TO_UNLICENSED_REFERENCES.md) | Four registered thresholds were anchored to macOS reference values this campaign is not licensed to compare against |

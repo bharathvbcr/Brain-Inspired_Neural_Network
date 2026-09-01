@@ -162,6 +162,23 @@ KNOWN_COINCIDENCE = {
               "run on the SHD instrument at all. Same reasoning as 0.6775 and "
               "0.2370 above, and 0.2370 is the gap LCB from the SAME TABLE ROW "
               "as this number, already declared a coincidence on those grounds.",
+    # Surfaced 2026-09-01 when wave 22's 288 attention cells enlarged the
+    # `paired` set. Both are judged coincidences on the same grounds as 0.6638
+    # above -- a named source from a different programme, colliding with a
+    # first-order paired difference that has no causal path to it. The decisive
+    # evidence is INSTABILITY: at 393 collected cells this sweep flagged
+    # 0.0192, 0.4838, 0.8332, 0.9150, 0.9387 and 0.9950; at 504 it flags only
+    # 0.9150 and 0.9975. A genuine derivation does not appear and disappear as
+    # unrelated cells land. Neither value is recomputed from wave-22 cells
+    # anywhere, and both keep their named sources.
+    "0.9150": "an EventProp literature accuracy from results/c1_eventprop.md, "
+              "which predates wave 22 and does not run on the SHD attention "
+              "instrument. The collision is with a paired difference between "
+              "two wave-22 cells and is arithmetic, not derivation.",
+    "0.9975": "a matched-DFA feedforward accuracy from the 2026-08-25 matched "
+              "rerun, same reasoning as 0.9150 and as 0.6638 above: a different "
+              "programme, a different instrument, and a collision that did not "
+              "exist one hundred cells ago.",
     "0.0862": "H21-1, the seed-paired DiD at h256. Second-order; see above.",
     "0.0767": "H21-1, the seed-paired DiD at h384. Second-order; see above.",
     "0.0968": "H21-1, the seed-paired DiD at h512. Second-order; see above.",
@@ -317,6 +334,24 @@ ELSEWHERE = [
                "and both are swept: +0.0827 from wave 23 and the archived "
                "-0.1318 from wave 18. It is their difference this sweep does "
                "not generate"),
+    # Wave 22. Every DiD is a difference OF seed-paired differences and is
+    # therefore second order, which this sweep does not generate -- the same
+    # reason W21's DiDs needed handling. The five below are the wave-22 DiDs
+    # that no first-order value happens to collide with; the other seven do
+    # collide and are declared in KNOWN_COINCIDENCE instead. All twelve come
+    # from `analyse_wave22.py`, are reproduced verbatim in
+    # `results/shd_attention_campaign_v2/VERDICTS_W22.md`, and were recomputed
+    # by a second implementation importing nothing from the analyser.
+    ("0.0893", "H22-1, the seed-paired DiD at h512/d32L1. Second order"),
+    ("0.1119", "H22-1, the seed-paired DiD at h128/fixed-t250/d32L4. Second "
+               "order"),
+    ("0.1145", "H22-1, the seed-paired DiD at h128/d32L2. Second order"),
+    ("0.1161", "H22-1, the seed-paired DiD at h128/fixed-t500/d32L4, and the "
+               "finest rung of H22-4. Second order"),
+    ("0.1331", "H22-1, the seed-paired DiD at h128/d64L4. Second order"),
+    ("0.0759", "W22, the range of the twelve DiDs (+0.1369 max - +0.0610 min). "
+               "A difference OF second-order quantities, so further out than "
+               "the DiDs themselves"),
     ("0.1430", "H21-3, the Spearman rank correlation between the six per-width "
                "gains and their DiDs. A rank statistic over a ladder is not a "
                "cell quantity and this sweep generates no such thing; it is "

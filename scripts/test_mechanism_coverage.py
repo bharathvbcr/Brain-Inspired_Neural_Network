@@ -279,17 +279,24 @@ class LiveCorpusTest(unittest.TestCase):
         self.assertGreater(len({r[0][1] for r in covered}), 1)
         self.assertGreater(len({r[0][2] for r in covered}), 1)
 
-    def test_uncovered_operating_points_still_exist(self):
-        """Coverage grew; it is not complete, and the difference matters.
+    def test_every_operating_point_carries_the_control(self):
+        """Coverage is complete: 21 of 21, as of wave 22.
 
-        Nine of twenty-one carry the control. Asserting the remainder is
-        non-empty stops "coverage improved" being read as "coverage is done"
-        by a later reader of this file.
+        This assertion was the other way round until 2026-09-01. It asserted
+        that uncovered points still existed, so that "coverage improved" could
+        not be read as "coverage is done" while nine of twenty-one carried the
+        control. Wave 22 measured the remaining twelve and H22-2 reports 21 of
+        21, so the old assertion encoded a state the cells have retired.
+
+        Flipped rather than deleted, because the guard is still needed and now
+        points at the live risk: coverage silently REGRESSING. If a root stops
+        being read, a corpus is pruned, or a point loses its `bin-shuffled`
+        arm, this fails instead of quietly reporting a smaller number.
         """
         rows = MC.coverage(MC.read(MC.DEFAULT_ROOTS))
         covered = [r for r in rows if r[6]]
-        self.assertGreater(len(covered), 1)
-        self.assertLess(len(covered), len(rows))
+        self.assertEqual(len(covered), len(rows))
+        self.assertEqual(len(rows), 21)
 
 
 if __name__ == "__main__":

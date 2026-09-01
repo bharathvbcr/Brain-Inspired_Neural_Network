@@ -1639,10 +1639,16 @@ CORPUS_BASELINE = {
     #:
     #: These are the first cells in the corpus produced by a binary that checks
     #: its evaluation forward for finiteness, and every one carries
-    #: `non_finite_forward: 0`. Wave 22 is still in flight; only its settled
-    #: cells are here and the rest land on the next freeze.
+    #: `non_finite_forward: 0`.
+    #:
+    #: Re-frozen 2026-09-01 on wave 22 completing: 288 attention cells added,
+    #: all valid. 1149 -> 1437 and 1139 -> 1427, both +288, so the ten invalid
+    #: are still the same ten `w13rec` cells and no archived verdict moved. No
+    #: tracked cell file was modified, so this is an addition and not a
+    #: re-scoring. See
+    #: `RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`.
     "shd_attention_campaign_v2":
-        (1149, 1139, "2ac22fed7b71071e"),
+        (1437, 1427, "d9b3c68ccf89e804"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":
