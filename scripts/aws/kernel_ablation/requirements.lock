@@ -1,0 +1,24 @@
+# The environment the pinned reference series was measured in, pinned so the
+# aarch64 Linux box reproduces it rather than resolving something newer.
+#
+# HK-4 is the gate this exists for: Arm A must land within 0.010 of the pinned
+# 0.9376 or nothing else in the series is read. Every version below is the one
+# `.venv-shd-cal` on the machine that produced 0.9390 / 0.9368 / 0.9371 holds,
+# read from `pip freeze` rather than chosen. torch 2.13.0 ships a
+# manylinux_2_28_aarch64 cp312 wheel, so the torch build matches exactly and
+# only the OS differs.
+#
+# `wandb` is here because `model.py` imports it at module scope even with
+# logging off. An absent import is a crash, not a disabled feature.
+torch==2.13.0
+torchvision==0.28.0
+torchaudio==2.11.0
+DCLS==0.1.1
+h5py==3.16.0
+numpy==2.5.1
+scipy==1.18.0
+pillow==12.3.0
+einops==0.8.2
+tqdm==4.69.1
+wandb==0.28.1
+spikingjelly @ git+https://github.com/fangwei123456/spikingjelly.git@6dca147afe684b5e78d9c9d430e8761f921437b2
