@@ -2,7 +2,7 @@
 
 # Record index
 
-334 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+335 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -11,7 +11,7 @@
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
-| Defects | 7 | 0 |
+| Defects | 8 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 3 | 0 |
 | Blockers | 1 | 0 |
@@ -220,6 +220,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-01 | [DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md](DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md) | Defect — HK-5 compares an arm with itself |
 | 2026-08-31 | [DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md) | Defect — wave 22 cannot evaluate H22-3, and no cell that lands will change it |
 | 2026-08-29 | [DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md) | Defect — a cell's accuracy was never checked for a non-finite forward |
 | 2026-08-23 | [DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md](DEFECT_2026-08-23_REFERENCE_SETUP_HAS_NO_LOCK.md) | Defect — concurrent reference cells race on one git checkout, and two died silently |

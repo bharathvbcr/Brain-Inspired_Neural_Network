@@ -152,3 +152,51 @@ operating point, K is reported **with that caveat attached**, and the naive
 confounded.
 
 Nine runs, not six. Still once, still no arm re-run to improve a verdict.
+
+---
+
+## 7. Second amendment, still before any run — Arm C and HK-5 are withdrawn
+
+§6 held `time_mask_size` at 8 for Arm B and added Arm C to measure what that
+holding was worth. **Tracing every consumer of the value before launching shows
+it is worth nothing, because nothing reads it.**
+
+`time_mask_size` is read at `datasets.py:45` and `:46` only, inside
+`TimeNeurons_mask_aug`, which is reached only through `Augs` (`datasets.py:96`)
+at `model.py:217`, under `if self.config.augment:`. Two independent facts make
+that unreachable here: **`best_config_SHD.py:125` sets `augment = False`**, and
+the clean protocol runs its own training loop in `reference_clean_main.py`,
+which never constructs `Augs` at all.
+
+Arm B and Arm C are therefore the **same configuration**, and HK-5 would compare
+an arm with itself — and would have **passed**, printing "the augmentation is
+not carrying K" as though something had been measured. The full record is
+[`DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md`](DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md).
+
+**So:**
+
+- **Arm C is withdrawn.** Six runs, not nine.
+- **HK-5 is withdrawn.** It is not replaced: there is no augmentation confound
+  at this operating point, so there is nothing for it to control.
+- **`time_mask_size` is left to follow `max_delay`**, as §2 originally said.
+  §6's holding is not wrong — it is inert — and the simpler edit is the one that
+  matches "sets `max_delay = 1` and changes nothing else".
+- **§2's original claim is restored and is now verified rather than assumed.**
+  `max_delay`'s only non-config consumer is `dilated_kernel_size` at
+  `snn_delays.py:33`, `:61` and `:89`. Every other value it moves — `sigInit`,
+  `left_padding`, `right_padding`, `init_pos_a`, `init_pos_b` — is a property of
+  that kernel and is mechanically required to follow it.
+
+**The manipulation is confirmed to run.** All three configurations were built
+and driven through a forward and a backward pass before launch. Arm A emits 136
+timesteps against Arm B's 100 — the 24 + 12 kernel padding present and then
+gone — so registration rule 3, which abandons the series if `max_delay = 1`
+cannot run, is satisfied and does not fire.
+
+| arm | `max_delay` | `sigInit` | paddings | `init_pos` | seeds |
+|---|---:|---:|---|---|---:|
+| A — reference as pinned | 25 | 12 | 24 / 12 | −13 … 12 | 3 |
+| B — kernel removed | 1 | 0 | 0 / 0 | −1 … 0 | 3 |
+
+HK-1 through HK-4 are unchanged. HK-4 remains the gate: an Arm A that does not
+reproduce the pinned reference within 0.010 means nothing else is read.

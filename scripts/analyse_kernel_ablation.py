@@ -5,6 +5,11 @@ Registered by `results/PREREG_2026-09-01_THE_KERNEL_ABLATION.md`, committed in
 the same commit and before any run existed. This file is the authority on
 HK-1..HK-4.
 
+Arm C and HK-5 were withdrawn by amendment 7, before any run: `time_mask_size`
+is unreachable in the clean protocol, so Arm C was the same configuration as
+Arm B and HK-5 would have compared an arm with itself -- and passed. See
+`results/DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md`.
+
 It reports NOT EVALUABLE rather than computing a verdict from fewer runs than
 were registered. A series that half-ran must not read as a series that ran.
 """
@@ -26,7 +31,6 @@ HK1_MIN_K = 0.050              # majority of the residual
 HK2_MAX_DIST = 0.030           # "lands near the instrument"
 HK3_REFUTES_BELOW = 0.020      # below this the attribution is refuted
 HK4_MAX_DRIFT = 0.010          # Arm A must reproduce the pinned reference
-HK5_MAX_AUG = 0.020            # amendment: the augmentation must not carry K
 
 
 def load(arm: str) -> list[float]:
@@ -47,24 +51,22 @@ def load(arm: str) -> list[float]:
 def main() -> int:
     a = load("armA-reference")
     b = load("armB-nokernel")
-    c = load("armC-nokernel-augfalls")
     print("# Kernel ablation — what the 25-tap temporal kernel is worth\n")
     print(f"Registered: `PREREG_2026-09-01_THE_KERNEL_ABLATION.md`. This "
           f"analyser is the authority on every verdict below.\n")
     print(f"| arm | n | mean | values |")
     print(f"|---|---:|---:|---|")
     for name, arm in (("A — reference as pinned", a),
-                      ("B — kernel removed, augmentation held", b),
-                      ("C — kernel removed, augmentation falls", c)):
+                      ("B — kernel removed", b)):
         mean = f"{statistics.fmean(arm):.4f}" if arm else "—"
         vals = ", ".join(f"{v:.4f}" for v in arm) if arm else "none"
         print(f"| {name} | {len(arm)} | {mean} | {vals} |")
     print()
 
-    if len(a) < SEEDS or len(b) < SEEDS or len(c) < SEEDS:
+    if len(a) < SEEDS or len(b) < SEEDS:
         print(f"**NOT EVALUABLE** — the series registers {SEEDS} seeds per arm "
-              f"and this corpus holds {len(a)}, {len(b)} and {len(c)}. No verdict "
-              f"is computed from a short series.")
+              f"and this corpus holds {len(a)} and {len(b)}. No verdict is "
+              f"computed from a short series.")
         return 0
 
     mean_a, mean_b = statistics.fmean(a), statistics.fmean(b)
@@ -105,16 +107,6 @@ def main() -> int:
              f"K = {k:+.4f} is at or above {HK3_REFUTES_BELOW}, so the "
              f"attribution stands as measured rather than inferred."))
 
-    mean_c = statistics.fmean(c)
-    aug = abs(mean_b - mean_c)
-    print(f"\n**HK-5 — {'MET' if aug <= HK5_MAX_AUG else 'NOT MET'}.** Holding "
-          f"`time_mask_size` versus letting it fall to 0 moves the ablated "
-          f"reference by {aug:.4f} ({mean_b:.4f} vs {mean_c:.4f}) against "
-          f"{HK5_MAX_AUG}. "
-          + ("The augmentation is not carrying K, so K is the kernel's."
-             if aug <= HK5_MAX_AUG else
-             "The augmentation is a material term here: K is reported WITH this "
-             "caveat, and the naive max_delay=1 ablation is confounded."))
     return 0
 
 
