@@ -2,11 +2,11 @@
 
 # Record index
 
-332 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+334 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 41 | 0 |
+| Preregistrations | 43 | 0 |
 | Results | 39 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
@@ -59,6 +59,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-01 | [PREREG_2026-09-01_THE_KERNEL_ABLATION.md](PREREG_2026-09-01_THE_KERNEL_ABLATION.md) | Preregistration — remove the temporal kernel and measure what it was worth |
+| 2026-09-01 | [PREREG_2026-09-01_ORDER_SYNCHRONY_AND_BUDGET.md](PREREG_2026-09-01_ORDER_SYNCHRONY_AND_BUDGET.md) | Preregistration — is the shuffle cost about order, and does it survive a second budget |
 | 2026-08-29 | [PREREG_2026-08-29_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md](PREREG_2026-08-29_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md) | Preregistration — the mechanism control at the twelve operating points that lack it |
 | 2026-08-29 | [PREREG_2026-08-29_THE_COLLAPSE_IS_LATE.md](PREREG_2026-08-29_THE_COLLAPSE_IS_LATE.md) | Preregistration — is the h1024 collapse late, and does stopping early avoid it? |
 | 2026-08-27 | [PREREG_2026-08-27_THE_RECURRENT_CLAIM_AT_THIRTY_TWO_SEEDS.md](PREREG_2026-08-27_THE_RECURRENT_CLAIM_AT_THIRTY_TWO_SEEDS.md) | Preregistration — the recurrent comparison at n=32, and whether survivorship is inflating it |

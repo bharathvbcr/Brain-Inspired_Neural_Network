@@ -846,6 +846,78 @@ def wave23_the_collapse_is_late():
     return cells
 
 
+def wave24_order_synchrony_and_budget():
+    """W24 - is the shuffle cost about order, and does it survive a second budget?
+
+    Registered in `PREREG_2026-09-01_ORDER_SYNCHRONY_AND_BUDGET.md`.
+
+    # Why `reversed` is the control this campaign has never run
+
+    Every difference-in-differences in the corpus is built from ONE destruction
+    operator, `bin-shuffled`, which destroys temporal order and displaces almost
+    every spike. Those are not separated anywhere, so "attention reads temporal
+    order" is presently indistinguishable from "attention is more brittle than
+    the rate read-out to having its input moved about".
+
+    `shd_temporal.rs` reverses the frame sequence: relocation and mean
+    displacement comparable to `bin-shuffled`, but per-channel counts,
+    cross-channel synchrony and every interval magnitude preserved. Because
+    `apply_temporal` runs on the TRAINING split too, a globally reversed task is
+    isomorphic to the intact one. So reversal is displacement-matched and
+    information-preserving: brittleness predicts it reproduces the DiD,
+    structure predicts it costs nothing.
+
+    `channel-shuffled` is NOT the order-preserving control - it draws an
+    independent permutation per channel and destroys order AND synchrony,
+    strictly more than `bin-shuffled`. It is here for a different question: the
+    difference between the two DiDs is synchrony's contribution.
+
+    # Why the e400 intact and bin-shuffled arms are not re-run
+
+    They exist at 12 seeds from `w22cov`, on the identical pinned binary
+    `3afd4434...` in the identical bucket, which `bootstrap.sh` re-pins and
+    aborts on mismatch. The one-binary rule is about the binary. Prereg section
+    5 states the condition under which the reuse is void.
+    """
+    cells = []
+    # (hidden, contract, geometry, (attn_dim, attn_layers)) at e400. Every point
+    # is a `w22cov` point, which is what makes the reuse available.
+    points_e400 = [
+        (128, ANCHOR[0], ANCHOR[1], (32, 2)),
+        (1024, ANCHOR[0], ANCHOR[1], (32, 1)),
+        (128, "fixed-t250", ANCHOR[1], (32, 4)),
+    ]
+    points_e100 = [
+        (128, ANCHOR[0], ANCHOR[1], (32, 2)),
+        (1024, ANCHOR[0], ANCHOR[1], (32, 1)),
+    ]
+    for epochs, points, temporals in (
+        (400, points_e400, ("reversed", "channel-shuffled")),
+        (100, points_e100,
+         ("intact", "bin-shuffled", "reversed", "channel-shuffled")),
+    ):
+        # One `ff+fixed` set serves every read-out depth at a given geometry, so
+        # the rate arms are keyed by geometry and not by point.
+        geometries = []
+        for hidden, contract, geometry, _ in points:
+            if (hidden, contract, geometry) not in geometries:
+                geometries.append((hidden, contract, geometry))
+        for hidden, contract, geometry in geometries:
+            for seed in SEEDS:
+                for temporal in temporals:
+                    cells.append(cell("w24ord", "ff+fixed", hidden, epochs, seed,
+                                      contract=contract, geometry=geometry,
+                                      temporal=temporal))
+        for hidden, contract, geometry, (attn_dim, attn_layers) in points:
+            for seed in SEEDS:
+                for temporal in temporals:
+                    cells.append(cell("w24ord", "ff+fixed+attn", hidden, epochs, seed,
+                                      contract=contract, geometry=geometry,
+                                      attn_dim=attn_dim, attn_layers=attn_layers,
+                                      temporal=temporal))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -870,6 +942,7 @@ WAVES = {
     "w21": wave21_the_mechanism_across_the_design_space,
     "w22": wave22_the_mechanism_at_every_operating_point,
     "w23": wave23_the_collapse_is_late,
+    "w24": wave24_order_synchrony_and_budget,
 }
 
 
