@@ -605,19 +605,58 @@ def figure_s_table() -> str:
 
 
 def tuples(const: str, arity: int) -> list[tuple[str, ...]]:
-    """A fixed-arity `[( ... ); N]` constant, as strings."""
+    """A fixed-arity `[( ... ); N]` constant, as strings.
+
+    Parsed by balanced parentheses, not by line. This read the source a line at
+    a time until 2026-09-01, which was correct only while every tuple fitted on
+    one line. `cargo fmt` explodes a tuple across eight lines the moment it
+    exceeds the width, and commit 7c48559 formatted `paper_figures.rs` and did
+    exactly that to three of SUBSTRATE's four rows.
+
+    The failure mode is the reason this now checks itself. A line reader that
+    stops recognising a row does not report anything -- it returns a SHORTER
+    list, and the caller indexes off the end with an `IndexError` that names a
+    subscript rather than the cause. A parser that quietly returns less than it
+    was asked for is the same defect class as a guard that cannot fire, so the
+    declared length in `; N]` is now read and enforced: losing a row fails here,
+    loudly, with both counts.
+    """
     text = SOURCE.read_text()
     block = text[text.index(f"pub const {const}"):]
     block = block[:block.index("];")]
+    declared = int(re.search(r";\s*(\d+)\s*\]", block).group(1))
+    block = block[block.index("= [") + 3:]          # drop the type, keep the value
     field = r'"([^"]*)"|(-?[\d.]+)'
-    rows = []
-    for line in block.splitlines():
-        line = line.strip()
-        if not line.startswith("("):
-            continue
-        found = [a or b for a, b in re.findall(field, line)]
-        if len(found) == arity:
-            rows.append(tuple(found))
+    rows: list[tuple[str, ...]] = []
+    depth, start, in_string, index = 0, None, False, 0
+    while index < len(block):
+        char = block[index]
+        if in_string:
+            if char == "\\":
+                index += 2
+                continue
+            if char == '"':
+                in_string = False
+        elif char == '"':
+            in_string = True
+        elif char == "(":
+            if depth == 0:
+                start = index
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                found = [a or b for a, b in re.findall(field, block[start:index + 1])]
+                if len(found) == arity:
+                    rows.append(tuple(found))
+                start = None
+        index += 1
+    if len(rows) != declared:
+        raise AssertionError(
+            f"{const} declares {declared} rows of arity {arity} and this parse "
+            f"recovered {len(rows)}. The constant changed shape, or the parser "
+            f"no longer reads it -- do not let a short read look like a pass."
+        )
     return rows
 
 
