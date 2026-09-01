@@ -247,9 +247,13 @@ mod nums {
     /// Panel D ban 2 and Figure 3 ban 6 both exist because of it.
     pub const DID_RHO: f64 = -0.1430;
     pub const DID_RHO_BAR: f64 = 0.829;
-    /// Coverage as MEASURED. Ban 4: the caption says 9 of 21, never "every
-    /// width" -- twelve operating points still carry no bin-shuffled twin.
-    pub const COVERAGE_COVERED: u32 = 9;
+    /// Coverage as MEASURED. Wave 22 closed the remaining twelve points, so
+    /// this is 21 of 21 as of 2026-09-01 (H22-2, `analyse_wave22.py` and
+    /// `mechanism_coverage.py`). Ban 4 SURVIVES the change and is why the
+    /// caption still refuses "every width": 21 of 21 is every point this
+    /// campaign MEASURED, not every width, depth or budget that exists, and
+    /// every one of them is e400.
+    pub const COVERAGE_COVERED: u32 = 21;
     pub const COVERAGE_TOTAL: u32 = 21;
     /// h768 carries the smallest positive gain on LADDER and the largest DiD
     /// in the campaign. It is the single clearest refutation of H21-3 and
@@ -1039,7 +1043,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     //   2. no gain on this axis and no connector between points -- rho is
     //      -0.1430 against a bar of +0.829, so a line asserts a NOT MET result;
     //   3. h1024 marked as the arm whose gain is negative;
-    //   4. coverage stated as 9 of 21, never "every width".
+    //   4. coverage stated as a MEASURED count, never "every width".
     label(
         root,
         (36, 900),
@@ -1129,7 +1133,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (36, note_y),
         &format!(
-            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width. Twelve carry intact arms with no bin-shuffled twin and claim nothing.",
+            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width, and not every budget: every one of them is e400.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
         ),
         13,
@@ -2788,11 +2792,8 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
             "widths 128 → 1024,",
             "both contracts, both geometries",
             "",
-            &format!(
-                "{} points carry intact arms with",
-                nums::COVERAGE_TOTAL - nums::COVERAGE_COVERED
-            ),
-            "no shuffled twin, and claim nothing",
+            "every one measured at e400;",
+            "no shuffled arm has run elsewhere",
         ],
     )?;
 

@@ -2,7 +2,7 @@
 
 # Record index
 
-331 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+332 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -17,7 +17,7 @@
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
-| Paper | 3 | 5 |
+| Paper | 4 | 5 |
 | Campaign control | 4 | 0 |
 | Writing | 2 | 0 |
 | Gates | 1 | 0 |
@@ -284,6 +284,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-08-31 | [PAPER_BINN_INSTRUMENT_2026-08-31.md](PAPER_BINN_INSTRUMENT_2026-08-31.md) | A Preregistered Instrument for Backpropagation-Free Learning: Four Negative Gates, One Conditional Positive, and Seven Withdrawals |
 | 2026-08-29 | [PAPER_GAPS_2026-08-29.md](PAPER_GAPS_2026-08-29.md) | The paper's gaps, consolidated — 2026-08-29 |
 | 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) **[retired]** | What is left for the paper — 2026-08-20 |
 | — | [PAPER_VERIFY.md](PAPER_VERIFY.md) **[retired]** | Paper scientific verify — 2026-07-23 |

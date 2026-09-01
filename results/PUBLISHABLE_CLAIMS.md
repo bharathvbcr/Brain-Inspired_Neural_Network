@@ -79,7 +79,7 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
 
 | Rank | Claim | Strength | Object under test |
 |---:|---|---|---|
-| **1 (lead)** | On SHD, the **attention read-out's marginal contribution is the order-dependent one**: its bin-shuffle cost is **+0.1347** against the rate read-out's own **+0.0142** on the same seeds and splits — **9.5×**, **32/32** positive. A difference-in-differences on the **gain**, not on accuracy. **Measured at 9 of 21 operating points**, widths 128–1024 and both contracts and geometries, clearing its +0.03 bar at every one | **Strongest / measured (registered n=12, confirmed n=32, generalised at n=12 per point)** | Which component's contribution depends on temporal order |
+| **1 (lead)** | On SHD, the **attention read-out's marginal contribution is the order-dependent one**: its bin-shuffle cost is **+0.1347** against the rate read-out's own **+0.0142** on the same seeds and splits — **9.5×**, **32/32** positive. A difference-in-differences on the **gain**, not on accuracy. **Measured at 21 of 21 operating points**, widths 128–1024 and both contracts and geometries, clearing its +0.03 bar at every one, all at `e400` | **Strongest / measured (registered n=12, confirmed n=32, generalised at n=12 per point)** | Which component's contribution depends on temporal order |
 | **1a (limit on the lead)** | The effect's **size is not the gain**: Spearman ρ over the six per-width rungs is **−0.1430** against a registered bar of **+0.829**. h768 carries the smallest gain (+0.0560) and the largest DiD (+0.1881) | **Measured — a registered NOT MET, and it bounds the lead** | Whether the gain *decomposes* into an order-dependent share |
 | **1b (supporting)** | Same instrument, headline accuracy: `ff+fixed+attn` at `d32/L4` reaches **0.8332** against `ff+fixed` **0.7057** (gain **+0.1275**, **32/32** positive, **32/32** at or above 0.80) | **Measured — and explicitly *not* competitive** (frontier 95–96.4%) | Attention read-out on a LIF substrate |
 | **2 (secondary)** | On an identical dense-LIF forward, **broadcast ±1 three-factor** (surrogate eligibility × ±1) does not clear the matched-arch gate vs SuperSpike BPTT, on **both** forward graphs at n=20 | **Strong / clean negative** | Rule topology only (±1 broadcast) |
@@ -121,7 +121,7 @@ Authority: Rust sources + on-disk result notes. Do not widen beyond this sheet f
    seed-paired quadruples. DiD clears **+0.03** at **12/12** seeds at h256
    (**+0.0862**), h384 (**+0.0767**) and h512 (**+0.0968**), and at both
    alternative binnings — `channels-700` (**+0.1122**) and `published-10ms`
-   (**+0.0959**). Coverage **2 → 9 of 21** operating points.
+   (**+0.0959**). Coverage **2 → 9 → 21 of 21** operating points, closed by wave 22.
    **What may NOT be claimed from it:** that the DiD tracks the gain (ρ =
    **−0.1430** against **+0.829**, NOT MET), and anything about h1024 other than
    that the order-dependence persists there while the gain is negative.

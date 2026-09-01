@@ -420,7 +420,7 @@ The same operator, seeds and pinned binary at seven further operating points: **
 cells, zero divergences, zero voided.** The DiD clears its +0.03 bar at 12/12 seeds
 at h256 (+0.0862), h384 (+0.0767) and h512 (+0.0968), and at both alternative
 binnings — `channels-700` (+0.1122) and `published-10ms` (+0.0959). Coverage goes
-from 2 of 21 operating points to **9 of 21**.
+from 2 of 21 operating points to 9, and wave 22 closed the rest: **21 of 21**.
 
 The same preregistration asked whether the shuffle cost *tracks* the gain across
 width. **It does not.** Spearman ρ = **−0.1430** against a registered bar of

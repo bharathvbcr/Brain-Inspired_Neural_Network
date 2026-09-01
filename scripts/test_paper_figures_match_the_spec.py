@@ -318,10 +318,23 @@ class LeadFigure1PanelDTest(unittest.TestCase):
         self.assertEqual(marked, ["h1024"], self.ladder)
         self.assertIn("gain is NEGATIVE here", self.panel)
 
-    def test_ban_4_coverage_is_stated_as_nine_of_twenty_one(self):
-        """Twelve operating points still carry no bin-shuffled twin."""
+    def test_ban_4_coverage_is_a_measured_count_and_refuses_every_width(self):
+        """Coverage is 21 of 21 as of wave 22, and the ban still holds.
+
+        This asserted 9 of 21 until 2026-09-01. Wave 22 measured the remaining
+        twelve points and H22-2 reports 21 of 21, so the old numbers encoded a
+        state the cells retired.
+
+        Ban 4 is NOT retired with them, which is the point of keeping this test
+        rather than deleting it. The ban exists to stop a coverage count being
+        read as universality, and that risk is LARGER at 21 of 21 than it was
+        at 9: "every operating point" invites "every width", and the two are
+        not the same claim. Twenty-one of twenty-one is every point this
+        campaign measured -- all of them at e400, none at another budget. So
+        the panel must still refuse "every width", and this still checks it.
+        """
         scalars = re.findall(r"pub const COVERAGE_(\w+): u32 = (\d+);", self.text)
-        self.assertEqual(dict(scalars), {"COVERED": "9", "TOTAL": "21"})
+        self.assertEqual(dict(scalars), {"COVERED": "21", "TOTAL": "21"})
         self.assertIn("NOT every width", self.panel)
 
     def test_the_refutation_is_on_the_panel_not_only_in_the_caption(self):
@@ -897,9 +910,19 @@ class LeadGraphicalAbstractTest(unittest.TestCase):
         self.assertIn("lead_graphical_abstract", SPEC.read_text())
 
     def test_the_coverage_is_stated_as_measured(self):
+        """The count comes from the constants, and a scope limit travels with it.
+
+        This required the literal words "claim nothing" until 2026-09-01, when
+        wave 22 closed the last twelve points and left nothing to say them
+        about. The requirement was never those two words: it is that the
+        coverage card cannot state a count WITHOUT stating what the count does
+        not reach. So the assertion now tracks the live limit -- every one of
+        the twenty-one is e400 -- rather than wording the cells retired.
+        """
         self.assertIn("nums::COVERAGE_COVERED", self.fig)
         self.assertIn("nums::COVERAGE_TOTAL", self.fig)
-        self.assertIn("claim nothing", self.fig)
+        self.assertIn("e400", self.fig)
+        self.assertIn("no shuffled arm has run elsewhere", self.fig)
 
 
 def matched_table(name: str, next_name: str) -> str:

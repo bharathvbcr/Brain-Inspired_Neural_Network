@@ -111,9 +111,14 @@ cites and against every ban its spec section names. What remains here is prose.
   (**−0.1618**). The paper's own registered prediction failed. The overfitting
   alternative is neither excluded nor supported, because that argument was
   conditional on a collapse that did not occur.
-- **Coverage is 9 of 21 operating points**, recomputed by
-  `scripts/mechanism_coverage.py` on every gate run. Twelve points carry intact
-  arms with no `bin-shuffled` twin and claim nothing. Widening it is compute.
+- **Coverage is 21 of 21 operating points — CLOSED 2026-09-01 by wave 22.**
+  It was 9 of 21 when this register was written, with twelve points carrying
+  intact arms and no `bin-shuffled` twin. Widening it was compute, and the
+  compute was spent: 504 self-contained cells, every one of the twelve clearing
+  the registered bar
+  ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)).
+  What replaces it as the scope limit is the **budget**: all twenty-one are
+  `e400` and no shuffled arm has run at any other.
 - **§6's audit debt is smaller than it reads.** The ~8,000 unswept lines in
   `binn-engine` / `binn-areas` / `binn-core` are **not on the cell path** — the
   instrument references those crates zero times. The two unswept files that
@@ -141,7 +146,7 @@ That decision is now written into
 and two disclosures an abstract cannot travel without — rather than only into
 the generator, so it can be disagreed with in the place that owns it. The
 substance is a compression of Figures 1–3 and asserts nothing they do not: the
-pair of costs at equal weight, coverage at 9 of 21, prior art named, and the
+pair of costs at equal weight, coverage at 21 of 21, prior art named, and the
 ρ = −0.1430 strip that stops the image reading as a decomposition of the gain.
 
 If the front image should say something else, the spec section is the edit.

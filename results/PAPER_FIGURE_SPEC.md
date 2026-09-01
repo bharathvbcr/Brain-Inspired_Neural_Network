@@ -259,7 +259,8 @@ leaving it to whoever draws it.**
    that shows only the DiD column reads as "the mechanism is healthy at every
    width", which is not what this point says.
 4. **Do not annotate 12 of 21 uncovered operating points out of existence.** The
-   caption states coverage as **9 of 21**, not "every width".
+   caption states coverage as **21 of 21**, not "every width" — the count is
+   every point MEASURED, and all of them are `e400`.
 
 ## Figure 2 — Headline accuracy and the 0.80 clearance
 
@@ -703,7 +704,7 @@ exists at one scale only.
 2. Destroy temporal order in the input and the read-out's advantage goes with
    it, while the rate arm's own cost barely moves. **That** is the result: a
    difference-in-differences on the *gain*.
-3. It is measured at **9 of 21** operating points, not at one.
+3. It is measured at **21 of 21** operating points, not at one.
 
 **Layout (left → right), one row:**
 
@@ -714,7 +715,7 @@ exists at one scale only.
 2. **The pair of costs, at equal weight — the centre of the image.** Attention
    `d32/L4` **+0.1347** beside rate `ff+fixed` **+0.0142**, `n = 32`, `h128`,
    `published-2ms`, `e400`, seed-paired, **32/32** positive, ratio **9.5×**.
-3. **The coverage strip.** **9 of 21** operating points carry the control and
+3. **The coverage strip.** **21 of 21** operating points carry the control and
    **every one clears its +0.03 bar**; widths 128–1024, both contracts, both
    geometries. Twelve operating points carry intact arms with no shuffled twin.
 

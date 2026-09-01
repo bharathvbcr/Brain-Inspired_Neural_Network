@@ -195,7 +195,7 @@ the same seeds and the same pinned binary; only the `bin-shuffled` halves are ne
 | **H21-4** the mechanism survives a change of binning | DiD ≥ +0.03 and ≥ 9/12 at **both** points | **MET** |
 
 **Reading, and the second row is the one that constrains the paper.** The
-mechanism generalises: coverage goes from **2 to 9 of 21** operating points and
+mechanism generalises: coverage goes from **2 to 9 to 21 of 21** operating points and
 the DiD clears its bar at every one. Its **size does not track the gain** — h768
 carries the smallest positive gain on the ladder and the largest DiD in the wave
 — so the contrast is a property of the read-out and **not** a decomposition of

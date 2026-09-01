@@ -27,7 +27,7 @@ Two programs, in this order:
    `bin-shuffled` input, seed-paired. Evidence is the `shd-attention-campaign-v2`
    wave series; the mechanism control's coverage is recomputed on every run of
    the evidence gate by `scripts/mechanism_coverage.py`, and is currently
-   **9 of 21 operating points**, spanning every width from 128 to 1024 and both
+   **21 of 21 operating points**, spanning every width from 128 to 1024 and both
    contracts and geometries. Until 2026-08-29 it was **one width (h128)**, and
    the disclosure below has been rewritten accordingly rather than deleted.
 2. **Secondary — the matched-architecture kill gate.** Broadcast ±1 three-factor
@@ -102,7 +102,7 @@ home for the paper this file used to describe.
 **Lead program**
 
 1. **What the difference-in-differences does and does not generalise over.**
-   The control exists at **9 of 21 operating points** (widths 128–1024, both
+   The control exists at **21 of 21 operating points** (widths 128–1024, both
    contracts, both geometries) and clears its registered bar at every one of
    them, so the mechanism is no longer a single-configuration result.
    **Twelve operating points still carry intact arms with no `bin-shuffled`
@@ -170,7 +170,7 @@ that sheet is the owner, and this table used to contradict it by ticking
 | **lead Figure 3** | `…/leadfig3_width_ladder.*` | **drawn 2026-08-27**, annotated 2026-08-29 — the mechanism does not track this curve |
 | **lead Figure 4** | `…/leadfig4_resolution_ladder.*` | **drawn 2026-08-27** — the resolution ladder |
 | **lead Figure S** | `…/figS_substrate.*` | **specified and drawn 2026-08-29** — §3.7 had three waves behind it and no figure in any sheet. Lettered beside Figure M rather than renumbering the secondary program |
-| **lead graphical abstract** | `…/lead_graphical_abstract.*` | **specified and drawn 2026-08-29** — the pair of costs at equal weight, coverage at 9 of 21, and the ρ = −0.1430 strip that stops it reading as a decomposition of the gain. A separate file from `graphical_abstract`, which is the secondary program's |
+| **lead graphical abstract** | `…/lead_graphical_abstract.*` | **specified and drawn 2026-08-29** — the pair of costs at equal weight, coverage at 21 of 21, and the ρ = −0.1430 strip that stops it reading as a decomposition of the gain. A separate file from `graphical_abstract`, which is the secondary program's |
 
 The four current files have one owner, `binn-lab/src/paper_figures.rs`:
 

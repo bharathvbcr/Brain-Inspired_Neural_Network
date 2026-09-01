@@ -266,6 +266,10 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
    | h128 / `channels-700` | 12 | +0.1090 | **+0.1122** | 12/12 |
    | h128 / `published-10ms` | 12 | +0.1491 | **+0.0959** | 12/12 |
 
+   **Coverage is complete, and the dissociation is wider than one width** (wave 22, preregistered). The twelve operating points that previously carried intact arms with no `bin-shuffled` twin were measured on a **self-contained** 504-cell wave — all four arms on one binary, because pairing new shuffled halves against archived intact halves would have built every difference-in-differences from two binaries. **All twelve clear the registered +0.03 bar**, the smallest at **+0.0610** and the weakest positive count at **11 of 12**, so `scripts/mechanism_coverage.py` now reports **21 of 21**. What that buys is not only coverage. At **h1024/`d32`/L1 the read-out makes accuracy worse — gain −0.0159 — and destroying temporal order still costs it +0.0675 in 12 of 12 seeds**; at h512 the gain is **+0.0043**, indistinguishable from nothing, against a DiD of **+0.0893**; and `channels-700` gains **+0.0243** while carrying the wave's largest DiD, **+0.1369**. The dissociation above was found at h1024 and recorded as this paper's leading open problem; it is **not an h1024 pathology**, and it recurs at widths and geometries where nothing collapses. ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md))
+
+   **Two limits travel with that coverage.** Every one of the twenty-one is **`e400`** — no `bin-shuffled` arm has run at any other budget, so nothing here says what the difference-in-differences would be at the e100 where §3.5's collapse does not occur. And the wave's registered depth question, H22-3, is **NOT EVALUABLE**: its analyser compares each depth point against a `d32l4` twin on the anchor contract drawn from the wave's own cells, and the plan contains none — the self-containment that makes every other verdict sound is what starves it. The analyser was not edited and no cell was added after the fact. ([`DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md`](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md))
+
    **The `gain` and `DiD` columns are over the same seeds everywhere except h1024**, where the DiD is over the twelve quadruples and the gain over the twenty intact pairs waves 18–19 extended that width to; over the twelve quadruple seeds the h1024 gain is **−0.1618**. The rank is identical either way.
 
    **The size of the effect is not the gain.** Spearman ρ between the six per-width gains and their DiDs is **−0.1430** against a preregistered bar of **+0.829**, the n = 6 one-tailed critical value — not a weak positive, absent and faintly negative. h768 buys the least on the ladder and carries the largest DiD in the wave. The registered reading is that the difference-in-differences is a property of the read-out and **not a quantitative account of what the gain is made of**. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
@@ -411,11 +415,14 @@ Continual forgetting (C2 / Gate G3 FAIL), multi-area scaling (R2 / Gate G4 **NO-
 
 The SHD attention readout results are anchored at **h128 / `published-2ms` /
 `adjacent-sum-5`**, and the **mechanism** result is no longer scoped to it: the
-destruction control exists at **9 of 21 operating points**, covering widths 128
+destruction control exists at **21 of 21 operating points**, covering widths 128
 through 1024, both contracts and both geometries, and
-`scripts/mechanism_coverage.py` recomputes that on every gate run. Twelve
-operating points still carry intact arms with no `bin-shuffled` twin, and no
-mechanism claim is made at those. We do not claim calibration, and the reason has
+`scripts/mechanism_coverage.py` recomputes that on every gate run. Wave 22
+measured the twelve points that previously carried intact arms with no
+`bin-shuffled` twin, and every one of them clears the registered bar
+([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)). **The remaining scope limit is the budget, not the coverage:**
+every one of the twenty-one is `e400`, and no shuffled arm has ever run at
+another budget. We do not claim calibration, and the reason has
 changed.
 
 Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
