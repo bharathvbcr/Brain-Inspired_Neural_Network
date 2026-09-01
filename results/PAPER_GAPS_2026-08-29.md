@@ -105,12 +105,19 @@ cites and against every ban its spec section names. What remains here is prose.
 
 ### 2.4 Science, not paperwork
 
-- **h1024 is the leading open problem**, per the wave-21 preregistration and not
-  as a caveat: the read-out consumes temporal order there (DiD **+0.1122** in 10
-  of 12 seeds against a ceiling of +0.02) while **harming** accuracy
-  (**−0.1618**). The paper's own registered prediction failed. The overfitting
-  alternative is neither excluded nor supported, because that argument was
-  conditional on a collapse that did not occur.
+- **The gain/DiD dissociation is the leading open problem — NARROWED TWICE
+  since this register was written, and still open.** At h1024 the read-out
+  consumes temporal order (DiD **+0.1122** in 10 of 12 seeds against a ceiling
+  of +0.02) while **harming** accuracy (**−0.1618**), and the paper's own
+  registered prediction failed. Two waves have since moved it:
+  wave 23 **excluded overfitting** and bounded the h1024 collapse in time — it
+  is a late-training phenomenon and e100 avoids it
+  ([`RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md`](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md));
+  wave 22 showed the dissociation is **not an h1024 pathology**, recurring at
+  h512 (gain +0.0043, DiD +0.0893) and `channels-700` (gain +0.0243, DiD
+  +0.1369) where nothing collapses. **What remains unexplained is why a
+  read-out consumes temporal order while buying no accuracy**, and that is now
+  a wider question than when it was written, not a narrower one.
 - **Coverage is 21 of 21 operating points — CLOSED 2026-09-01 by wave 22.**
   It was 9 of 21 when this register was written, with twelve points carrying
   intact arms and no `bin-shuffled` twin. Widening it was compute, and the
