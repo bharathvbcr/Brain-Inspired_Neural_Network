@@ -174,6 +174,56 @@ def ensure_role(bucket: str) -> str:
     return PROFILE
 
 
+def require_pinned_binary(bucket: str, region: str, required: str) -> None:
+    """Refuse to launch into a bucket whose pinned binary is not `required`.
+
+    `--bucket` defaults to `binn-campaign-{account}-{region}` — the v1 bucket,
+    pinned to `22d97c51...`, while the v2 bucket is pinned to `3afd4434...`. A
+    wave that reuses another wave's arms must run on that wave's binary, and
+    until now the only thing between "the right bucket" and "a corpus silently
+    built from two binaries" was the operator typing `--bucket` correctly.
+
+    `bootstrap.sh:83` aborts on a pin MISMATCH, and that check cannot fire here:
+    a launch into the wrong bucket is not a mismatch. Every worker there agrees
+    with that bucket's own pin, boots clean, and produces cells that no analyser
+    can tell apart — a cell record carries no `binary_sha256` at all, only the
+    per-instance gate object does. The wrong-binary corpus would look exactly
+    like the right one.
+
+    So the check belongs here, before anything is provisioned and before any
+    money is spent.
+    """
+    try:
+        out = subprocess.run(
+            ["aws", "s3", "cp", f"s3://{bucket}/input/binary.sha256", "-",
+             "--region", region],
+            capture_output=True, text=True, timeout=AWS_TIMEOUT_S)
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"reading s3://{bucket}/input/binary.sha256 did not answer in "
+            f"{AWS_TIMEOUT_S}s. A provenance check that could not run must not "
+            "be treated as one that passed."
+        ) from None
+    if out.returncode != 0:
+        raise SystemExit(
+            "REFUSING TO LAUNCH: --require-binary-sha256 was given, but\n"
+            f"  s3://{bucket}/input/binary.sha256\n"
+            "does not exist or could not be read. A pin cannot be inherited from a\n"
+            "bucket that has none — `bootstrap.sh` would BUILD a new binary and pin\n"
+            "that, which is a different experiment from the one being reused.\n"
+            f"  aws said: {out.stderr.strip()[:200]}")
+    found = out.stdout.strip()
+    if found != required:
+        raise SystemExit(
+            "REFUSING TO LAUNCH: wrong binary.\n"
+            f"  bucket   {bucket}\n"
+            f"  pinned   {found or '<empty>'}\n"
+            f"  required {required}\n"
+            "Cells produced here would come from a different binary than the arms\n"
+            "this wave reuses, and nothing downstream could tell them apart.")
+    print(f"binary pin     {found}  (required, and it matches)")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True)
@@ -210,6 +260,11 @@ def main() -> int:
                         help="0 = derive from the instance's vCPU count (default)")
     parser.add_argument("--bucket")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--require-binary-sha256",
+                        help="abort unless the bucket is already pinned to this "
+                             "binary. Mandatory for any wave that reuses another "
+                             "wave's arms: the default bucket is not the one those "
+                             "arms came from, and a cell record carries no binary.")
     parser.add_argument("--skip-inputs", action="store_true",
                         help="do not re-upload source + corpus; use when scaling an "
                              "already-provisioned campaign. The corpus is ~660 MB and static, "
@@ -230,6 +285,8 @@ def main() -> int:
     print(f"per instance   {args.concurrent_cells or 'nproc/threads'} cells "
           f"x {args.threads_per_cell} threads")
     report_thread_mismatch(bucket, args.region, args.threads_per_cell)
+    if args.require_binary_sha256:
+        require_pinned_binary(bucket, args.region, args.require_binary_sha256.strip())
     if args.dry_run:
         print("\ndry run - nothing provisioned")
         return 0

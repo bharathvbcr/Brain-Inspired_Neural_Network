@@ -2459,5 +2459,126 @@ class ReleaseSkipsFailedCellsTest(AwsScriptedTest):
         self.assertNotIn(self.LIVE, removed)
 
 
+class PinnedBinaryLaunchGateTest(unittest.TestCase):
+    """The wrong-bucket launch, which no existing check could catch.
+
+    `launch.py --bucket` defaults to `binn-campaign-{account}-{region}`. That is
+    the v1 bucket, pinned to `22d97c51...`; the v2 bucket is pinned to
+    `3afd4434...`. Wave 24 reuses wave 22's e400 intact and bin-shuffled arms
+    and is therefore only valid on the v2 binary.
+
+    `bootstrap.sh:83` aborts on a pin mismatch, and that check CANNOT fire on
+    this failure: a launch into the wrong bucket is not a mismatch. Every worker
+    agrees with that bucket's own pin, boots clean, and writes cells that carry
+    no `binary_sha256` at all -- only the per-instance gate object does. A
+    corpus silently built from two binaries would look exactly like one built
+    from one, which is the defect wave 22 spent 324 extra cells avoiding.
+    """
+
+    PIN_V2 = "3afd4434431a75a26cc9d5fa46831341fc2f1dd0ef08dc308e18ca139b576364"
+    PIN_V1 = "22d97c51ab0204702ce44661683ff8c759c29d7f3379e2f6606b048f4f032104"
+
+    def scripted(self, stdout="", returncode=0, raises=None):
+        import launch
+
+        def fake_run(argv, **kwargs):
+            if raises is not None:
+                raise raises
+            class R:
+                pass
+            r = R()
+            r.returncode, r.stdout, r.stderr = returncode, stdout, "no such key"
+            return r
+
+        original, launch.subprocess.run = launch.subprocess.run, fake_run
+        self.addCleanup(lambda: setattr(launch.subprocess, "run", original))
+        return launch
+
+    def test_the_default_bucket_is_refused_for_a_wave_that_reuses_arms(self):
+        """The exact operator slip: `--bucket` omitted, so v1's binary answers."""
+        launch = self.scripted(stdout=self.PIN_V1 + "\n")
+        with self.assertRaises(SystemExit) as caught:
+            launch.require_pinned_binary(
+                "binn-campaign-511192439661-us-east-1", "us-east-1", self.PIN_V2)
+        message = str(caught.exception)
+        self.assertIn("REFUSING TO LAUNCH", message)
+        self.assertIn(self.PIN_V1, message, "the message must name what it found")
+        self.assertIn(self.PIN_V2, message, "and what was required")
+
+    def test_a_matching_pin_launches(self):
+        launch = self.scripted(stdout=self.PIN_V2 + "\n")
+        launch.require_pinned_binary("bkt", "us-east-1", self.PIN_V2)
+
+    def test_a_bucket_with_no_pin_is_refused_rather_than_pinned_afresh(self):
+        """No pin means `bootstrap.sh` BUILDS one. That is a new experiment, not
+        an inherited one, and it is the quietest way to get a second binary."""
+        launch = self.scripted(returncode=1)
+        with self.assertRaises(SystemExit) as caught:
+            launch.require_pinned_binary("empty-bkt", "us-east-1", self.PIN_V2)
+        self.assertIn("REFUSING TO LAUNCH", str(caught.exception))
+
+    def test_an_empty_pin_object_is_refused(self):
+        """A zero-byte `binary.sha256` reads as success with an empty body. It
+        must not compare equal to anything, and it must not print as a match."""
+        launch = self.scripted(stdout="   \n")
+        with self.assertRaises(SystemExit) as caught:
+            launch.require_pinned_binary("bkt", "us-east-1", self.PIN_V2)
+        self.assertIn("REFUSING TO LAUNCH", str(caught.exception))
+
+    def test_a_wedged_read_is_not_treated_as_a_pass(self):
+        """A check that could not run must never report what a check that ran
+        and passed reports."""
+        launch = self.scripted(
+            raises=subprocess.TimeoutExpired(cmd="aws", timeout=300))
+        with self.assertRaises(SystemExit) as caught:
+            launch.require_pinned_binary("bkt", "us-east-1", self.PIN_V2)
+        self.assertIn("did not answer", str(caught.exception))
+
+
+class ProvenanceGateTest(unittest.TestCase):
+    """`collect.py` printed its binary warnings and returned 0 regardless.
+
+    `PREREG_2026-09-01_ORDER_SYNCHRONY_AND_BUDGET.md` §5 rests on "every cell in
+    this bucket came from one named binary", and a warning nobody is required to
+    read is not a basis for a published contrast. `--require-binary-sha256`
+    turns the warning into an exit code.
+    """
+
+    A = "a" * 64
+    B = "b" * 64
+
+    def test_the_required_binary_alone_is_clean(self):
+        import collect
+        self.assertEqual(collect.provenance_failures({self.A}, [], self.A), [])
+
+    def test_a_different_binary_fails(self):
+        import collect
+        failures = collect.provenance_failures({self.B}, [], self.A)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("required", failures[0])
+
+    def test_no_gate_naming_any_binary_fails_rather_than_passing_quietly(self):
+        """The quiet one. An empty set means nothing DISAGREED, which is not the
+        same as everything agreeing, and it is what an unlisted or wrong prefix
+        produces."""
+        import collect
+        failures = collect.provenance_failures(set(), [], self.A)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("unconfirmed", failures[0])
+
+    def test_an_unattributed_report_fails_even_beside_the_right_binary(self):
+        """One instance whose gate names no binary is one instance whose cells
+        are unattributable -- and its cells are in the same corpus."""
+        import collect
+        failures = collect.provenance_failures({self.A}, ["i-old.json"], self.A)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("i-old.json", failures[0])
+
+    def test_both_failures_are_reported_not_just_the_first(self):
+        import collect
+        failures = collect.provenance_failures({self.B}, ["i-old.json"], self.A)
+        self.assertEqual(len(failures), 2, failures)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

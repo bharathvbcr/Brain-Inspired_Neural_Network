@@ -132,9 +132,38 @@ def attribute_binaries(reports: dict) -> tuple[set, list]:
     return binaries, unattributed
 
 
+def provenance_failures(binaries: set, unattributed: list, required: str) -> list[str]:
+    """Why this campaign's cells may NOT be attributed to `required`. Empty = clean.
+
+    Extracted for the same reason `attribute_binaries` was: the decision that
+    protects a reused control must be reachable by a test without a fleet. The
+    three ways it fails are genuinely different and one of them is the quiet
+    one -- `not binaries` means no gate report named any binary at all, which
+    reads like "nothing disagreed" and is really "nothing was checked".
+    """
+    failures = []
+    if unattributed:
+        failures.append(
+            f"{len(unattributed)} gate report(s) name no binary, so their cells "
+            f"cannot be attributed to the required one: {sorted(unattributed)[:3]}")
+    if not binaries:
+        failures.append(
+            f"no gate report names any binary, so the required {required[:12]} is "
+            "unconfirmed. Absence of evidence is not the evidence this needs.")
+    elif binaries != {required}:
+        failures.append(
+            f"cells here came from {sorted(b[:12] for b in binaries)}, "
+            f"required {required[:12]}")
+    return failures
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bucket", required=True)
+    parser.add_argument("--require-binary-sha256",
+                        help="exit non-zero unless every gate report names this "
+                             "binary and none is unattributed. The warnings below "
+                             "print either way; this makes them stop a pipeline.")
     parser.add_argument("--out", help="download results into this directory")
     parser.add_argument("--release-orphans", action="store_true",
                         help="delete claims with no result so the queue re-issues them")
@@ -222,6 +251,7 @@ def main() -> int:
     # can behave identically - the Gate F logs are the evidence for that, not an
     # assumption - but the check has to be visible either way.
     binaries, unattributed = attribute_binaries(reports)
+    provenance_failed = False
     if unattributed:
         # Silence here would read as "one binary", which is the answer that
         # needs the most evidence.
@@ -235,6 +265,20 @@ def main() -> int:
               "the minority under one binary.")
     elif binaries:
         print(f"\nsingle binary across the campaign: {next(iter(binaries))[:12]}")
+
+    # Everything above this line PRINTS. A warning that only prints is read by
+    # whoever happens to be looking, and the wave-22 reuse in
+    # `PREREG_2026-09-01_ORDER_SYNCHRONY_AND_BUDGET.md` §5 rests on this exact
+    # fact being true. `--require-binary-sha256` is what turns it into a
+    # precondition a pipeline cannot walk past.
+    if args.require_binary_sha256:
+        required = args.require_binary_sha256.strip()
+        failures = provenance_failures(binaries, unattributed, required)
+        for reason in failures:
+            print(f"\nPROVENANCE FAILED: {reason}")
+        provenance_failed = bool(failures)
+        if not provenance_failed:
+            print(f"provenance: every gate names the required binary {required[:12]}")
 
     if args.release_orphans and orphaned:
         for cid in orphaned:
@@ -301,7 +345,7 @@ def main() -> int:
                   "collection; sync re-fetches a cell whose size differs from "
                   "S3, and `analyse_wave8.py` will refuse the arm either way.")
             return 1
-    return 0
+    return 1 if provenance_failed else 0
 
 
 if __name__ == "__main__":
