@@ -95,3 +95,60 @@ kernel cost measured against a broken baseline is worse than no measurement.
 `scripts/analyse_kernel_ablation.py`, committed here, is the authority on all
 four verdicts. It reports `NOT EVALUABLE` against an absent or short corpus
 rather than computing a verdict from fewer runs than registered.
+
+---
+
+## 6. Amendment, before any run — `max_delay` is not one value
+
+§2 said the ablation "sets `max_delay = 1` and changes nothing else". Reading
+`config.py` before launching shows that is **not achievable as written**, and
+the gap is large enough to change what the series measures. Recorded here, with
+no data in existence.
+
+**Seven values derive from `max_delay`:**
+
+```
+max_delay      = 250//time_step            -> 25
+sigInit        = max_delay // 2            -> 12
+left_padding   = max_delay-1               -> 24
+right_padding  = (max_delay-1) // 2        -> 12
+init_pos_a     = -max_delay//2             -> -13
+init_pos_b     = max_delay//2              -> 12
+time_mask_size = max_delay//3              -> 8
+```
+
+Setting `max_delay = 1` and letting every one follow gives `time_mask_size = 0`,
+which **switches off the time-masking augmentation**. That is a second mechanism,
+unrelated to the kernel, moving in the same edit. An ablation that removes a
+temporal convolution *and* a temporal augmentation cannot attribute its effect
+to either.
+
+**So the derivations split, and the split is registered now:**
+
+- **Follow `max_delay`** — `sigInit`, `left_padding`, `right_padding`,
+  `init_pos_a`, `init_pos_b`. Every one is **mechanically required** by a
+  one-tap kernel: padding and delay-positions for a 25-tap convolution are
+  undefined for a 1-tap one, and letting them follow is what "the kernel is
+  gone" *means*.
+- **HELD at its 25-tap value** — `time_mask_size = 8`. It is an **augmentation**
+  applied to the input, not a property of the kernel, and holding it is what
+  isolates the manipulation.
+
+**This is a deliberate departure from "config.py at `max_delay=1`", and it is
+the whole point.** The registration's rule 2 forbids changing another config
+value *to make Arm B run*; this holds one fixed **so that Arm B measures one
+thing**. The two are opposite moves and only the second is compatible with
+attributing K to the kernel.
+
+**Arm C, added now, is what makes the split checkable.** A third arm at
+`max_delay = 1` with `time_mask_size` **allowed to fall to 0**, n = 3.
+`mean(B) − mean(C)` is then the augmentation's contribution, measured rather
+than assumed away.
+
+**HK-5 — the augmentation is not doing the work.** `|mean(B) − mean(C)| ≤ 0.020`.
+If it is exceeded, the time-masking augmentation is a material term at this
+operating point, K is reported **with that caveat attached**, and the naive
+`max_delay=1` ablation that a later reader would reach for first is on record as
+confounded.
+
+Nine runs, not six. Still once, still no arm re-run to improve a verdict.
