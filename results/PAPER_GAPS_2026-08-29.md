@@ -123,13 +123,19 @@ cites and against every ban its spec section names. What remains here is prose.
   both say "temporal order". **Closing this means the same contrast at the other
   two `fixed-tN` rungs and at a second geometry** — the cells do not exist
   ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md)).
-- **NEW 2026-09-02: the reference's compensating −0.20 term is unidentified.**
-  The kernel ablation shows the reference is not "the instrument plus a temporal
-  kernel": the kernel is worth +0.3111 and the observed gap is 0.087, so a term
-  worth roughly −0.20 to the reference relative to the instrument is unaccounted
-  for. §3.8 now states this rather than implying an additive decomposition.
-  Closing it means an ablation series on the *other* differences, and it is the
-  natural successor to the one just run.
+- **The reference's compensating −0.20 term — NAMED and 81.5% CLOSED the same
+  day it was opened.** The kernel ablation showed the reference is not "the
+  instrument plus a temporal kernel": the kernel is worth +0.3111 against an
+  observed gap of 0.087, so a term worth roughly −0.20 was unaccounted for. It
+  is the **membrane**. The reference's neuron retains 0.0050 per step against
+  the instrument's 0.82, so with the kernel gone it has no temporal integration
+  at all; matching the retention lifts it from 0.6276 to 0.7942, **M =
+  +0.1666**. The decomposition closes: the reference's 0.1067 lead is
+  +0.3111 − 0.1666 − 0.0378. **What remains unexplained is 0.0378**, below the
+  0.05 this programme calls material, and the untouched candidates are the
+  synaptic filter, the optimiser, the schedule and the read-out. Closing the
+  last third is a further series and is no longer load-bearing for §3.8
+  ([`RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md`](RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md)).
 
 - **The gain/DiD dissociation is the leading open problem — NARROWED TWICE
   since this register was written, and still open.** At h1024 the read-out

@@ -2,12 +2,12 @@
 
 # Record index
 
-339 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+340 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 45 | 0 |
-| Results | 41 | 2 |
+| Results | 42 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
@@ -112,6 +112,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-09-02 | [RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md) | Result — the shuffle cost is about order, it survives a second budget, and at one point synchrony matters too |
+| 2026-09-02 | [RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md](RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md) | Result — the membrane is 81.5% of the term the kernel ablation could not name |
 | 2026-09-02 | [RESULT_2026-09-02_THE_KERNEL_ABLATION.md](RESULT_2026-09-02_THE_KERNEL_ABLATION.md) | Result — the kernel is worth 0.311, which is 3.6× the residual it was supposed to explain |
 | 2026-09-01 | [RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md) | Result — wave 22: the mechanism is present at every operating point, and it is not the gain |
 | 2026-08-30 | [RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md) | Result — wave 23: the h1024 collapse is late, and stopping early avoids it |

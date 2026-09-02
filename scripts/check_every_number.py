@@ -325,6 +325,17 @@ PAPER_SOURCES = [
     ("0.2044", "results/RESULT_2026-09-02_THE_KERNEL_ABLATION.md",
      "HK-2: the distance from Arm B to the instrument's 0.8320. It crosses the "
      "two corpora, so no single generator could reach it either"),
+    # The membrane ablation, `results/membrane_ablation_2026-09-02/`. Same
+    # reasoning: six PyTorch runs of the pinned reference, reproducible by
+    # `scripts/analyse_membrane_ablation.py`, and not cells of the instrument.
+    ("0.1067", "results/RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md",
+     "the reference's lead over the instrument on the RE-MEASURED Arm A "
+     "(0.9387 - 0.8320). The manuscript's 0.087 is the same quantity against "
+     "the pinned 0.9376, and both are quoted where each belongs"),
+    ("0.8200", "results/RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md",
+     "the per-step membrane retention of `LIFNode(tau=5.5556)`, MEASURED by "
+     "constructing the neuron and stepping it -- not an accuracy at all, so no "
+     "generator over cell accuracies could reach it"),
 ]
 
 #: Wave documents whose numbers this sweep cannot derive, and why. Naming them
