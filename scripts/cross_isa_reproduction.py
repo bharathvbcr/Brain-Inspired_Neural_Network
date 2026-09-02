@@ -121,9 +121,10 @@ def leaves(cell: dict) -> dict[str, object]:
 #: still fails, which is the property `test_a_missing_field_is_a_disagreement`
 #: pins. This list may only grow forward, and every entry is a field that a
 #: newer cell has and an older one cannot.
+#: `emitted_unix_s` and `emitted_utc` are deliberately NOT here: they are in
+#: `compare_cells.IGNORED`, because their problem is that both sides carry them
+#: and the values can never agree, not that one side lacks them.
 SCHEMA_ADDITIONS = {
-    "emitted_unix_s": "2026-08-27, provenance: when the cell was produced",
-    "emitted_utc": "2026-08-27, the same timestamp in readable form",
     "seed": "2026-08-27, provenance for attentive arms",
     "clip_sample_grad_norm": "per-sample clipping, absent before it existed",
     "clipped_samples": "the counter for the above",

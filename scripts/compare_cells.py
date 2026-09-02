@@ -21,9 +21,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gate_f_rust import COMPARED_FIELDS  # noqa: E402
 
-# `wall_secs` is a timing, not a result — a kernel optimisation is *supposed* to
-# move it. Everything else the cell reports is a measurement and must not move.
-IGNORED = {"wall_secs"}
+# Provenance, not measurement. A kernel optimisation is *supposed* to move
+# `wall_secs`, and two runs of the same cell are *supposed* to have been emitted
+# at different moments. Everything else the cell reports is a measurement and
+# must not move.
+#
+# The timestamps were added here on 2026-09-02. Before wave 24 no two waves both
+# carried them for one configuration and seed, so the pair never met in a
+# comparison. Wave 24's e100 rate cells duplicate wave 23's and both post-date
+# the field, so `check_reproduction.py` compared two emission times, found them
+# different -- as they must be -- and printed REPRODUCTION FAILED over twelve
+# cells that agreed on every measured value. A gate that cries wolf on a perfect
+# reproduction is a gate the next reader skims.
+#
+# They are NOT in `cross_isa_reproduction.SCHEMA_ADDITIONS` any more: that set
+# handles a field one side cannot carry, and is about PRESENCE. This is about a
+# field both sides carry whose value can never agree. Two different problems,
+# one field each -- keeping both would have left the presence rule looking like
+# it covered a case it does not.
+IGNORED = {"wall_secs", "emitted_unix_s", "emitted_utc"}
 
 
 def compare(before: Path, after: Path) -> list[str]:

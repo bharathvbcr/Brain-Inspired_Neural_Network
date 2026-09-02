@@ -106,6 +106,41 @@ class SweepTest(unittest.TestCase):
         self.pair(right=a_cell(wall_secs=999.0))
         self.assertEqual(self.run_tool()[0], 0)
 
+    def test_emission_timestamps_alone_are_not_a_reproduction_failure(self):
+        """The wave-24 regression. `emitted_unix_s` and `emitted_utc` record
+        WHEN a cell was produced, so two runs of the same cell can never agree
+        on them -- and until wave 24 no two waves both carried the fields for
+        one configuration and seed, so the pair never met here.
+
+        Wave 24's e100 rate cells duplicate wave 23's. Twelve cells that matched
+        on every measured value printed REPRODUCTION FAILED over a clock.
+        """
+        self.pair(left=a_cell(emitted_unix_s=1000, emitted_utc="2026-08-30T00:00:00Z"),
+                  right=a_cell(emitted_unix_s=2000, emitted_utc="2026-09-01T00:00:00Z"))
+        code, out = self.run_tool()
+        self.assertEqual(code, 0, out)
+        self.assertIn("BYTE-IDENTICAL", out)
+
+    def test_a_real_disagreement_still_fails_beside_differing_timestamps(self):
+        """The regression that would matter: ignoring the clock must not also
+        silence the measurement standing next to it."""
+        self.pair(left=a_cell(emitted_unix_s=1000),
+                  right=a_cell(emitted_unix_s=2000, accuracy=0.5000001))
+        code, out = self.run_tool()
+        self.assertEqual(code, 1, out)
+        self.assertIn("accuracy", out)
+
+    def test_the_timestamps_are_ignored_rather_than_declared_schema_additions(self):
+        """Two different problems, and conflating them makes the presence rule
+        look like it covers a case it does not. `SCHEMA_ADDITIONS` is for a
+        field one side CANNOT carry; these are fields both sides carry whose
+        values can never agree."""
+        from compare_cells import IGNORED
+        import cross_isa_reproduction as CI
+        for field in ("emitted_unix_s", "emitted_utc"):
+            self.assertIn(field, IGNORED)
+            self.assertNotIn(field, CI.SCHEMA_ADDITIONS)
+
     def test_different_configurations_are_never_compared(self):
         """h128 against h256 is not a reproduction failure. It is not a pair."""
         self.write("w1__ff-fixed-attn__h128__d32l4__s1", a_cell(accuracy=0.1))
