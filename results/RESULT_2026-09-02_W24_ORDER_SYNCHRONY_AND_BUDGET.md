@@ -124,8 +124,10 @@ control the paper did not previously run.
 - **Corpus.** 1,437 → 1,773 cells, 1,427 → 1,763 valid, both **+336**. The ten
   invalid cells are the same ten `w13rec` cells as before, enumerated rather
   than inferred from the count. An addition, not a re-scoring.
-- **Cost.** 587 slot-hours, which is what the estimate said to four significant
-  figures before the wave ran. 14:52 to 21:22 UTC on a fleet scaled from four to
+- **Cost.** 587 slot-hours against the 587 the preregistration predicted from
+  wave 22's measured medians -- three figures, and the estimator's calibration
+  check (predicting $108 against wave 22's actual $107.66) is why that is worth
+  stating rather than a coincidence worth boasting about. 14:52 to 21:22 UTC on a fleet scaled from four to
   six `c7g.16xlarge` mid-run; ≈$26 of spot.
 
 ## 5. What this does not establish
