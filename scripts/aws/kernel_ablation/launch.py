@@ -147,6 +147,13 @@ def main() -> int:
     parser.add_argument("--bucket", default="binn-campaign-v2-511192439661-us-east-1")
     parser.add_argument("--region", default="us-east-1")
     parser.add_argument("--instance-type", default="c7g.8xlarge")
+    parser.add_argument("--series", default="kernel", choices=("kernel", "membrane"),
+                        help="which registered series to run. `kernel` is arms A "
+                             "and B (PREREG_2026-09-01_THE_KERNEL_ABLATION); "
+                             "`membrane` is arms B2 and E "
+                             "(PREREG_2026-09-02_THE_MEMBRANE_ABLATION). They "
+                             "share every pinned version and differ only in which "
+                             "arms exist and where results land.")
     parser.add_argument("--probe", action="store_true",
                         help="build the environment, run ONE Arm A seed, and keep "
                              "the box up. Use this before spending the series: it "
@@ -160,6 +167,7 @@ def main() -> int:
     print(f"bucket         s3://{args.bucket}/{PREFIX}/")
     print(f"instance       {args.instance_type}  (spot)")
     print(f"mode           {mode}")
+    print(f"series         {args.series}")
     print(f"reference      {REFERENCE_COMMIT}")
     if args.dry_run:
         print("\ndry run - nothing uploaded, nothing provisioned")
@@ -183,6 +191,7 @@ def main() -> int:
     user_data = (
         "#!/usr/bin/env bash\n"
         f"export KA_MODE={mode}\n"
+        f"export KA_SERIES={args.series}\n"
         f"aws s3 cp s3://{args.bucket}/{PREFIX}/input/bootstrap.sh /tmp/ka.sh\n"
         "bash /tmp/ka.sh\n"
     )
@@ -210,7 +219,8 @@ def main() -> int:
     ids = [i["InstanceId"] for i in launched["Instances"]]
     print(f"  {' '.join(ids)}")
     print(f"\nlive log:  aws s3 cp s3://{args.bucket}/{PREFIX}/logs/{ids[0]}.log -")
-    print(f"results:   aws s3 ls s3://{args.bucket}/{PREFIX}/results/")
+    results = "kernel-ablation" if args.series == "kernel" else "membrane-ablation"
+    print(f"results:   aws s3 ls s3://{args.bucket}/{results}/results/")
     return 0
 
 

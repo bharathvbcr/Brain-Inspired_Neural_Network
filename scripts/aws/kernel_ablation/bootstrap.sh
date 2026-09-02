@@ -111,12 +111,23 @@ PYCHECK
 # Arm C and HK-5 were withdrawn before any run
 # (`results/DEFECT_2026-09-01_HK_5_CANNOT_FIRE.md`): `time_mask_size` is
 # unreachable in the clean protocol, so holding it changed nothing.
+# KA_SERIES selects which registered series runs. They share every pinned
+# version and differ only in which arms exist and where results land, so one
+# script serves both rather than a copy drifting from its original.
+#
+#   kernel    PREREG_2026-09-01_THE_KERNEL_ABLATION.md      arms A, B
+#   membrane  PREREG_2026-09-02_THE_MEMBRANE_ABLATION.md    arms B2, E
+SERIES="${KA_SERIES:-kernel}"
 SEEDS="5170001 5170002 5170003"
+case "$SERIES" in
+  kernel)   ARMS="A B";  RESULT_PREFIX="kernel-ablation/results" ;;
+  membrane) ARMS="B2 E"; RESULT_PREFIX="membrane-ablation/results" ;;
+  *) echo "FATAL: unknown KA_SERIES $SERIES"; exit 1 ;;
+esac
 if [ "$MODE" = "probe" ]; then
-  ARMS="A"; SEEDS="5170001"
-else
-  ARMS="A B"
+  ARMS="$(echo "$ARMS" | cut -d" " -f1)"; SEEDS="5170001"
 fi
+echo "series $SERIES  arms $ARMS"
 
 THREADS=$(( $(nproc) / 6 ))
 [ "$THREADS" -lt 1 ] && THREADS=1
@@ -127,8 +138,10 @@ RUN_PIDS=()
 for ARM in $ARMS; do
   for SEED in $SEEDS; do
     case "$ARM" in
-      A) LABEL=armA-reference ;;
-      B) LABEL=armB-nokernel ;;
+      A)  LABEL=armA-reference ;;
+      B)  LABEL=armB-nokernel ;;
+      B2) LABEL=armB2-nokernel ;;
+      E)  LABEL=armE-nokernel-slowmembrane ;;
     esac
     DIR="$ROOT/runs/$LABEL-$SEED"
     rm -rf "$DIR" && cp -r "$CHECKOUT" "$DIR" && rm -rf "$DIR/.git"
@@ -145,11 +158,18 @@ def once(text, old, new):
 src = once(src, "seed = 0", f"seed = {seed}")
 src = once(src, "datasets_path = 'Datasets/SHD'", f"datasets_path = {data!r}")
 src = once(src, "run_name = 'Wandb Run Name'", f"run_name = 'BINN-kernel-ablation-{arm}-{seed}'")
-if arm == "B":
+if arm in ("B", "B2", "E"):
     # The whole manipulation. `sigInit`, the paddings and the delay positions
     # are derived from this line and follow it; that following is what "the
     # kernel is gone" means. Nothing else is touched.
     src = once(src, "    max_delay = 250//time_step\n", "    max_delay = 1\n")
+if arm == "E":
+    # The membrane ablation's ONLY additional value. 55.5556 ms normalises to
+    # tau 5.5556, whose measured per-step retention is 0.8200 -- the
+    # instrument's, matched rather than approximated. The pinned 10.05 ms
+    # retains 0.0050, which is what makes the kernel-free reference have no
+    # temporal integration at all.
+    src = once(src, "    init_tau = 10.05", "    init_tau = 55.5556")
 pathlib.Path(d, "config.py").write_text(src)
 
 # macOS spawn semantics forced num_workers=0 locally. Held here so the loader
@@ -176,7 +196,7 @@ PYPATCH
       "$ROOT/venv/bin/python" -c "import torch;torch.set_num_threads($THREADS)" >/dev/null
       "$ROOT/venv/bin/python" clean_main.py > run.log 2>&1
       aws s3 cp "$BINN_SHD_REFERENCE_RESULT" \
-        "s3://$BUCKET/$PREFIX/results/$(basename "$BINN_SHD_REFERENCE_RESULT")" --quiet
+        "s3://$BUCKET/$RESULT_PREFIX/$(basename "$BINN_SHD_REFERENCE_RESULT")" --quiet
       echo "DONE $LABEL seed $SEED"
     ) &
     RUN_PIDS+=($!)
