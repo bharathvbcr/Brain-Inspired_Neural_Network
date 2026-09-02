@@ -918,6 +918,131 @@ def wave24_order_synchrony_and_budget():
     return cells
 
 
+def wave25_the_mechanism_where_it_is_unmeasured():
+    """W25 - every place the mechanism claim is still asserted without a control.
+
+    Registered in `PREREG_2026-09-02_THE_MECHANISM_WHERE_IT_IS_UNMEASURED.md`.
+
+    Four groups, one wave, because they answer one question - where does the
+    difference-in-differences actually hold - and they share a binary and a
+    fleet. Each has its own hypothesis and its own bar.
+
+    # H25-1, and it is the one that matters
+
+    Section 3.7 of the draft reads the recurrent complementarity finding through
+    section 3.5's shuffle result: "the claim the paper supports is about what
+    the read-out consumes". Every shuffled cell in the corpus is `ff+fixed` or
+    `ff+fixed+attn`. NOT ONE recurrent cell has ever been manipulated, so that
+    sentence transports an order-dependence claim across substrates on no
+    evidence at all. `reversed` is in the group for the same reason it was in
+    wave 24: running only `bin-shuffled` would rebuild the confound wave 24
+    just removed, in the arm that has never been controlled.
+
+    `surrogate_scale=0.4` is the registered recurrent operating point
+    (`AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md`), not a choice made
+    here.
+
+    # H25-2 - the synchrony term is n = 1 point and the paper says so
+
+    Wave 24 found that at `fixed-t250`, destroying cross-channel synchrony as
+    well as order costs +0.1038 MORE than destroying order alone, while the two
+    `published-2ms` points sat inside a +/-0.03 band. That is now in the
+    abstract as "at at least one operating point". The other two rungs of the
+    same ladder decide whether it is a resolution effect or a single point.
+
+    # H25-3 - the cells H22-3 needed and did not have
+
+    `analyse_wave22.py` compares each depth point against a `d32l4` twin on the
+    anchor contract, drawn from the wave's own cells. Wave 22's plan contained
+    none, so H22-3 came back NOT EVALUABLE
+    (`DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md`). These are those twins,
+    on the same pinned binary, so the comparison is within one experiment.
+    The rate arms already exist in `w22cov` at all four widths.
+
+    # H25-4 - the budget axis, everywhere else
+
+    Wave 24 measured two of the twenty-one points at e100. Nineteen are still
+    single-budget. Rate arms are keyed by geometry, and h128/anchor and
+    h1024/anchor already have theirs from wave 24, which is why nine rate
+    geometries run here and not eleven.
+    """
+    cells = []
+    ANCHOR_GEOMETRY = ANCHOR[1]
+
+    # --- H25-1: the recurrent substrate has never been manipulated ----------
+    for seed in SEEDS:
+        for temporal in ("intact", "bin-shuffled", "reversed"):
+            cells.append(cell("w25mec", "rec+alif", 128, 400, seed,
+                              temporal=temporal, surrogate_scale=0.4))
+            cells.append(cell("w25mec", "rec+alif+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4,
+                              temporal=temporal, surrogate_scale=0.4))
+
+    # --- H25-2: the synchrony term across the resolution ladder -------------
+    # `intact` and `bin-shuffled` exist at both rungs in `w22cov`, same binary.
+    for contract in ("fixed-t100", "fixed-t500"):
+        for seed in SEEDS:
+            cells.append(cell("w25mec", "ff+fixed", 128, 400, seed,
+                              contract=contract, temporal="channel-shuffled"))
+            cells.append(cell("w25mec", "ff+fixed+attn", 128, 400, seed,
+                              contract=contract, attn_dim=32, attn_layers=4,
+                              temporal="channel-shuffled"))
+
+    # --- H25-3: the d32l4 anchor twins H22-3 could not find -----------------
+    for hidden in (128, 256, 512, 768):
+        for seed in SEEDS:
+            for temporal in ("intact", "bin-shuffled"):
+                cells.append(cell("w25mec", "ff+fixed+attn", hidden, 400, seed,
+                                  attn_dim=32, attn_layers=4, temporal=temporal))
+
+    # --- H25-4: the nineteen points that are still e400-only ----------------
+    points = [
+        (128, "fixed-t100", ANCHOR_GEOMETRY, (32, 4)),
+        (128, "fixed-t250", ANCHOR_GEOMETRY, (32, 4)),
+        (128, "fixed-t500", ANCHOR_GEOMETRY, (32, 4)),
+        (128, "published-10ms", ANCHOR_GEOMETRY, (32, 4)),
+        (128, ANCHOR[0], ANCHOR_GEOMETRY, (32, 1)),
+        (128, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+        (128, ANCHOR[0], ANCHOR_GEOMETRY, (64, 4)),
+        (128, ANCHOR[0], "channels-700", (32, 1)),
+        (128, ANCHOR[0], "channels-700", (32, 4)),
+        (256, ANCHOR[0], ANCHOR_GEOMETRY, (32, 1)),
+        (256, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+        (384, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+        (512, ANCHOR[0], ANCHOR_GEOMETRY, (32, 1)),
+        (512, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+        (768, ANCHOR[0], ANCHOR_GEOMETRY, (32, 2)),
+        (768, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+        (1024, ANCHOR[0], ANCHOR_GEOMETRY, (32, 2)),
+        (1024, ANCHOR[0], ANCHOR_GEOMETRY, (32, 3)),
+        (1024, ANCHOR[0], ANCHOR_GEOMETRY, (32, 4)),
+    ]
+    #: The two geometries whose e100 rate arms wave 24 already produced. Running
+    #: them again would be 48 cells to reproduce cells from the same binary.
+    have_rate_at_e100 = {(128, ANCHOR[0], ANCHOR_GEOMETRY),
+                         (1024, ANCHOR[0], ANCHOR_GEOMETRY)}
+    geometries = []
+    for hidden, contract, geometry, _ in points:
+        if (hidden, contract, geometry) not in geometries:
+            geometries.append((hidden, contract, geometry))
+    for hidden, contract, geometry in geometries:
+        if (hidden, contract, geometry) in have_rate_at_e100:
+            continue
+        for seed in SEEDS:
+            for temporal in ("intact", "bin-shuffled"):
+                cells.append(cell("w25mec", "ff+fixed", hidden, 100, seed,
+                                  contract=contract, geometry=geometry,
+                                  temporal=temporal))
+    for hidden, contract, geometry, (attn_dim, attn_layers) in points:
+        for seed in SEEDS:
+            for temporal in ("intact", "bin-shuffled"):
+                cells.append(cell("w25mec", "ff+fixed+attn", hidden, 100, seed,
+                                  contract=contract, geometry=geometry,
+                                  attn_dim=attn_dim, attn_layers=attn_layers,
+                                  temporal=temporal))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -943,6 +1068,7 @@ WAVES = {
     "w22": wave22_the_mechanism_at_every_operating_point,
     "w23": wave23_the_collapse_is_late,
     "w24": wave24_order_synchrony_and_budget,
+    "w25": wave25_the_mechanism_where_it_is_unmeasured,
 }
 
 
