@@ -97,13 +97,39 @@ cites and against every ban its spec section names. What remains here is prose.
   `check_every_number.py` does not sweep §0, and both figures state
   "NOT MACHINE-CHECKED" where they are read. Closing this means reading the
   papers.
-- **The 0.087 residual attribution.** Four preregistered ablations fail to
-  explain it; the term-by-term reading attributes it to a 25-tap learned kernel
-  per synapse. That rests on elimination and code-reading, **not on an ablation
-  that added the kernel**, and the draft calls it the paper's weakest
-  load-bearing inference. An ablation would close it.
+- **The 0.087 residual attribution — CLOSED 2026-09-02, and it closed against
+  the draft.** The ablation was run: `max_delay = 1` makes all three `Dcls1d`
+  constructions pointwise, and the reference falls from 0.9387 to 0.6276. The
+  kernel is worth **K = +0.3111**, which is **3.6× the residual it was invoked
+  to explain**, and removing it drops the reference **0.2044 below** the
+  instrument rather than down to it. So the kernel is real and measured — the
+  weakest load-bearing inference in the paper is now the best-measured
+  structural fact about the reference — but the *arithmetic* attribution is
+  withdrawn: 0.087 is the net of at least two large terms of opposite sign, and
+  §3.8 now says so. **The compensating ≈−0.20 term is not identified**, and
+  naming it is the next ablation. Arm A reproduced the pinned 0.9376 at 0.9387
+  on new hardware, which is what makes any of this readable
+  ([`RESULT_2026-09-02_THE_KERNEL_ABLATION.md`](RESULT_2026-09-02_THE_KERNEL_ABLATION.md)).
 
 ### 2.4 Science, not paperwork
+
+- **NEW 2026-09-02: synchrony is a second term in the mechanism, and it is
+  uncharacterised.** `bin-shuffled` destroys temporal order and preserves
+  within-bin synchrony; `channel-shuffled` destroys both. At the two
+  `published-2ms` points their difference is inside a ±0.03 band — order alone.
+  At `fixed-t250` it is **+0.1038**: destroying synchrony as well as order
+  roughly doubles the cost (+0.2157 against +0.1119). One point is not an axis,
+  nothing here says why the contracts differ, and the paper's title and abstract
+  both say "temporal order". **Closing this means the same contrast at the other
+  two `fixed-tN` rungs and at a second geometry** — the cells do not exist
+  ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md)).
+- **NEW 2026-09-02: the reference's compensating −0.20 term is unidentified.**
+  The kernel ablation shows the reference is not "the instrument plus a temporal
+  kernel": the kernel is worth +0.3111 and the observed gap is 0.087, so a term
+  worth roughly −0.20 to the reference relative to the instrument is unaccounted
+  for. §3.8 now states this rather than implying an additive decomposition.
+  Closing it means an ablation series on the *other* differences, and it is the
+  natural successor to the one just run.
 
 - **The gain/DiD dissociation is the leading open problem — NARROWED TWICE
   since this register was written, and still open.** At h1024 the read-out
@@ -124,8 +150,15 @@ cites and against every ban its spec section names. What remains here is prose.
   compute was spent: 504 self-contained cells, every one of the twelve clearing
   the registered bar
   ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)).
-  What replaces it as the scope limit is the **budget**: all twenty-one are
-  `e400` and no shuffled arm has run at any other.
+  What replaced it as the scope limit was the **budget** — and wave 24 has since
+  narrowed that too: all twenty-one were measured at `e400`, and two of them
+  have now been measured at `e100` as well (+0.1183 and +0.0633, 12/12 each).
+  **Nineteen points remain single-budget**, so this is narrowed, not closed. The
+  same wave retired a limit this register never recorded: every DiD in the paper
+  rested on ONE destruction operator, and `reversed` — which displaces further
+  than bin-shuffling while destroying no information — now shows the cost is not
+  displacement brittleness
+  ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md)).
 - **§6's audit debt is smaller than it reads.** The ~8,000 unswept lines in
   `binn-engine` / `binn-areas` / `binn-core` are **not on the cell path** — the
   instrument references those crates zero times. The two unswept files that

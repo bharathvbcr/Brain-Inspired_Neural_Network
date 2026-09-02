@@ -309,6 +309,22 @@ PAPER_SOURCES = [
     ("0.9390", "results/FINDING_2026-08-24_THE_FORWARD_PASSES_DIFFER_IN_KIND.md",
      "the published 25-tap temporal-convolutional SHD reference: literature, "
      "not a cell of this campaign"),
+    # The kernel ablation. Its corpus is `results/kernel_ablation_2026-09-01/` --
+    # six PyTorch runs of the pinned third-party reference, not cells of the
+    # SHD instrument -- so no generator here can reach any of these however
+    # dense the cell corpus becomes. They are machine-written and reproducible
+    # from that corpus by `scripts/analyse_kernel_ablation.py`, which is the
+    # frozen analyser that established them.
+    ("0.9376", "results/RESULT_2026-09-02_THE_KERNEL_ABLATION.md",
+     "the pinned reference mean, and the target HK-4 gates the series on"),
+    ("0.6276", "results/RESULT_2026-09-02_THE_KERNEL_ABLATION.md",
+     "Arm B: the same reference with its temporal kernel reduced to one tap"),
+    ("0.3111", "results/RESULT_2026-09-02_THE_KERNEL_ABLATION.md",
+     "K = mean(A) - mean(B), what the 25-tap kernel is worth. A difference of "
+     "two means from that corpus"),
+    ("0.2044", "results/RESULT_2026-09-02_THE_KERNEL_ABLATION.md",
+     "HK-2: the distance from Arm B to the instrument's 0.8320. It crosses the "
+     "two corpora, so no single generator could reach it either"),
 ]
 
 #: Wave documents whose numbers this sweep cannot derive, and why. Naming them

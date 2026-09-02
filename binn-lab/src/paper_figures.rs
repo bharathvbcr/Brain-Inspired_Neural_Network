@@ -251,8 +251,11 @@ mod nums {
     /// this is 21 of 21 as of 2026-09-01 (H22-2, `analyse_wave22.py` and
     /// `mechanism_coverage.py`). Ban 4 SURVIVES the change and is why the
     /// caption still refuses "every width": 21 of 21 is every point this
-    /// campaign MEASURED, not every width, depth or budget that exists, and
-    /// every one of them is e400.
+    /// campaign MEASURED, not every width, depth or budget that exists. All
+    /// twenty-one were measured at e400; wave 24 re-measured TWO of them at
+    /// e100, so the budget caveat is narrowed and not retired -- nineteen are
+    /// still single-budget, and the caption must not round that to "every
+    /// budget".
     pub const COVERAGE_COVERED: u32 = 21;
     pub const COVERAGE_TOTAL: u32 = 21;
     /// h768 carries the smallest positive gain on LADDER and the largest DiD
@@ -1133,7 +1136,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (36, note_y),
         &format!(
-            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width, and not every budget: every one of them is e400.",
+            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width, and not every budget: all twenty-one at e400, two of them also at e100.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
         ),
         13,
@@ -2792,8 +2795,8 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
             "widths 128 → 1024,",
             "both contracts, both geometries",
             "",
-            "every one measured at e400;",
-            "no shuffled arm has run elsewhere",
+            "all measured at e400;",
+            "two of them also at e100",
         ],
     )?;
 

@@ -330,7 +330,8 @@ class LeadFigure1PanelDTest(unittest.TestCase):
         read as universality, and that risk is LARGER at 21 of 21 than it was
         at 9: "every operating point" invites "every width", and the two are
         not the same claim. Twenty-one of twenty-one is every point this
-        campaign measured -- all of them at e400, none at another budget. So
+        campaign measured -- all of them at e400, and since wave 24 two of them
+        also at e100, which narrows the budget caveat without removing it. So
         the panel must still refuse "every width", and this still checks it.
         """
         scalars = re.findall(r"pub const COVERAGE_(\w+): u32 = (\d+);", self.text)
@@ -922,7 +923,13 @@ class LeadGraphicalAbstractTest(unittest.TestCase):
         self.assertIn("nums::COVERAGE_COVERED", self.fig)
         self.assertIn("nums::COVERAGE_TOTAL", self.fig)
         self.assertIn("e400", self.fig)
-        self.assertIn("no shuffled arm has run elsewhere", self.fig)
+        # Wave 24 measured two of the twenty-one at e100, so the card may no
+        # longer say no shuffled arm has run elsewhere -- it has. The caveat is
+        # narrowed, not retired: nineteen points are still single-budget, and a
+        # card that dropped the budget line entirely would read as "every
+        # budget", which is the claim this ban exists to refuse.
+        self.assertIn("e100", self.fig)
+        self.assertNotIn("no shuffled arm has run elsewhere", self.fig)
 
 
 def matched_table(name: str, next_name: str) -> str:
