@@ -52,6 +52,8 @@ PAIRS = [
      "RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md"),
     ("VERDICTS_W22.md",
      "RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md"),
+    ("VERDICTS_W24.md",
+     "RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md"),
 ]
 
 #: Wave results this check CANNOT cross-check, each with the reason.

@@ -1647,8 +1647,14 @@ CORPUS_BASELINE = {
     #: tracked cell file was modified, so this is an addition and not a
     #: re-scoring. See
     #: `RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`.
+    #:
+    #: Re-frozen 2026-09-02 on wave 24 completing: 336 cells added, all valid.
+    #: 1437 -> 1773 and 1427 -> 1763, both +336, so the ten invalid are still
+    #: the same ten `w13rec` cells -- enumerated, not inferred from the count --
+    #: and no archived verdict moved. An addition, not a re-scoring. See
+    #: `RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`.
     "shd_attention_campaign_v2":
-        (1437, 1427, "d9b3c68ccf89e804"),
+        (1773, 1763, "83a5f56f6eb388da"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":

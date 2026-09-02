@@ -129,6 +129,27 @@ KNOWN_COINCIDENCE = {
     "0.6775": "a July C1 / Gate G2 local mean from the matched-architecture "
               "program, which does not run on the SHD instrument at all.",
     "0.2370": "a July C1 gap lower bound, same program, same reasoning.",
+    # Surfaced on 2026-09-02 when wave 24's 336 cells took the `paired`
+    # generator from 3,080 quantities to 4,125 — from a 24.9% chance of matching
+    # a random 4dp value to 30.9%. All three are from the matched-architecture
+    # program, whose named source documents mention SHD nowhere: different task,
+    # different corpus, different arms, and no cell of this campaign can produce
+    # them. Same class and same judgement as `0.6775`, `0.2370` and `0.8267`.
+    #
+    # `0.0192` is the clearest of the three, because it has flickered: at 393
+    # cells it was flagged, at 504 it was not, and at 1,773 it is again. A value
+    # that appears and disappears as unrelated cells land is not being derived
+    # by anything.
+    "0.0192": "the recurrent gap lower confidence bound (−0.0192) of the matched "
+              "dense-LIF C1 program, from "
+              "`results/matched_rerun_2026-08-25/c1_match_recurrent.md`. That "
+              "program does not run on the SHD instrument at all.",
+    "0.6825": "the local accuracy of structured-B on a capacity substrate, from "
+              "`results/c1_sfb_cap.md` — the same program, the same reasoning.",
+    "0.9875": "the graded-DFA gap LCB, from "
+              "`results/matched_rerun_2026-08-25/c1_matched-dfa_recurrent.md`. "
+              "It is quoted twice in the manuscript and neither occurrence is an "
+              "SHD quantity.",
     "0.8267": "xor_thresh under DFA — a two-class XOR fixture in the "
               "matched-architecture program, which shares no task, no corpus "
               "and no arm with the SHD instrument. It collided with a per-seed "
@@ -334,6 +355,25 @@ ELSEWHERE = [
                "and both are swept: +0.0827 from wave 23 and the archived "
                "-0.1318 from wave 18. It is their difference this sweep does "
                "not generate"),
+    # Wave 24. Same class as every DiD before it: a difference OF seed-paired
+    # differences, second order, and not a quantity this sweep generates. The
+    # wave's other DiDs collide with a first-order value and are declared in
+    # KNOWN_COINCIDENCE; this one does not.
+    ("0.1183", "H24-3, the seed-paired DiD at h128/d32L2 at e100 -- the first "
+               "shuffle contrast this campaign has measured at any budget but "
+               "e400. Second order"),
+    # The manipulation audit, not the accuracy. `apply_temporal` records what
+    # each destruction operator actually did to the input, and this sweep
+    # generates quantities from `accuracy` alone -- so no generator can reach a
+    # relocated fraction however dense it gets. They are cell fields all the
+    # same, machine-written into every manipulated cell, and the wave-24 result
+    # quotes them because they are what makes `reversed` a displacement control
+    # rather than a claim about one.
+    ("0.9969", "the mean `temporal_audit.relocated_fraction` over the wave's "
+               "120 `channel-shuffled` cells"),
+    ("0.9972", "the same, over its 48 `bin-shuffled` cells. The `reversed` "
+               "figure of 0.9986 is NOT here: a first-order value happens to "
+               "collide with it, so the sweep reaches it and needs no entry"),
     # Wave 22. Every DiD is a difference OF seed-paired differences and is
     # therefore second order, which this sweep does not generate -- the same
     # reason W21's DiDs needed handling. The five below are the wave-22 DiDs
