@@ -10,8 +10,29 @@ together, and the first cell is produced afterwards.
 authority on every verdict below. Twelve tests in
 `scripts/test_wave26_analyser.py`.
 
-**Binary:** `fe7904a48dd4160948876d94eeb3f9b0571a03f316d35c26bef0802a77085669`
-— **new**, and that is the wave's defining constraint. See §1.
+**Binary:** new, and that is the wave's defining constraint. See §1.
+
+The campaign's convention is to name the **fleet** (aarch64/AL2023) hash, and it
+does not exist yet: the first instance builds it from the uploaded source and
+publishes the pin, exactly as `3afd4434…` was created for wave 22. What is
+already measured is the **local** macOS/arm64 build,
+`fe7904a48dd4160948876d94eeb3f9b0571a03f316d35c26bef0802a77085669`, which is the
+binary the reproduction gate in §1 ran against. The two are different builds of
+the same source and will not share a hash; the fleet hash is recorded per
+instance in `gates/` and is transcribed into the result document.
+
+**Bucket:** `s3://binn-campaign-v3-511192439661-us-east-1`, **new**, and for the
+same reason. `binn-campaign-v2` pins `3afd4434…`, the binary all 1,790 of its
+archived results came from, and `bootstrap.sh` treats a published pin as
+mandatory — an instance there would download the old binary and reject every one
+of this wave's flags. Replacing the pin in place would overwrite the artefact
+that those 1,790 results' provenance points at. A new bucket per binary
+generation is the campaign's existing pattern (`binn-campaign` → `-v2`), it is
+non-destructive, and it makes "self-contained on one binary" true at the storage
+layer rather than only by convention.
+
+Results are collected into `results/shd_attention_campaign_v3/`, and the frozen
+analyser is pointed at it with `--results`.
 
 **Governing registration:**
 [`PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md`](PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md),
