@@ -2866,3 +2866,117 @@ class OperatorInvariantsMirrorTheBinary(unittest.TestCase):
         }
         problems = cell_validity._temporal_problems(cell, None)
         self.assertTrue(any("outside" in p for p in problems), problems)
+
+
+class PlanAgreementIsChecked(unittest.TestCase):
+    """A cell must have run what the plan asked for, on every pinned field.
+
+    `temporal_condition` was already compared against the plan. Nothing else
+    was, and `attn_readout` is the field where that matters most: it comes from
+    the weight file, and `train-cell` has no flag to cross-check it against --
+    unlike `--arm`, which it accepts and does compare. A plan asking for a
+    `qk-norm` cell while pointing at a default weight file produces a perfectly
+    healthy `default` cell, and PREREG_2026-09-03 registers those two as
+    different instruments whose results do not transfer.
+    """
+
+    @staticmethod
+    def _cell(**overrides):
+        cell = {
+            "mechanical_status": "COMPLETE", "non_finite_events": 0,
+            "classes_predicted": 20, "majority_prediction": 0.1,
+            "silent_fraction": 0.1, "saturated_fraction": 0.0,
+            "accuracy": 0.83, "temporal_condition": "intact",
+            "arm": "ff+fixed+attn", "attn_readout": "default",
+            "attn_dim": 32, "attn_layers": 4, "tau_m": 10.050000191,
+        }
+        cell.update(overrides)
+        return cell
+
+    def test_a_matching_plan_is_clean(self):
+        import cell_validity
+        spec = {"arm": "ff+fixed+attn", "attn_readout": "default",
+                "attn_dim": 32, "attn_layers": 4, "tau_m": 10.05,
+                "temporal": "intact"}
+        self.assertEqual(cell_validity.validity_problems(self._cell(), spec), [])
+
+    def test_the_wrong_read_out_is_caught(self):
+        import cell_validity
+        problems = cell_validity.validity_problems(
+            self._cell(), {"attn_readout": "qk-norm"})
+        self.assertTrue(any("attn_readout" in p for p in problems), problems)
+
+    def test_the_wrong_membrane_is_caught(self):
+        import cell_validity
+        problems = cell_validity.validity_problems(
+            self._cell(), {"tau_m": 20.0})
+        self.assertTrue(any("tau_m" in p for p in problems), problems)
+
+    def test_a_float_plan_matches_the_f32_the_cell_records(self):
+        """A plan writes 10.05; the cell records what that rounds to in f32."""
+        import cell_validity
+        self.assertEqual(
+            cell_validity._plan_agreement_problems(self._cell(), {"tau_m": 10.05}), [])
+
+    def test_a_field_the_plan_does_not_pin_is_not_asserted_about(self):
+        import cell_validity
+        self.assertEqual(
+            cell_validity._plan_agreement_problems(self._cell(), {"arm": "ff+fixed+attn"}), [])
+
+    def test_a_pinned_field_the_cell_lacks_is_a_problem_not_a_pass(self):
+        import cell_validity
+        cell = self._cell()
+        del cell["attn_readout"]
+        problems = cell_validity._plan_agreement_problems(cell, {"attn_readout": "qk-norm"})
+        self.assertTrue(any("records no attn_readout" in p for p in problems), problems)
+
+    def test_every_archived_cell_still_passes_without_a_plan(self):
+        """No spec, no assertions -- the two call sites that have none are safe."""
+        import cell_validity
+        self.assertEqual(cell_validity._plan_agreement_problems(self._cell(), None), [])
+
+    def test_a_null_in_the_plan_is_not_a_pin(self):
+        """The campaign's plans write null for fields that do not apply.
+
+        Read as a pin, `attn_dim: null` on a rate arm voided 886 archived cells
+        on this check's first run against the corpus: their plans say null and
+        the cells, correctly, carry no attn_dim at all. The whole corpus is
+        clean under the repaired rule -- 2,297 cells matched to a plan entry,
+        zero disagreements.
+        """
+        import cell_validity
+        rate_cell = {"arm": "ff+fixed", "accuracy": 0.73}
+        rate_spec = {"arm": "ff+fixed", "attn_dim": None, "attn_layers": None,
+                     "surrogate_scale": None, "clip_grad_norm": None}
+        self.assertEqual(
+            cell_validity._plan_agreement_problems(rate_cell, rate_spec), [])
+
+    def test_every_archived_cell_agrees_with_its_own_plan_entry(self):
+        """The check must not void anything a published verdict rests on."""
+        import cell_validity
+        root = ROOT / "results" / "shd_attention_campaign_v2"
+        specs = {}
+        for plan in sorted(root.glob("plan*.json")):
+            payload = json.loads(plan.read_text())
+            entries = payload.get("cells", payload) if isinstance(payload, dict) else payload
+            for entry in entries:
+                if isinstance(entry, dict) and "id" in entry:
+                    specs[entry["id"]] = entry
+        matched = 0
+        for path in sorted(root.rglob("*.json")):
+            if path.name.startswith("plan") or path.name == "manifest.json":
+                continue
+            try:
+                cell = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            if "accuracy" not in cell:
+                continue
+            spec = specs.get(path.stem)
+            if spec is None:
+                continue
+            matched += 1
+            self.assertEqual(
+                cell_validity._plan_agreement_problems(cell, spec), [],
+                f"{path.name} disagrees with its plan entry")
+        self.assertGreater(matched, 2000, f"only {matched} cells matched a plan")

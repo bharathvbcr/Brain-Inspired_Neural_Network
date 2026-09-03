@@ -206,6 +206,7 @@ def validity_problems(cell: dict, spec: dict | None = None) -> list[str]:
             problems.append(f"non_finite_forward={forward}")
 
     problems.extend(_temporal_problems(cell, spec))
+    problems.extend(_plan_agreement_problems(cell, spec))
     problems.extend(_gradient_problems(cell))
     return problems
 
@@ -301,6 +302,72 @@ def _audit_number(audit: dict, field: str, problems: list[str]):
         problems.append(f"temporal_audit.{field}={value!r} is not a number")
         return None
     return float(value)
+
+
+#: Cell fields a plan entry may pin, and the plan key that pins each.
+#:
+#: `temporal` is handled separately because it also carries an audit. These are
+#: the fields a cell records from something other than its own command line, so
+#: a plan and a cell can disagree about them **without anything erroring**.
+#:
+#: `attn_readout` is the case that motivated this. It is read from the weight
+#: file, and `train-cell` has no `--attn-readout` flag to cross-check against --
+#: unlike `--arm`, which it does accept and does compare. A plan that asked for
+#: a `qk-norm` cell and pointed at a default weight file would therefore produce
+#: a perfectly healthy `default` cell, and it would be scored as the qk-norm arm
+#: by a wave whose whole point was that the two are different instruments.
+PLAN_PINNED_FIELDS = {
+    "arm": "arm",
+    "attn_readout": "attn_readout",
+    "attn_dim": "attn_dim",
+    "attn_layers": "attn_layers",
+    "tau_m": "tau_m",
+    "val_speakers": "val_speakers",
+}
+
+
+def _plan_agreement_problems(cell: dict, spec: dict | None) -> list[str]:
+    """A cell that ran something other than what the plan asked for.
+
+    Only compares keys the plan actually carries **with a value**. A plan that
+    does not pin a field is not asserting anything about it, and inventing an
+    expectation would void cells for a field their wave never registered.
+
+    ``None`` counts as not pinned, and that is not a nicety. The campaign's plan
+    files write ``null`` for every field that does not apply to a cell --
+    ``surrogate_scale``, ``clip_grad_norm``, and ``attn_dim`` on a rate arm. Read
+    as a pin, that last one voided **886 archived cells** on the first run of
+    this check: their plans say ``attn_dim: null`` and the cells, correctly,
+    record no ``attn_dim`` at all.
+    """
+    if spec is None:
+        return []
+    problems: list[str] = []
+    for plan_key, cell_key in PLAN_PINNED_FIELDS.items():
+        if spec.get(plan_key) is None:
+            continue
+        expected = spec[plan_key]
+        if cell_key not in cell:
+            problems.append(
+                f"the plan pins {plan_key}={expected!r} and the cell records no {cell_key}"
+            )
+            continue
+        observed = cell[cell_key]
+        # Floats are compared with a tolerance because a plan writes 10.05 and a
+        # cell records the f32 that value rounds to.
+        if isinstance(expected, float) or isinstance(observed, float):
+            try:
+                if abs(float(observed) - float(expected)) > 1e-4:
+                    problems.append(
+                        f"{cell_key}={observed!r} but the plan asked for {expected!r}"
+                    )
+            except (TypeError, ValueError):
+                problems.append(
+                    f"{cell_key}={observed!r} is not comparable to the plan's {expected!r}"
+                )
+        elif str(observed) != str(expected):
+            problems.append(f"{cell_key}={observed!r} but the plan asked for {expected!r}")
+    return problems
 
 
 def _temporal_problems(cell: dict, spec: dict | None) -> list[str]:
