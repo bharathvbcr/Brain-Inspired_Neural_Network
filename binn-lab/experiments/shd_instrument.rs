@@ -14,7 +14,9 @@ use rayon::prelude::*;
 
 use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
 use binn_lab::timestamp::{iso8601_utc, unix_seconds};
-use binn_learn::shd_attention::{AttentionConfig, AttentionParams, ReadoutVariant};
+use binn_learn::shd_attention::{
+    attention_forward_presented, AttentionConfig, AttentionParams, AttentionProbe, ReadoutVariant,
+};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
 use binn_learn::{
@@ -100,7 +102,11 @@ fn print_help() {
            --clip-grad-norm F  global-norm clipping of the batch gradient (default: off)\n\
            --clip-sample-grad-norm F  global-norm clipping of each sample gradient,\n\
                                before accumulation (default: off)\n\
-           --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)"
+           --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)\n\
+           --probe-epochs L    comma-separated 1-indexed epochs at which to write\n\
+                               read-out diagnostics (attention arms only)\n\
+           --probe-out FILE    where those diagnostics go, one JSON line each\n\
+           --probe-max-samples N  evaluation samples each probe reads (default 256)"
     );
 }
 
@@ -552,6 +558,9 @@ const TRAIN_CELL_FLAGS: &[&str] = &[
     "--max-train",
     "--max-test",
     "--save-final-weights",
+    "--probe-epochs",
+    "--probe-out",
+    "--probe-max-samples",
 ];
 
 /// Refuse a flag this subcommand does not understand.
@@ -665,6 +674,27 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let out = required_path(args, "--out")?;
     let train_limit = optional_usize(args, "--max-train")?;
     let test_limit = optional_usize(args, "--max-test")?;
+    // Read-out probing. Both flags absent means no probing and a byte-identical
+    // cell; either one alone is an error rather than a silent no-op, because a
+    // wave that asked for probes and got none would look exactly like a wave
+    // that did not ask.
+    let probe_epochs = optional_epoch_list(args, "--probe-epochs", epochs)?;
+    let probe_out = optional_path(args, "--probe-out")?;
+    let probe_max_samples = optional_usize(args, "--probe-max-samples")?
+        .unwrap_or(DEFAULT_PROBE_SAMPLES);
+    match (probe_epochs.is_empty(), &probe_out) {
+        (true, None) => {}
+        (false, Some(_)) => {}
+        (true, Some(_)) => {
+            return Err("--probe-out needs --probe-epochs; nothing would be written".into())
+        }
+        (false, None) => {
+            return Err("--probe-epochs needs --probe-out; the probes would be discarded".into())
+        }
+    }
+    if probe_max_samples == 0 {
+        return Err("--probe-max-samples must be positive".into());
+    }
     let started = Instant::now();
 
     let train_raw = read_event_cache(&train_events, train_limit)?;
@@ -751,6 +781,15 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         return Err("order file n_train does not match loaded training set".into());
     }
 
+    if !probe_epochs.is_empty() && !weights.arm.attention {
+        return Err(format!(
+            "--probe-epochs asked for read-out diagnostics on {}, which has no \
+             attention block to diagnose",
+            weights.arm.label()
+        ));
+    }
+    let mut probe_lines: Vec<String> = Vec::with_capacity(probe_epochs.len());
+
     let batch_size = 256usize;
     let total_steps = epochs * train.len().div_ceil(batch_size);
     let mut optimizer = ArmAdam::new(&weights);
@@ -775,7 +814,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     // was already computing.
     let mut epoch_max_gradient_norm: Vec<f64> = Vec::with_capacity(epochs);
     let mut epoch_max_gradient_step: Vec<f64> = Vec::with_capacity(epochs);
-    for order in orders.iter().take(epochs) {
+    for (epoch_index, order) in orders.iter().take(epochs).enumerate() {
         let epoch_loss_start = diagnostics.loss_sum;
         let epoch_samples_start = diagnostics.samples;
         let epoch_norm_start = diagnostics.gradient_norm_sum;
@@ -947,6 +986,15 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         );
         epoch_max_gradient_norm.push(epoch_peak_norm);
         epoch_max_gradient_step.push(epoch_peak_step as f64);
+        // Read-out diagnostics, after the epoch's last optimiser step and
+        // before the next epoch's first. `weights` is borrowed immutably here
+        // and the probe holds no state, draws no randomness and returns a
+        // value, so it cannot perturb the run it observes -- which
+        // `probing_does_not_change_the_cell` asserts rather than assumes.
+        if probe_epochs.contains(&(epoch_index + 1)) {
+            let probe = probe_readout(&weights, &test, probe_max_samples)?;
+            probe_lines.push(probe_line(epoch_index + 1, &probe));
+        }
     }
     // Convergence summary: fractional loss improvement over the final tenth of
     // training. Near zero means converged; materially negative means the cell
@@ -980,6 +1028,13 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     // bit-reproducible with or without the flag.
     if let Some(path) = optional_path(args, "--save-final-weights")? {
         weights.save(&path)?;
+    }
+    // Written before the cell, and separately from it. A probe file is a
+    // diagnostic and the cell is the result; emitting them into one artefact
+    // would put a field the analysers do not read beside the fields they do,
+    // and would make the cell's shape depend on whether probing was on.
+    if let Some(path) = probe_out {
+        atomic_write(&path, probe_lines.concat().as_bytes())?;
     }
     let evaluation = evaluate(&weights, &test)?;
     let scientific = evaluation.accuracy >= 0.80
@@ -1085,6 +1140,115 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         provenance_fields,
     );
     atomic_write(&out, result.as_bytes())
+}
+
+/// How many evaluation samples a probe reads unless told otherwise.
+///
+/// The probe runs a second attention forward per sample and holds a
+/// `[t_steps, t_steps]` weight matrix per layer while it does — 512 KB per
+/// layer at the anchor's 358 bins. 256 samples is 3% of the evaluation set,
+/// enough that a mean row entropy is not noise, and bounded so a probed cell
+/// does not become a differently-shaped experiment from an unprobed one.
+const DEFAULT_PROBE_SAMPLES: usize = 256;
+
+/// Read-out diagnostics over the first `limit` evaluation samples.
+///
+/// Deliberately the *first* `limit` and not a random subset: a random subset
+/// would need a stream, and a stream drawn here would be one more thing that
+/// has to be proved not to touch the run. The evaluation set's order is fixed
+/// by the event cache, so this is reproducible without drawing anything.
+///
+/// Accumulation is chunked-parallel with in-order folding, exactly as
+/// `evaluate` is, because `AttentionProbe::merge` weights floating-point means
+/// and would otherwise depend on thread count.
+fn probe_readout(
+    weights: &ShdArmWeights,
+    samples: &[MatchedShdSample],
+    limit: usize,
+) -> Result<AttentionProbe, String> {
+    let params = weights
+        .attn
+        .as_ref()
+        .ok_or_else(|| "probe asked for an arm with no attention block".to_string())?;
+    let layout = ShdArmWeightLayout::prepare(weights);
+    let probed = &samples[..limit.min(samples.len())];
+    let mut total = AttentionProbe::default();
+    for chunk in probed.chunks(PARALLEL_CHUNK) {
+        let computed: Vec<Result<AttentionProbe, String>> = chunk
+            .par_iter()
+            .map(|sample| {
+                let (forward, _) = shd_matched_loss_and_gradient_arm_scaled_prepared(
+                    weights, &layout, sample, 1.0,
+                )?;
+                let cache = attention_forward_presented(
+                    params,
+                    &forward.spikes,
+                    sample.frames.len(),
+                    sample.hidden_time_permutation.as_deref(),
+                )?;
+                Ok(AttentionProbe::observe(&cache))
+            })
+            .collect();
+        for outcome in computed {
+            total.merge(&outcome?);
+        }
+    }
+    Ok(total)
+}
+
+/// One JSON line per probed epoch.
+fn probe_line(epoch: usize, probe: &AttentionProbe) -> String {
+    format!(
+        "{{\"schema\":\"shd-readout-probe-v1\",\"epoch\":{epoch},\"samples\":{},\
+         \"mean_t_steps\":{:.6},\"residual_norm\":{:.9},\
+         \"normalised_entropy\":{},\"min_normalised_entropy\":{},\"max_weight\":{},\
+         \"saturated_rows\":{},\"score_range\":{},\"q_norm\":{},\"k_norm\":{},\
+         \"score_bound\":{}}}\n",
+        probe.samples,
+        probe.mean_t_steps,
+        probe.residual_norm,
+        json_f64(&probe.normalised_entropy),
+        json_f64(&probe.min_normalised_entropy),
+        json_f64(&probe.max_weight),
+        json_f64(&probe.saturated_rows),
+        json_f64(&probe.score_range),
+        json_f64(&probe.q_norm),
+        json_f64(&probe.k_norm),
+        json_f64(&probe.score_bound),
+    )
+}
+
+/// `--probe-epochs 1,10,100` — 1-indexed, deduplicated, sorted.
+///
+/// Every entry must name an epoch the run will actually reach. A probe list
+/// containing epoch 400 on a 100-epoch cell is a plan error, and silently
+/// producing three probes where the plan expected four is exactly the failure
+/// this campaign keeps finding: a check that could not run reported as one that
+/// ran and passed.
+fn optional_epoch_list(args: &[String], flag: &str, epochs: usize) -> Result<Vec<usize>, String> {
+    let Some(index) = args.iter().position(|value| value == flag) else {
+        return Ok(Vec::new());
+    };
+    let raw = args
+        .get(index + 1)
+        .ok_or_else(|| format!("{flag} requires a value"))?;
+    let mut chosen = Vec::new();
+    for piece in raw.split(',') {
+        let epoch = parse_usize(piece.trim(), flag)?;
+        if epoch == 0 || epoch > epochs {
+            return Err(format!(
+                "{flag} names epoch {epoch}, outside the 1..={epochs} this cell runs"
+            ));
+        }
+        if !chosen.contains(&epoch) {
+            chosen.push(epoch);
+        }
+    }
+    if chosen.is_empty() {
+        return Err(format!("{flag} was given no epochs"));
+    }
+    chosen.sort_unstable();
+    Ok(chosen)
 }
 
 /// Compute independent sample gradients in parallel while preserving the
@@ -1847,5 +2011,187 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Write a minimal `SHDEVT1` event cache, matching
+    /// `scripts/shd_calibration/data.py::write_event_cache`.
+    fn write_event_cache(path: &Path, samples: usize) {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"SHDEVT1\0");
+        bytes.extend_from_slice(&(samples as u32).to_le_bytes());
+        for index in 0..samples {
+            bytes.extend_from_slice(&((index % 4) as u32).to_le_bytes());
+            let events = 40usize;
+            bytes.extend_from_slice(&(events as u32).to_le_bytes());
+            for event in 0..events {
+                // Ascending in time, which the cache writer guarantees by
+                // sorting; the framing path relies on `first`/`last`.
+                let time_s = 0.01 + (event as f32) * 0.004;
+                let channel = ((index * 7 + event * 13) % 140) as u16;
+                bytes.extend_from_slice(&time_s.to_bits().to_le_bytes());
+                bytes.extend_from_slice(&channel.to_le_bytes());
+                bytes.extend_from_slice(&0u16.to_le_bytes());
+            }
+        }
+        fs::write(path, bytes).unwrap();
+    }
+
+    fn owned(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    /// Strip the two fields that differ on every run by construction.
+    fn without_timings(cell: &str) -> String {
+        cell.split(',')
+            .filter(|field| {
+                !field.starts_with("\"wall_secs\"")
+                    && !field.starts_with("\"emitted_unix_s\"")
+                    && !field.starts_with("\"emitted_utc\"")
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    /// A probed cell and an unprobed one are the same cell.
+    ///
+    /// # Why this is not left to the type system
+    ///
+    /// `probe_readout` takes `&ShdArmWeights`, so the compiler already forbids
+    /// it from writing to the weights, and it draws no randomness because there
+    /// is no stream for it to draw from. Both are real arguments and neither is
+    /// what this campaign has learned to trust.
+    ///
+    /// What the compiler does *not* forbid is the probe changing the run
+    /// through a shared resource: it calls into rayon from inside the epoch
+    /// loop, and the training loop's bit-identity rests on `par_iter().collect()`
+    /// preserving index order. If probing perturbed that — a nested pool, a
+    /// changed thread count, a work-stealing interaction — every cell in a
+    /// probed wave would differ from its unprobed twin in the last bits, and
+    /// nothing else in the harness would say so.
+    ///
+    /// So the assertion is the strong one: every measured field, byte for byte.
+    #[test]
+    fn probing_does_not_change_the_cell() {
+        let directory = std::env::temp_dir().join("shd-instrument-probe-identity");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 24);
+        write_event_cache(&test, 12);
+        let weights = directory.join("w.bin");
+        let orders = directory.join("o.bin");
+
+        init(&owned(&[
+            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
+            "--seed", "5170001", "--epochs", "3", "--n-train", "24",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--arm", "ff+fixed+attn", "--attn-dim", "4", "--attn-layers", "2",
+        ]))
+        .unwrap();
+
+        let run = |out: &Path, probe: Option<&Path>| {
+            let mut args = owned(&[
+                "--train-events", train.to_str().unwrap(),
+                "--test-events", test.to_str().unwrap(),
+                "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+                "--epochs", "3",
+                "--weights", weights.to_str().unwrap(),
+                "--orders", orders.to_str().unwrap(),
+                "--out", out.to_str().unwrap(),
+                "--arm", "ff+fixed+attn",
+            ]);
+            if let Some(path) = probe {
+                args.extend(owned(&["--probe-epochs", "1,3", "--probe-out", path.to_str().unwrap()]));
+                args.extend(owned(&["--probe-max-samples", "8"]));
+            }
+            train_cell(&args).unwrap();
+            fs::read_to_string(out).unwrap()
+        };
+
+        let plain = run(&directory.join("plain.json"), None);
+        let probe_file = directory.join("probe.jsonl");
+        let probed = run(&directory.join("probed.json"), Some(&probe_file));
+        assert_eq!(
+            without_timings(&plain),
+            without_timings(&probed),
+            "probing moved the cell"
+        );
+
+        let probes = fs::read_to_string(&probe_file).unwrap();
+        let lines: Vec<&str> = probes.lines().collect();
+        assert_eq!(lines.len(), 2, "one line per probed epoch: {probes}");
+        assert!(lines[0].contains("\"epoch\":1"), "{}", lines[0]);
+        assert!(lines[1].contains("\"epoch\":3"), "{}", lines[1]);
+        for line in &lines {
+            assert!(line.contains("\"samples\":8"), "{line}");
+            assert!(line.contains("\"normalised_entropy\":["), "{line}");
+            assert!(!line.contains("NaN") && !line.contains("null"), "{line}");
+        }
+    }
+
+    /// A probe request that could not be honoured is an error, not a silence.
+    #[test]
+    fn a_probe_that_cannot_run_refuses_rather_than_writing_nothing() {
+        let directory = std::env::temp_dir().join("shd-instrument-probe-refusal");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 12);
+        write_event_cache(&test, 8);
+        let weights = directory.join("w.bin");
+        let orders = directory.join("o.bin");
+        init(&owned(&[
+            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
+            "--seed", "5170001", "--epochs", "2", "--n-train", "12",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]))
+        .unwrap();
+
+        let base = owned(&[
+            "--train-events", train.to_str().unwrap(),
+            "--test-events", test.to_str().unwrap(),
+            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+            "--epochs", "2",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--out", directory.join("cell.json").to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]);
+
+        // No attention block to diagnose.
+        let mut with_probe = base.clone();
+        with_probe.extend(owned(&[
+            "--probe-epochs", "1",
+            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+        ]));
+        let error = train_cell(&with_probe).expect_err("ff+alif has no read-out to probe");
+        assert!(error.contains("no attention block"), "{error}");
+
+        // An epoch the run never reaches.
+        let mut past_the_end = base.clone();
+        past_the_end.extend(owned(&[
+            "--probe-epochs", "1,9",
+            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+        ]));
+        let error = train_cell(&past_the_end).expect_err("epoch 9 of a 2-epoch cell");
+        assert!(error.contains("outside the 1..=2"), "{error}");
+
+        // Half a request.
+        let mut half = base.clone();
+        half.extend(owned(&["--probe-epochs", "1"]));
+        assert!(train_cell(&half).is_err(), "--probe-epochs without --probe-out");
+        let mut other_half = base;
+        other_half.extend(owned(&[
+            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+        ]));
+        assert!(
+            train_cell(&other_half).is_err(),
+            "--probe-out without --probe-epochs"
+        );
     }
 }

@@ -1107,6 +1107,298 @@ pub fn attention_gradient(
     Ok((gradient, ds_attn))
 }
 
+
+/// Read-out diagnostics for `PREREG_2026-08-25_THE_H1024_COLLAPSE`.
+///
+/// # What this measures and why it is not in the cell record already
+///
+/// The h1024 collapse is currently a claim about a *loss curve*. The mechanism
+/// proposed for it — the softmax saturating as `||q|| ||k||` grows, until every
+/// attention row is a delta and the read-out is a single-timestep gather — is
+/// not observable in anything the instrument emits. Wave 23's analysis had loss
+/// curves and nothing else, because no cell has ever saved a weight mid-run:
+/// `--save-final-weights` writes one file after the last epoch.
+///
+/// These are the quantities the mechanism predicts, measured on the evaluation
+/// set at chosen epochs:
+///
+/// * **normalised entropy** of each attention row, divided by `ln(t_steps)` so
+///   that `published-2ms` (~358 bins) and `fixed-t100` are on one scale. 1.0 is
+///   uniform attention, 0.0 is a delta. The registered prediction is that this
+///   goes to 0 at L4/e400 and not at L2 or e100.
+/// * **max attention weight** per row, the same statement without a logarithm,
+///   and **saturated rows**, the fraction above 0.99 — a mean entropy can be
+///   dragged down by a minority of collapsed rows or by all of them drifting,
+///   and those call for different readings.
+/// * **score range**, `ln(max a) - ln(min a)` per row. The softmax destroys the
+///   additive shift but not the differences, so this recovers the pre-softmax
+///   spread that actually drives saturation, exactly.
+/// * **residual norm** `||z||` per timestep, per layer, and the **q / k norms**
+///   whose product bounds the score. If the collapse is driven by growth in
+///   these, they grow; if entropy falls while they do not, it is something else.
+///
+/// # It cannot alter the run it observes
+///
+/// Every field is computed from a borrowed [`AttentionCache`]. The probe draws
+/// no randomness, holds no state between calls, and returns a value; there is
+/// no `&mut` anywhere in this type's construction. The instrument runs it
+/// outside the training loop on a bounded subset, and
+/// `probing_does_not_change_the_cell` asserts the consequence — a probed cell
+/// and an unprobed one are bit-identical.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AttentionProbe {
+    pub samples: usize,
+    /// Mean sequence length over the probed samples, so a reader can tell a
+    /// change in entropy from a change in what it was normalised by.
+    pub mean_t_steps: f64,
+    /// Per layer, mean over rows of `H(row) / ln(t_steps)`.
+    pub normalised_entropy: Vec<f64>,
+    /// Per layer, the smallest normalised row entropy seen.
+    pub min_normalised_entropy: Vec<f64>,
+    /// Per layer, mean over rows of `max_j a[t, j]`.
+    pub max_weight: Vec<f64>,
+    /// Per layer, fraction of rows whose largest weight is at least 0.99.
+    pub saturated_rows: Vec<f64>,
+    /// Per layer, mean over rows of `ln(max a) - ln(min a)`.
+    pub score_range: Vec<f64>,
+    /// Per layer, mean over timesteps of the **pre-normalisation** `||q||` and
+    /// `||k||` — the term `PREREG_2026-08-25_THE_H1024_COLLAPSE` names, whether
+    /// or not the read-out normalises it away before the score.
+    pub q_norm: Vec<f64>,
+    pub k_norm: Vec<f64>,
+    /// Per layer, an upper bound on `|score|` — not a score.
+    ///
+    /// Computed from the vectors the score **consumed**, so under QK-norm it is
+    /// `sqrt(d_model)` by construction while `q_norm` above is free to grow.
+    /// The pair is the measurement: growth in `q_norm` with a flat
+    /// `score_bound` is the normalisation doing its job.
+    pub score_bound: Vec<f64>,
+    /// Mean over timesteps of `||z||` in the final residual stream.
+    pub residual_norm: f64,
+}
+
+/// A row whose largest weight reaches this is a delta for the purposes of the
+/// collapse hypothesis: the other `t_steps - 1` timesteps together contribute
+/// less than one percent of the context.
+pub const ATTENTION_SATURATED_WEIGHT: f32 = 0.99;
+
+impl AttentionProbe {
+    /// Observe one completed forward. Borrows; changes nothing.
+    pub fn observe(cache: &AttentionCache) -> Self {
+        let t_steps = cache.t_steps;
+        let d = cache.d_model;
+        let layers = cache.a.len();
+        let scale = if cache.variant.qk_norm {
+            f64::from(qk_norm_score_scale(d))
+        } else {
+            1.0 / (d as f64).sqrt()
+        };
+        // `ln(1) == 0` at a single timestep, and every row is then trivially
+        // uniform. Reported as 1.0 — fully uniform — rather than as a division
+        // by zero, and the `mean_t_steps` field is what tells a reader the
+        // normaliser was degenerate.
+        let log_t = if t_steps > 1 {
+            (t_steps as f64).ln()
+        } else {
+            f64::INFINITY
+        };
+
+        let mut probe = Self {
+            samples: 1,
+            mean_t_steps: t_steps as f64,
+            normalised_entropy: Vec::with_capacity(layers),
+            min_normalised_entropy: Vec::with_capacity(layers),
+            max_weight: Vec::with_capacity(layers),
+            saturated_rows: Vec::with_capacity(layers),
+            score_range: Vec::with_capacity(layers),
+            q_norm: Vec::with_capacity(layers),
+            k_norm: Vec::with_capacity(layers),
+            score_bound: Vec::with_capacity(layers),
+            residual_norm: 0.0,
+        };
+
+        for layer in 0..layers {
+            let a = &cache.a[layer];
+            let mut entropy_sum = 0.0_f64;
+            let mut entropy_min = f64::INFINITY;
+            let mut max_sum = 0.0_f64;
+            let mut saturated = 0_usize;
+            let mut range_sum = 0.0_f64;
+            for t in 0..t_steps {
+                let row = &a[t * t_steps..(t + 1) * t_steps];
+                let mut entropy = 0.0_f64;
+                let mut largest = 0.0_f32;
+                let mut smallest = f32::INFINITY;
+                for &weight in row {
+                    if weight > 0.0 {
+                        let value = f64::from(weight);
+                        entropy -= value * value.ln();
+                    }
+                    if weight > largest {
+                        largest = weight;
+                    }
+                    if weight < smallest {
+                        smallest = weight;
+                    }
+                }
+                let normalised = if log_t.is_finite() {
+                    entropy / log_t
+                } else {
+                    1.0
+                };
+                entropy_sum += normalised;
+                if normalised < entropy_min {
+                    entropy_min = normalised;
+                }
+                max_sum += f64::from(largest);
+                if largest >= ATTENTION_SATURATED_WEIGHT {
+                    saturated += 1;
+                }
+                // A weight that underflowed to exactly zero carries no
+                // information about how far below the maximum its score was,
+                // only that it was far. Clamping to the smallest positive f32
+                // reports a finite, saturating range instead of an infinity
+                // that would poison every mean downstream of it.
+                let floor = smallest.max(f32::MIN_POSITIVE);
+                range_sum += f64::from(largest.max(f32::MIN_POSITIVE).ln() - floor.ln());
+            }
+            let rows = t_steps as f64;
+            probe.normalised_entropy.push(entropy_sum / rows);
+            probe.min_normalised_entropy.push(entropy_min);
+            probe.max_weight.push(max_sum / rows);
+            probe.saturated_rows.push(saturated as f64 / rows);
+            probe.score_range.push(range_sum / rows);
+
+            // `q_norm` / `k_norm` are the **pre-normalisation** magnitudes,
+            // always. That is the quantity the collapse hypothesis names, and
+            // under QK-norm it is not what `cache.q` holds: the cache stores
+            // the normalised vectors, whose norms are 1 by construction and
+            // would report a flat line no matter what the read-out was doing.
+            // The divisors the forward recorded are the same quantity, to the
+            // guard inside the square root.
+            let (q_mean, q_max) = if cache.variant.qk_norm {
+                mean_and_max(&cache.q_norm[layer])
+            } else {
+                row_norms(&cache.q[layer], t_steps, d)
+            };
+            let (k_mean, k_max) = if cache.variant.qk_norm {
+                mean_and_max(&cache.k_norm[layer])
+            } else {
+                row_norms(&cache.k[layer], t_steps, d)
+            };
+            probe.q_norm.push(q_mean);
+            probe.k_norm.push(k_mean);
+            // `score_bound` is a bound on the score the softmax actually saw,
+            // which is a different question: under QK-norm it is `sqrt(d)` by
+            // construction however large `q_norm` grows, and that constancy
+            // beside a growing `q_norm` is precisely what the arm is registered
+            // to demonstrate.
+            let (consumed_q, consumed_k) = if cache.variant.qk_norm {
+                (
+                    row_norms(&cache.q[layer], t_steps, d).1,
+                    row_norms(&cache.k[layer], t_steps, d).1,
+                )
+            } else {
+                (q_max, k_max)
+            };
+            probe.score_bound.push(consumed_q * consumed_k * scale);
+        }
+
+        let (residual, _) = row_norms(&cache.z[layers], t_steps, d);
+        probe.residual_norm = residual;
+        probe
+    }
+
+    /// Fold another observation in, weighting by sample count.
+    ///
+    /// Means are weighted; minima are minima. Folding a minimum as a mean is
+    /// how "one row collapsed" becomes invisible, and one collapsed row is the
+    /// first thing the hypothesis predicts.
+    pub fn merge(&mut self, other: &Self) {
+        let total = self.samples + other.samples;
+        if total == 0 {
+            return;
+        }
+        let weight = |a: f64, b: f64| {
+            (a * self.samples as f64 + b * other.samples as f64) / total as f64
+        };
+        self.mean_t_steps = weight(self.mean_t_steps, other.mean_t_steps);
+        self.residual_norm = weight(self.residual_norm, other.residual_norm);
+        if self.samples == 0 {
+            self.normalised_entropy = other.normalised_entropy.clone();
+            self.min_normalised_entropy = other.min_normalised_entropy.clone();
+            self.max_weight = other.max_weight.clone();
+            self.saturated_rows = other.saturated_rows.clone();
+            self.score_range = other.score_range.clone();
+            self.q_norm = other.q_norm.clone();
+            self.k_norm = other.k_norm.clone();
+            self.score_bound = other.score_bound.clone();
+            self.samples = total;
+            return;
+        }
+        for (mine, theirs) in [
+            (&mut self.normalised_entropy, &other.normalised_entropy),
+            (&mut self.max_weight, &other.max_weight),
+            (&mut self.saturated_rows, &other.saturated_rows),
+            (&mut self.score_range, &other.score_range),
+            (&mut self.q_norm, &other.q_norm),
+            (&mut self.k_norm, &other.k_norm),
+        ] {
+            for (a, b) in mine.iter_mut().zip(theirs) {
+                *a = weight(*a, *b);
+            }
+        }
+        for (a, b) in self
+            .min_normalised_entropy
+            .iter_mut()
+            .zip(&other.min_normalised_entropy)
+        {
+            if *b < *a {
+                *a = *b;
+            }
+        }
+        for (a, b) in self.score_bound.iter_mut().zip(&other.score_bound) {
+            if *b > *a {
+                *a = *b;
+            }
+        }
+        self.samples = total;
+    }
+}
+
+/// Mean and max of a list of already-computed norms.
+fn mean_and_max(norms: &[f32]) -> (f64, f64) {
+    let mut sum = 0.0_f64;
+    let mut largest = 0.0_f64;
+    for &norm in norms {
+        let value = f64::from(norm);
+        sum += value;
+        if value > largest {
+            largest = value;
+        }
+    }
+    (sum / norms.len().max(1) as f64, largest)
+}
+
+/// Mean and max Euclidean norm over the rows of a `[rows, cols]` buffer.
+fn row_norms(values: &[f32], rows: usize, cols: usize) -> (f64, f64) {
+    let mut sum = 0.0_f64;
+    let mut largest = 0.0_f64;
+    for row in 0..rows {
+        let slice = &values[row * cols..(row + 1) * cols];
+        let norm = slice
+            .iter()
+            .map(|value| f64::from(*value) * f64::from(*value))
+            .sum::<f64>()
+            .sqrt();
+        sum += norm;
+        if norm > largest {
+            largest = norm;
+        }
+    }
+    (sum / rows.max(1) as f64, largest)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2193,5 +2485,89 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The entropy scale is anchored at both ends on synthetic attention rows.
+    ///
+    /// A normalised entropy is only interpretable if 1.0 really is uniform and
+    /// 0.0 really is a delta. Both are constructed here rather than asserted
+    /// about a trained network, because a probe that read 0.85 on a uniform row
+    /// would make every collapse verdict a few points too generous and nothing
+    /// downstream would notice.
+    #[test]
+    fn the_probe_reads_one_on_uniform_attention_and_zero_on_a_delta() {
+        let t_steps = 32_usize;
+        let d = 4_usize;
+        let mut cache = AttentionCache {
+            t_steps,
+            d_model: d,
+            z: vec![vec![0.0; t_steps * d]; 2],
+            q: vec![vec![0.0; t_steps * d]],
+            k: vec![vec![0.0; t_steps * d]],
+            v: vec![vec![0.0; t_steps * d]],
+            a: vec![vec![1.0 / t_steps as f32; t_steps * t_steps]],
+            c: vec![vec![0.0; t_steps * d]],
+            pooled: vec![0.0; d],
+            presentation: None,
+            q_norm: Vec::new(),
+            k_norm: Vec::new(),
+            variant: ReadoutVariant::DEFAULT,
+        };
+        let uniform = AttentionProbe::observe(&cache);
+        assert!(
+            (uniform.normalised_entropy[0] - 1.0).abs() < 1e-6,
+            "uniform attention read {}",
+            uniform.normalised_entropy[0]
+        );
+        assert_eq!(uniform.saturated_rows[0], 0.0);
+        assert!((uniform.max_weight[0] - 1.0 / t_steps as f64).abs() < 1e-9);
+        assert_eq!(uniform.score_range[0], 0.0, "a uniform row has no spread");
+
+        for row in 0..t_steps {
+            let slice = &mut cache.a[0][row * t_steps..(row + 1) * t_steps];
+            slice.fill(0.0);
+            slice[row] = 1.0;
+        }
+        let delta = AttentionProbe::observe(&cache);
+        assert_eq!(delta.normalised_entropy[0], 0.0, "a delta has no entropy");
+        assert_eq!(delta.saturated_rows[0], 1.0);
+        assert_eq!(delta.max_weight[0], 1.0);
+        assert!(
+            delta.score_range[0].is_finite(),
+            "an underflowed weight must not put an infinity in the record"
+        );
+    }
+
+    /// Merging keeps minima as minima and means as means.
+    ///
+    /// One collapsed row inside a probe that averaged to 0.9 is the first thing
+    /// the hypothesis predicts, and folding `min_normalised_entropy` as a mean
+    /// is exactly how it would disappear.
+    #[test]
+    fn the_probe_merge_does_not_average_away_a_minimum() {
+        let make = |entropy: f64, minimum: f64, bound: f64| AttentionProbe {
+            samples: 1,
+            mean_t_steps: 100.0,
+            normalised_entropy: vec![entropy],
+            min_normalised_entropy: vec![minimum],
+            max_weight: vec![0.1],
+            saturated_rows: vec![0.0],
+            score_range: vec![1.0],
+            q_norm: vec![2.0],
+            k_norm: vec![2.0],
+            score_bound: vec![bound],
+            residual_norm: 1.0,
+        };
+        let mut total = AttentionProbe::default();
+        total.merge(&make(0.9, 0.9, 3.0));
+        total.merge(&make(0.9, 0.01, 9.0));
+        total.merge(&make(0.9, 0.9, 3.0));
+        assert_eq!(total.samples, 3);
+        assert!((total.normalised_entropy[0] - 0.9).abs() < 1e-12);
+        assert_eq!(
+            total.min_normalised_entropy[0], 0.01,
+            "one collapsed row must survive the fold"
+        );
+        assert_eq!(total.score_bound[0], 9.0, "a bound is a max, not a mean");
     }
 }
