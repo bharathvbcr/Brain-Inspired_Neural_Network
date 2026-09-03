@@ -77,6 +77,15 @@ SILENT_MAX = 0.95
 SATURATED_MAX = 0.05
 # A "shuffle" that relocated less than half its entries did not shuffle.
 RELOCATED_MIN = 0.5
+# Registered floor on a full shuffle's mean displacement, as a fraction of the
+# sequence length: half the T/3 a uniform permutation gives in expectation.
+FULL_SHUFFLE_DISPLACEMENT_FLOOR = 1.0 / 6.0
+# Slack on the window operator's relocated band; a uniform permutation of w
+# items leaves one fixed point in expectation, so the fraction concentrates on
+# 1 - 1/w.
+WINDOW_RELOCATED_SLACK = 0.15
+# Width of the binomial band on dropout retention, in standard deviations.
+DROPOUT_BAND_SIGMAS = 5.0
 
 F32_MAX = 3.4028234663852886e38
 # Above every cell in the current record; see the module docstring.
@@ -213,6 +222,87 @@ def pre_guard_cells(cells) -> int:
     return sum(1 for cell in cells if "non_finite_forward" not in cell)
 
 
+def temporal_invariants(condition: str) -> dict | None:
+    """What one operator promises, keyed by the label a cell records.
+
+    Duplicates ``TemporalCondition::invariants`` in
+    ``binn-learn/src/shd_temporal.rs`` rather than reading it out of the cell,
+    for the same reason ``TRAIN_BATCH_SIZE`` is duplicated: the binary is pinned
+    across every wave of this campaign and must not be rebuilt to improve a
+    diagnostic, and a gate that checked the binary's own claim about itself
+    would be a check that cannot fail.
+    ``test_campaign_tooling.py`` asserts the two tables agree.
+
+    Returns ``None`` for a label this file does not know, which the caller
+    reports as a problem -- an unrecognised operator must never be waved
+    through as "no invariants to check".
+    """
+    if condition == "intact":
+        return {
+            "relocated": (0.0, 0.0),
+            "max_displacement": 0.0,
+            "min_mean_displacement_fraction": None,
+            "hidden_permutation_relocated": (0.0, 0.0),
+            "retention": ("exact",),
+        }
+    if condition in ("bin-shuffled", "channel-shuffled", "reversed"):
+        return {
+            "relocated": (RELOCATED_MIN, 1.0),
+            "max_displacement": None,
+            "min_mean_displacement_fraction": FULL_SHUFFLE_DISPLACEMENT_FLOOR,
+            "hidden_permutation_relocated": (0.0, 0.0),
+            "retention": ("exact",),
+        }
+    if condition == "hidden-shuffled":
+        # Every input-side statistic reads exactly as `intact` does, by design.
+        # `hidden_permutation_relocated` is the only field that separates the
+        # two, which is why the band on it is the whole gate here.
+        return {
+            "relocated": (0.0, 0.0),
+            "max_displacement": 0.0,
+            "min_mean_displacement_fraction": None,
+            "hidden_permutation_relocated": (RELOCATED_MIN, 1.0),
+            "retention": ("exact",),
+        }
+    if condition.startswith("window-shuffled-w"):
+        try:
+            window = int(condition[len("window-shuffled-w"):])
+        except ValueError:
+            return None
+        if window < 2:
+            return None
+        return {
+            "relocated": (max(0.0, 1.0 - 1.0 / window - WINDOW_RELOCATED_SLACK), 1.0),
+            "max_displacement": float(window - 1),
+            "min_mean_displacement_fraction": None,
+            "hidden_permutation_relocated": (0.0, 0.0),
+            "retention": ("exact",),
+        }
+    if condition.startswith("spike-dropout-p"):
+        try:
+            percent = int(condition[len("spike-dropout-p"):])
+        except ValueError:
+            return None
+        if not 1 <= percent <= 99:
+            return None
+        return {
+            "relocated": (0.0, 0.0),
+            "max_displacement": 0.0,
+            "min_mean_displacement_fraction": None,
+            "hidden_permutation_relocated": (0.0, 0.0),
+            "retention": ("binomial", 1.0 - percent / 100.0, DROPOUT_BAND_SIGMAS),
+        }
+    return None
+
+
+def _audit_number(audit: dict, field: str, problems: list[str]):
+    value = audit.get(field)
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        problems.append(f"temporal_audit.{field}={value!r} is not a number")
+        return None
+    return float(value)
+
+
 def _temporal_problems(cell: dict, spec: dict | None) -> list[str]:
     """The manipulation ran, did what it claims, and is the one that was asked for."""
     problems: list[str] = []
@@ -231,18 +321,114 @@ def _temporal_problems(cell: dict, spec: dict | None) -> list[str]:
     if condition == "intact":
         return problems
 
+    invariants = temporal_invariants(condition)
+    if invariants is None:
+        problems.append(f"temporal_condition={condition!r} has no registered invariants")
+        return problems
+
     audit = cell.get("temporal_audit")
     if not isinstance(audit, dict):
         problems.append("temporal_audit missing for a manipulated cell")
         return problems
-    if audit.get("counts_preserved") is not True:
-        problems.append("counts not preserved")
-    relocated = audit.get("relocated_fraction")
-    if not isinstance(relocated, (int, float)) or isinstance(relocated, bool):
-        problems.append(f"relocated_fraction={relocated!r} is not a number")
-    elif relocated < RELOCATED_MIN:
-        problems.append(f"relocated_fraction={relocated:.3f}")
+
+    samples = audit.get("samples")
+    if isinstance(samples, int) and not isinstance(samples, bool) and samples == 0:
+        problems.append("temporal_audit covers zero samples - the manipulation never ran")
+        return problems
+
+    low, high = invariants["relocated"]
+    relocated = _audit_number(audit, "relocated_fraction", problems)
+    if relocated is not None and not low <= relocated <= high:
+        problems.append(
+            f"relocated_fraction={relocated:.3f} outside {condition}'s band [{low:.3f}, {high:.3f}]"
+        )
+
+    low, high = invariants["hidden_permutation_relocated"]
+    if "hidden_permutation_relocated" in audit:
+        permuted = _audit_number(audit, "hidden_permutation_relocated", problems)
+        if permuted is not None and not low <= permuted <= high:
+            problems.append(
+                f"hidden_permutation_relocated={permuted:.3f} outside {condition}'s "
+                f"band [{low:.3f}, {high:.3f}]"
+            )
+    elif high > 0.0:
+        # `hidden-shuffled` is invisible in every other field, so a cell that
+        # predates the field cannot be checked at all -- and unlike the other
+        # clauses, there is nothing left over. Reported as a problem rather than
+        # skipped: a check that could not run must not read as one that passed.
+        problems.append(
+            f"{condition} needs hidden_permutation_relocated and the cell has none; "
+            "nothing else in the audit distinguishes it from intact"
+        )
+
+    # Fields added with the operator table. A cell recorded before them cannot
+    # be checked against the clauses that need them, and saying so is not the
+    # same as passing: `temporal_fields_absent` counts those cells for the
+    # caller, exactly as `non_finite_forward` is counted.
+    bound = invariants["max_displacement"]
+    if bound is not None and "max_bin_displacement" in audit:
+        observed = _audit_number(audit, "max_bin_displacement", problems)
+        if observed is not None and observed > bound:
+            problems.append(
+                f"max_bin_displacement={observed:.1f} past {condition}'s bound of {bound:.1f}"
+            )
+
+    fraction = invariants["min_mean_displacement_fraction"]
+    if fraction is not None and "mean_steps" in audit:
+        steps = _audit_number(audit, "mean_steps", problems)
+        mean_displacement = _audit_number(audit, "mean_bin_displacement", problems)
+        if steps is not None and mean_displacement is not None:
+            floor = fraction * steps
+            if mean_displacement < floor:
+                problems.append(
+                    f"mean_bin_displacement={mean_displacement:.3f} below {condition}'s "
+                    f"floor of {floor:.3f} on a {steps:.1f}-bin sequence"
+                )
+
+    rule = invariants["retention"]
+    if rule[0] == "exact":
+        if audit.get("counts_preserved") is not True:
+            problems.append("counts not preserved")
+    else:
+        _, survival, sigmas = rule
+        if audit.get("counts_preserved") is True:
+            problems.append(f"{condition} preserved counts - it deleted nothing")
+        if "count_before" in audit and "count_after" in audit:
+            before = _audit_number(audit, "count_before", problems)
+            after = _audit_number(audit, "count_after", problems)
+            if before is not None and after is not None:
+                if before <= 0.0:
+                    problems.append(f"{condition} saw no spikes to delete")
+                else:
+                    observed = after / before
+                    deviation = math.sqrt(survival * (1.0 - survival) / before) * sigmas
+                    if abs(observed - survival) > deviation:
+                        problems.append(
+                            f"retained {observed:.6f} of {before:.0f} spikes; "
+                            f"{condition} registers {survival:.6f} +/- {deviation:.6f}"
+                        )
     return problems
+
+
+def temporal_fields_absent(cells: list[dict]) -> int:
+    """How many manipulated cells predate the per-operator audit fields.
+
+    A cell without `max_bin_displacement` / `mean_steps` / `count_before` was
+    produced before the operator table existed, so the displacement and
+    retention clauses above could not run on it. That is not a defect and voids
+    nothing, but a check that could not run must never be counted as a check
+    that ran and passed.
+    """
+    needed = ("max_bin_displacement", "mean_steps", "count_before", "count_after",
+              "hidden_permutation_relocated")
+    absent = 0
+    for cell in cells:
+        if cell.get("temporal_condition") in (None, "intact"):
+            continue
+        audit = cell.get("temporal_audit")
+        if not isinstance(audit, dict) or any(field not in audit for field in needed):
+            absent += 1
+    return absent
 
 
 def _gradient_problems(cell: dict) -> list[str]:

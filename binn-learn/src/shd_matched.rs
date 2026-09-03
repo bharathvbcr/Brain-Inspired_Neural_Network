@@ -35,6 +35,43 @@ pub struct MatchedShdSample {
     pub frames: Vec<Vec<(usize, f32)>>,
     pub n_inputs: usize,
     pub dt_ms: f32,
+    /// Order in which the hidden timesteps are presented to the **read-out**.
+    ///
+    /// `None` — the value every path but `hidden-shuffled` produces — is the
+    /// identity, and every downstream call is the one that existed before this
+    /// field. `Some(p)` means the read-out is shown hidden state `p[t]` at
+    /// stream position `t`.
+    ///
+    /// It lives on the sample rather than being drawn in the forward pass for
+    /// the same reason the dropout mask does: drawn per forward it would be
+    /// re-randomised on every epoch and become noise rather than a fixed
+    /// impoverishment. `crate::shd_temporal::apply_temporal` sets it once, from
+    /// the manipulation seed, before the first epoch.
+    ///
+    /// The **spiking dynamics never read it.** It is applied strictly after the
+    /// membrane loop has produced the full spike train, so the substrate is
+    /// bit-identical to its intact twin and the only thing the manipulation can
+    /// move is what the read-out extracts from order.
+    pub hidden_time_permutation: Option<Vec<usize>>,
+}
+
+impl MatchedShdSample {
+    /// A sample with no read-out permutation: the shape every framing path
+    /// produces.
+    ///
+    /// Constructor rather than `..Default::default()` so that adding a field
+    /// here keeps failing to compile at the sites that build a sample by hand,
+    /// which is the only reason those sites got reviewed when this one was
+    /// added.
+    pub fn new(label: u32, frames: Vec<Vec<(usize, f32)>>, n_inputs: usize, dt_ms: f32) -> Self {
+        Self {
+            label,
+            frames,
+            n_inputs,
+            dt_ms,
+            hidden_time_permutation: None,
+        }
+    }
 }
 
 impl MatchedTrainSpec {
@@ -645,6 +682,7 @@ mod tests {
             frames: vec![vec![(0, 1.0)], vec![(1, 1.0)]],
             n_inputs: 700,
             dt_ms: 10.0,
+            hidden_time_permutation: None,
         }
     }
 

@@ -331,6 +331,7 @@ fn dense_fixture(arm: MatchedArm) -> (MatchedShdSample, ShdArmWeights) {
         frames,
         n_inputs,
         dt_ms: 4.0,
+        hidden_time_permutation: None,
     };
     let base = ShdMatchedWeights::deterministic(n_inputs, hidden, 20, 4242);
     let w_rec = if arm.recurrent {
@@ -686,6 +687,7 @@ fn the_kernel_matches_the_derivation_across_many_shapes() {
             frames,
             n_inputs,
             dt_ms,
+            hidden_time_permutation: None,
         };
 
         for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {

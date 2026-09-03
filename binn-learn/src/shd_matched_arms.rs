@@ -29,7 +29,8 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use crate::shd_attention::{
-    attention_forward, attention_gradient, attention_logits, AttentionConfig, AttentionGradient,
+    attention_forward_presented, attention_gradient, attention_logits, AttentionConfig,
+    AttentionGradient,
     AttentionParams,
 };
 use crate::shd_matched::{
@@ -749,8 +750,21 @@ pub fn loss_and_gradient_arm_scaled_prepared(
     // Time-axis attention read-out. Runs on the completed spike train, adds to
     // the logits, and leaves the spiking forward untouched — at `w_a = 0` the
     // arm is numerically its own non-attention counterpart.
+    //
+    // `hidden_time_permutation` is the `hidden-shuffled` control and is read
+    // **only here**. The membrane loop above has already finished, so the
+    // substrate a shuffled cell trains on is bit-identical to its intact
+    // twin's; and `rates` above was accumulated from the unpermuted buffer, so
+    // the rate read-out's contribution is bit-identical too. Both are the
+    // manipulation's own predictions rather than exemptions from it — see
+    // `attention_forward_presented`.
     let attention_cache = match &weights.attn {
-        Some(params) => Some(attention_forward(params, &spikes, t_steps)?),
+        Some(params) => Some(attention_forward_presented(
+            params,
+            &spikes,
+            t_steps,
+            sample.hidden_time_permutation.as_deref(),
+        )?),
         None => None,
     };
 
@@ -1147,6 +1161,7 @@ mod tests {
             frames,
             n_inputs: 40,
             dt_ms: 10.0,
+            hidden_time_permutation: None,
         }
     }
 
@@ -1467,6 +1482,7 @@ mod tests {
             frames,
             n_inputs,
             dt_ms: 4.0,
+            hidden_time_permutation: None,
         };
         let base = MatchedWeights::deterministic(n_inputs, hidden, 20, 4242);
         let w_rec = if arm.recurrent {

@@ -2653,3 +2653,216 @@ class ProvenanceGateTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class OperatorInvariantsMirrorTheBinary(unittest.TestCase):
+    """`cell_validity.temporal_invariants` duplicates a Rust table.
+
+    Same reason as the batch size above, and higher stakes: this table is what
+    decides whether a manipulated cell is valid. If the Python copy drifted from
+    `TemporalCondition::invariants`, a cell the binary refused to produce could
+    be accepted by the artefact gate, or -- worse in this campaign's direction
+    -- a legitimate cell could be voided after the machine-hours were spent.
+
+    The three constants are parsed out of the Rust source rather than compared
+    through a fixture, so renaming or retuning one on either side fails here
+    instead of silently in a wave.
+    """
+
+    @staticmethod
+    def _rust_source():
+        return (ROOT / "binn-learn/src/shd_temporal.rs").read_text()
+
+    def test_the_shared_constants_agree(self):
+        import cell_validity
+        src = self._rust_source()
+        pairs = [
+            (r"pub const FULL_SHUFFLE_DISPLACEMENT_FLOOR: f64 = 1\.0 / (\d+)\.0;",
+             lambda m: 1.0 / float(m.group(1)),
+             cell_validity.FULL_SHUFFLE_DISPLACEMENT_FLOOR),
+            (r"pub const DROPOUT_BAND_SIGMAS: f64 = ([\d.]+);",
+             lambda m: float(m.group(1)),
+             cell_validity.DROPOUT_BAND_SIGMAS),
+            (r"\(1\.0 - 1\.0 / window as f64 - ([\d.]+)\)\.max\(0\.0\)",
+             lambda m: float(m.group(1)),
+             cell_validity.WINDOW_RELOCATED_SLACK),
+        ]
+        for pattern, extract, python_value in pairs:
+            match = re.search(pattern, src)
+            self.assertIsNotNone(
+                match, f"the Rust binding for {pattern!r} moved or was renamed; "
+                       "the mirrored constant can no longer be checked")
+            self.assertAlmostEqual(extract(match), python_value, places=12)
+
+    def test_the_relocated_floor_of_the_full_shuffles_is_the_rust_one(self):
+        import cell_validity
+        src = self._rust_source()
+        match = re.search(r"relocated: \(0\.5, 1\.0\),", src)
+        self.assertIsNotNone(match, "the full-shuffle relocated band moved")
+        for condition in ("bin-shuffled", "channel-shuffled", "reversed"):
+            self.assertEqual(
+                cell_validity.temporal_invariants(condition)["relocated"],
+                (cell_validity.RELOCATED_MIN, 1.0), condition)
+
+    def test_every_operator_the_rust_parser_accepts_has_python_invariants(self):
+        """A label reachable from `--temporal` must be gated on both sides."""
+        import cell_validity
+        labels = ["intact", "bin-shuffled", "channel-shuffled", "reversed",
+                  "hidden-shuffled",
+                  "window-shuffled-w2", "window-shuffled-w8", "window-shuffled-w64",
+                  "spike-dropout-p1", "spike-dropout-p10", "spike-dropout-p99"]
+        for label in labels:
+            self.assertIsNotNone(
+                cell_validity.temporal_invariants(label),
+                f"{label} parses in Rust but has no Python invariants")
+
+    def test_degenerate_labels_have_no_invariants_on_either_side(self):
+        import cell_validity
+        for label in ("window-shuffled-w1", "window-shuffled-w0",
+                      "spike-dropout-p0", "spike-dropout-p100",
+                      "window-shuffled-wide", "shuffled"):
+            self.assertIsNone(cell_validity.temporal_invariants(label), label)
+
+    def test_a_dropout_cell_is_not_voided_for_changing_counts(self):
+        """The gate this table replaced would have voided every dropout cell."""
+        import cell_validity
+        cell = {
+            "temporal_condition": "spike-dropout-p30",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": False, "count_mismatches": 8156,
+                "relocated_fraction": 0.0, "mean_bin_displacement": 0.0,
+                "max_bin_displacement": 0.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 295.0,
+                "count_before": 4_000_000.0, "count_after": 2_800_000.0,
+            },
+        }
+        self.assertEqual(cell_validity._temporal_problems(cell, None), [])
+
+    def test_a_dropout_cell_at_the_wrong_rate_is_voided(self):
+        import cell_validity
+        cell = {
+            "temporal_condition": "spike-dropout-p30",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": False, "count_mismatches": 8156,
+                "relocated_fraction": 0.0, "mean_bin_displacement": 0.0,
+                "max_bin_displacement": 0.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 295.0,
+                # (1 - 0.3)^2: the mask applied twice.
+                "count_before": 4_000_000.0, "count_after": 1_960_000.0,
+            },
+        }
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(any("retained" in p for p in problems), problems)
+
+    def test_a_window_cell_that_moved_too_far_is_voided(self):
+        import cell_validity
+        cell = {
+            "temporal_condition": "window-shuffled-w8",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": True, "count_mismatches": 0,
+                "relocated_fraction": 0.87, "mean_bin_displacement": 2.6,
+                "max_bin_displacement": 41.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 300.0,
+                "count_before": 4_000_000.0, "count_after": 4_000_000.0,
+            },
+        }
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(any("max_bin_displacement" in p for p in problems), problems)
+
+    def test_a_full_shuffle_that_barely_moved_is_voided(self):
+        """The gap the displacement floor closes: a narrow shuffle mislabelled."""
+        import cell_validity
+        cell = {
+            "temporal_condition": "bin-shuffled",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": True, "count_mismatches": 0,
+                # A w4 window shuffle's numbers, wearing the full shuffle's label.
+                "relocated_fraction": 0.75, "mean_bin_displacement": 1.25,
+                "max_bin_displacement": 3.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 300.0,
+                "count_before": 4_000_000.0, "count_after": 4_000_000.0,
+            },
+        }
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(any("floor" in p for p in problems), problems)
+
+    def test_an_unrecognised_operator_is_a_problem_not_a_pass(self):
+        import cell_validity
+        cell = {"temporal_condition": "jitter-p5", "temporal_audit": {"samples": 1}}
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(any("no registered invariants" in p for p in problems), problems)
+
+    def test_cells_predating_the_operator_fields_are_counted_not_waved_through(self):
+        import cell_validity
+        old = {"temporal_condition": "bin-shuffled",
+               "temporal_audit": {"samples": 1, "counts_preserved": True,
+                                  "relocated_fraction": 0.99,
+                                  "mean_bin_displacement": 120.0}}
+        new = {"temporal_condition": "bin-shuffled",
+               "temporal_audit": {"samples": 1, "counts_preserved": True,
+                                  "relocated_fraction": 0.99,
+                                  "mean_bin_displacement": 120.0,
+                                  "max_bin_displacement": 350.0, "mean_steps": 358.0,
+                                  "count_before": 10.0, "count_after": 10.0,
+                                  "hidden_permutation_relocated": 0.0}}
+        intact = {"temporal_condition": "intact"}
+        self.assertEqual(cell_validity.temporal_fields_absent([old, new, intact]), 1)
+        # And the old cell still passes on the clauses that can run.
+        self.assertEqual(cell_validity._temporal_problems(old, None), [])
+
+    def test_the_rust_parser_and_the_python_table_accept_the_same_names(self):
+        """Neither side may reach an operator the other cannot gate.
+
+        Parsed out of the Rust match arms rather than listed here, so adding a
+        `--temporal` label without a Python entry fails at this line instead of
+        at the first cell that used it.
+        """
+        import cell_validity
+        src = self._rust_source()
+        block = src[src.index("pub fn parse(value: &str)"):src.index("pub fn window_shuffled")]
+        exact = set(re.findall(r'"([a-z-]+)" => return Ok', block))
+        self.assertEqual(
+            exact,
+            {"intact", "bin-shuffled", "channel-shuffled", "reversed", "hidden-shuffled"},
+            "the Rust parser's fixed labels changed")
+        prefixes = set(re.findall(r'strip_prefix\("([a-z-]+)"\)', block))
+        self.assertEqual(prefixes, {"window-shuffled-w", "spike-dropout-p"},
+                         "the Rust parser's parameterised labels changed")
+        for label in exact:
+            self.assertIsNotNone(cell_validity.temporal_invariants(label), label)
+        for prefix in prefixes:
+            self.assertIsNotNone(
+                cell_validity.temporal_invariants(f"{prefix}8"), prefix)
+
+    def test_a_hidden_shuffled_cell_without_its_one_field_is_not_waved_through(self):
+        """It is invisible in every other field, so absence is a problem."""
+        import cell_validity
+        cell = {
+            "temporal_condition": "hidden-shuffled",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": True, "count_mismatches": 0,
+                "relocated_fraction": 0.0, "mean_bin_displacement": 0.0,
+                "max_bin_displacement": 0.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 300.0,
+                "count_before": 4_000_000.0, "count_after": 4_000_000.0,
+            },
+        }
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(
+            any("hidden_permutation_relocated" in p for p in problems), problems)
+
+    def test_a_hidden_shuffled_cell_that_never_permuted_is_voided(self):
+        import cell_validity
+        cell = {
+            "temporal_condition": "hidden-shuffled",
+            "temporal_audit": {
+                "samples": 8156, "counts_preserved": True, "count_mismatches": 0,
+                "relocated_fraction": 0.0, "mean_bin_displacement": 0.0,
+                "max_bin_displacement": 0.0, "mean_steps": 358.0,
+                "occupied_bins_before": 300.0, "occupied_bins_after": 300.0,
+                "count_before": 4_000_000.0, "count_after": 4_000_000.0,
+                "hidden_permutation_relocated": 0.0,
+            },
+        }
+        problems = cell_validity._temporal_problems(cell, None)
+        self.assertTrue(any("outside" in p for p in problems), problems)

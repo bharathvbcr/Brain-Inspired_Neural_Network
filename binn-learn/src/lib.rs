@@ -116,7 +116,9 @@ pub use shd_matched_arms::{
     ArmWeights as ShdArmWeights, MatchedArm, MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A,
     MATCHED_WEIGHTS_MAGIC_V2, MATCHED_WEIGHTS_MAGIC_V3,
 };
-pub use shd_temporal::{apply_temporal, TemporalAudit, TemporalCondition};
+pub use shd_temporal::{
+    apply_temporal, OperatorInvariants, RetentionRule, TemporalAudit, TemporalCondition,
+};
 pub use surrogate_lif_baseline::{
     SurrogateLifReference, DEFAULT_SURROGATE_BETA, SURROGATE_LIF_REFERENCE_LABEL,
 };

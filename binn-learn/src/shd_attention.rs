@@ -445,6 +445,19 @@ pub struct AttentionCache {
     /// `A v` per layer, `[t_steps, d_model]`.
     c: Vec<Vec<f32>>,
     pooled: Vec<f32>,
+    /// Which hidden timestep was shown at each presentation position.
+    ///
+    /// `None` is the identity and every arithmetic path below is the one that
+    /// existed before this field. `Some(p)` means position `t` of the stream
+    /// was built from hidden state `p[t]` — the `hidden-shuffled` manipulation.
+    ///
+    /// It lives in the **cache**, not in the gradient's argument list, so the
+    /// backward physically cannot scatter through a different permutation than
+    /// the forward gathered through. That failure has happened once in this
+    /// codebase already, in the recurrent drive, and it produced a forward and
+    /// a backward that each looked correct on its own
+    /// (`DEFECT_2026-08-03_RECURRENT_ARM_FORWARD_BACKWARD_MISMATCH.md`).
+    presentation: Option<Vec<usize>>,
 }
 
 impl AttentionCache {
@@ -489,6 +502,37 @@ pub fn attention_forward(
     spikes: &[f32],
     t_steps: usize,
 ) -> Result<AttentionCache, String> {
+    attention_forward_presented(params, spikes, t_steps, None)
+}
+
+/// [`attention_forward`] reading the hidden train through a presentation order.
+///
+/// `presentation[t]` is the hidden timestep shown at stream position `t`. This
+/// is the `hidden-shuffled` control: the read-out is handed the same set of
+/// hidden states in a different order, so anything it extracts from *order*
+/// dies while everything it extracts from *rate* survives untouched.
+///
+/// # Why the rate read-out is not routed through this
+///
+/// A rate read-out computes `mean_t s(t)`, a sum over a set, and a permutation
+/// is a bijection on that set — so its value under `hidden-shuffled` is
+/// mathematically identical to its value under `intact`. Summing the permuted
+/// order in f32 would nonetheless move the last bits, and the campaign's
+/// estimator is a difference of differences at a ±0.03 bar: a rate arm that
+/// drifted by a few ULPs per sample would put a non-zero number where the
+/// design says exactly zero, and no reader could tell that from a real effect.
+///
+/// So the rate read-out in `shd_matched_arms` reads the **unpermuted** buffer
+/// and is bit-identical to its intact twin by construction. That is not an
+/// exemption from the manipulation; it is the manipulation's own prediction,
+/// computed exactly instead of approximately.
+/// `a_hidden_shuffle_costs_the_rate_read_out_exactly_nothing` pins it.
+pub fn attention_forward_presented(
+    params: &AttentionParams,
+    spikes: &[f32],
+    t_steps: usize,
+    presentation: Option<&[usize]>,
+) -> Result<AttentionCache, String> {
     let hidden = params.hidden;
     if spikes.len() != t_steps * hidden {
         return Err(format!(
@@ -499,6 +543,27 @@ pub fn attention_forward(
     }
     if t_steps == 0 {
         return Err("attention forward needs at least one timestep".into());
+    }
+    if let Some(order) = presentation {
+        // A "permutation" that repeated one index would show the same hidden
+        // state twice and drop another, which is a different manipulation
+        // entirely — it changes the *rate* the read-out sees, and would break
+        // the identity the rate arm is checked against. Refused, not repaired.
+        if order.len() != t_steps {
+            return Err(format!(
+                "presentation order has {} entries, expected {t_steps}",
+                order.len()
+            ));
+        }
+        let mut seen = vec![false; t_steps];
+        for &source in order {
+            if source >= t_steps || seen[source] {
+                return Err(format!(
+                    "presentation order is not a permutation of 0..{t_steps}"
+                ));
+            }
+            seen[source] = true;
+        }
     }
     let d = params.config.d_model;
     let layers = params.blocks.len();
@@ -513,12 +578,17 @@ pub fn attention_forward(
     // `attention_gradient` claims and what the finite-difference test checks.
     let mut active: Vec<(usize, f32)> = Vec::with_capacity(hidden);
     for t in 0..t_steps {
+        // The position code is attached to the *presentation* index, not to the
+        // source timestep. That is the whole content of the manipulation: the
+        // read-out is told this state came at time `t`, and under a shuffle it
+        // did not.
         positional_code(t, t_steps, &mut position);
         let stream = &mut z0[t * d..(t + 1) * d];
         stream.copy_from_slice(&position);
+        let source = presentation.map_or(t, |order| order[t]);
         active.clear();
         for h in 0..hidden {
-            let spike = spikes[t * hidden + h];
+            let spike = spikes[source * hidden + h];
             if spike != 0.0 {
                 active.push((h, spike));
             }
@@ -620,6 +690,7 @@ pub fn attention_forward(
         a: a_all,
         c: c_all,
         pooled,
+        presentation: presentation.map(<[usize]>::to_vec),
     })
 }
 
@@ -788,10 +859,17 @@ pub fn attention_gradient(
     let mut ds_attn = vec![0.0_f32; t_steps * hidden];
     for t in 0..t_steps {
         let upstream = &d_stream[t * d..(t + 1) * d];
+        // Scatter back to the timestep the state actually came from, through
+        // the same order the forward gathered with. Assignment rather than
+        // accumulation is sound because a permutation hits every source index
+        // exactly once — checked in the forward, so this cannot silently
+        // overwrite one timestep's credit with another's.
+        let source = cache.presentation.as_ref().map_or(t, |order| order[t]);
         for h in 0..hidden {
             let embedding = &params.w_e[h * d..(h + 1) * d];
-            ds_attn[t * hidden + h] = embedding.iter().zip(upstream).map(|(w, g)| w * g).sum();
-            let spike = spikes[t * hidden + h];
+            ds_attn[source * hidden + h] =
+                embedding.iter().zip(upstream).map(|(w, g)| w * g).sum();
+            let spike = spikes[source * hidden + h];
             if spike != 0.0 {
                 for (accumulator, g) in gradient.w_e[h * d..(h + 1) * d].iter_mut().zip(upstream) {
                     *accumulator += *g * spike;
@@ -1289,5 +1367,236 @@ mod tests {
             grad.sum_squares() > 0.0,
             "silent input froze every parameter"
         );
+    }
+
+    /// A permutation of `t_steps` that moves every position, built by hand so
+    /// the test does not depend on the campaign's RNG.
+    fn presentation(t_steps: usize) -> Vec<usize> {
+        // A single cycle: `t -> (t * 3 + 1) mod t_steps` is a bijection when
+        // `gcd(3, t_steps) == 1`, which holds for the odd, non-multiple-of-3
+        // lengths used below. Asserted rather than assumed.
+        let order: Vec<usize> = (0..t_steps).map(|t| (t * 3 + 1) % t_steps).collect();
+        let mut seen = vec![false; t_steps];
+        for &source in &order {
+            assert!(!seen[source], "the fixture permutation is not a permutation");
+            seen[source] = true;
+        }
+        order
+    }
+
+    fn objective_presented(
+        params: &AttentionParams,
+        spikes: &[f32],
+        t_steps: usize,
+        d_logits: &[f32],
+        order: &[usize],
+    ) -> f32 {
+        let cache = attention_forward_presented(params, spikes, t_steps, Some(order)).unwrap();
+        attention_logits(params, &cache.pooled)
+            .iter()
+            .zip(d_logits)
+            .map(|(logit, weight)| logit * weight)
+            .sum()
+    }
+
+    /// [`central_difference`] through a presentation order.
+    ///
+    /// A separate helper rather than an `Option` argument on the existing one:
+    /// the unpermuted test is the load-bearing check on the read-out itself,
+    /// and threading a parameter through it would put every one of its call
+    /// sites one edit away from silently testing the permuted path instead.
+    #[allow(clippy::too_many_arguments)]
+    fn central_difference_presented(
+        params: &AttentionParams,
+        spikes: &[f32],
+        t_steps: usize,
+        d_logits: &[f32],
+        order: &[usize],
+        select: impl Fn(&mut AttentionParams) -> &mut f32,
+        epsilon: f32,
+    ) -> f32 {
+        let mut plus = params.clone();
+        *select(&mut plus) += epsilon;
+        let mut minus = params.clone();
+        *select(&mut minus) -= epsilon;
+        (objective_presented(&plus, spikes, t_steps, d_logits, order)
+            - objective_presented(&minus, spikes, t_steps, d_logits, order))
+            / (2.0 * epsilon)
+    }
+
+    /// The gradient is still right when the read-out reads through a
+    /// permutation.
+    ///
+    /// # Why this is not covered by the unpermuted test
+    ///
+    /// `hidden-shuffled` adds a gather in the forward embedding and a scatter
+    /// in the backward embedding. Those are two separate edits to two separate
+    /// loops, and the failure mode is that they disagree — the forward reads
+    /// state `p[t]` while the backward credits timestep `t`. Nothing about that
+    /// is visible in the forward's output, in the loss, or in any parameter
+    /// gradient: only `ds_attn`, the term the spiking layer receives, is wrong,
+    /// and it is wrong by a permutation of itself, which has the same norm and
+    /// the same distribution as the right answer.
+    ///
+    /// That is exactly the shape of
+    /// `DEFECT_2026-08-03_RECURRENT_ARM_FORWARD_BACKWARD_MISMATCH.md`, which
+    /// survived in this codebase until a finite-difference check was pointed at
+    /// it. Storing the order in the cache makes the disagreement structurally
+    /// impossible; this makes it detectable anyway.
+    #[test]
+    fn the_permuted_read_out_matches_finite_difference() {
+        for layers in [1_usize, 2] {
+            let (t_steps, hidden, n_classes, d_model) = (11_usize, 6_usize, 4_usize, 4_usize);
+            let order = presentation(t_steps);
+            let params = params(hidden, n_classes, d_model, layers);
+            let spikes = spike_train(t_steps, hidden);
+            let d_logits = vec![0.31_f32, -0.72, 0.14, 0.27];
+            let cache =
+                attention_forward_presented(&params, &spikes, t_steps, Some(&order)).unwrap();
+            let (gradient, ds_attn) =
+                attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+
+            for index in [0_usize, 7, 13, 23] {
+                assert_close(
+                    &format!("permuted layers {layers} w_e[{index}]"),
+                    gradient.w_e[index],
+                    central_difference_presented(
+                        &params,
+                        &spikes,
+                        t_steps,
+                        &d_logits,
+                        &order,
+                        |p| &mut p.w_e[index],
+                        1e-3,
+                    ),
+                );
+            }
+            for index in [0_usize, 5, 11] {
+                assert_close(
+                    &format!("permuted layers {layers} w_a[{index}]"),
+                    gradient.w_a[index],
+                    central_difference_presented(
+                        &params,
+                        &spikes,
+                        t_steps,
+                        &d_logits,
+                        &order,
+                        |p| &mut p.w_a[index],
+                        1e-3,
+                    ),
+                );
+            }
+            for layer in 0..layers {
+                for index in [0_usize, 5, 11, 15] {
+                    for name in ["w_q", "w_k", "w_v", "w_o"] {
+                        let analytic = match name {
+                            "w_q" => gradient.blocks[layer].w_q[index],
+                            "w_k" => gradient.blocks[layer].w_k[index],
+                            "w_v" => gradient.blocks[layer].w_v[index],
+                            _ => gradient.blocks[layer].w_o[index],
+                        };
+                        assert_close(
+                            &format!("permuted layers {layers} block {layer} {name}[{index}]"),
+                            analytic,
+                            central_difference_presented(
+                                &params,
+                                &spikes,
+                                t_steps,
+                                &d_logits,
+                                &order,
+                                |p| match name {
+                                    "w_q" => &mut p.blocks[layer].w_q[index],
+                                    "w_k" => &mut p.blocks[layer].w_k[index],
+                                    "w_v" => &mut p.blocks[layer].w_v[index],
+                                    _ => &mut p.blocks[layer].w_o[index],
+                                },
+                                1e-3,
+                            ),
+                        );
+                    }
+                }
+            }
+
+            // The term the permutation actually reorders, checked at the source
+            // index it is supposed to land on.
+            for &index in &[0_usize, 17, 31, 44, 59] {
+                let mut plus = spikes.clone();
+                plus[index] += 1e-3;
+                let mut minus = spikes.clone();
+                minus[index] -= 1e-3;
+                let value = (objective_presented(&params, &plus, t_steps, &d_logits, &order)
+                    - objective_presented(&params, &minus, t_steps, &d_logits, &order))
+                    / 2e-3;
+                assert_close(
+                    &format!("permuted layers {layers} ds_attn[{index}]"),
+                    ds_attn[index],
+                    value,
+                );
+            }
+        }
+    }
+
+    /// A permutation is a relabelling of the same states, so the *set* of
+    /// spike-gradient entries is preserved even when their timesteps are not.
+    /// This pins the direction the finite-difference check cannot see cheaply:
+    /// the permuted `ds_attn` is the unpermuted one **rearranged**, not a
+    /// different vector.
+    #[test]
+    fn the_permuted_spike_gradient_is_a_rearrangement_of_itself() {
+        let (t_steps, hidden, n_classes, d_model) = (11_usize, 6_usize, 4_usize, 4_usize);
+        let order = presentation(t_steps);
+        let params = params(hidden, n_classes, d_model, 1);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits = vec![0.31_f32, -0.72, 0.14, 0.27];
+
+        // Permuting the input and reading it back in order must give the same
+        // answer as reading the original through the permutation.
+        let mut gathered = vec![0.0_f32; spikes.len()];
+        for (position, &source) in order.iter().enumerate() {
+            gathered[position * hidden..(position + 1) * hidden]
+                .copy_from_slice(&spikes[source * hidden..(source + 1) * hidden]);
+        }
+        let direct = attention_forward(&params, &gathered, t_steps).unwrap();
+        let presented =
+            attention_forward_presented(&params, &spikes, t_steps, Some(&order)).unwrap();
+        assert_eq!(
+            direct.pooled, presented.pooled,
+            "gathering up front and presenting through the order must agree exactly"
+        );
+
+        let (_, direct_ds) = attention_gradient(&params, &direct, &gathered, &d_logits).unwrap();
+        let (_, presented_ds) =
+            attention_gradient(&params, &presented, &spikes, &d_logits).unwrap();
+        for (position, &source) in order.iter().enumerate() {
+            for h in 0..hidden {
+                assert_eq!(
+                    direct_ds[position * hidden + h].to_bits(),
+                    presented_ds[source * hidden + h].to_bits(),
+                    "credit for position {position} must land on source {source}, unit {h}"
+                );
+            }
+        }
+    }
+
+    /// A presentation order that is not a permutation is refused rather than
+    /// quietly showing one hidden state twice — which would change the *rate*
+    /// the read-out sees and silently break the identity the rate arm is
+    /// checked against.
+    #[test]
+    fn a_presentation_order_that_is_not_a_permutation_is_refused() {
+        let (t_steps, hidden, n_classes, d_model) = (6_usize, 4_usize, 3_usize, 4_usize);
+        let params = params(hidden, n_classes, d_model, 1);
+        let spikes = spike_train(t_steps, hidden);
+        for bad in [
+            vec![0_usize, 1, 2, 3, 4],
+            vec![0, 1, 2, 3, 4, 4],
+            vec![0, 1, 2, 3, 4, 6],
+            vec![0, 1, 2, 3, 4, 5, 5],
+        ] {
+            assert!(
+                attention_forward_presented(&params, &spikes, t_steps, Some(&bad)).is_err(),
+                "{bad:?} was accepted as a presentation order"
+            );
+        }
     }
 }

@@ -84,7 +84,14 @@ fn print_help() {
          Optional on init, recurrent arms only:\n\
            --w-rec-scale F   multiplies the Glorot recurrent draw (default 1.0)\n\
          Optional on train-cell:\n\
-           --temporal intact|bin-shuffled|channel-shuffled|reversed  (default intact)\n\
+           --temporal intact|bin-shuffled|channel-shuffled|reversed\n\
+                      |hidden-shuffled|window-shuffled-wN\n\
+                      |spike-dropout-pN                        (default intact)\n\
+                      hidden-shuffled permutes the hidden train's time axis for\n\
+                      the read-out only; it costs a rate arm exactly nothing\n\
+                      window-shuffled-wN permutes bins only within disjoint\n\
+                      N-bin windows; spike-dropout-pN deletes N% of spikes\n\
+                      from a mask frozen before the first epoch\n\
            --temporal-seed N   (required unless --temporal intact)\n\
            --clip-grad-norm F  global-norm clipping of the batch gradient (default: off)\n\
            --clip-sample-grad-norm F  global-norm clipping of each sample gradient,\n\
@@ -699,16 +706,16 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             audit.merge(&per_sample);
         }
         // Prereg gate 5.1 is enforced inside apply_temporal, which errors rather
-        // than returning. A manipulation that relocated almost nothing would
-        // pass that gate while doing nothing, so check it separately.
-        if audit.relocated_fraction < 0.5 {
-            return Err(format!(
-                "temporal condition {} relocated only {:.4} of entries - the manipulation \
-                 is not doing what it claims",
-                condition.label(),
-                audit.relocated_fraction
-            ));
-        }
+        // than returning. Everything it cannot see — a manipulation that
+        // relocated almost nothing, moved further than its window allows, or
+        // deleted at the wrong rate — is checked here against the operator's
+        // own registered invariants.
+        //
+        // This used to be a single `relocated_fraction < 0.5` test, which was
+        // exactly right for the four conditions that existed and wrong for both
+        // that came after. See `binn_learn::shd_temporal` for why the repair
+        // was a per-operator table rather than a wider bound.
+        condition.invariants().check(&condition.label(), &audit)?;
     }
     let train = train;
     let test = test;
@@ -1003,7 +1010,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"accuracy\":{:.9},\"classes_predicted\":{},\"majority_prediction\":{:.9},\
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
-         \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
+         \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9},\"max_bin_displacement\":{:.9},\"mean_steps\":{:.9},\"count_before\":{:.1},\"count_after\":{:.1},\"hidden_permutation_relocated\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
          \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}}}\n",
         weights.arm.label(),
         contract.id(),
@@ -1036,6 +1043,14 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         audit.mean_bin_displacement,
         audit.occupied_bins_before,
         audit.occupied_bins_after,
+        // Appended inside `temporal_audit`, never inserted. Gate F compares an
+        // explicit top-level field list that does not include this object, and
+        // every consumer reads it by key, so recorded cells are unaffected.
+        audit.max_bin_displacement,
+        audit.mean_steps,
+        audit.count_before,
+        audit.count_after,
+        audit.hidden_permutation_relocated,
         json_f64(&epoch_loss),
         json_f64(&epoch_gradient_norm),
         json_f64(&epoch_max_gradient_norm),
@@ -1180,19 +1195,23 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
 }
 
 fn to_matched(sample: &FramedShdSample) -> MatchedShdSample {
-    MatchedShdSample {
-        label: sample.label,
-        frames: sample
+    MatchedShdSample::new(
+        sample.label,
+        sample
             .frames
             .iter()
             .map(|frame| frame.values.clone())
             .collect(),
-        n_inputs: sample.n_inputs,
-        dt_ms: sample.dt_ms,
-    }
+        sample.n_inputs,
+        sample.dt_ms,
+    )
 }
 
-/// `--temporal intact|bin-shuffled|channel-shuffled|reversed`. Absent means intact.
+/// `--temporal <label>`. Absent means intact.
+///
+/// The vocabulary lives in [`TemporalCondition::parse`] and nowhere else, so a
+/// new operator cannot be reachable from the command line without also being
+/// reachable from the invariant table that gates it.
 fn optional_temporal(args: &[String]) -> Result<Option<TemporalCondition>, String> {
     match args.iter().position(|value| value == "--temporal") {
         Some(index) => {
@@ -1563,12 +1582,11 @@ mod tests {
                     .collect()
             })
             .collect();
-        MatchedShdSample {
-            label: (sample_index % 4) as u32,
-            frames,
-            n_inputs: 40,
-            dt_ms: 2.0,
-        }
+        MatchedShdSample::new(frames_label(sample_index), frames, 40, 2.0)
+    }
+
+    fn frames_label(sample_index: usize) -> u32 {
+        (sample_index % 4) as u32
     }
 
     fn result_bits(results: Vec<Result<(f32, ShdArmGradient), String>>) -> Vec<Vec<u32>> {
