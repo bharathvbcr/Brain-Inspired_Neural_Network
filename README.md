@@ -1,8 +1,18 @@
 # BINN
 
+<p align="left">
+  <a href="https://binn.vbcr.dev/"><img src="https://img.shields.io/badge/website-binn.vbcr.dev-EC4899?style=flat&logo=safari&logoColor=white" alt="Live Website"></a>
+  <img src="https://img.shields.io/badge/architecture-Rust_8--Crate_Workspace-orange" alt="Architecture">
+  <img src="https://img.shields.io/badge/learning-non--backprop_local_STDP-purple" alt="Learning">
+</p>
+
 **Brain-Inspired Neural Network Substrate** — a from-scratch Rust research instrument and simulation engine for testing one falsifiable question:
 
 > Can a sparse-assembly, locally learned, event-driven network learn competitively **without backpropagation**?
+
+<p>
+  <a href="https://binn.vbcr.dev/"><strong>Explore the Live Interactive Simulation Showcase (binn.vbcr.dev) &rarr;</strong></a>
+</p>
 
 BINN is not a product or neuromorphic deployment framework. It is an exact, deterministic software instrument built with preregistered kill-gates to isolate the computational capabilities and limits of biological learning primitives.
 

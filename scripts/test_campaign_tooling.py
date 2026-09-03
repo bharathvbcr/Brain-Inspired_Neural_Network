@@ -1292,6 +1292,23 @@ class SharedValidityOwnerTest(unittest.TestCase):
     #: first is the invariant worth having.
     COMPLETION_RATE_WAVES = ("w13rec",)
 
+    #: Saturation is a property of the recurrent SUBSTRATE, not of a wave.
+    #:
+    #: Wave 25 ran the first manipulated recurrent cells in this campaign and
+    #: one of them -- `rec+alif+attn`, `bin-shuffled`, seed 5170010 -- voided at
+    #: `saturated_fraction=0.305`, which is the same failure mode that voided
+    #: ten `w13rec` cells and that §3.7 reports. Exempting the whole WAVE would
+    #: have been the easy fix and the wrong one: wave 25's feed-forward groups
+    #: carry three of its four hypotheses, and they must stay wholly valid.
+    #:
+    #: So the exemption is by substrate. Every `ff+*` cell of every wave stays
+    #: under this check. What protects a recurrent VERDICT is not this test but
+    #: the analyser's seed-paired floor: a voided cell lowers n, and a contrast
+    #: that falls under nine quadruples reads NOT EVALUABLE rather than being
+    #: computed from what survived.
+    def is_recurrent(self, payload) -> bool:
+        return str(payload.get("arm", "")).startswith("rec")
+
     def campaign_cells(self):
         roots = [ROOT / "results" / "shd_attention_campaign_v1" / "cells",
                  ROOT / "results" / "shd_attention_campaign_v2"]
@@ -1314,12 +1331,34 @@ class SharedValidityOwnerTest(unittest.TestCase):
         checked = 0
         for path, payload in self.campaign_cells():
             wave = path.name.split("__", 1)[0]
-            if wave in self.COMPLETION_RATE_WAVES:
+            if wave in self.COMPLETION_RATE_WAVES or self.is_recurrent(payload):
                 continue
             self.assertEqual(cell_validity.validity_problems(payload), [],
                              f"{path.name} would now be voided")
             checked += 1
         self.assertGreater(checked, 600, f"only {checked} cells checked")
+
+    def test_the_saturation_exemption_is_by_substrate_and_not_by_wave(self):
+        """The exemption must not cover a feed-forward cell.
+
+        Adding `w25mec` to COMPLETION_RATE_WAVES would have made this test pass
+        by exempting three hypotheses' worth of feed-forward cells along with
+        one recurrent one. This pins that it did not.
+        """
+        self.assertTrue(self.is_recurrent({"arm": "rec+alif+attn"}))
+        self.assertTrue(self.is_recurrent({"arm": "rec+fixed"}))
+        self.assertFalse(self.is_recurrent({"arm": "ff+fixed+attn"}))
+        self.assertFalse(self.is_recurrent({"arm": "ff+fixed"}))
+        self.assertFalse(self.is_recurrent({}))
+        # and every feed-forward cell of the newest wave is still checked
+        import cell_validity
+        seen = 0
+        for path, payload in self.campaign_cells():
+            if path.name.startswith("w25mec__") and not self.is_recurrent(payload):
+                self.assertEqual(cell_validity.validity_problems(payload), [],
+                                 f"{path.name} would now be voided")
+                seen += 1
+        self.assertGreater(seen, 100, f"only {seen} wave-25 feed-forward cells checked")
 
     def test_wave_13_voided_exactly_the_cells_its_record_reports(self):
         """Wave 13's voided cells ARE its measurement, so they are pinned here.
@@ -1653,8 +1692,23 @@ CORPUS_BASELINE = {
     #: the same ten `w13rec` cells -- enumerated, not inferred from the count --
     #: and no archived verdict moved. An addition, not a re-scoring. See
     #: `RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`.
+    #:
+    #: Re-frozen 2026-09-03 MID-WAVE, and it will be re-frozen again when wave
+    #: 25 finishes. The wave's fleet was reclaimed by AWS spot at 525 of 888
+    #: cells, those 525 were collected during the recovery, and leaving the gate
+    #: red until the wave completes would mean citing numbers against a failing
+    #: record. Each freeze is a true statement about its own commit.
+    #:
+    #: 1773 -> 2298 and 1763 -> 2287: +525 and +524. The one cell that did NOT
+    #: add to the valid count is
+    #: `w25mec__rec-alif-attn__...__bin-shuffled__ss0.4__s5170010`, voided at
+    #: `saturated_fraction=0.305` -- the first manipulated recurrent cell in the
+    #: campaign to saturate, the same failure mode as the ten `w13rec` cells.
+    #: It lowers H25-1's `bin-shuffled` quadruples from 12 to 11, above the
+    #: analyser's floor of 9, so the verdict is still computed rather than
+    #: rescued. Enumerated, not inferred from the count.
     "shd_attention_campaign_v2":
-        (1773, 1763, "83a5f56f6eb388da"),
+        (2298, 2287, "7570bc6cba57d113"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":
