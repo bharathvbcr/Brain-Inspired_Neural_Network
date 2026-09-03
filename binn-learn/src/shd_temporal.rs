@@ -657,11 +657,12 @@ fn total_count(sample: &MatchedShdSample) -> f64 {
 ///
 /// For the shuffles that is incidental. For [`TemporalCondition::SpikeDropout`]
 /// it is the difference between two experiments. Redrawn each epoch, dropout is
-/// *noise augmentation* — a regulariser that Cramer et al. (2022) report
-/// **improves** SHD generalisation — and it would lift both arms while wearing
-/// the label of an information-removal control. Frozen, the network sees one
-/// impoverished dataset and the question is whether the read-out can still use
-/// it. Nothing in this function can be called per epoch without the caller
+/// *noise augmentation* rather than information removal, and it would lift both
+/// arms while wearing the label of an information-removal control — Cramer et
+/// al. (2022) report that noise injection "was effective in decreasing
+/// overfitting" on SHD, which is what makes that a real risk rather than a
+/// hypothetical one. Frozen, the network sees one impoverished dataset and the
+/// question is whether the read-out can still use it. Nothing in this function can be called per epoch without the caller
 /// re-deriving a seed, and `dropout_is_a_frozen_mask_not_per_epoch_noise` pins
 /// the realisation itself.
 pub fn apply_temporal(
