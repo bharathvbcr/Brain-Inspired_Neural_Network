@@ -1319,6 +1319,17 @@ impl AttentionProbe {
         if total == 0 {
             return;
         }
+        // Zipping vectors of different lengths truncates silently, so a probe
+        // folded across two different layer counts would report the shorter
+        // one's statistics under the longer one's name. It cannot happen inside
+        // one cell — every sample runs the same read-out — which is exactly why
+        // it would go unnoticed if a caller ever folded across cells.
+        debug_assert!(
+            self.samples == 0 || self.normalised_entropy.len() == other.normalised_entropy.len(),
+            "merging probes over {} and {} layers",
+            self.normalised_entropy.len(),
+            other.normalised_entropy.len()
+        );
         let weight = |a: f64, b: f64| {
             (a * self.samples as f64 + b * other.samples as f64) / total as f64
         };

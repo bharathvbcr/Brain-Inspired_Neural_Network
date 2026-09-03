@@ -61,6 +61,12 @@ tar xzf source.tar.gz
 mkdir -p data/shd/events
 aws s3 cp "s3://$BUCKET/input/train.events" data/shd/events/train.events --quiet
 aws s3 cp "s3://$BUCKET/input/test.events" data/shd/events/test.events --quiet
+# Speaker sidecars, only read by a wave using --val-speakers. Absent is fine and
+# is not an error: `|| true` here, and `run_cell.py` refuses loudly if a plan
+# asks for a split whose sidecar did not arrive, so a missing file surfaces as a
+# named failure rather than as a silently unsplit cell.
+aws s3 cp "s3://$BUCKET/input/train.speakers" data/shd/events/train.speakers --quiet 2>/dev/null || true
+aws s3 cp "s3://$BUCKET/input/test.speakers" data/shd/events/test.speakers --quiet 2>/dev/null || true
 aws s3 cp "s3://$BUCKET/input/cells.json" cells.json --quiet
 
 # --- the campaign binary is PINNED ------------------------------------------
@@ -176,6 +182,15 @@ worker() {
     if python3 scripts/aws/run_cell.py "$id" --work "/tmp/$id" --binary "$BIN" \
          --bucket "$BUCKET" --threads "$THREADS_PER_CELL" > "/tmp/$id.log" 2>&1; then
       aws s3 cp "/tmp/$id/cell.json" "s3://$BUCKET/results/$id.json" --quiet
+      # Read-out diagnostics, when the cell was asked for them. Written to its
+      # own prefix, never merged into the cell: the cell is the result and the
+      # probe is a diagnostic, and the analysers read an explicit field list
+      # that does not include it. The work directory is deleted below, so
+      # without this line a probed cell would spend the compute and throw the
+      # probe away.
+      if [[ -f "/tmp/$id/probe.jsonl" ]]; then
+        aws s3 cp "/tmp/$id/probe.jsonl" "s3://$BUCKET/probes/$id.jsonl" --quiet
+      fi
     else
       echo "slot $slot: FAILED $id"
       aws s3 cp "/tmp/$id.log" "s3://$BUCKET/failures/$id.log" --quiet

@@ -1487,13 +1487,20 @@ fn probe_readout(
 fn probe_line(epoch: usize, probe: &AttentionProbe) -> String {
     format!(
         "{{\"schema\":\"shd-readout-probe-v1\",\"epoch\":{epoch},\"samples\":{},\
-         \"mean_t_steps\":{:.6},\"residual_norm\":{:.9},\
+         \"mean_t_steps\":{},\"residual_norm\":{},\
          \"normalised_entropy\":{},\"min_normalised_entropy\":{},\"max_weight\":{},\
          \"saturated_rows\":{},\"score_range\":{},\"q_norm\":{},\"k_norm\":{},\
          \"score_bound\":{}}}\n",
         probe.samples,
-        probe.mean_t_steps,
-        probe.residual_norm,
+        // Guarded, like every vector below and unlike the first version of this
+        // line. `{:.9}` renders a non-finite f64 as the bare token `inf`, which
+        // is not valid JSON — and a non-finite residual is not a hypothetical
+        // here: this probe exists to observe an arm whose forward is known to
+        // go non-finite (`non_finite_forward` was added for exactly that arm).
+        // Unguarded, the probe would have written an unparseable file precisely
+        // on the cells it was built to explain.
+        json_scalar(probe.mean_t_steps),
+        json_scalar(probe.residual_norm),
         json_f64(&probe.normalised_entropy),
         json_f64(&probe.min_normalised_entropy),
         json_f64(&probe.max_weight),
@@ -2656,5 +2663,64 @@ mod tests {
             with(&["--val-speakers", "1"]).is_err(),
             "--val-speakers without --train-speakers"
         );
+    }
+
+    /// The probe writes parseable JSON on the arm it exists to explain.
+    ///
+    /// The h1024 collapse produces non-finite forwards — that is why
+    /// `non_finite_forward` exists — and `{:.9}` renders a non-finite f64 as
+    /// the bare token `inf`, which no JSON parser accepts. Unguarded, the probe
+    /// would have written an unreadable file on precisely the cells it was
+    /// built for, and the failure would have surfaced as "the analyser cannot
+    /// read the probe output" hours after the compute was spent.
+    #[test]
+    fn a_probe_over_a_non_finite_read_out_is_still_json() {
+        let probe = AttentionProbe {
+            samples: 4,
+            mean_t_steps: f64::NAN,
+            normalised_entropy: vec![0.5, f64::NAN],
+            min_normalised_entropy: vec![0.1, f64::NEG_INFINITY],
+            max_weight: vec![0.9, 1.0],
+            saturated_rows: vec![0.0, 1.0],
+            score_range: vec![f64::INFINITY, 2.0],
+            q_norm: vec![1.0, f64::INFINITY],
+            k_norm: vec![1.0, 2.0],
+            score_bound: vec![f64::INFINITY, 3.0],
+            residual_norm: f64::INFINITY,
+        };
+        let line = probe_line(400, &probe);
+        assert!(!line.contains("inf"), "{line}");
+        assert!(!line.contains("NaN"), "{line}");
+        // Parseable is the actual claim, so parse it rather than pattern-match.
+        let trimmed = line.trim();
+        assert!(trimmed.starts_with('{') && trimmed.ends_with('}'), "{line}");
+        let commas_outside_arrays = {
+            let mut depth = 0;
+            let mut count = 0;
+            for byte in trimmed.bytes() {
+                match byte {
+                    b'[' => depth += 1,
+                    b']' => depth -= 1,
+                    b',' if depth == 0 => count += 1,
+                    _ => {}
+                }
+            }
+            count
+        };
+        assert_eq!(depth_balanced(trimmed), 0, "unbalanced brackets: {line}");
+        assert_eq!(commas_outside_arrays, 12, "field count changed: {line}");
+        assert_eq!(line.matches("null").count(), 7, "{line}");
+    }
+
+    fn depth_balanced(text: &str) -> i32 {
+        let mut depth = 0;
+        for byte in text.bytes() {
+            match byte {
+                b'[' | b'{' => depth += 1,
+                b']' | b'}' => depth -= 1,
+                _ => {}
+            }
+        }
+        depth
     }
 }

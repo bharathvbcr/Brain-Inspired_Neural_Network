@@ -2980,3 +2980,101 @@ class PlanAgreementIsChecked(unittest.TestCase):
                 cell_validity._plan_agreement_problems(cell, spec), [],
                 f"{path.name} disagrees with its plan entry")
         self.assertGreater(matched, 2000, f"only {matched} cells matched a plan")
+
+
+class RunCellBuildsTheFlagsAWaveAsksFor(unittest.TestCase):
+    """The command line is a pure function of the plan entry, so it is testable.
+
+    Before this, the only witness that a wave ran the flags its plan asked for
+    was a log on a terminated spot instance. Every new instrument added in
+    2026-09-03 -- the read-out variants, the membrane constant, the probe, the
+    speaker split -- is reachable only through this file, and a plan key that
+    silently did nothing would produce a healthy cell of the wrong arm.
+    """
+
+    @staticmethod
+    def _spec(**overrides):
+        spec = {
+            "id": "wXX__ff-fixed-attn__h128__s5170001",
+            "n_inputs": 140, "hidden": 128, "seed": 5170001, "epochs": 400,
+            "n_train": 8156, "arm": "ff+fixed+attn",
+            "contract": "published-2ms", "geometry": "adjacent-sum-5",
+            "attn_dim": 32, "attn_layers": 4, "temporal": "intact",
+            "temporal_seed": None, "surrogate_scale": None, "clip_grad_norm": None,
+        }
+        spec.update(overrides)
+        return spec
+
+    def _init(self, **overrides):
+        import importlib.util
+        spec_file = ROOT / "scripts/aws/run_cell.py"
+        module_spec = importlib.util.spec_from_file_location("run_cell", spec_file)
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        return module
+
+    def test_a_plan_without_the_new_keys_is_unchanged(self):
+        """The clause that keeps every archived wave reproducible."""
+        run_cell = self._init()
+        init = run_cell.init_command("BIN", self._spec(), Path("w"), Path("o"))
+        train = run_cell.train_command("BIN", self._spec(), Path("w"), Path("o"),
+                                       Path("k"), "ev", "id")
+        for absent in ("--attn-readout", "--tau-m", "--probe-epochs",
+                       "--probe-out", "--train-speakers", "--val-speakers"):
+            self.assertNotIn(absent, init + train, absent)
+
+    def test_the_default_read_out_is_omitted_not_passed(self):
+        """Passing it would write SHDWGT4 and break the reproduction gate."""
+        run_cell = self._init()
+        init = run_cell.init_command("BIN", self._spec(attn_readout="default"),
+                                     Path("w"), Path("o"))
+        self.assertNotIn("--attn-readout", init)
+
+    def test_a_named_read_out_reaches_init(self):
+        run_cell = self._init()
+        init = run_cell.init_command("BIN", self._spec(attn_readout="qk-norm"),
+                                     Path("w"), Path("o"))
+        self.assertIn("--attn-readout", init)
+        self.assertEqual(init[init.index("--attn-readout") + 1], "qk-norm")
+
+    def test_the_membrane_constant_reaches_train_cell(self):
+        run_cell = self._init()
+        train = run_cell.train_command("BIN", self._spec(tau_m=20.0), Path("w"),
+                                       Path("o"), Path("k"), "ev", "id")
+        self.assertEqual(train[train.index("--tau-m") + 1], "20.0")
+
+    def test_probe_epochs_are_joined_and_paired_with_an_output(self):
+        run_cell = self._init()
+        train = run_cell.train_command(
+            "BIN", self._spec(probe_epochs=[1, 25, 400], probe_max_samples=128),
+            Path("w"), Path("o"), Path("/tmp/k"), "ev", "id")
+        self.assertEqual(train[train.index("--probe-epochs") + 1], "1,25,400")
+        self.assertIn("--probe-out", train)
+        self.assertTrue(train[train.index("--probe-out") + 1].endswith("probe.jsonl"))
+        self.assertEqual(train[train.index("--probe-max-samples") + 1], "128")
+
+    def test_a_probe_request_is_never_half_assembled(self):
+        """The binary refuses half a request; this must not build one."""
+        run_cell = self._init()
+        train = run_cell.train_command("BIN", self._spec(probe_epochs=[1]),
+                                       Path("w"), Path("o"), Path("k"), "ev", "id")
+        self.assertEqual("--probe-epochs" in train, "--probe-out" in train)
+
+    def test_a_speaker_split_without_its_sidecar_refuses(self):
+        """Running it unsplit would look exactly like a wave that never asked."""
+        run_cell = self._init()
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit) as caught:
+                run_cell.train_command("BIN", self._spec(val_speakers=[6, 7]),
+                                       Path("w"), Path("o"), Path("k"), tmp, "cell-id")
+            self.assertIn("refusing to run it as an unsplit cell", str(caught.exception))
+
+    def test_a_speaker_split_with_its_sidecar_is_passed_through(self):
+        run_cell = self._init()
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "train.speakers").write_bytes(b"SHDSPK1\x00\x00\x00\x00\x00")
+            train = run_cell.train_command("BIN", self._spec(val_speakers=[6, 7]),
+                                           Path("w"), Path("o"), Path("k"), tmp, "id")
+            self.assertEqual(train[train.index("--val-speakers") + 1], "6,7")
+            self.assertTrue(
+                train[train.index("--train-speakers") + 1].endswith("train.speakers"))

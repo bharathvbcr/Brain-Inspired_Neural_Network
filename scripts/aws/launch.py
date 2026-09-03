@@ -375,6 +375,19 @@ def upload_inputs(bucket, args):
         aws("s3", "cp", str(ROOT / f"data/shd/events/{split}.events"),
             f"s3://{bucket}/input/{split}.events", "--quiet")
     print("  corpus uploaded")
+    # Speaker sidecars, uploaded when present and never required.
+    #
+    # Only a wave using `--val-speakers` reads them, and a wave that does not is
+    # unaffected either way. Uploaded unconditionally-if-present rather than
+    # behind a flag because the alternative -- a wave whose plan asks for a
+    # speaker split against a bucket that has no sidecar -- fails on the fleet,
+    # one cell at a time, after provisioning.
+    for split in ("train", "test"):
+        sidecar = ROOT / f"data/shd/events/{split}.speakers"
+        if sidecar.is_file():
+            aws("s3", "cp", str(sidecar),
+                f"s3://{bucket}/input/{split}.speakers", "--quiet")
+            print(f"  {split}.speakers uploaded")
 
 
 def upload_plan(bucket, plan_path):
