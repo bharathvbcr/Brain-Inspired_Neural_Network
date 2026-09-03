@@ -21,6 +21,7 @@ from . import CALIBRATION_FLOOR, PUBLISHED_ACCURACY, REFERENCE_COMMIT, SCHEMA_VE
 from .data import (
     Contract,
     convert_h5_to_event_cache,
+    convert_h5_to_speaker_sidecar,
     corpus_summary,
     frame_events,
     read_event_cache,
@@ -153,6 +154,19 @@ def prepare_events() -> dict[str, object]:
             outputs[split] = {
                 "source": str(source),
                 "output": str(destination),
+                "status": "existing",
+            }
+        # The speaker sidecar is written beside the cache and never in place of
+        # it, so an existing cache stays byte-identical and its fixture hashes
+        # are untouched. Regenerated unconditionally when absent, including
+        # beside caches that predate it.
+        speakers = EVENT_ROOT / f"{split}.speakers"
+        if not speakers.is_file():
+            outputs[f"{split}_speakers"] = convert_h5_to_speaker_sidecar(source, speakers)
+        else:
+            outputs[f"{split}_speakers"] = {
+                "source": str(source),
+                "output": str(speakers),
                 "status": "existing",
             }
     return outputs

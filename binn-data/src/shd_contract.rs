@@ -220,6 +220,77 @@ pub fn frame_events(
     }
 }
 
+/// Magic of the speaker sidecar that accompanies an event cache.
+pub const SHD_SPEAKER_MAGIC: &[u8; 8] = b"SHDSPK1\0";
+
+/// Number of samples an event cache declares, without reading any of them.
+///
+/// Exists so the speaker sidecar can be checked against the **file**, not
+/// against however many samples a `--max-train` happened to load. A sidecar
+/// that lined up with a truncated read and not with the whole cache would
+/// silently mislabel every sample the moment the truncation changed.
+pub fn read_event_cache_count(path: &Path) -> Result<usize, String> {
+    let mut reader = BufReader::new(
+        File::open(path)
+            .map_err(|error| format!("open SHD event cache {}: {error}", path.display()))?,
+    );
+    let mut magic = [0_u8; 8];
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| error.to_string())?;
+    if &magic != SHD_EVENT_MAGIC {
+        return Err(format!("bad SHD event magic in {}", path.display()));
+    }
+    Ok(read_u32(&mut reader)? as usize)
+}
+
+/// Read the speaker sidecar written by `scripts/convert_shd.py --speakers`.
+///
+/// # Why a sidecar and not a field in the cache
+///
+/// `SHDEVT1` is the provenance root of this campaign: every archived cell's
+/// reproduction runs against a cache in that format, and the format's own
+/// fixture hashes are pinned. Adding a field would change the magic, require
+/// every cache to be regenerated, and put a re-derivation of the entire corpus
+/// between the campaign and its next result — for a datum that is not an input
+/// to any forward pass.
+///
+/// The sidecar is positional: entry `i` is the speaker of sample `i` in the
+/// cache beside it. That is the whole risk of the design, so
+/// [`read_event_cache_count`] exists and the caller is required to check the
+/// two lengths against each other.
+pub fn read_speaker_sidecar(path: &Path) -> Result<Vec<u16>, String> {
+    let mut reader = BufReader::new(
+        File::open(path)
+            .map_err(|error| format!("open SHD speaker sidecar {}: {error}", path.display()))?,
+    );
+    let mut magic = [0_u8; 8];
+    reader
+        .read_exact(&mut magic)
+        .map_err(|error| error.to_string())?;
+    if &magic != SHD_SPEAKER_MAGIC {
+        return Err(format!("bad SHD speaker magic in {}", path.display()));
+    }
+    let count = read_u32(&mut reader)? as usize;
+    let mut speakers = Vec::with_capacity(count);
+    for _ in 0..count {
+        speakers.push(read_u16(&mut reader)?);
+    }
+    // A sidecar with bytes left over was written against a different cache, or
+    // by a writer that disagrees with this reader about the record size. Either
+    // way the positional correspondence it rests on is not established, and a
+    // speaker-held-out split built on it would silently hold out the wrong
+    // trials.
+    let mut trailing = [0_u8; 1];
+    if reader.read(&mut trailing).map_err(|e| e.to_string())? != 0 {
+        return Err(format!(
+            "SHD speaker sidecar {} declares {count} speakers and has bytes after them",
+            path.display()
+        ));
+    }
+    Ok(speakers)
+}
+
 /// Read the count-preserving event cache produced by
 /// `scripts/shd_calibration/data.py`.
 pub fn read_event_cache(

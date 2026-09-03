@@ -7,7 +7,8 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use binn_data::{
-    frame_events, read_event_cache, FramedShdSample, FrequencyGeometry, ShdEventContract,
+    frame_events, read_event_cache, read_event_cache_count, read_speaker_sidecar, FramedShdSample,
+    FrequencyGeometry, ShdEventContract,
 };
 use binn_lab::{authorize_campaign, CampaignKind};
 use rayon::prelude::*;
@@ -54,6 +55,13 @@ fn run(args: Vec<String>) -> Result<(), String> {
             authorize_campaign(CampaignKind::Calibration)?;
             train_cell(&args[1..])
         }
+        // Reads two files and prints counts. Trains nothing, claims nothing,
+        // and exists so a plan can get its post-split `--n-train` from the data
+        // rather than from arithmetic done by hand.
+        "speaker-split" => {
+            authorize_campaign(CampaignKind::Parity)?;
+            speaker_split(&args[1..])
+        }
         // Validity check on the instrument, not a campaign: it trains nothing
         // and makes no accuracy claim. See PREREG_2026-08-02 §5 positive control.
         "temporal-sensitivity" => {
@@ -75,7 +83,8 @@ fn print_help() {
            fixture-hashes --events FILE --contract ID --geometry ID\n\
            parity --events FILE --index N --contract ID --geometry ID --weights FILE --out FILE\n\
            init --n-inputs N --hidden N --classes N --seed N --epochs N --n-train N \\\n+                --weights FILE --orders FILE\n\
-           train-cell --train-events FILE --test-events FILE --contract ID --geometry ID \\\n+                --weights FILE --orders FILE --epochs N --out FILE\n\n\
+           train-cell --train-events FILE --test-events FILE --contract ID --geometry ID \\\n+                --weights FILE --orders FILE --epochs N --out FILE\n\
+           speaker-split --events FILE --speakers FILE [--val-speakers a,b]\n\n\
          Optional on parity/init/train-cell:\n\
            --arm ff+fixed|ff+alif|rec+fixed|rec+alif   (default ff+fixed)\n\
            any arm above with a +attn suffix adds the time-axis attention read-out\n\
@@ -106,7 +115,12 @@ fn print_help() {
            --probe-epochs L    comma-separated 1-indexed epochs at which to write\n\
                                read-out diagnostics (attention arms only)\n\
            --probe-out FILE    where those diagnostics go, one JSON line each\n\
-           --probe-max-samples N  evaluation samples each probe reads (default 256)"
+           --probe-max-samples N  evaluation samples each probe reads (default 256)\n\
+           --train-speakers FILE  speaker sidecar for the training cache\n\
+           --val-speakers a,b     hold every trial from these speakers out of\n\
+                               training and report val_accuracy on them. SHD's\n\
+                               test split is 81.3% speakers unseen in training,\n\
+                               so a random hold-out is not a proxy for it."
     );
 }
 
@@ -561,6 +575,8 @@ const TRAIN_CELL_FLAGS: &[&str] = &[
     "--probe-epochs",
     "--probe-out",
     "--probe-max-samples",
+    "--train-speakers",
+    "--val-speakers",
 ];
 
 /// Refuse a flag this subcommand does not understand.
@@ -706,6 +722,14 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         .iter()
         .map(|sample| to_matched(&frame_events(sample, contract, geometry)))
         .collect();
+    // --- speaker-held-out validation split ---------------------------------
+    //
+    // Split before the manipulation, so a validation sample is manipulated by
+    // the same operator the training samples are and under the same seed
+    // stream. Splitting afterwards would work too; doing it here keeps the two
+    // sets structurally the same object right up to the point they are used
+    // differently.
+    let (train, validation) = partition_by_speaker(args, &train_events, train)?;
     let test: Vec<MatchedShdSample> = test_raw
         .iter()
         .map(|sample| to_matched(&frame_events(sample, contract, geometry)))
@@ -721,6 +745,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let temporal_seed = temporal_seed.unwrap_or(0);
     let mut train = train;
     let mut test = test;
+    let mut validation = validation;
     let mut audit = TemporalAudit::default();
     if !condition.is_identity() {
         // Train and test are manipulated with disjoint seed streams so a
@@ -741,6 +766,21 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             )?;
             audit.merge(&per_sample);
         }
+        // A third disjoint stream, for the same reason the first two are
+        // disjoint: a permutation shared between the validation and training
+        // halves would leak the manipulation's own structure across the split
+        // this flag exists to keep clean.
+        //
+        // Absent a split this loop runs zero times, so a cell without
+        // `--val-speakers` draws exactly what it drew before the flag existed.
+        for (index, sample) in validation.iter_mut().enumerate() {
+            let per_sample = apply_temporal(
+                sample,
+                condition,
+                temporal_seed ^ 0x3333_0000_0000_0000 ^ index as u64,
+            )?;
+            audit.merge(&per_sample);
+        }
         // Prereg gate 5.1 is enforced inside apply_temporal, which errors rather
         // than returning. Everything it cannot see — a manipulation that
         // relocated almost nothing, moved further than its window allows, or
@@ -755,6 +795,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     }
     let train = train;
     let test = test;
+    let validation = validation;
 
     let mut weights = ShdArmWeights::load(&weights_path)?;
     if let Some(arm) = optional_arm(args)? {
@@ -1037,6 +1078,15 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         atomic_write(&path, probe_lines.concat().as_bytes())?;
     }
     let evaluation = evaluate(&weights, &test)?;
+    // Reported beside the test number, never in place of it. The point of a
+    // speaker-held-out split is to have somewhere to select on that is not the
+    // test set; hiding the test number would make that impossible to check, and
+    // replacing it would silently redefine `accuracy` for every consumer.
+    let validation_accuracy = if validation.is_empty() {
+        None
+    } else {
+        Some(evaluate(&weights, &validation)?.accuracy)
+    };
     let scientific = evaluation.accuracy >= 0.80
         && evaluation.classes_predicted == weights.base.n_classes
         && evaluation.majority_prediction < 0.30
@@ -1053,6 +1103,16 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     // plain arm, or compared against one, without the width and depth in hand.
     let provenance_fields = match provenance_seed {
         Some(seed) => format!(",\"seed\":{seed}"),
+        None => String::new(),
+    };
+    // Absent for every cell that did not ask for a split, so Gate F's explicit
+    // field list and all 784 recorded cells are unaffected.
+    let validation_fields = match validation_accuracy {
+        Some(accuracy) => format!(
+            ",\"n_val\":{},\"val_accuracy\":{accuracy:.9},\"val_speakers\":\"{}\"",
+            validation.len(),
+            optional_flag_value(args, "--val-speakers").unwrap_or_default()
+        ),
         None => String::new(),
     };
     let attention_fields = match weights.attention_config() {
@@ -1080,7 +1140,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
          \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9},\"max_bin_displacement\":{:.9},\"mean_steps\":{:.9},\"count_before\":{:.1},\"count_after\":{:.1},\"hidden_permutation_relocated\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
-         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}}}\n",
+         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}{}}}\n",
         weights.arm.label(),
         contract.id(),
         geometry.id(),
@@ -1138,8 +1198,211 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         iso8601_utc(emitted),
         attention_fields,
         provenance_fields,
+        validation_fields,
     );
     atomic_write(&out, result.as_bytes())
+}
+
+/// Split the framed training set into train and validation **by speaker**.
+///
+/// `--train-speakers FILE --val-speakers 6,7` holds every trial from speakers 6
+/// and 7 out of training and evaluates on them separately. Both flags absent
+/// returns the input untouched and an empty validation set, which is what every
+/// recorded cell did.
+///
+/// # Why not a random hold-out
+///
+/// SHD's official test split is not a random sample of the corpus. Speakers 4
+/// and 5 appear **only** in test and account for 1,840 of its 2,264 trials —
+/// 81.3% — the remaining 18.7% being held-out trials from the ten speakers that
+/// are also in train. (Measured from `data/shd/shd_test.h5`'s `extra/speaker`;
+/// the ten training speakers are 0-3 and 6-11.)
+///
+/// A validation split drawn at random from train therefore contains **zero**
+/// unseen speakers, while the set it is standing in for is 81% unseen speakers.
+/// Every trial in it comes from a speaker the network has thousands of other
+/// trials from. Selecting anything on such a split — an epoch, a read-out
+/// variant, a hyperparameter — reads a number that is systematically optimistic
+/// about the one thing the test set mostly measures, and the optimism grows
+/// with exactly the speaker-specific overfitting the split was supposed to
+/// detect.
+///
+/// # What this still does not reproduce
+///
+/// Holding out whole speakers gives a validation set that is 100% unseen
+/// speaker against the test set's 81.3%. The 18.7% tail — held-out trials from
+/// seen speakers — has no counterpart here, so this split is *harder* than the
+/// test set rather than matched to it. That is the safe direction and it is
+/// stated rather than corrected, because correcting it would need a second
+/// selection mechanism with its own seed and its own argument for why it does
+/// not leak.
+fn partition_by_speaker(
+    args: &[String],
+    train_events: &Path,
+    train: Vec<MatchedShdSample>,
+) -> Result<(Vec<MatchedShdSample>, Vec<MatchedShdSample>), String> {
+    let sidecar = optional_path(args, "--train-speakers")?;
+    let requested = optional_flag_value(args, "--val-speakers");
+    let (sidecar, requested) = match (sidecar, requested) {
+        (None, None) => return Ok((train, Vec::new())),
+        (Some(path), Some(value)) => (path, value),
+        // Half a request. Either half alone would run a cell that looks exactly
+        // like one with a speaker split and has none.
+        (Some(_), None) => {
+            return Err("--train-speakers needs --val-speakers; nothing would be held out".into())
+        }
+        (None, Some(_)) => {
+            return Err("--val-speakers needs --train-speakers to know who is who".into())
+        }
+    };
+
+    let speakers = read_speaker_sidecar(&sidecar)?;
+    let declared = read_event_cache_count(train_events)?;
+    if speakers.len() != declared {
+        return Err(format!(
+            "{} carries {} speakers and {} declares {declared} samples; the sidecar is \
+             positional and cannot be matched to a cache of a different length",
+            sidecar.display(),
+            speakers.len(),
+            train_events.display()
+        ));
+    }
+    if train.len() > speakers.len() {
+        return Err(format!(
+            "loaded {} training samples against {} speakers",
+            train.len(),
+            speakers.len()
+        ));
+    }
+
+    let mut held_out: Vec<u16> = Vec::new();
+    for piece in requested.split(',') {
+        let piece = piece.trim();
+        let speaker: u16 = piece
+            .parse()
+            .map_err(|_| format!("--val-speakers takes integer ids, got {piece:?}"))?;
+        if !speakers.contains(&speaker) {
+            return Err(format!(
+                "--val-speakers names speaker {speaker}, who has no trials in {}",
+                train_events.display()
+            ));
+        }
+        if !held_out.contains(&speaker) {
+            held_out.push(speaker);
+        }
+    }
+    if held_out.is_empty() {
+        return Err("--val-speakers was given no speakers".into());
+    }
+    let distinct: Vec<u16> = {
+        let mut all = speakers.clone();
+        all.sort_unstable();
+        all.dedup();
+        all
+    };
+    if held_out.len() >= distinct.len() {
+        return Err(format!(
+            "--val-speakers holds out all {} speakers; there would be nothing to train on",
+            distinct.len()
+        ));
+    }
+
+    // Order within each half is the cache's order, so the epoch-order file that
+    // `init` generated over `0..n_train` indexes the training half in a
+    // reproducible way. It has to be told the post-split size: `train-cell`
+    // already refuses an order file whose length disagrees, and the
+    // `speaker-split` subcommand exists so a plan can get that number without
+    // guessing.
+    let mut kept = Vec::with_capacity(train.len());
+    let mut validation = Vec::new();
+    for (index, sample) in train.into_iter().enumerate() {
+        if held_out.contains(&speakers[index]) {
+            validation.push(sample);
+        } else {
+            kept.push(sample);
+        }
+    }
+    if kept.is_empty() {
+        return Err("the speaker split left no training samples".into());
+    }
+    Ok((kept, validation))
+}
+
+/// Report the speaker inventory of an event cache and the sizes a split gives.
+///
+/// A plan needs the post-split `--n-train` before `init` can generate an order
+/// file of the right length, and computing it by hand from the h5 is exactly
+/// the kind of number that ends up right in the plan and wrong in the run.
+fn speaker_split(args: &[String]) -> Result<(), String> {
+    reject_unknown_flags(args, SPEAKER_SPLIT_FLAGS)?;
+    let events = required_path(args, "--events")?;
+    let sidecar = required_path(args, "--speakers")?;
+    let speakers = read_speaker_sidecar(&sidecar)?;
+    let declared = read_event_cache_count(&events)?;
+    if speakers.len() != declared {
+        return Err(format!(
+            "{} carries {} speakers and {} declares {declared} samples",
+            sidecar.display(),
+            speakers.len(),
+            events.display()
+        ));
+    }
+    let mut inventory: Vec<(u16, usize)> = Vec::new();
+    for &speaker in &speakers {
+        match inventory.iter_mut().find(|(id, _)| *id == speaker) {
+            Some((_, count)) => *count += 1,
+            None => inventory.push((speaker, 1)),
+        }
+    }
+    inventory.sort_unstable_by_key(|&(id, _)| id);
+    let held: Vec<u16> = match optional_flag_value(args, "--val-speakers") {
+        Some(value) => {
+            let mut chosen = Vec::new();
+            for piece in value.split(',') {
+                chosen.push(
+                    piece
+                        .trim()
+                        .parse::<u16>()
+                        .map_err(|_| format!("--val-speakers takes integer ids, got {piece:?}"))?,
+                );
+            }
+            chosen
+        }
+        None => Vec::new(),
+    };
+    let validation: usize = inventory
+        .iter()
+        .filter(|(id, _)| held.contains(id))
+        .map(|&(_, count)| count)
+        .sum();
+    let entries: Vec<String> = inventory
+        .iter()
+        .map(|&(id, count)| format!("{{\"speaker\":{id},\"samples\":{count}}}"))
+        .collect();
+    println!(
+        "{{\"schema\":\"shd-speaker-split-v1\",\"events\":\"{}\",\"samples\":{},\
+         \"inventory\":[{}],\"val_speakers\":[{}],\"n_val\":{validation},\"n_train\":{}}}",
+        events.display(),
+        speakers.len(),
+        entries.join(","),
+        held.iter()
+            .map(u16::to_string)
+            .collect::<Vec<_>>()
+            .join(","),
+        speakers.len() - validation,
+    );
+    Ok(())
+}
+
+/// Every flag `speaker-split` accepts.
+const SPEAKER_SPLIT_FLAGS: &[&str] = &["--events", "--speakers", "--val-speakers"];
+
+/// The value following `flag`, if the flag is present.
+fn optional_flag_value(args: &[String], flag: &str) -> Option<String> {
+    args.iter()
+        .position(|value| value == flag)
+        .and_then(|index| args.get(index + 1))
+        .cloned()
 }
 
 /// How many evaluation samples a probe reads unless told otherwise.
@@ -2192,6 +2455,174 @@ mod tests {
         assert!(
             train_cell(&other_half).is_err(),
             "--probe-out without --probe-epochs"
+        );
+    }
+
+    fn write_speaker_sidecar(path: &Path, speakers: &[u16]) {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"SHDSPK1\0");
+        bytes.extend_from_slice(&(speakers.len() as u32).to_le_bytes());
+        for &speaker in speakers {
+            bytes.extend_from_slice(&speaker.to_le_bytes());
+        }
+        fs::write(path, bytes).unwrap();
+    }
+
+    /// A speaker-held-out split trains on the speakers it kept and reports the
+    /// ones it did not, and every count adds up.
+    #[test]
+    fn the_speaker_split_holds_out_whole_speakers() {
+        let directory = std::env::temp_dir().join("shd-instrument-speaker-split");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 30);
+        write_event_cache(&test, 10);
+        // Three speakers, unevenly represented, in the cache's own order.
+        let speakers: Vec<u16> = (0..30).map(|index| (index % 3) as u16).collect();
+        let sidecar = directory.join("train.speakers");
+        write_speaker_sidecar(&sidecar, &speakers);
+
+        let weights = directory.join("w.bin");
+        let orders = directory.join("o.bin");
+        // 20 of the 30 survive the split: speakers 0 and 1.
+        init(&owned(&[
+            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
+            "--seed", "5170001", "--epochs", "2", "--n-train", "20",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]))
+        .unwrap();
+
+        let out = directory.join("cell.json");
+        train_cell(&owned(&[
+            "--train-events", train.to_str().unwrap(),
+            "--test-events", test.to_str().unwrap(),
+            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+            "--epochs", "2",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--out", out.to_str().unwrap(),
+            "--arm", "ff+alif",
+            "--train-speakers", sidecar.to_str().unwrap(),
+            "--val-speakers", "2",
+        ]))
+        .unwrap();
+        let cell = fs::read_to_string(&out).unwrap();
+        assert!(cell.contains("\"n_train\":20"), "{cell}");
+        assert!(cell.contains("\"n_val\":10"), "{cell}");
+        assert!(cell.contains("\"val_speakers\":\"2\""), "{cell}");
+        assert!(cell.contains("\"val_accuracy\":"), "{cell}");
+    }
+
+    /// A cell that asked for no split emits exactly the cell it emitted before
+    /// the flags existed.
+    #[test]
+    fn no_split_is_the_cell_that_was_there_before() {
+        let directory = std::env::temp_dir().join("shd-instrument-no-split");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 20);
+        write_event_cache(&test, 8);
+        let weights = directory.join("w.bin");
+        let orders = directory.join("o.bin");
+        init(&owned(&[
+            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
+            "--seed", "5170001", "--epochs", "2", "--n-train", "20",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]))
+        .unwrap();
+        let out = directory.join("cell.json");
+        train_cell(&owned(&[
+            "--train-events", train.to_str().unwrap(),
+            "--test-events", test.to_str().unwrap(),
+            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+            "--epochs", "2",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--out", out.to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]))
+        .unwrap();
+        let cell = fs::read_to_string(&out).unwrap();
+        for absent in ["n_val", "val_accuracy", "val_speakers"] {
+            assert!(!cell.contains(absent), "{absent} leaked into an unsplit cell: {cell}");
+        }
+    }
+
+    /// Every way of asking for a split that cannot be honoured is an error.
+    ///
+    /// The positional correspondence between a cache and its sidecar is the
+    /// whole design, and it is not self-checking: a sidecar of the wrong length
+    /// would assign speakers to the wrong trials and the split would silently
+    /// hold out an arbitrary subset. So the length check is against the cache's
+    /// **declared** count and not against however many samples were loaded.
+    #[test]
+    fn a_split_that_cannot_be_honoured_refuses() {
+        let directory = std::env::temp_dir().join("shd-instrument-split-refusal");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 20);
+        write_event_cache(&test, 8);
+        let speakers: Vec<u16> = (0..20).map(|index| (index % 2) as u16).collect();
+        let sidecar = directory.join("train.speakers");
+        write_speaker_sidecar(&sidecar, &speakers);
+        let short = directory.join("short.speakers");
+        write_speaker_sidecar(&short, &speakers[..12]);
+
+        let weights = directory.join("w.bin");
+        let orders = directory.join("o.bin");
+        init(&owned(&[
+            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
+            "--seed", "5170001", "--epochs", "2", "--n-train", "10",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]))
+        .unwrap();
+        let base = owned(&[
+            "--train-events", train.to_str().unwrap(),
+            "--test-events", test.to_str().unwrap(),
+            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+            "--epochs", "2",
+            "--weights", weights.to_str().unwrap(),
+            "--orders", orders.to_str().unwrap(),
+            "--out", directory.join("cell.json").to_str().unwrap(),
+            "--arm", "ff+alif",
+        ]);
+        let with = |extra: &[&str]| {
+            let mut args = base.clone();
+            args.extend(owned(extra));
+            train_cell(&args)
+        };
+
+        let error = with(&["--train-speakers", short.to_str().unwrap(), "--val-speakers", "1"])
+            .expect_err("a 12-entry sidecar against a 20-sample cache");
+        assert!(error.contains("positional"), "{error}");
+
+        let error = with(&["--train-speakers", sidecar.to_str().unwrap(), "--val-speakers", "9"])
+            .expect_err("speaker 9 has no trials");
+        assert!(error.contains("no trials"), "{error}");
+
+        let error = with(&["--train-speakers", sidecar.to_str().unwrap(), "--val-speakers", "0,1"])
+            .expect_err("holding out every speaker");
+        assert!(error.contains("nothing to train on"), "{error}");
+
+        assert!(
+            with(&["--train-speakers", sidecar.to_str().unwrap()]).is_err(),
+            "--train-speakers without --val-speakers"
+        );
+        assert!(
+            with(&["--val-speakers", "1"]).is_err(),
+            "--val-speakers without --train-speakers"
         );
     }
 }

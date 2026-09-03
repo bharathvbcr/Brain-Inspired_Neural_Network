@@ -19,6 +19,22 @@ EVENT_HEADER = struct.Struct("<8sI")
 SAMPLE_HEADER = struct.Struct("<II")
 EVENT_RECORD = struct.Struct("<fHH")
 
+# Speaker identity travels beside the event cache, not inside it.
+#
+# `SHDEVT1` is the provenance root of the whole campaign: every archived cell is
+# reproduced against a cache in that format and the format's fixture hashes are
+# pinned. Adding a field would change the magic, force every cache to be
+# regenerated, and put a re-derivation of the corpus between the campaign and
+# its next result -- for a datum no forward pass reads.
+#
+# The sidecar is positional: entry `i` is the speaker of sample `i` in the cache
+# beside it. That correspondence is the design's whole risk, so both readers
+# check their lengths against the cache's declared count rather than against
+# whatever a `--max-train` happened to load.
+SPEAKER_MAGIC = b"SHDSPK1\0"
+SPEAKER_HEADER = struct.Struct("<8sI")
+SPEAKER_RECORD = struct.Struct("<H")
+
 
 @dataclass(frozen=True)
 class EventSample:
@@ -135,6 +151,64 @@ def convert_h5_to_event_cache(h5_path: Path, output: Path) -> dict[str, object]:
         "source": str(h5_path),
         "output": str(output),
         "samples": int(len(labels)),
+    }
+
+
+def write_speaker_sidecar(path: Path, speakers: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f".tmp-{__import__('os').getpid()}")
+    values = np.asarray(speakers, dtype="<u2")
+    with temporary.open("wb") as handle:
+        handle.write(SPEAKER_HEADER.pack(SPEAKER_MAGIC, len(values)))
+        for speaker in values:
+            handle.write(SPEAKER_RECORD.pack(int(speaker)))
+        handle.flush()
+        __import__("os").fsync(handle.fileno())
+    temporary.replace(path)
+
+
+def read_speaker_sidecar(path: Path) -> np.ndarray:
+    with path.open("rb") as handle:
+        magic, count = SPEAKER_HEADER.unpack(handle.read(SPEAKER_HEADER.size))
+        if magic != SPEAKER_MAGIC:
+            raise ValueError(f"bad speaker sidecar magic in {path}")
+        payload = handle.read(count * SPEAKER_RECORD.size)
+        if len(payload) != count * SPEAKER_RECORD.size:
+            raise ValueError(f"{path} declares {count} speakers and is shorter")
+        if handle.read(1):
+            raise ValueError(f"{path} declares {count} speakers and has bytes after them")
+    return np.frombuffer(payload, dtype="<u2")
+
+
+def convert_h5_to_speaker_sidecar(h5_path: Path, output: Path) -> dict[str, object]:
+    """Write the speaker of every sample, in the cache's own order.
+
+    SHD carries speaker identity in `extra/speaker`. It matters because the
+    official test split is **not** a random hold-out: speakers 4 and 5 appear
+    only in test and account for 1,840 of its 2,264 trials (81.3%), the rest
+    being held-out trials from the ten speakers that are in train.
+
+    A validation split drawn at random from train therefore contains zero
+    unseen speakers, while the set it is meant to predict is 81% unseen
+    speakers. Selecting anything on such a split -- an epoch, a read-out, a
+    hyperparameter -- reads a number that is systematically optimistic about the
+    one thing the test set is mostly measuring.
+    """
+    with h5py.File(h5_path, "r") as source:
+        if "extra" not in source or "speaker" not in source["extra"]:
+            raise ValueError(f"{h5_path} carries no extra/speaker")
+        speakers = np.asarray(source["extra"]["speaker"], dtype=np.uint16)
+        labels = np.asarray(source["labels"])
+        if len(speakers) != len(labels):
+            raise ValueError(
+                f"{h5_path} has {len(labels)} labels and {len(speakers)} speakers"
+            )
+    write_speaker_sidecar(output, speakers)
+    return {
+        "source": str(h5_path),
+        "output": str(output),
+        "samples": int(len(speakers)),
+        "speakers": sorted({int(value) for value in speakers}),
     }
 
 
