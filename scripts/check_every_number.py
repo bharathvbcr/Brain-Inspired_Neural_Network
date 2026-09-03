@@ -140,50 +140,14 @@ KNOWN_COINCIDENCE = {
     # cells it was flagged, at 504 it was not, and at 1,773 it is again. A value
     # that appears and disappears as unrelated cells land is not being derived
     # by anything.
-    "0.0453": "C-2, gain(t500) − gain(t100): a difference OF gains across the "
-              "resolution ladder, second order, and recomputed by name in "
-              "verify_published_numbers.py.",
-    "0.0116": "H16-1's h384 − h512 gap, the negative one that breaks the chain. "
-              "A difference OF gains, judged exactly as 0.0453 is.",
-    "0.0737": "the live opt-in REINFORCE gap LCB from "
-              "`results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md` — the "
-              "matched-architecture program, not the SHD instrument.",
-    "0.9700": "an A6 ceiling-health reference accuracy "
-              "(`results/a6_ceiling_health_2026-08-19/a6_report.md`); that "
-              "program measures a dense-LIF gradient reference on a two-class "
-              "fixture and shares no cell with this campaign.",
-    "0.9863": "the same program's matched-80 figure "
-              "(`.../matched_80.md`); same reasoning.",
-    # Also 2026-09-03. `paired` is now 4,806 quantities (35.6% chance of matching
-    # a random 4dp value) and `arm` 1,074 (10.5%), against 3,080 and 24.9% when
-    # wave 21's DiDs were first judged. Every entry below is one of the two
-    # established classes: a second-order quantity this sweep does not generate,
-    # or a value from a program that does not run on the SHD instrument.
-    "0.1119": "W22's seed-paired DiD at h128 / `fixed-t250`. A difference OF "
-              "paired differences; this sweep generates no second-order "
-              "quantity, so a `paired` match is not the same computation.",
-    "0.3111": "K, the kernel's worth: mean(Arm A) − mean(Arm B) over six "
-              "PyTorch runs of the pinned reference. Neither mean is a cell of "
-              "this campaign and their difference is second order besides.",
-    "0.5025": "v21 Soft-WTA × structured B at chance, from "
-              "`results/c1_sfb_soft.md` — the matched-architecture program, "
-              "which shares no task, corpus or arm with the SHD instrument.",
-    "0.9100": "a matched RL recurrent local accuracy from "
-              "`results/matched_rerun_2026-08-25/c1_matched-rl_recurrent.md`; "
-              "same program, same reasoning.",
-    # Surfaced on 2026-09-03 when wave 25's cells pushed the `paired` generator
-    # further still. Both are membrane-ablation values: six PyTorch runs of the
-    # pinned third-party reference, a corpus this sweep does not generate from
-    # at all, so a collision with a cell-derived difference is arithmetic and
-    # nothing else. Their ELSEWHERE entries name the record that establishes
-    # them and stay.
-    "0.1067": "the reference's lead over the instrument in the membrane series "
-              "(0.9387 − 0.8320). A difference of two means from the ablation "
-              "corpus, one of which is not a cell of this campaign.",
-    "0.8200": "the instrument's per-step membrane retention, and the value "
-              "`init_tau = 55.5556 ms` was chosen to reproduce. It is a "
-              "property of a neuron, measured by constructing one — no "
-              "accuracy anywhere derives it.",
+    "0.0893": "W22's seed-paired DiD at h512. A difference OF paired "
+              "differences, second order, judged as every DiD before it.",
+    "0.0959": "W21's seed-paired DiD at h128 / `published-10ms`. Same class, "
+              "same judgement.",
+    "0.9972": "the mean `temporal_audit.relocated_fraction` over wave 24's 48 "
+              "`bin-shuffled` cells. This sweep generates quantities from "
+              "`accuracy` alone, so no generator computes a relocated fraction "
+              "however dense it gets; its ELSEWHERE entry names the record.",
     "0.0192": "the recurrent gap lower confidence bound (−0.0192) of the matched "
               "dense-LIF C1 program, from "
               "`results/matched_rerun_2026-08-25/c1_match_recurrent.md`. That "
@@ -202,6 +166,63 @@ KNOWN_COINCIDENCE = {
     "0.1411": "M-2, a difference OF gains. This sweep deliberately generates no "
               "second-order quantities, so a `pooled` match cannot be the same "
               "computation.",
+    "0.0453": "C-2, gain(t500) − gain(t100): a difference OF gains across the "
+              "resolution ladder, second order, and recomputed by name in "
+              "verify_published_numbers.py.",
+    "0.0116": "H16-1's h384 − h512 gap, the negative one that breaks the chain. "
+              "A difference OF gains, judged exactly as 0.0453 is.",
+    "0.0737": "the live opt-in REINFORCE gap LCB from "
+              "`results/CAMPAIGN_2026-07-23_CLAIM_FREEZE.md` — the "
+              "matched-architecture program, not the SHD instrument.",
+    "0.9700": "an A6 ceiling-health reference accuracy "
+              "(`results/a6_ceiling_health_2026-08-19/a6_report.md`); that "
+              "program measures a dense-LIF gradient reference on a two-class "
+              "fixture and shares no cell with this campaign.",
+    # `0.8200` and `0.9863` were declared here earlier on 2026-09-03 and removed
+    # the same day: wave 25's last 353 cells landed between the declaration and
+    # the next sweep, and the collisions they recorded went away. A declaration
+    # whose overlap has gone FAILS as stale, which is the property that stops
+    # this list rotting into a way of silencing the check -- and it is the same
+    # instability that makes `0.0192` the clearest coincidence in the file.
+    # Declare against a corpus that has stopped moving.
+    # Also 2026-09-03. `paired` is now 4,806 quantities (35.6% chance of matching
+    # a random 4dp value) and `arm` 1,074 (10.5%), against 3,080 and 24.9% when
+    # wave 21's DiDs were first judged. Every entry below is one of the two
+    # established classes: a second-order quantity this sweep does not generate,
+    # or a value from a program that does not run on the SHD instrument.
+    "0.1119": "W22's seed-paired DiD at h128 / `fixed-t250`. A difference OF "
+              "paired differences; this sweep generates no second-order "
+              "quantity, so a `paired` match is not the same computation.",
+    # 2026-09-03, after wave 25's 353rd cell landed and the corpus stopped
+    # moving. Exactly one construction in the whole `paired` set reaches this
+    # value: the mean delta between wave 2's h128/`d128l1` intact arm and wave
+    # 25's h128/`d64l4` bin-shuffled arm, 0.11612927 over their shared seeds.
+    # Those two are "comparable" only because `operating_point` strips the
+    # attention shape, so the pair spans two waves AND two shapes and is a
+    # comparison no document in this campaign makes.
+    "0.1161": "W22's seed-paired DiD at h128 / `fixed-t500` / d32L4, the finest "
+              "rung of H22-4, quoted again as H25-2's `fixed-t500` order term. "
+              "A difference OF paired differences, which this sweep does not "
+              "generate; the single colliding first-order construction pairs "
+              "wave 2 against wave 25 across two attention shapes.",
+    "0.3111": "K, the kernel's worth: mean(Arm A) − mean(Arm B) over six "
+              "PyTorch runs of the pinned reference. Neither mean is a cell of "
+              "this campaign and their difference is second order besides.",
+    "0.5025": "v21 Soft-WTA × structured B at chance, from "
+              "`results/c1_sfb_soft.md` — the matched-architecture program, "
+              "which shares no task, corpus or arm with the SHD instrument.",
+    "0.9100": "a matched RL recurrent local accuracy from "
+              "`results/matched_rerun_2026-08-25/c1_matched-rl_recurrent.md`; "
+              "same program, same reasoning.",
+    # Surfaced on 2026-09-03 when wave 25's cells pushed the `paired` generator
+    # further still. Both are membrane-ablation values: six PyTorch runs of the
+    # pinned third-party reference, a corpus this sweep does not generate from
+    # at all, so a collision with a cell-derived difference is arithmetic and
+    # nothing else. Their ELSEWHERE entries name the record that establishes
+    # them and stay.
+    "0.1067": "the reference's lead over the instrument in the membrane series "
+              "(0.9387 − 0.8320). A difference of two means from the ablation "
+              "corpus, one of which is not a cell of this campaign.",
     # Wave 21's four difference-in-differences, quoted in PAPER_DRAFT.md 3.5.
     # Same class as 0.1411 and judged the same way on 2026-08-29: a DiD is a
     # difference OF paired differences, and this sweep generates no second-order
@@ -445,6 +466,12 @@ ELSEWHERE = [
     ("0.9972", "the same, over its 48 `bin-shuffled` cells. The `reversed` "
                "figure of 0.9986 is NOT here: a first-order value happens to "
                "collide with it, so the sweep reaches it and needs no entry"),
+    # Wave 25. The same class again, one order further out for the second.
+    ("0.2631", "H25-2, the seed-paired DiD under `channel-shuffled` at "
+               "h128 / `fixed-t100`. Second order"),
+    ("0.1308", "H25-2 at `fixed-t100`: DiD(channel) - DiD(bin). A difference OF "
+               "second-order quantities, so further out than the DiDs "
+               "themselves, exactly as W22's 0.0759 range is"),
     # Wave 22. Every DiD is a difference OF seed-paired differences and is
     # therefore second order, which this sweep does not generate -- the same
     # reason W21's DiDs needed handling. The five below are the wave-22 DiDs

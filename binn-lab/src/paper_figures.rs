@@ -251,11 +251,14 @@ mod nums {
     /// this is 21 of 21 as of 2026-09-01 (H22-2, `analyse_wave22.py` and
     /// `mechanism_coverage.py`). Ban 4 SURVIVES the change and is why the
     /// caption still refuses "every width": 21 of 21 is every point this
-    /// campaign MEASURED, not every width, depth or budget that exists. All
-    /// twenty-one were measured at e400; wave 24 re-measured TWO of them at
-    /// e100, so the budget caveat is narrowed and not retired -- nineteen are
-    /// still single-budget, and the caption must not round that to "every
-    /// budget".
+    /// campaign MEASURED, not every width or depth that exists. The BUDGET
+    /// caveat is gone as of 2026-09-03: wave 24 re-measured two of the
+    /// twenty-one at e100 and wave 25 the other nineteen, so all twenty-one
+    /// carry the contrast at two budgets and the caption says so. What
+    /// replaces it is DEPTH -- H25-3 is NOT MET at h768/d32l2, 0.1271 from its
+    /// d32l4 twin against a 0.10 bar -- and the caption must carry that
+    /// instead. Two budgets is still not "every budget"; the caption claims
+    /// two, not all.
     pub const COVERAGE_COVERED: u32 = 21;
     pub const COVERAGE_TOTAL: u32 = 21;
     /// h768 carries the smallest positive gain on LADDER and the largest DiD
@@ -1136,7 +1139,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (36, note_y),
         &format!(
-            "The mechanism travels: every point clears the registered bar, and coverage is {} of {} operating points — NOT every width, and not every budget: all twenty-one at e400, two of them also at e100.",
+            "The mechanism travels: every point clears the registered bar at BOTH budgets, and coverage is {} of {} operating points — NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
         ),
         13,
@@ -2795,8 +2798,8 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
             "widths 128 → 1024,",
             "both contracts, both geometries",
             "",
-            "all measured at e400;",
-            "two of them also at e100",
+            "all at e400 AND e100;",
+            "depth is a scope limit: h768",
         ],
     )?;
 

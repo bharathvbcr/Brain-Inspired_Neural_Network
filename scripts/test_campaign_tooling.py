@@ -1707,8 +1707,19 @@ CORPUS_BASELINE = {
     #: It lowers H25-1's `bin-shuffled` quadruples from 12 to 11, above the
     #: analyser's floor of 9, so the verdict is still computed rather than
     #: rescued. Enumerated, not inferred from the count.
+    #:
+    #: Re-frozen 2026-09-03 on wave 25 COMPLETING: 2298 -> 2651 and 2287 -> 2640,
+    #: both +353, so the mid-wave freeze above was the same corpus plus the 353
+    #: cells the relaunched fleet produced. The invalid set is unchanged from
+    #: that freeze -- the ten `w13rec` cells and the one saturated `w25mec`
+    #: recurrent cell, enumerated rather than inferred. An addition, not a
+    #: re-scoring. Wave 25's ten FAILED cells are absent from the corpus
+    #: entirely: the instrument aborted them on a non-finite training value
+    #: rather than writing a poisoned record, so they are counted in the wave's
+    #: result and not here. See
+    #: `RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`.
     "shd_attention_campaign_v2":
-        (2298, 2287, "7570bc6cba57d113"),
+        (2651, 2640, "384d6927f4053a2d"),
     "shd_attention_pilot_v1":
         (15, 15, "80f968419a71ef75"),
     "shd_instrument_v1":

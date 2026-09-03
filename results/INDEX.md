@@ -2,12 +2,12 @@
 
 # Record index
 
-340 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+341 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 45 | 0 |
-| Results | 42 | 2 |
+| Results | 43 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
 | Amendments | 15 | 1 |
@@ -111,6 +111,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-03 | [RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md) | Result — synchrony is an axis, depth is a scope limit, the budget limit is gone, and the recurrent question could not be asked |
 | 2026-09-02 | [RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md) | Result — the shuffle cost is about order, it survives a second budget, and at one point synchrony matters too |
 | 2026-09-02 | [RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md](RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md) | Result — the membrane is 81.5% of the term the kernel ablation could not name |
 | 2026-09-02 | [RESULT_2026-09-02_THE_KERNEL_ABLATION.md](RESULT_2026-09-02_THE_KERNEL_ABLATION.md) | Result — the kernel is worth 0.311, which is 3.6× the residual it was supposed to explain |

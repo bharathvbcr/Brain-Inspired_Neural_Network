@@ -113,16 +113,30 @@ cites and against every ban its spec section names. What remains here is prose.
 
 ### 2.4 Science, not paperwork
 
-- **NEW 2026-09-02: synchrony is a second term in the mechanism, and it is
-  uncharacterised.** `bin-shuffled` destroys temporal order and preserves
-  within-bin synchrony; `channel-shuffled` destroys both. At the two
-  `published-2ms` points their difference is inside a ±0.03 band — order alone.
-  At `fixed-t250` it is **+0.1038**: destroying synchrony as well as order
-  roughly doubles the cost (+0.2157 against +0.1119). One point is not an axis,
-  nothing here says why the contracts differ, and the paper's title and abstract
-  both say "temporal order". **Closing this means the same contrast at the other
-  two `fixed-tN` rungs and at a second geometry** — the cells do not exist
-  ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md)).
+- **Synchrony is a second term in the mechanism — RESOLUTION LADDER CLOSED
+  2026-09-03, second geometry still open.** `bin-shuffled` destroys temporal
+  order and preserves within-bin synchrony; `channel-shuffled` destroys both.
+  Wave 24 found the difference at `fixed-t250` (**+0.1038**) and nowhere else,
+  and wave 25 measured what this entry asked for: **+0.1308** at `fixed-t100`
+  and **+0.0575** at `fixed-t500`, against nothing at either `published-2ms`
+  point. **Synchrony is an axis, not one point**, and the term falls
+  monotonically as bins get finer (14.0, 5.6, 2.8 ms) — an observation carrying
+  no registered claim, three points and no fitted curve. What this entry asked
+  for and did not get is the **second geometry**: every synchrony cell is on
+  `adjacent-sum-5`, so nothing separates the contract from the encoder
+  ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
+- **NEW 2026-09-03: the recurrent substrate's mechanism is unmeasured, and the
+  attempt to measure it failed.** Every manipulated cell in this corpus is
+  feed-forward, so §3.7's claim about "what the read-out consumes" was resting
+  on the feed-forward shuffle result. Wave 25 registered 72 recurrent cells to
+  fix that and returned **NOT EVALUABLE**: ten failed on the instrument's
+  non-finite-training guard, five of them the rate arm under time reversal,
+  leaving three seed-paired quadruples against a floor of nine. `bin-shuffled`
+  did reach nine (**+0.0291**, 6 of 9), which is a number and not a verdict. The
+  registration forbade rescuing failed cells and none was rescued. **Closing
+  this means a surrogate scale at which `rec+alif` is stable under reversal, and
+  finding one is itself a wave**
+  ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
 - **The reference's compensating −0.20 term — NAMED and 81.5% CLOSED the same
   day it was opened.** The kernel ablation showed the reference is not "the
   instrument plus a temporal kernel": the kernel is worth +0.3111 against an
@@ -156,11 +170,17 @@ cites and against every ban its spec section names. What remains here is prose.
   compute was spent: 504 self-contained cells, every one of the twelve clearing
   the registered bar
   ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)).
-  What replaced it as the scope limit was the **budget** — and wave 24 has since
-  narrowed that too: all twenty-one were measured at `e400`, and two of them
-  have now been measured at `e100` as well (+0.1183 and +0.0633, 12/12 each).
-  **Nineteen points remain single-budget**, so this is narrowed, not closed. The
-  same wave retired a limit this register never recorded: every DiD in the paper
+  What replaced it as the scope limit was the **budget — CLOSED 2026-09-03.**
+  Wave 24 measured two of the twenty-one at `e100` (+0.1183 and +0.0633, 12/12
+  each) and wave 25 measured the other nineteen, all clearing the +0.03 bar
+  (+0.0469 to +0.1381, seventeen at 12/12 and the weakest at 11/12). **Every
+  operating point now carries the contrast at two budgets.** Wave 25 also
+  answered wave 22's stranded depth question, H22-3, by running the `d32l4`
+  anchor twins it lacked — and answered it **NOT MET**: four widths land within
+  0.013 of their twin and **h768 is 0.1271 away**, outside the 0.10 bar, so
+  **read-out depth replaces the budget as the scope limit** at one width of five
+  ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
+  Wave 24 retired a limit this register never recorded: every DiD in the paper
   rested on ONE destruction operator, and `reversed` — which displaces further
   than bin-shuffling while destroying no information — now shows the cost is not
   displacement brittleness

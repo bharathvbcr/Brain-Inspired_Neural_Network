@@ -76,10 +76,12 @@ reversed task is isomorphic to the intact one. **The difference-in-differences
 under reversal is negative at all three points measured** (−0.0222, −0.0040,
 −0.0099), positive in 2 to 4 of twelve seed quadruples. The cost is not in the
 displacement. The same wave measures the contrast at a **second budget** for the
-first time (**+0.1183** and **+0.0633** at `e100`, 12/12 each) and finds that
-"order" is not the whole story everywhere: at `fixed-t250`, destroying
-cross-channel synchrony *as well as* order costs **+0.1038 more**, so the
-read-out reads synchrony too at at least one operating point.
+first time and finds that "order" is not the whole story. A following wave
+finished both: **all twenty-one operating points now carry the contrast at two
+budgets**, and destroying cross-channel synchrony *as well as* order costs
+**+0.1308**, **+0.1038** and **+0.0575** more at the three `fixed-tN` contracts
+and nothing at either `published-2ms` point. **The read-out reads synchrony as
+well as order, and how much depends on the contract.**
 
 **What that wave also refuted is ours.** The same preregistration asked whether
 the shuffle cost *tracks* the gain across width, and it does not: Spearman
@@ -285,9 +287,13 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
 
    **The operator that carries every one of those numbers is now controlled** (wave 24, preregistered). Until this point every difference-in-differences in this paper rested on a single destruction operator, and `bin-shuffled` destroys temporal order *and* displaces almost every spike. On that evidence "the read-out consumes temporal order" was not distinguishable from "the read-out is more brittle than the rate arm to having its input moved about." The control is **time reversal**, which by the instrument's own per-cell manipulation audit relocates **0.9986** of entries at a mean displacement of **145.2 bins** — against bin-shuffling's 0.9972 and 109.2, so it moves spikes *a third further* — while preserving per-channel counts, cross-channel synchrony and every inter-spike interval. Because the manipulation is applied to the training split as well, a globally reversed task is isomorphic to the intact one: the displacement is maximal and the information loss is nil. **At all three points measured the difference-in-differences under reversal is negative** — −0.0222 at h128/`d32`/L2, −0.0040 at h1024/`d32`/L1, −0.0099 at h128/`fixed-t250`/`d32`/L4 — and positive in 2, 4 and 3 of twelve seed quadruples, against the same +0.03 bar the shuffle clears everywhere. The cost is not in the displacement. It is in what the displacement destroys. ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md))
 
-   **But order is not the whole of it at every operating point.** `bin-shuffled` applies one permutation to every channel, so temporal order dies and within-bin synchrony survives; `channel-shuffled` permutes each channel independently and destroys both. Their difference is what cross-channel synchrony contributes, and the same wave registered it as a question with no directional prediction. At both `published-2ms` points the answer is **order alone** — the two DiDs differ by −0.0117 and −0.0181, inside a ±0.03 band. At **`fixed-t250` destroying synchrony as well as order doubles the cost: +0.2157 against +0.1119**, a difference of **+0.1038**. **The read-out reads cross-channel synchrony as well as temporal order at at least one operating point**, and the paper's one-word summary of the mechanism is incomplete somewhere in the design space. This is one point, not a resolution axis, and nothing here says why the two contracts differ; it is reported as a finding that the abstract's "temporal order" does not cover, not as a characterised effect.
+   **But order is not the whole of it at every operating point.** `bin-shuffled` applies one permutation to every channel, so temporal order dies and within-bin synchrony survives; `channel-shuffled` permutes each channel independently and destroys both. Their difference is what cross-channel synchrony contributes, and the same wave registered it as a question with no directional prediction. At both `published-2ms` points the answer is **order alone** — the two DiDs differ by −0.0117 and −0.0181, inside a ±0.03 band. At **`fixed-t250` destroying synchrony as well as order doubles the cost: +0.2157 against +0.1119**, a difference of **+0.1038**. **The read-out reads cross-channel synchrony as well as temporal order**, and the paper's one-word summary of the mechanism is incomplete. Wave 24 could say that of one operating point; the next paragraph says it of the whole resolution ladder.
 
-   **One of the two limits that travelled with that coverage is retired; the other stands.** Every one of the twenty-one was measured at **`e400`**. Wave 24 measured the contrast at **`e100`** at two of them — **+0.1183** at h128/`d32`/L2 and **+0.0633** at h1024/`d32`/L1, each positive in **12 of 12** seed quadruples and each within 0.005 of its own `e400` value, with reversal still flat at both (−0.0068, −0.0307). The mechanism is not a property of the anchor budget. Two points are not the whole ladder. The remaining limit is unchanged: the wave's registered depth question, H22-3, is **NOT EVALUABLE**: its analyser compares each depth point against a `d32l4` twin on the anchor contract drawn from the wave's own cells, and the plan contains none — the self-containment that makes every other verdict sound is what starves it. The analyser was not edited and no cell was added after the fact. ([`DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md`](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md))
+   **Synchrony is an axis, not a single point.** Wave 24 found the term at `fixed-t250` and nowhere else, and both remaining rungs of that ladder now answer the same way: destroying cross-channel synchrony on top of temporal order costs **+0.1308** more at `fixed-t100` (DiD +0.2631 against +0.1323) and **+0.0575** more at `fixed-t500` (+0.1736 against +0.1161), while both `published-2ms` points sit inside the ±0.03 band and slightly negative. **The read-out reads cross-channel synchrony as well as temporal order, and how much depends on the contract.** As an observation carrying no registered claim, the term falls monotonically as bins get finer — +0.1308, +0.1038, +0.0575 at 14.0, 5.6 and 2.8 ms, and absent at 2 ms — which is the direction a bin-width account predicts, because a wider bin holds more coincident spikes for `channel-shuffled` to destroy and `bin-shuffled` to preserve. Three rungs are three points, no curve is fitted, and the `published-2ms` points differ in sequence length as well as bin width so they are not a fourth rung. ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md))
+
+   **The budget limit is retired.** Wave 24 measured the contrast at `e100` at two of the twenty-one — **+0.1183** at h128/`d32`/L2 and **+0.0633** at h1024/`d32`/L1, each positive in **12 of 12** seed quadruples and each within 0.005 of its own `e400` value, with reversal still flat at both (−0.0068, −0.0307). Wave 25 measured the other nineteen. **All nineteen clear the +0.03 bar**, seventeen at 12/12 seed quadruples and the weakest at 11/12, ranging from **+0.0469** (h1024 `d32l2`) to **+0.1381** (h128 `d64l4`). **Every one of the twenty-one operating points now carries the difference-in-differences at two budgets, and the mechanism is not a property of the anchor budget.** Two budgets are still two budgets; nothing here maps the contrast as a function of training length.
+
+   **The depth question that wave 22 could not evaluate is now answered, and it is answered NOT MET.** H22-3 was **NOT EVALUABLE** because its analyser compares each depth point against a `d32l4` twin on the anchor contract drawn from the wave's own cells and the plan contained none — the self-containment that makes every other verdict sound is what starved it; the analyser was not edited and no cell was added after the fact ([`DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md`](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md)). Wave 25 ran the missing twins as a registered wave of its own rather than as a repair, and against them the contrast is largely indifferent to read-out depth: h128 (`d32l2` **+0.0063**, `d64l4` **+0.0123**), h256 (**+0.0104**) and h512 (**+0.0075**) all sit inside 0.013 of their twin, against a registered bar of 0.10. **h768 `d32l2` is +0.1271 from its twin and outside it**, so the question is answered **NOT MET** and **read-out depth is a scope axis for the mechanism claim, at one width of five.** h768 is also where the campaign records its largest difference-in-differences (+0.1881) and its smallest positive gain (+0.0560); this paper does not explain either, and one point outside a bar is a scope limit to disclose rather than a depth effect to characterise.
 
    **The `gain` and `DiD` columns are over the same seeds everywhere except h1024**, where the DiD is over the twelve quadruples and the gain over the twenty intact pairs waves 18–19 extended that width to; over the twelve quadruple seeds the h1024 gain is **−0.1618**. The rank is identical either way.
 
@@ -372,7 +378,9 @@ The +0.1258 of §3.5 has two readings the campaign could not separate, because e
 
 The difference is **+0.1411** against a bar of 0.03, positive in **10 of 10** recurrent pairs. The scale is not doing the work: `ff+fixed` at 0.4 scores **0.7088** against **0.7062** archived at 1.0, a difference of +0.0026. ([`RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md`](RESULT_2026-08-23_W14_ATTENTION_AND_RECURRENCE_ARE_COMPLEMENTARY.md))
 
-**So substitution is refuted on both axes**, and the read-out's advantage is indifferent to adaptation and *larger* where the substrate is recurrent. Read with §3.5's shuffle result — 94.5% of the advantage contingent on temporal order at n=32 — the claim the paper supports is about what the read-out consumes, not about a deficiency of one substrate.
+**So substitution is refuted on both axes**, and the read-out's advantage is indifferent to adaptation and *larger* where the substrate is recurrent.
+
+**This paragraph used to read that finding through §3.5's shuffle result and conclude that the claim is "about what the read-out consumes". That reading is withdrawn.** Every manipulated cell in this corpus is feed-forward, and the wave registered to fix that — 72 recurrent cells under `intact`, `bin-shuffled` and `reversed` — **could not be evaluated**: ten failed on the instrument's non-finite-training guard, five of them the rate arm under time reversal, leaving the reversal contrast at three seed-paired quadruples against a floor of nine. **Whether the recurrent read-out's advantage is order-dependent is unmeasured**, and this section no longer asserts it. What the attempt did establish is that `rec+alif` at the registered surrogate scale is numerically unstable under time reversal, which is a fact about the substrate and not about the read-out ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
 
 Four limits are load-bearing and are stated here rather than in a footnote.
 
@@ -448,17 +456,25 @@ through 1024, both contracts and both geometries, and
 measured the twelve points that previously carried intact arms with no
 `bin-shuffled` twin, and every one of them clears the registered bar
 ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)). **The budget limit that stood beside that coverage is
-now partly discharged:** every one of the twenty-one was measured at `e400`, and
-wave 24 has since measured the contrast at `e100` at two of them, both clearing
-the registered bar in 12 of 12 seed quadruples and both within 0.005 of their
-own `e400` value. Nineteen points remain single-budget, so the scope limit is
-narrowed rather than removed. The same wave supplies what the mechanism claim
-had never had — a destruction control that is displacement-matched and
-information-preserving — and finds a second, uncharacterised term: at
-`fixed-t250`, destroying cross-channel synchrony as well as order costs +0.1038
-more than destroying order alone, so **"temporal order" is an incomplete
-description of the mechanism at at least one operating point**
-([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md)).
+discharged:** wave 24 measured the contrast at `e100` at two of the twenty-one
+and wave 25 at the other nineteen, and every one of the twenty-one clears the
+registered bar at both budgets. Two budgets are not a curve, and nothing
+maps the contrast as a function of training length. Wave 24 also supplies what
+the mechanism claim had never had — a destruction control that is
+displacement-matched and information-preserving — and finds a second term that
+wave 25 then measured across the resolution ladder: destroying cross-channel
+synchrony as well as order costs +0.1308, +0.1038 and +0.0575 more than
+destroying order alone at `fixed-t100`, `fixed-t250` and `fixed-t500`, and
+nothing at either `published-2ms` point, so **"temporal order" is an incomplete
+description of the mechanism** and how incomplete depends on the contract
+([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md);
+[`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
+**Two limits replace it.** Read-out depth is a scope axis: four of five widths
+put the contrast within 0.013 of their `d32l4` twin and h768 is 0.1271 away,
+outside the registered 0.10 bar. And every manipulated cell in the corpus is
+feed-forward — the registered attempt to measure the recurrent substrate under
+shuffling and reversal returned **NOT EVALUABLE**, ten of its cells lost to the
+instrument's non-finite-training guard.
 We do not claim calibration, and the reason has changed.
 
 Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
