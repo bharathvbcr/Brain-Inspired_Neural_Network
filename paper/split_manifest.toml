@@ -1,0 +1,61 @@
+# Where the page limit falls.
+#
+# NeurIPS 2026 allows nine content pages. Acknowledgments, references, the
+# checklist and technical appendices do not count against that, so the split
+# below is a decision about what a reviewer must read to judge the lead claim,
+# not about what is worth keeping.
+#
+# The principle: the MAIN TEXT is the SHD read-out programme end to end --
+# what the difference-in-differences is, every control on it, every scope
+# limit, and the reproducibility statement. The APPENDIX is the secondary
+# matched-architecture programme, which the manuscript itself describes as
+# "supporting material", plus the integrity appendices.
+#
+# A section listed in neither list is an ERROR, not a default. `build_paper.py`
+# refuses to build rather than silently dropping prose out of the paper, which
+# is the failure this file exists to make impossible.
+
+[main]
+sections = [
+  "Abstract",
+  "0. What is new here, and what is not",
+  "1. Introduction",
+  "2. Methods",
+  "2.3 SHD attention readout",
+  "3. Results",
+  "3.5 SHD attention read-out and mechanism",
+  "3.7 The read-out does not substitute for temporal state in the substrate",
+  "4. Discussion and limitations",
+  "4.1 Lead claim and mechanism",
+  "4.6 Neuromorphic benchmark scope and non-claims",
+  "5. Reproducibility",
+]
+
+[appendix]
+sections = [
+  "Abstract — matched-architecture kill gate (secondary program)",
+  "2.1 Matched dense-LIF control",
+  "2.2 Engine C1 / Gate G2",
+  "3.1 Matched-architecture primary results",
+  "3.2 Engine C1 secondary results",
+  "3.3 Live transfer, gap-close, and break-it",
+  "3.4 Task evidence",
+  # Moved out of the main text 2026-09-03 to fit nine pages. Its conclusion --
+  # that the distance to the reference is a class difference and not a tuning
+  # gap -- is stated in §0 and §4.6, which are both main text. What lives here
+  # is the ablation-by-ablation arithmetic that establishes it: the kernel at
+  # +0.3111, the membrane at +0.1666, and the 0.0378 still unexplained.
+  "3.8 Where 0.8320 sits against the literature, and why the gap is a class difference",
+  # Moved out of the main text 2026-09-03 to fit nine pages. This section is
+  # about the MATCHED program's SuperSpike reference and its saturated ceiling,
+  # not about the SHD instrument -- it belongs beside 3.1-3.4, and reads as a
+  # non-sequitur between the lead's mechanism section and its literature
+  # placement. The lead cites its conclusion in 4.6 rather than restating it.
+  "3.6 The reference is undertrained, and the task saturates",
+  "4.2 Transfer barrier and live negatives",
+  "4.3 Baselines and EventProp H2H",
+  "4.4 Efficiency honesty (F1 / F2 / F5)",
+  "4.5 Appendix-only: G3 / G4 / H0 (do not reopen G2)",
+  "Appendix A — Integrity limitations (protocol v2)",
+  "Appendix B — Post-G2 harvest (banner)",
+]

@@ -290,7 +290,7 @@ supersedes the other**, and the sheet says so.
 
 | marker | value | note |
 |---|---:|---|
-| SHD frontier | **95–96.4%** | learned delays (DCLS, ICLR 2024), adaptation (SE-adLIF, Nat. Commun. 2025), spiking transformers |
+| SHD frontier | **95.07–96.3%** | learned delays (DCLS, ICLR 2024) at the bottom, a state-space model (S7, arXiv:2410.03464) at the top, adaptation (SE-adLIF, Nat. Commun. 2025) between. Verified against primaries 2026-09-03; the band read **95–96.4%** until then and 96.4 had no source |
 | STSC-SNN (Yu et al., 2022) | 92.36% | temporal attention inside the synaptic connection |
 | TA-SNN (Yao et al., ICCV 2021) | 91.08% | squeeze-and-excitation attention over the time axis |
 | **no-delay recurrent baseline** (Cramer et al., 2022) | **83.2 ± 1.3%** | 1024 neurons, with augmentation — **this is the anchor** |
@@ -315,7 +315,7 @@ not.
 **Four things this figure must not be allowed to say.**
 
 1. **It must not present 0.8332 as competitive.** The strip is not decoration:
-   the frontier is 95–96.4% and the honest reading is that this instrument lands
+   the frontier is 95.07–96.3% and the honest reading is that this instrument lands
    **where an architecture carrying no temporal kernel should land**, next to the
    dataset authors’ own no-delay recurrent baseline. Drawing the panel with an
    axis that starts at 0.65, or omitting the frontier marker, would make the bar
@@ -342,8 +342,8 @@ not.
 “Headline accuracy. The time-axis attention read-out reaches **0.8332** against
 the rate read-out’s **0.7057** (gain **+0.1275**, positive in **32/32** seeds,
 **32/32 at or above 0.80**, |e400 − e200| = 0.0002). **This is not
-competitive.** The SHD frontier sits at **95–96.4%**, reached by learned delays,
-adaptation and spiking transformers; this instrument carries **no temporal
+competitive.** The SHD frontier sits at **95.07–96.3%**, reached by learned delays,
+adaptation and a state-space model; this instrument carries **no temporal
 kernel of any kind** and lands beside the dataset authors’ own best-effort
 **no-delay recurrent baseline (83.2 ± 1.3% at 1024 neurons with augmentation)**,
 which is where an architecture of this class should land. The 0.80 clearance is
@@ -741,7 +741,7 @@ a licence to say something the figure may not.
    quantity and is labelled as one.
 
 **Also required on the image, because an abstract travels alone:** that
-**0.8332 is not competitive** — the SHD frontier is 95–96.4% — and that the
+**0.8332 is not competitive** — the SHD frontier is 95.07–96.3% — and that the
 **h1024 inversion** exists. An abstract that omits both reads as a results
 claim about SHD, which the paper explicitly does not make.
 

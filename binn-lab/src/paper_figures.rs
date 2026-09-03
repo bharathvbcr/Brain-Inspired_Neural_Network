@@ -175,11 +175,24 @@ mod nums {
     pub const HEAD_BUDGET_DELTA: f64 = 0.0002;
 
     /// The published field, from `PAPER_DRAFT.md` §0. **Not machine-checked**
-    /// against cells, unlike every other number in this module: assembled by a
-    /// 2026-08-27 search pass, and `check_every_number.py` does not sweep §0.
-    /// The figure says so on its face.
-    pub const FIELD_FRONTIER_LO: f64 = 0.95;
-    pub const FIELD_FRONTIER_HI: f64 = 0.964;
+    /// against cells, unlike every other number in this module -- these come
+    /// from published papers, not from this instrument. They ARE checked
+    /// against their primary sources: every one was read on 2026-09-03 and
+    /// recorded, with the source hashes, in
+    /// `results/CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`. The
+    /// figure says on its face that they are not cell-derived.
+    ///
+    /// **`FIELD_FRONTIER_HI` was 0.964 until that read, and 0.964 was wrong.**
+    /// No source §0 cited reported it, and the sources it named topped out at
+    /// 0.9581; 96.4 turns up in the literature as an S-MNIST result. The
+    /// verified band runs from DCLS's own 95.07 +/- 0.24 (Hammouamri et al.,
+    /// ICLR 2024) to S7's 96.3 (arXiv:2410.03464) -- and the top of it is a
+    /// state-space model with continuously-valued output and augmentation,
+    /// not a spiking network, which is why the caption no longer attributes
+    /// the whole band to delays, adaptation and "spiking transformers". That
+    /// last attribution had no citation at all and is withdrawn.
+    pub const FIELD_FRONTIER_LO: f64 = 0.9507;
+    pub const FIELD_FRONTIER_HI: f64 = 0.963;
     pub const FIELD_STSC_SNN: f64 = 0.9236;
     pub const FIELD_TA_SNN: f64 = 0.9108;
     /// The anchor: the dataset authors' own no-delay recurrent baseline, 1024
@@ -2638,7 +2651,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
 /// different quantity and is labelled as one.
 ///
 /// Two disclosures the spec requires because an abstract travels alone: 0.8332
-/// is **not competitive** against a 95-96.4% frontier, and the gain **inverts
+/// is **not competitive** against a 95.07-96.3% frontier, and the gain **inverts
 /// at h1024**. Without them the image reads as a results claim about SHD.
 fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
@@ -2845,7 +2858,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         root,
         (36, 734),
         &format!(
-            "Accuracy, for scale and no more: the read-out reaches {:.4} against the rate arm's {:.4}. It is NOT COMPETITIVE — the SHD frontier is {:.0}–{:.1}% via learned delays,",
+            "Accuracy, for scale and no more: the read-out reaches {:.4} against the rate arm's {:.4}. It is NOT COMPETITIVE — the SHD frontier is {:.2}–{:.1}% via learned delays,",
             nums::HEAD_ATTN_32,
             nums::HEAD_RATE_32,
             nums::FIELD_FRONTIER_LO * 100.0,
@@ -2857,7 +2870,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
     label(
         root,
         (36, 756),
-        "adaptation and spiking transformers, and this instrument carries no temporal kernel of any kind. No accuracy claim is made and none is drawn larger than the costs above.",
+        "adaptation and a state-space model, and this instrument carries no temporal kernel of any kind. No accuracy claim is made and none is drawn larger than the costs above.",
         13,
         RGBColor(70, 70, 70),
     )?;

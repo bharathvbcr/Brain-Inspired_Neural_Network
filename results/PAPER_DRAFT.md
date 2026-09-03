@@ -42,77 +42,30 @@
 ## Abstract
 
 Adding a time-axis attention read-out to a spiking network raises SHD accuracy
-from 0.7057 to **0.8332** (gain **+0.1275**, positive in 32/32 seeds, 32/32 at or
-above 0.80). That much is unsurprising and not new. The result this paper is
-built on is the **conditional**: when the temporal order of the input is
-destroyed by permuting time bins — independently per sample, in **both the
-training and test splits**, so the task itself becomes rate-solvable — the
-read-out's *advantage over a rate read-out* collapses by **+0.1347**, while the
-rate read-out loses only **+0.0142** of its own. A **9.5× ratio, 32/32 seeds**.
+from 0.7057 to **0.8332** (gain **+0.1275**, positive in 32/32 seeds). That much
+is unsurprising. The result this paper is built on is the **conditional**: when
+the temporal order of the input is destroyed by permuting time bins —
+independently per sample, in **both the training and test splits**, so the task
+itself becomes rate-solvable — the read-out's *advantage over a rate read-out*
+collapses by **+0.1347**, while the rate read-out loses only **+0.0142** of its
+own. That SHD depends on temporal information is established; what has not been
+measured is which *component's* contribution is the order-dependent one. This is
+a difference-in-differences on the **gain**, not on accuracy.
 
-The distinction matters because "SHD depends on temporal order" is already
-established — Cramer et al. (2022) could not exceed 60% on spike-count-only SHD,
-and two 2025 studies reach the same conclusion with model-side and spike-time
-operators. What has not been measured is which *component's* contribution is the
-order-dependent one. This is a difference-in-differences on the **gain**, not on
-accuracy, and it is what the read-out is for.
+Preregistered waves carried the control to **all twenty-one operating points**
+of this instrument, at **two training budgets**, and every one clears its +0.03
+bar. Two further controls decide what "order" means. Time reversal displaces
+spikes *further* than shuffling while destroying no information, and its
+difference-in-differences is flat — so the cost is not brittleness to
+displacement. Destroying cross-channel synchrony *as well as* order costs
+**+0.1308**, **+0.1038** and **+0.0575** more at three binning contracts and
+nothing at two others, so **the read-out reads synchrony as well as order, and
+how much depends on the contract**.
 
-**The contrast is not confined to the configuration it was registered at.** A
-preregistered wave carried the same destruction control to seven further
-operating points: the difference-in-differences clears its +0.03 bar in **12 of
-12 seeds** at h256 (**+0.0862**), h384 (**+0.0767**) and h512 (**+0.0968**), and
-at both alternative binnings — `channels-700` (**+0.1122**) and `published-10ms`
-(**+0.0959**). Coverage goes from **2 of 21 operating points to 9**, spanning
-every width from 128 to 1024 and two contracts and geometries. The read-out's
-contribution is order-dependent across the design space, not at a point.
-
-**The operator is controlled, which is what turns "order" from a label into a
-claim.** Permuting time bins destroys temporal order and displaces almost every
-spike, and until this control the two were not separable. Time reversal
-displaces *further* — 0.9986 of entries relocated at a mean 145.2 bins, against
-bin-shuffling's 0.9972 and 109.2 — while preserving counts, synchrony and every
-interval, and because the manipulation is applied to the training split too, the
-reversed task is isomorphic to the intact one. **The difference-in-differences
-under reversal is negative at all three points measured** (−0.0222, −0.0040,
-−0.0099), positive in 2 to 4 of twelve seed quadruples. The cost is not in the
-displacement. The same wave measures the contrast at a **second budget** for the
-first time and finds that "order" is not the whole story. A following wave
-finished both: **all twenty-one operating points now carry the contrast at two
-budgets**, and destroying cross-channel synchrony *as well as* order costs
-**+0.1308**, **+0.1038** and **+0.0575** more at the three `fixed-tN` contracts
-and nothing at either `published-2ms` point. **The read-out reads synchrony as
-well as order, and how much depends on the contract.**
-
-**What that wave also refuted is ours.** The same preregistration asked whether
-the shuffle cost *tracks* the gain across width, and it does not: Spearman
-**ρ = −0.1430** over the six rungs against a bar of **+0.829**, the n = 6
-one-tailed critical value. h768 carries the **smallest** positive gain on the
-ladder (+0.0560) and the **largest** difference-in-differences in the wave
-(**+0.1881**). So *"the read-out's contribution is order-dependent"* survives and
-is now measured at nine points; *"the gain is made of temporal order"* does not
-survive as a quantitative account, and this paper does not assert it.
-
-We report three scope limits against it. The gain **inverts at width h1024**
-(−0.1618), and on a six-rung ladder that inversion is a threshold — a 0.2178
-drop, 6.9× the largest gap below it — not a continuing slope; three preregistered
-rescue levers all fail. The collapse is **late**, not intrinsic: at the same
-width and depth, truncating the budget to e100 turns the gain from **−0.1318**
-into **+0.0827** in **12 of 12** seeds, and the arm retains its fit in 12 of 12
-where at e400 it loses it in 63 of 68. A `d32/L2` control moves only +0.0149
-over the same budget change, so this is specific to the collapsing arm and not
-a general statement that e400 is past the optimum. **Why the fit is lost is
-still unexplained**, and the anchor budget is now known to be past the optimum
-at this width and depth
-([`RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md`](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md)). The 0.80
-clearance is geometry-specific. And **0.8332 is not competitive**: the SHD
-frontier sits at 95–96.4% via learned delays, adaptation, and spiking
-transformers. This instrument carries **no temporal kernel of any kind**, and it
-lands where the literature puts a no-delay recurrent SNN. Four preregistered
-ablations fail to explain the 0.087 residual against a delay-free reference; the
-term-by-term reading attributes it to a 25-tap learned kernel per synapse that
-the reference has and the instrument does not. That attribution rests on
-elimination and code-reading, **not on an ablation that added the kernel**, and
-is the paper's weakest load-bearing inference.
+The paper's own registered prediction failed: the size of the effect does not
+track the gain (Spearman **ρ = −0.1430** against a bar of +0.829). We claim
+presence, not proportion, and report four scope limits — width, read-out depth,
+geometry, and a substrate on which the question could not be asked.
 
 ## Abstract — matched-architecture kill gate (secondary program)
 
@@ -127,15 +80,21 @@ Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a 
 ## 0. What is new here, and what is not
 
 > **Provenance of the citations in this section.** The literature positioning
-> below was assembled by a search pass on 2026-08-27, not by the author reading
-> each source. Numbers marked here were reported as extracted from the primary
-> PDF or a Crossref record; a further set encountered during that search
-> (Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR 95.60, d-cAdLIF 94.85) came only
-> from a secondary comparison table and is **deliberately excluded** from the
-> claims below. **Every citation in this section must be checked against its
-> primary source before submission.** Unlike every SHD number in this paper,
-> none of them is machine-verified against cells on disk, and
-> `scripts/check_every_number.py` does not sweep this document.
+> below was assembled by a search pass on 2026-08-27 and **was read against its
+> primary sources on 2026-09-03**. Each source was retrieved as a PDF, the cited
+> number located in the source's own words, and the bibliographic fields taken
+> from the arXiv API and Crossref. **Three claims were wrong**: the frontier
+> band's upper bound, the attribution of that band, and the description of Yu et
+> al. (2025). All three are corrected below, and every check — including the
+> failures — is recorded with the source hashes in
+> [`CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md)
+> and gated by `scripts/check_section0_citations.py`. Four numbers seen during
+> the original search (Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR 95.60,
+> d-cAdLIF 94.85) came only from a secondary comparison table; this pass did not
+> reach their primaries either, and they remain **excluded** from every claim
+> here. Percentages in this section are quoted from published papers and are
+> **not** machine-checked against cells on disk, which is what every SHD number
+> elsewhere in this paper is.
 
 
 This paper's SHD result sits in a populated field and the boundary is stated
@@ -151,22 +110,40 @@ embeddings. The specific placement used here — attention **only** at the
 read-out, replacing the field's default unweighted Σₜ softmax(u[t]) — appears
 unoccupied, but a configuration gap is not a mechanism.
 
-**Not new: that SHD depends on temporal order.** The dataset's own authors
-constructed spike-count-only variants and could not exceed **60%** on SHD
-(Cramer et al., IEEE TNNLS 33(7), 2022). The Neuromorphic Sequential Arena
-(IJCAI 2025) removes temporal processing model-side and reports SHD falling
-86.48 → 68.51. Yu et al. (arXiv:2507.16043, 2025) randomise spike times while
-preserving counts, and separately reverse time, on SHD directly. Three
-independent destruction operators, one conclusion, all of it prior to this work.
+**Not new: that SHD depends on temporal information.** The dataset's own authors
+constructed spike-count-only variants — patterns "without temporal information" —
+and report that no linear or nonlinear classifier on them could "surpass the 60 %
+accuracy mark for the SHD" (Cramer et al., IEEE TNNLS 33(7):2744–2757, 2022). The
+Neuromorphic Sequential Arena (IJCAI 2025) removes temporal propagation
+**model-side** rather than data-side and reports SHD falling 86.48 → 68.51 (its
+Table S4). Two destruction operators on two different sides of the model, one
+conclusion, both prior to this work. Neither separates *order* from the other
+things a spike train carries, which is what §3.5 does and what makes synchrony
+visible there as a second term.
 
-**Not new, and worth conceding plainly: the accuracy.** The SHD frontier is
-95–96.4%, reached by learned delays (DCLS, ICLR 2024), adaptation (SE-adLIF,
-Nature Communications 2025), and spiking transformers. This instrument's 0.8332
-is not in that band and is not offered as if it were. It is close to the
+**Not new, and worth conceding plainly: the accuracy.** The SHD frontier runs
+from **95.07 ± 0.24%** — learned delays (DCLS, ICLR 2024), the best published
+result from a model of this general class — to **96.3%**, held by a state-space
+model (S7, arXiv:2410.03464) whose SHD entry uses data augmentation and
+continuously-valued rather than spiking output. Adaptation reaches **95.81 ±
+0.56%** in between (SE-adLIF, Nature Communications 2025). This instrument's
+0.8332 is not in that band and is not offered as if it were. It is close to the
 best-effort no-delay recurrent baseline the dataset's authors themselves report
 (83.2 ± 1.3% at 1024 neurons with augmentation), which is where an architecture
 carrying no temporal kernel should land, and is the external corroboration §3.8
 argues for from ablation alone.
+
+**Prior work that corroborates the reversal control, rather than the shuffle
+result.** Yu et al. (arXiv:2507.16043, 2025) reverse time on SHD with an operator
+that, in their words, "perturb[s] spatio-temporal spike patterns but leave[s]
+interspike intervals and coincidence information unchanged" — the same
+information-preserving property §3.5's `reversed` control was built to have. Their
+finding is that "when axonal delays are not used, networks perform well under time
+reversal, whereas networks trained with delays perform poorly." This instrument
+has no delays and no temporal kernel, and its reversal difference-in-differences is
+flat at all three points measured. **That is an independent prediction of what
+§3.5 observes**, and it is the reason the reversal result is reported here as a
+control that behaved as the literature says it should rather than as a surprise.
 
 **New: which component's contribution is the order-dependent one.** Every result
 above measures how much *accuracy* survives destroying temporal structure. None
@@ -176,24 +153,27 @@ against the rate read-out's own, on the same seeds, same splits, same
 destruction operator — and we find no published equivalent for any read-out on
 any neuromorphic benchmark.
 
-**The claim is about presence, not proportion.** Measured across nine operating
-points, the order-dependence is present everywhere and its *size* is uncorrelated
-with the gain (§3.5). The contribution is therefore a statement about what the
+**The claim is about presence, not proportion.** Measured across **all
+twenty-one** operating points and at two training budgets, the order-dependence is
+present everywhere and its *size* is uncorrelated with the gain (§3.5). The contribution is therefore a statement about what the
 read-out consumes, and explicitly not a decomposition of the gain into an
 order-dependent share and a remainder.
 
 **New, and unsupported in either direction: the width collapse.** No published
 work reports an attention read-out degrading with hidden width, and none reports
 gradient pathology in an attention read-out over spike trains. Width normally
-*helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner: 3×128 →
-3×1024 improves 92.88 → 94.62). §3.5's inversion is therefore an anomaly against
-the baseline expectation with no citation to lean on, and the parsimonious
-alternative — overfitting on 8,156 training samples, which Cramer et al. document
-as severe — is **not excluded by anything in this paper**.
+*helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner: RadLIF at
+3×128 → 3×1024 improves 92.88 → 94.62). §3.5's inversion is therefore an anomaly
+against the baseline expectation with no citation to lean on, and the parsimonious
+alternative — overfitting on the **8,156** training samples every cell in this
+campaign records loading — is **not excluded by anything in this paper**. Cramer
+et al. report overfitting on SHD repeatedly, and that noise injection reduced it.
 
 **A caveat on the benchmark itself.** SHD ships no validation set. Baronig et al.
-(2025) report the same model at 95.81 ± 0.56 validating on test "to ensure
-comparability" and 93.79 ± 0.76 with a proper held-out split — a two-point gap.
+(2025) — the SE-adLIF paper cited above, not a separate source — report the same
+model at 95.81 ± 0.56 validating on the test set "to ensure comparability" and
+93.79 ± 0.76 with 20% of training held out instead: a two-point gap that is a
+property of the protocol, not of the model.
 Differences below ~1.5 points between published SHD numbers are not reliably
 meaningful, and that applies to this paper's comparisons as much as anyone's.
 
@@ -201,11 +181,62 @@ meaningful, and that applies to this paper's comparisons as much as anyone's.
 
 ## 1. Introduction
 
-Claims that sparse assemblies can learn without backpropagation are only as strong as the object under test. Much of the rhetoric around local synaptic learning mixes rule topology, neuromodulator richness, and spiking front-end engineering. We separate those factors with a preregistered matched-architecture kill gate: the dense-LIF forward, width, frames, readout, splits, and seeds are held fixed, and only the update rule changes.
+A read-out that weights a spiking network's hidden state over time buys accuracy
+on SHD. Everyone who has added one reports that, and this paper reproduces it:
+0.7057 to **0.8332** at the headline configuration, positive in 32 of 32 seeds
+and at or above 0.80 in 32 of 32. The interesting question is not whether it
+helps but **what it is consuming**, and an accuracy number cannot answer that,
+because the mechanism and the improvement are confounded in it.
 
-The narrow primary hypothesis is that a **broadcast ±1 three-factor** rule—surrogate eligibility multiplied by a single ±1 reward—is insufficient to recover SuperSpike BPTT accuracy on a coincidence discrimination task under fixed Gate G2 thresholds. A contrast hypothesis is that richer or more local credit (graded DFA; REINFORCE × frozen feedback weights) can clear the same matched gate. A transfer hypothesis asks whether matched PASS transfers to live muted-θ / k-WTA C1; the honest package answer is **no** (v13–v24 FAIL). On standard neuromorphic audio benchmarks (SHD), we test whether temporal self-attention readouts can unlock temporal order in spiking representations.
+**The design.** Pair the attention arm against a rate read-out that is identical
+in every other respect, on the same seeds and splits, and measure the gain.
+Then destroy the temporal order of the input — permuting time bins
+independently per sample, in the training split as well as the test split, so
+that the task itself becomes rate-solvable rather than merely harder — and
+measure the gain again. The difference of those two differences is the
+quantity this paper reports. It is a statement about a component's marginal
+contribution, not about how much accuracy survives a corrupted input, and it is
+what distinguishes this from prior work: that SHD depends on temporal
+information has been shown from the data side (Cramer et al., 2022) and from the
+model side (Chen et al., 2025), but neither localises the dependence to a part
+of the network.
 
-We treat the hashed C1 production loop as a secondary, softer negative: it fails its operationalized gate under static scalar modulation, but integrity caveats reduce how far that failure alone can be generalized. Throughout, we refuse biology, neuromorphic hardware, and impossibility claims. Mechanism evidence is summarized as richness × addressability (Figure M; Section 3.1 / 3.4) and temporal order (Section 3.5).
+**Three controls decide whether "order" is a label or a claim.** Bin-shuffling
+destroys order *and* displaces almost every spike, so on that operator alone the
+result is not distinguishable from "the attention arm is the more brittle of the
+two". **Time reversal** displaces further — 0.9986 of entries relocated at a
+mean 145.2 bins, against bin-shuffling's 0.9972 and 109.2 — while preserving
+counts, cross-channel synchrony and every interval; applied to the training
+split too, it leaves a task isomorphic to the intact one. Its
+difference-in-differences is negative at all three points measured, so the cost
+is in what the displacement destroys and not in the displacement.
+**Channel-shuffling** destroys order and synchrony together, and the gap between
+the two operators is what synchrony is worth. **A second training budget**
+separates the mechanism from the schedule it was measured on.
+
+**Coverage, because a mechanism claim at one configuration is a configuration
+result.** The contrast is measured at every one of the twenty-one operating
+points this instrument defines — widths 128 to 1024, both binning contracts,
+both channel geometries, five read-out depths — and at two budgets at each.
+
+**What failed is reported at the same weight as what held.** The registered
+prediction that the shuffle cost would *track* the gain across width is refuted
+(Spearman ρ = −0.1430 against a one-tailed n = 6 bar of +0.829); the width at
+which the gain is smallest carries the largest difference-in-differences. So the
+claim this paper defends is that the read-out's contribution **is**
+order-dependent, and explicitly not that the gain decomposes into an
+order-dependent share and a remainder. Section 4.1 states the four scope limits
+that travel with it.
+
+**A secondary programme is reported in the appendix.** A preregistered
+matched-architecture kill gate holds a dense-LIF forward, width, frames,
+read-out, splits and seeds fixed and changes only the update rule, and finds
+that a broadcast ±1 three-factor rule fails a task every other rule tested
+saturates, while live muted-θ / k-WTA transfer fails outright. It is the
+programme this manuscript was originally built around; it is supporting material
+now, and it is bounded by a reference that saturates the task (Appendix,
+§3.6). Throughout, we refuse claims about biology, neuromorphic hardware, and
+the impossibility of local learning in principle.
 
 ---
 
@@ -262,7 +293,7 @@ The ladder from the matched PASS down through every live arm (Figure 8) is drawn
 
 ### 3.4 Task evidence
 
-On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip (Figure 9). On mid-init two-layer depth locality, broadcast also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
+On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip (Figure 9). On mid-init two-layer depth locality, broadcast error also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
 
 ### 3.5 SHD attention read-out and mechanism
 
@@ -285,7 +316,7 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
 
    **Coverage is complete, and the dissociation is wider than one width** (wave 22, preregistered). The twelve operating points that previously carried intact arms with no `bin-shuffled` twin were measured on a **self-contained** 504-cell wave — all four arms on one binary, because pairing new shuffled halves against archived intact halves would have built every difference-in-differences from two binaries. **All twelve clear the registered +0.03 bar**, the smallest at **+0.0610** and the weakest positive count at **11 of 12**, so `scripts/mechanism_coverage.py` now reports **21 of 21**. What that buys is not only coverage. At **h1024/`d32`/L1 the read-out makes accuracy worse — gain −0.0159 — and destroying temporal order still costs it +0.0675 in 12 of 12 seeds**; at h512 the gain is **+0.0043**, indistinguishable from nothing, against a DiD of **+0.0893**; and `channels-700` gains **+0.0243** while carrying the wave's largest DiD, **+0.1369**. The dissociation above was found at h1024 and recorded as this paper's leading open problem; it is **not an h1024 pathology**, and it recurs at widths and geometries where nothing collapses. ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md))
 
-   **The operator that carries every one of those numbers is now controlled** (wave 24, preregistered). Until this point every difference-in-differences in this paper rested on a single destruction operator, and `bin-shuffled` destroys temporal order *and* displaces almost every spike. On that evidence "the read-out consumes temporal order" was not distinguishable from "the read-out is more brittle than the rate arm to having its input moved about." The control is **time reversal**, which by the instrument's own per-cell manipulation audit relocates **0.9986** of entries at a mean displacement of **145.2 bins** — against bin-shuffling's 0.9972 and 109.2, so it moves spikes *a third further* — while preserving per-channel counts, cross-channel synchrony and every inter-spike interval. Because the manipulation is applied to the training split as well, a globally reversed task is isomorphic to the intact one: the displacement is maximal and the information loss is nil. **At all three points measured the difference-in-differences under reversal is negative** — −0.0222 at h128/`d32`/L2, −0.0040 at h1024/`d32`/L1, −0.0099 at h128/`fixed-t250`/`d32`/L4 — and positive in 2, 4 and 3 of twelve seed quadruples, against the same +0.03 bar the shuffle clears everywhere. The cost is not in the displacement. It is in what the displacement destroys. ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md))
+   **The operator that carries every one of those numbers is now controlled** (wave 24, preregistered). Until this point every difference-in-differences in this paper rested on a single destruction operator, and `bin-shuffled` destroys temporal order *and* displaces almost every spike. On that evidence "the read-out consumes temporal order" was not distinguishable from "the read-out is more brittle than the rate arm to having its input moved about." The control is **time reversal**, which by the instrument's own per-cell manipulation audit relocates **0.9986** of entries at a mean displacement of **145.2 bins** — against bin-shuffling's 0.9972 and 109.2, so it moves spikes *a third further* — while preserving per-channel counts, cross-channel synchrony and every inter-spike interval. Because the manipulation is applied to the training split as well, a globally reversed task is isomorphic to the intact one: the displacement is maximal and the information loss is nil. **At all three points measured the difference-in-differences under reversal is negative** — −0.0222 at h128/`d32`/L2, −0.0040 at h1024/`d32`/L1, −0.0099 at h128/`fixed-t250`/`d32`/L4 — and positive in 2, 4 and 3 of twelve seed quadruples, against the same +0.03 bar the shuffle clears everywhere. The cost is not in the displacement. It is in what the displacement destroys. **This is the one result in the paper with an independent prediction behind it**: Yu et al. (2025) report that delay-free networks are robust to a time reversal that preserves intervals and coincidences, and this instrument has no delays (§0). ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md))
 
    **But order is not the whole of it at every operating point.** `bin-shuffled` applies one permutation to every channel, so temporal order dies and within-bin synchrony survives; `channel-shuffled` permutes each channel independently and destroys both. Their difference is what cross-channel synchrony contributes, and the same wave registered it as a question with no directional prediction. At both `published-2ms` points the answer is **order alone** — the two DiDs differ by −0.0117 and −0.0181, inside a ±0.03 band. At **`fixed-t250` destroying synchrony as well as order doubles the cost: +0.2157 against +0.1119**, a difference of **+0.1038**. **The read-out reads cross-channel synchrony as well as temporal order**, and the paper's one-word summary of the mechanism is incomplete. Wave 24 could say that of one operating point; the next paragraph says it of the whole resolution ladder.
 

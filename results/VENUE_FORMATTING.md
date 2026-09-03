@@ -1,7 +1,19 @@
-# Venue formatting notes (skeleton)
+# Venue formatting notes
 
-Status: **skeleton + bibliography stubs** (REPRO §G partially checked). Final
-camera-ready style pass still open once venue is chosen.
+Status: **venue chosen, template applied, anonymous PDF building and gated**
+(2026-09-03). The submission is **NeurIPS 2026, main track, double-blind**, and
+it builds from the manuscript rather than from a parallel `.tex`:
+
+```
+python3 scripts/build_paper.py        # generate, compile, and check
+python3 scripts/build_paper.py --check   # check a build already on disk
+```
+
+`scripts/build_paper.py --check` runs inside `record_checks.sh` and fails on
+any of: a modified style file, a section in neither half of the split, a paper
+over nine content pages, or an identity leaking into the body text or the PDF
+metadata. Each of those failures otherwise looks exactly like a finished
+paper.
 
 Companion: [`references.bib`](references.bib) · [`PAPER_DRAFT.md`](PAPER_DRAFT.md) · [`PAPER_SKELETON.md`](PAPER_SKELETON.md) · [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md)
 
@@ -43,10 +55,28 @@ Two programs, in this order:
 | Negative-results track | Fits the **secondary** program alone, and would bury the lead | Only if the lead is withdrawn |
 | "Brain-like AI" venues | **Avoid** unless claims rewritten down | Would overclaim Assembly Calculus / cortex |
 
-**Working default:** ML methods track, anonymous submission, venue template TBD.
-The lead is a positive, preregistered contrast with a destroyed-structure
-control; a negative-results venue is the wrong home for it and was the right
-home for the paper this file used to describe.
+**Chosen 2026-09-03: NeurIPS 2026 main track, double-blind.** The lead is a
+positive, preregistered contrast with a destroyed-structure control; a
+negative-results venue is the wrong home for it and was the right home for the
+paper this file used to describe. Nine content pages, with references, the
+checklist and technical appendices excess to that.
+
+**The style file is pinned by hash and was not taken from the first search
+result.** `media.neurips.cc` 404s for the 2026 styles, so the file was recovered
+from two unrelated arXiv submissions that ship it, which agree byte-for-byte.
+The most findable third-party "unified" template is **27 lines longer** than
+that — added comments and an extra `\AtBeginDocument` block — which is a
+modified style file, and NeurIPS says modifying it may be grounds for desk
+rejection. See [`../paper/STYLE_PROVENANCE.md`](../paper/STYLE_PROVENANCE.md).
+
+**Where the page limit falls** is written down, not implicit:
+[`../paper/split_manifest.toml`](../paper/split_manifest.toml) lists every
+section as main text or appendix, and the build refuses a section that is in
+neither. The main text is the SHD read-out programme end to end; the appendix is
+the matched-architecture programme, which this manuscript already calls
+supporting material. Fitting nine pages moved three sections out — §3.6, §3.8
+and the whole secondary programme — and rewrote two: the abstract had grown to
+795 words and the introduction was still about the paper this one replaced.
 
 ---
 
@@ -87,13 +117,25 @@ home for the paper this file used to describe.
       24 July. Both are now owned by `binn-lab/src/paper_figures.rs`, and
       `scripts/test_paper_figures_match_the_spec.py` checks each against the
       Table it cites and asserts every ban its spec section names
-- [ ] Venue template applied (NeurIPS/ICML/TMLR/… `.sty` / Overleaf)
-- [ ] Anonymous PDF build
-- [ ] Caption pass against [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) —
-      Figures 1 and 6 carry **required wording** in the spec and the rest do
-      not; writing the remaining seven is the open half
-- [ ] Page budget / appendix split (G3/G4/H0 appendix-only)
-- [ ] Final copy-edit for "broadcast ±1 three-factor" terminology consistency
+- [x] **Venue template applied** 2026-09-03 — NeurIPS 2026, `neurips_2026.sty`
+      pinned at `0c1ad369…`, verified by two independent copies agreeing
+- [x] **Anonymous PDF build** 2026-09-03 — `scripts/build_paper.py`, checked
+      for identity in the rendered text *and* in the PDF metadata, which fail
+      separately: pdflatex writes `/Author` from the environment unasked
+- [x] **Caption pass** 2026-09-03 — and it turned out not to be writing work.
+      This file said "Figures 1 and 6 carry required wording and the rest do
+      not"; the spec in fact carries a `**Caption (required wording):**` block
+      for **all seven**. So the build now READS them from
+      [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) instead of holding a
+      second copy, and a figure the spec does not caption is not typeset
+- [x] **Page budget / appendix split** 2026-09-03 — nine content pages of nine,
+      split written down in `paper/split_manifest.toml`
+- [x] **Terminology check** 2026-09-03 — `scripts/check_terminology.py`. The
+      requirement was recorded in four documents and checked in none, and one
+      sentence in §3.4 had already drifted to a bare `broadcast` for an arm the
+      figure spec calls `err_broadcast`. 102 uses now checked
+- [x] **§0's citations read against their primaries** 2026-09-03 — three were
+      wrong ([`CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md))
 
 ---
 
@@ -190,6 +232,10 @@ Orphans under `results/fig1_ladder.png` etc. are **not** camp MUST artwork.
 
 ## Bibliography ownership
 
-Primary stubs live in [`references.bib`](references.bib). Expand DOIs / venue
-pages when locking the template. Prefer citing on-disk hashes in Methods over
-inventing external "BINN" papers.
+[`references.bib`](references.bib) carries **ten SHD-literature entries whose
+every field — volume, issue, pages, DOI, venue — came from the arXiv API or
+Crossref on 2026-09-03**, not from recollection, alongside the secondary
+programme's older stubs. `scripts/check_section0_citations.py` fails if that
+file and the verification record disagree about which sources exist.
+
+Prefer citing on-disk hashes in Methods over inventing external "BINN" papers.

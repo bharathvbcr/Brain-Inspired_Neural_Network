@@ -1,6 +1,15 @@
-% BINN camera-ready bibliography stubs
-% Expand DOIs / pages when locking a venue template.
+% BINN camera-ready bibliography
 % Do not invent citations; prefer on-disk hashes in Methods.
+%
+% The ten SHD-literature entries below were read against their primary sources
+% on 2026-09-03 and every field here -- volume, issue, pages, DOI, venue --
+% comes from the arXiv API or Crossref rather than from recollection. The
+% check, including the three claims it corrected, is
+% results/CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md, and
+% scripts/check_section0_citations.py fails if this file and that record
+% disagree about which sources exist.
+%
+% The entries above that line are the secondary program's and are still stubs.
 
 @article{superspike2018,
   title   = {SuperSpike: Supervised Learning in Multilayer Spiking Neural Networks},
@@ -56,4 +65,114 @@
   year         = {2026},
   howpublished = {On-disk: results/PUBLISHABLE\_CLAIMS.md, results/PAPER\_RESULTS\_TABLE.md},
   note         = {Authority for camera-ready numbers; cite hashes not this stub alone}
+}
+
+
+% ---------------------------------------------------------------------------
+% SHD literature (lead program). Verified 2026-09-03 against primaries.
+% ---------------------------------------------------------------------------
+
+@article{cramer2022,
+  title   = {The {Heidelberg} Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks},
+  author  = {Cramer, Benjamin and Stradmann, Yannik and Schemmel, Johannes and Zenke, Friedemann},
+  journal = {IEEE Transactions on Neural Networks and Learning Systems},
+  volume  = {33},
+  number  = {7},
+  pages   = {2744--2757},
+  year    = {2022},
+  doi     = {10.1109/TNNLS.2020.3044364},
+  note    = {SHD/SSC datasets. Spike-count-only variants do not exceed 60\% on SHD; best-effort recurrent baseline 83.2 $\pm$ 1.3\% at 1024 neurons with augmentation}
+}
+
+@inproceedings{yao2021tasnn,
+  title     = {Temporal-wise Attention Spiking Neural Networks for Event Streams Classification},
+  author    = {Yao, Man and Gao, Huanhuan and Zhao, Guangshe and Wang, Dingheng and Lin, Yihan and Yang, Zhaoxu and Li, Guoqi},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2021},
+  eprint    = {2107.11711},
+  archivePrefix = {arXiv},
+  note      = {Squeeze-and-excitation attention over the time axis; 91.08\% on SHD}
+}
+
+@article{yu2022stsc,
+  title   = {{STSC-SNN}: Spatio-Temporal Synaptic Connection with Temporal Convolution and Attention for Spiking Neural Networks},
+  author  = {Yu, Chengting and Gu, Zheming and Li, Da and Wang, Gaoang and Wang, Aili and Li, Erping},
+  journal = {Frontiers in Neuroscience},
+  volume  = {16},
+  year    = {2022},
+  doi     = {10.3389/fnins.2022.1079357},
+  note    = {Temporal attention inside the synaptic connection; 92.36\% on SHD}
+}
+
+@inproceedings{okabe2018,
+  title     = {Attentive Statistics Pooling for Deep Speaker Embedding},
+  author    = {Okabe, Koji and Koshinaka, Takafumi and Shinoda, Koichi},
+  booktitle = {Proc. Interspeech 2018},
+  pages     = {2252--2256},
+  year      = {2018},
+  doi       = {10.21437/Interspeech.2018-993},
+  note      = {Attention as a temporal read-out outside spiking networks}
+}
+
+@inproceedings{hammouamri2024dcls,
+  title     = {Learning Delays in Spiking Neural Networks using Dilated Convolutions with Learnable Spacings},
+  author    = {Hammouamri, Ilyass and Khalfaoui-Hassani, Ismail and Masquelier, Timoth\'{e}e},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2024},
+  eprint    = {2306.17670},
+  archivePrefix = {arXiv},
+  note      = {Learned delays; the paper's own SHD result is 95.07 $\pm$ 0.24\%}
+}
+
+@article{baronig2025,
+  title   = {Advancing Spatio-Temporal Processing in Spiking Neural Networks through Adaptation},
+  author  = {Baronig, Maximilian and Ferrand, Romain and Sabathiel, Silvester and Legenstein, Robert},
+  journal = {Nature Communications},
+  volume  = {16},
+  number  = {1},
+  pages   = {5776},
+  year    = {2025},
+  doi     = {10.1038/s41467-025-60878-z},
+  note    = {SE-adLIF. 95.81 $\pm$ 0.56\% validating on the SHD test set and 93.79 $\pm$ 0.76\% with 20\% of training held out}
+}
+
+@misc{yu2025timing,
+  title         = {Beyond Rate Coding: Surrogate Gradients Enable Spike Timing Learning in Spiking Neural Networks},
+  author        = {Yu, Ziqiao and Sun, Pengfei and Akarca, Danyal and Goodman, Dan F. M.},
+  year          = {2025},
+  eprint        = {2507.16043},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.NE},
+  note          = {Time reversal preserving ISIs and coincidences; delay-free networks are robust to it}
+}
+
+@inproceedings{chen2025nsa,
+  title     = {Neuromorphic Sequential Arena: A Benchmark for Neuromorphic Temporal Processing},
+  author    = {Chen, Xinyi and Ma, Chenxiang and Wu, Yujie and Tan, Kay Chen and Wu, Jibin},
+  booktitle = {Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelligence (IJCAI)},
+  year      = {2025},
+  eprint    = {2505.22035},
+  archivePrefix = {arXiv},
+  note      = {Table S4: removing temporal propagation model-side drops SHD 86.48 to 68.51}
+}
+
+@misc{soydan2024s7,
+  title         = {{S7}: Selective and Simplified State Space Layers for Sequence Modeling},
+  author        = {Soydan, Taylan and Zubi\'{c}, Nikola and Messikommer, Nico and Mishra, Siddhartha and Scaramuzza, Davide},
+  year          = {2024},
+  eprint        = {2410.03464},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG},
+  note          = {96.3\% on SHD; a state-space model with continuously-valued output and augmentation, not a spiking network}
+}
+
+@article{bittar2022,
+  title   = {A surrogate gradient spiking baseline for speech command recognition},
+  author  = {Bittar, Alexandre and Garner, Philip N.},
+  journal = {Frontiers in Neuroscience},
+  volume  = {16},
+  pages   = {865897},
+  year    = {2022},
+  doi     = {10.3389/fnins.2022.865897},
+  note    = {RadLIF. Table 5: 3 layers of 128 units 92.88\%, 3 layers of 1024 units 94.62\%}
 }

@@ -2,7 +2,7 @@
 
 # Record index
 
-341 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+342 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -30,7 +30,7 @@
 | Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
-| Other | 26 | 0 |
+| Other | 27 | 0 |
 
 ## Retired documents
 
@@ -542,10 +542,11 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-03 | [CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md) | §0's citations, read against their primary sources |
 | 2026-08-02 | [PERF_AUDIT_2026-08-02.md](PERF_AUDIT_2026-08-02.md) | Performance audit — hot path, 2026-08-02 |
 | 2026-07-25 | [MOVING_FORWARD_2026-07-25.md](MOVING_FORWARD_2026-07-25.md) | Moving forward — 2026-07-25 |
 | 2026-07-25 | [GAPFIX_2026-07-25.md](GAPFIX_2026-07-25.md) | BINN overnight gap fixes — 2026-07-25 |
-| — | [VENUE_FORMATTING.md](VENUE_FORMATTING.md) | Venue formatting notes (skeleton) |
+| — | [VENUE_FORMATTING.md](VENUE_FORMATTING.md) | Venue formatting notes |
 | — | [V147_POST_STOP_QUARANTINE.md](V147_POST_STOP_QUARANTINE.md) | v147 post-stop quarantine |
 | — | [U-NEG_protocol_v2.md](U-NEG_protocol_v2.md) | U-NEG — scoped negative note (protocol v2) |
 | — | [TEMPORAL_ELIGIBILITY_V147_DECISION.md](TEMPORAL_ELIGIBILITY_V147_DECISION.md) | v147 decision |

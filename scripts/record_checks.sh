@@ -34,6 +34,19 @@ run "every internal record link resolves" python3 scripts/check_record_links.py
 # number in a wave result, and so can catch one nobody thought to name. It prints
 # its own coincidence rate; verify_published_numbers.py above is the strong check.
 run "every wave-result number is derivable" python3 scripts/check_every_number.py
+# The sweep above is four-decimal and reads cells, so it cannot see §0: its
+# numbers are two-decimal percentages quoted out of published papers. They were
+# read against their primaries on 2026-09-03 and three were wrong. This keeps
+# §0 a closed set -- a new percentage there has to arrive with a source read.
+run "every §0 citation is covered by a primary" python3 scripts/check_section0_citations.py
+# The submission itself. Checks the page limit, anonymity in body AND metadata,
+# and that the style file is the unmodified one -- three failures that all look
+# exactly like a finished paper in the output.
+run "the submission builds anonymous and within the page limit" python3 scripts/build_paper.py --check
+# The lead matched FAIL is broadcast ±1 three-factor, NOT broadcast credit
+# topology in general -- broadcast-graded reaches 0.9975 on the same schedule.
+# Four documents recorded that requirement and none checked it.
+run "the lead matched FAIL is never widened to 'broadcast'" python3 scripts/check_terminology.py
 # The analyser is frozen so that IT is the authority. That only helps if what
 # gets published is what it said, and every verdict in a write-up is retyped.
 run "published verdicts match their analyser" python3 scripts/check_verdicts_transcribed.py

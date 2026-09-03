@@ -65,19 +65,34 @@ confirming exactly the intended test fails:
 
 Nothing below is code-closeable today. Each says what it is blocked on.
 
-### 2.1 Blocked on a venue decision (one decision unblocks four)
+### 2.1 Blocked on a venue decision — DECIDED AND CLOSED 2026-09-03
 
-`VENUE_FORMATTING.md` records the working default as an ML-methods track with
-an anonymous submission, and the template as TBD. Until that is a choice rather
-than a default:
+The venue is **NeurIPS 2026, main track, double-blind**, and all four things
+that hung off the decision are done. `python3 scripts/build_paper.py` generates
+the `.tex` from `PAPER_DRAFT.md`, compiles it, and checks it; the check runs
+inside `record_checks.sh`.
 
-- **Venue template applied** (`.sty` / Overleaf).
-- **Anonymous PDF build.**
-- **Page budget and appendix split.** G3 / G4 / H0 are appendix-only; where the
-  split falls depends on the page limit.
-- **Caption pass.** Figures 1 and 6 carry **required wording** in the spec;
-  the other seven do not, and writing them is prose work that a template's
-  caption style constrains.
+- **Venue template applied.** `neurips_2026.sty`, pinned at `0c1ad369…`.
+  Getting it was not a download: `media.neurips.cc` 404s for the 2026 styles,
+  and the most findable third-party template is **27 lines longer** than the
+  real one. The file used was recovered from two unrelated arXiv submissions
+  that agree byte-for-byte ([`../paper/STYLE_PROVENANCE.md`](../paper/STYLE_PROVENANCE.md)).
+- **Anonymous PDF build.** Checked in the rendered text *and* in the PDF
+  metadata, which fail separately — pdflatex fills `/Author` from the
+  environment without being asked.
+- **Page budget and appendix split.** **Nine content pages of nine.** The split
+  is written down in [`../paper/split_manifest.toml`](../paper/split_manifest.toml)
+  and a section in neither half stops the build. Fitting it moved §3.6, §3.8 and
+  the whole secondary programme to the appendix, and rewrote two sections that
+  were stale independently of the page count: a **795-word abstract** still
+  claiming coverage of "2 of 21 operating points" and a frontier of 95–96.4%,
+  and an introduction still framing the paper around the matched-architecture
+  kill gate this manuscript demoted in August.
+- **Caption pass — and it was not writing work.** The register said Figures 1
+  and 6 carried required wording and "the other seven do not". The spec in fact
+  carries a `**Caption (required wording):**` block for **all seven** figures.
+  So the build reads them from `PAPER_FIGURE_SPEC.md` rather than holding a
+  second copy, and a figure the spec does not caption is not typeset at all.
 
 ### 2.2 Authoring work, unblocked but not started
 
@@ -85,18 +100,36 @@ than a default:
 package specifies are drawn, by one generator, each checked against the sheet it
 cites and against every ban its spec section names. What remains here is prose.
 
-- **Terminology copy-edit.** "broadcast ±1 three-factor" versus bare "broadcast
-  credit topology". The requirement is recorded in four documents and is not
-  mechanically checked.
+- **Terminology copy-edit — CLOSED 2026-09-03, and it was not clean.** The
+  requirement to say "broadcast ±1 three-factor" rather than bare "broadcast"
+  was recorded in four documents and checked in none, and §3.4 had already
+  drifted: "on mid-init two-layer depth locality, broadcast also succeeds" names
+  an arm the figure spec calls `err_broadcast`. `scripts/check_terminology.py`
+  now checks all **102** uses across those four documents, with nine bare uses
+  exempted by name and reason. This matters because widening the lead FAIL from
+  one update rule to a credit topology is the most likely way this paper gets
+  over-cited: on the same schedule broadcast-*graded* reaches 0.9975.
 
 ### 2.3 Verification the repository cannot do for itself
 
-- **§0's literature citations are unchecked against their primary sources**, and
-  §0 says so on its face. Every frontier number in Figure 2 Panel B and on the
-  lead graphical abstract came from a 2026-08-27 search pass;
-  `check_every_number.py` does not sweep §0, and both figures state
-  "NOT MACHINE-CHECKED" where they are read. Closing this means reading the
-  papers.
+- **§0's literature citations — READ 2026-09-03, and three were wrong.** Ten
+  primaries were retrieved and the cited number located in each source's own
+  words, with bibliographic fields from the arXiv API and Crossref. The
+  corrections: the frontier band's upper bound of **96.4 had no source** (it is
+  an S-MNIST number; the verified band is **95.07–96.3**, and the top of it is a
+  state-space model with augmentation and continuously-valued output, not a
+  spiking network); **"spiking transformers"** carried no citation at all and is
+  withdrawn; and **Yu et al. (2025) was misdescribed** as a third vote for
+  order-dependence when their actual finding — delay-free networks are robust to
+  an interval- and coincidence-preserving time reversal — is an independent
+  prediction of what §3.5's own reversal control observes. Two further claims
+  were downgraded rather than corrected: "8,156 training samples" is a fact
+  about this instrument (`n_train` in every cell) and not a citation, and Cramer
+  et al. document overfitting without calling it "severe", which was this
+  paper's word. `scripts/check_section0_citations.py` now keeps the abstract,
+  §0 and §1 a closed set: a new percentage there has to arrive with a source
+  read, and the frontier constants the figures **draw** are checked against the
+  same record ([`CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md)).
 - **The 0.087 residual attribution — CLOSED 2026-09-02, and it closed against
   the draft.** The ablation was run: `max_delay = 1` makes all three `Dcls1d`
   constructions pointwise, and the reference falls from 0.9387 to 0.6276. The
