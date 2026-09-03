@@ -15,7 +15,9 @@ Run: python3 scripts/test_wave26_analyser.py
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -219,6 +221,85 @@ class Wave26Analyser(unittest.TestCase):
         probes = self.module.read_probes(self.probes)
         record = next(iter(probes.values()))
         self.assertIn("unparseable", record)
+
+
+    # ---- a clause that could not run is not a clause that was refuted ----
+    #
+    # The failure this guards is the one the wave is most exposed to: the
+    # probe files land last, only when the h1024/e400 cells finish. If they
+    # do not arrive, H26-1 has no inputs -- and an analyser that prints
+    # NOT MET there hands the result document a refutation of the wave's
+    # primary hypothesis that no cell ever tested.
+
+    def run_main(self):
+        buffer = io.StringIO()
+        sys.argv = ["x", "--results", str(self.results),
+                    "--probes", str(self.probes)]
+        with contextlib.redirect_stdout(buffer):
+            code = self.module.main()
+        return code, buffer.getvalue()
+
+    def clause(self, text, name):
+        for line in text.splitlines():
+            if line.startswith(name):
+                return line
+        self.fail(f"{name} never printed a verdict")
+
+    def test_a_missing_probe_reads_unevaluated_not_refuted(self):
+        self.populate_pos()          # cells land; probes never arrive
+        code, text = self.run_main()
+        for name in ("H26-1a", "H26-1b"):
+            line = self.clause(text, name)
+            self.assertIn("NOT EVALUABLE", line)
+            self.assertNotIn("NOT MET", line)
+        self.assertEqual(code, 3, "an unevaluated primary must not exit 0")
+
+    def test_a_fired_void_rule_takes_no_verdict(self):
+        """The prereg's words are 'No verdict is taken from it'."""
+        self.populate_pos()
+        for seed in range(5170001, 5170013):
+            for depth in ("d32l4", "d32l2"):
+                self.probe_file(
+                    f"w26sat__ff-fixed-attn__h1024__e400__published-2ms"
+                    f"__adjacent-sum-5__{depth}__s{seed}",
+                    [(1, 0.10, 2.0, 2.0), (100, 0.09, 3.0, 3.0),
+                     (400, 0.02, 40.0, 40.0)])
+        code, text = self.run_main()
+        self.assertIn("VOID", text)
+        line = self.clause(text, "H26-1a")
+        self.assertIn("NOT EVALUABLE", line)
+        self.assertNotIn("NOT MET", line)
+        self.assertEqual(code, 3)
+
+    def test_a_refutation_is_still_reachable(self):
+        """Over-correction check: real data that misses the bar reads NOT MET.
+
+        This one passes against the pre-fix analyser too, on purpose. It is
+        here so that a later attempt to silence NOT MET altogether fails.
+        """
+        self.populate_pos()
+        for seed in range(5170001, 5170013):
+            for depth in ("d32l4", "d32l2"):
+                self.probe_file(
+                    f"w26sat__ff-fixed-attn__h1024__e400__published-2ms"
+                    f"__adjacent-sum-5__{depth}__s{seed}",
+                    [(1, 0.95, 2.0, 2.0), (100, 0.90, 2.1, 2.1),
+                     (400, 0.85, 2.2, 2.2)])
+        code, text = self.run_main()
+        for name in ("H26-1a", "H26-1b"):
+            line = self.clause(text, name)
+            self.assertIn("NOT MET", line)
+            self.assertNotIn("NOT EVALUABLE", line)
+        self.assertEqual(code, 0, "a fully evaluated wave exits 0")
+
+    def test_tau_half_separates_an_absent_did_from_one_below_the_bar(self):
+        ladder = {2: 0.01, 4: 0.02, 8: 0.04, 16: 0.06,
+                  32: 0.08, 64: 0.09, 128: 0.10}
+        _, absent = self.module.tau_half(ladder, None)
+        _, below = self.module.tau_half(ladder, 0.01)
+        self.assertNotEqual(absent, below)
+        self.assertIn("could not be computed", absent)
+        self.assertIn("not above the bar", below)
 
 
 if __name__ == "__main__":

@@ -198,8 +198,13 @@ def tau_half(ladder, full):
     ladder never reaches the half-maximum, which is reported as "not reached on
     this ladder" and never as a large tau.
     """
-    if full is None or full <= BAR:
-        return None, "DiD(bin-shuffled) is not above the bar; there is no order effect to locate"
+    if full is None:
+        return None, ("DiD(bin-shuffled) could not be computed, so there is no "
+                      "half-maximum to locate. This is not a statement that the "
+                      "order effect is absent")
+    if full <= BAR:
+        return None, ("DiD(bin-shuffled) is not above the bar; there is no order "
+                      "effect to locate")
     target = full / 2.0
     rungs = [(w, ladder[w]) for w in WINDOWS if ladder.get(w) is not None]
     if len(rungs) < 2:
@@ -221,10 +226,37 @@ def tau_half(ladder, full):
     return None, "the half-maximum is not reached on the registered ladder"
 
 
-def verdict(met, name, met_reading, not_met_reading):
-    print(f"\n{name}: {'MET' if met else 'NOT MET'}")
-    print(f"  {met_reading if met else not_met_reading}")
-    return met
+#: A clause whose inputs were not all present. Distinct from NOT MET, which is
+#: a refutation: the bar was tested and the data fell short. Conflating the two
+#: is this campaign's own failure shape with the sign flipped -- a check that
+#: could not run reporting what a check that ran would report.
+NOT_EVALUABLE = "NOT EVALUABLE"
+
+
+def status_of(met, blocked):
+    """Three-state outcome. `blocked` is a reason string when the clause could
+    not be evaluated at all, and it always wins over `met`."""
+    if blocked:
+        return blocked
+    return "MET" if met else "NOT MET"
+
+
+def verdict(status, name, met_reading, not_met_reading):
+    """Print one clause's outcome.
+
+    `status` is "MET", "NOT MET", or a string opening with NOT_EVALUABLE that
+    carries its own reason. Only the first two are scientific verdicts; the
+    third says the clause did not run, and no reading is attached to it.
+    """
+    print(f"\n{name}: {status}")
+    if status == "MET":
+        print(f"  {met_reading}")
+    elif status == "NOT MET":
+        print(f"  {not_met_reading}")
+    else:
+        print("  The clause did not run. This is not a refutation, and no "
+              "reading is taken from it.")
+    return status
 
 
 def main() -> int:
@@ -291,16 +323,29 @@ def main() -> int:
               "The probe is measuring initialisation, not training, and the "
               "epoch grid is wrong. No verdict is taken from it.")
 
+    # The void rule and an absent probe are both "no verdict", never NOT MET.
+    # The prereg's words for the void are "No verdict is taken from it";
+    # printing NOT MET would be taking one.
+    if not probes:
+        blocked_h1 = f"{NOT_EVALUABLE}: no probe file was read from {args.probes}"
+    elif void_h26_1:
+        blocked_h1 = f"{NOT_EVALUABLE} (VOID): the registered void rule fired"
+    else:
+        blocked_h1 = None
+
     def drop(depth):
         early, late = entropy[depth].get(100), entropy[depth].get(400)
         return None if early is None or late is None else early - late
 
     d4, d2 = drop("d32l4"), drop("d32l2")
-    h1a = (not void_h26_1 and d4 is not None and d2 is not None
+    h1a_blocked = blocked_h1 or (
+        None if (d4 is not None and d2 is not None)
+        else f"{NOT_EVALUABLE}: the e100 or e400 entropy row is missing")
+    h1a = (d4 is not None and d2 is not None
            and d4 >= ENTROPY_DROP_MIN and (d4 - d2) >= ENTROPY_DROP_MARGIN)
     print(f"\n  entropy drop e100->e400: d32l4 {d4 if d4 is None else round(d4, 4)}, "
           f"d32l2 {d2 if d2 is None else round(d2, 4)}")
-    verdict(h1a, "H26-1a  the read-out saturates where the fit is lost, and not in the control",
+    h1a = verdict(status_of(h1a, h1a_blocked), "H26-1a  the read-out saturates where the fit is lost, and not in the control",
             f"d32l4 drops {d4} (bar {ENTROPY_DROP_MIN}) and exceeds d32l2's {d2} "
             f"by at least {ENTROPY_DROP_MARGIN}. The collapse has a mechanism.",
             "the entropy drop is absent or is not specific to the collapsing depth. "
@@ -310,9 +355,12 @@ def main() -> int:
     g2 = qk["d32l2"]
     growth4 = None if not (g4[0] and g4[1]) else g4[1] / g4[0]
     growth2 = None if not (g2[0] and g2[1]) else g2[1] / g2[0]
-    h1b = (not void_h26_1 and growth4 is not None and growth2 is not None
+    h1b_blocked = blocked_h1 or (
+        None if (growth4 is not None and growth2 is not None)
+        else f"{NOT_EVALUABLE}: the e1 or e400 |q||k| row is missing")
+    h1b = (growth4 is not None and growth2 is not None
            and growth4 >= QK_GROWTH_MIN and growth2 < QK_GROWTH_CONTROL_MAX)
-    verdict(h1b, "H26-1b  the named term is what grows",
+    h1b = verdict(status_of(h1b, h1b_blocked), "H26-1b  the named term is what grows",
             f"|q||k| grows {growth4}x at d32l4 against {growth2}x at d32l2. "
             "The proposed cause is the one that moved.",
             f"|q||k| grew {growth4}x at d32l4 and {growth2}x at d32l2, against bars "
@@ -322,9 +370,12 @@ def main() -> int:
             "confirmation.")
 
     late4 = entropy["d32l4"].get(400)
-    h1c = late4 is not None and late4 < ENTROPY_ABSOLUTE
+    if late4 is None:
+        h1c_reading = f"{NOT_EVALUABLE}: no e400 entropy row"
+    else:
+        h1c_reading = "below" if late4 < ENTROPY_ABSOLUTE else "not below"
     print(f"\n  H26-1c (secondary, reported not required): entropy at e400/d32l4 "
-          f"= {late4}, threshold {ENTROPY_ABSOLUTE} -> {'below' if h1c else 'not below'}")
+          f"= {late4}, threshold {ENTROPY_ABSOLUTE} -> {h1c_reading}")
 
     # ---------------- H26-2 : the structural null ---------------------------
     print("\n=== H26-2  removing the read-out's access to order ===")
@@ -338,9 +389,12 @@ def main() -> int:
               f"positive {positive}/{n}")
 
     shared = sorted(set(gd_by_seed) & set(gn_by_seed))
+    h2a_blocked = None
+    h2a = False
     if len(shared) < MIN_PAIRS:
-        print(f"  NOT EVALUABLE: {len(shared)} seed pairs, floor {MIN_PAIRS}")
-        h2a = False
+        h2a_blocked = (f"{NOT_EVALUABLE}: {len(shared)} seed pairs, "
+                       f"floor {MIN_PAIRS}")
+        print(f"  {h2a_blocked}")
     else:
         deltas = [gd_by_seed[s] - gn_by_seed[s] for s in shared]
         mean_delta = statistics.fmean(deltas)
@@ -348,7 +402,7 @@ def main() -> int:
         print(f"  gain(default) - gain(no-position) = {mean_delta:.4f}, "
               f"above {BAR} in {above}/{len(deltas)}")
         h2a = mean_delta > BAR and above >= MIN_PAIRS
-    verdict(h2a, "H26-2a  position is what the read-out's advantage runs through",
+    h2a = verdict(status_of(h2a, h2a_blocked), "H26-2a  position is what the read-out's advantage runs through",
             "removing the positional code costs more than the campaign's bar. The "
             "arm keeps every parameter and loses the advantage.",
             "removing the positional code does not cost the read-out its advantage. "
@@ -374,10 +428,11 @@ def main() -> int:
     for window in WINDOWS:
         value, positive, n = did(cells, "w26win", f"window-shuffled-w{window}")
         ladder[window] = value
-        print(f"  w{window:<4} DiD {value if value is None else round(value, 4)}  "
+        print(f"  w{window:<4} DiD "
+              f"{NOT_EVALUABLE if value is None else round(value, 4)}  "
               f"positive {positive}/{n}")
     full, full_positive, full_n = did(cells, "w26pos", "bin-shuffled")
-    print(f"  full  DiD {full if full is None else round(full, 4)}  "
+    print(f"  full  DiD {NOT_EVALUABLE if full is None else round(full, 4)}  "
           f"positive {full_positive}/{full_n}")
     value, why = tau_half(ladder, full)
     if value is None:
@@ -387,10 +442,18 @@ def main() -> int:
         print(f"           = {value * 2.0:.1f} ms at the anchor's 2 ms bins")
 
     print("\n" + "=" * 70)
-    print("H26-1a", "MET" if h1a else "NOT MET",
-          "| H26-1b", "MET" if h1b else "NOT MET",
-          "| H26-2a", "MET" if h2a else "NOT MET")
+    def label(state):
+        return state if state in ("MET", "NOT MET") else NOT_EVALUABLE
+
+    print(f"H26-1a {label(h1a)} | H26-1b {label(h1b)} | H26-2a {label(h2a)}")
     print("H26-2b and H26-3 are registered as questions and have no MET/NOT MET.")
+    unrun = [name for name, state in (("H26-1a", h1a), ("H26-1b", h1b),
+                                      ("H26-2a", h2a))
+             if state.startswith(NOT_EVALUABLE)]
+    if unrun:
+        print(f"INCOMPLETE: {', '.join(unrun)} did not run. The result document "
+              "records them as unevaluated, never as refuted.")
+        return 3
     return 0
 
 
