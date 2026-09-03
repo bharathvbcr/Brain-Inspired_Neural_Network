@@ -22,7 +22,7 @@ use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
 use binn_learn::{
     load_epoch_orders, one_cycle_lr, shd_matched_loss_and_gradient_arm,
-    shd_matched_loss_and_gradient_arm_scaled_prepared, MatchedArm, MatchedShdSample, PortableRng,
+    shd_matched_loss_and_gradient_arm_tau, MatchedArm, MatchedShdSample, PortableRng,
     ShdArmGradient, ShdArmWeightLayout, ShdArmWeights, ShdMatchedWeights,
 };
 
@@ -112,6 +112,9 @@ fn print_help() {
            --clip-sample-grad-norm F  global-norm clipping of each sample gradient,\n\
                                before accumulation (default: off)\n\
            --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)\n\
+           --tau-m MS          membrane time constant (default 10.05, the calibrated\n\
+                               value; anything else is a different substrate and\n\
+                               its cells are not comparable to the corpus)\n\
            --probe-epochs L    comma-separated 1-indexed epochs at which to write\n\
                                read-out diagnostics (attention arms only)\n\
            --probe-out FILE    where those diagnostics go, one JSON line each\n\
@@ -577,6 +580,7 @@ const TRAIN_CELL_FLAGS: &[&str] = &[
     "--probe-max-samples",
     "--train-speakers",
     "--val-speakers",
+    "--tau-m",
 ];
 
 /// Refuse a flag this subcommand does not understand.
@@ -684,6 +688,19 @@ fn train_cell(args: &[String]) -> Result<(), String> {
                 "--clip-sample-grad-norm must be finite and positive, got {value}"
             ))
         }
+    };
+    // Membrane time constant, in ms. Absent means the calibrated 10.05 and a
+    // bit-identical cell -- `the_default_tau_is_bit_identical_to_the_constant_path`
+    // is the binding check on that, across every arm.
+    //
+    // Registered per cell rather than per weight file for the same reason
+    // `--surrogate-scale` is: a ladder runs one initialisation at several
+    // values, and a file-level field would give each rung a different file and
+    // no way to pair them.
+    let tau_m = match optional_f32(args, "--tau-m")? {
+        None => binn_learn::MATCHED_PHYSICAL_TAU_MS,
+        Some(value) if value.is_finite() && value > 0.0 => value,
+        Some(value) => return Err(format!("--tau-m must be finite and positive, got {value}")),
     };
     let weights_path = required_path(args, "--weights")?;
     let orders_path = required_path(args, "--orders")?;
@@ -909,6 +926,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
                     &train,
                     chunk,
                     surrogate_scale,
+                    tau_m,
                 );
                 for outcome in computed {
                     let (loss, mut sample_gradient) = outcome?;
@@ -1033,7 +1051,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         // value, so it cannot perturb the run it observes -- which
         // `probing_does_not_change_the_cell` asserts rather than assumes.
         if probe_epochs.contains(&(epoch_index + 1)) {
-            let probe = probe_readout(&weights, &test, probe_max_samples)?;
+            let probe = probe_readout(&weights, &test, probe_max_samples, tau_m)?;
             probe_lines.push(probe_line(epoch_index + 1, &probe));
         }
     }
@@ -1077,7 +1095,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     if let Some(path) = probe_out {
         atomic_write(&path, probe_lines.concat().as_bytes())?;
     }
-    let evaluation = evaluate(&weights, &test)?;
+    let evaluation = evaluate(&weights, &test, tau_m)?;
     // Reported beside the test number, never in place of it. The point of a
     // speaker-held-out split is to have somewhere to select on that is not the
     // test set; hiding the test number would make that impossible to check, and
@@ -1085,7 +1103,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let validation_accuracy = if validation.is_empty() {
         None
     } else {
-        Some(evaluate(&weights, &validation)?.accuracy)
+        Some(evaluate(&weights, &validation, tau_m)?.accuracy)
     };
     let scientific = evaluation.accuracy >= 0.80
         && evaluation.classes_predicted == weights.base.n_classes
@@ -1140,7 +1158,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
          \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9},\"max_bin_displacement\":{:.9},\"mean_steps\":{:.9},\"count_before\":{:.1},\"count_after\":{:.1},\"hidden_permutation_relocated\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
-         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\"{}{}{}}}\n",
+         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\",\"tau_m\":{:.9}{}{}{}}}\n",
         weights.arm.label(),
         contract.id(),
         geometry.id(),
@@ -1196,6 +1214,12 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         // `binn-lab/tests/timestamp_is_not_compared.rs` pins.
         emitted,
         iso8601_utc(emitted),
+        // Appended, never inserted, and emitted unconditionally: a reader must
+        // be able to tell "this cell ran at the calibrated membrane" from "this
+        // cell predates the flag", and an absent field says neither. Gate F
+        // compares an explicit field list by key, so neither the addition nor
+        // its position touches a recorded cell.
+        tau_m,
         attention_fields,
         provenance_fields,
         validation_fields,
@@ -1428,6 +1452,7 @@ fn probe_readout(
     weights: &ShdArmWeights,
     samples: &[MatchedShdSample],
     limit: usize,
+    tau_m: f32,
 ) -> Result<AttentionProbe, String> {
     let params = weights
         .attn
@@ -1440,9 +1465,8 @@ fn probe_readout(
         let computed: Vec<Result<AttentionProbe, String>> = chunk
             .par_iter()
             .map(|sample| {
-                let (forward, _) = shd_matched_loss_and_gradient_arm_scaled_prepared(
-                    weights, &layout, sample, 1.0,
-                )?;
+                let (forward, _) =
+                    shd_matched_loss_and_gradient_arm_tau(weights, &layout, sample, 1.0, tau_m)?;
                 let cache = attention_forward_presented(
                     params,
                     &forward.spikes,
@@ -1522,15 +1546,17 @@ fn ordered_sample_gradients(
     train: &[MatchedShdSample],
     indices: &[usize],
     surrogate_scale: f32,
+    tau_m: f32,
 ) -> Vec<Result<(f32, ShdArmGradient), String>> {
     indices
         .par_iter()
         .map(|&index| {
-            shd_matched_loss_and_gradient_arm_scaled_prepared(
+            shd_matched_loss_and_gradient_arm_tau(
                 weights,
                 weight_layout,
                 &train[index],
                 surrogate_scale,
+                tau_m,
             )
             .map(|(forward, sample_gradient)| (forward.loss, sample_gradient))
         })
@@ -1569,7 +1595,11 @@ struct Evaluation {
     non_finite_forward: usize,
 }
 
-fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Evaluation, String> {
+fn evaluate(
+    weights: &ShdArmWeights,
+    samples: &[MatchedShdSample],
+    tau_m: f32,
+) -> Result<Evaluation, String> {
     let mut correct = 0usize;
     let mut predictions = vec![0usize; weights.base.n_classes];
     let mut unit_rate = vec![0.0_f64; weights.base.hidden];
@@ -1589,11 +1619,12 @@ fn evaluate(weights: &ShdArmWeights, samples: &[MatchedShdSample]) -> Result<Eva
         let computed: Vec<SampleEval> = chunk
             .par_iter()
             .map(|sample| {
-                shd_matched_loss_and_gradient_arm_scaled_prepared(
+                shd_matched_loss_and_gradient_arm_tau(
                     weights,
                     &weight_layout,
                     sample,
                     1.0,
+                    tau_m,
                 )
                 .map(|(forward, _)| {
                     let finite = forward.logits.iter().all(|value| value.is_finite());
@@ -2124,7 +2155,7 @@ mod tests {
             Vec::new(),
         )
         .expect("arm");
-        let clean = evaluate(&healthy, &samples).expect("evaluate");
+        let clean = evaluate(&healthy, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS).expect("evaluate");
         assert_eq!(
             clean.non_finite_forward, 0,
             "the healthy fixture already overflows; it cannot show the defect"
@@ -2175,7 +2206,7 @@ mod tests {
         );
         let overflowing = ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
 
-        let poisoned = evaluate(&overflowing, &samples).expect("evaluate");
+        let poisoned = evaluate(&overflowing, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS).expect("evaluate");
         // The fixture's own precondition: if the units stop firing, the
         // read-out sum shrinks back inside f32 and the assertion below would
         // pass or fail for a reason that has nothing to do with the guard.
@@ -2251,6 +2282,7 @@ mod tests {
                             &train,
                             &indices,
                             1.0,
+                            binn_learn::MATCHED_PHYSICAL_TAU_MS,
                         ))
                     })
             };

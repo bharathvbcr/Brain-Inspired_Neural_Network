@@ -112,6 +112,7 @@ pub use shd_matched_arms::{
     loss_and_gradient_arm as shd_matched_loss_and_gradient_arm,
     loss_and_gradient_arm_scaled as shd_matched_loss_and_gradient_arm_scaled,
     loss_and_gradient_arm_scaled_prepared as shd_matched_loss_and_gradient_arm_scaled_prepared,
+    loss_and_gradient_arm_tau as shd_matched_loss_and_gradient_arm_tau,
     ArmAdam as ShdArmAdam, ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
     ArmWeights as ShdArmWeights, MatchedArm, MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A,
     MATCHED_WEIGHTS_MAGIC_V2, MATCHED_WEIGHTS_MAGIC_V3,

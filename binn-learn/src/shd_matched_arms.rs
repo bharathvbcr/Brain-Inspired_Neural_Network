@@ -624,6 +624,42 @@ pub fn loss_and_gradient_arm_scaled_prepared(
     sample: &MatchedShdSample,
     surrogate_scale: f32,
 ) -> Result<(MatchedForward, ArmGradient), String> {
+    loss_and_gradient_arm_tau(
+        weights,
+        layout,
+        sample,
+        surrogate_scale,
+        MATCHED_PHYSICAL_TAU_MS,
+    )
+}
+
+/// [`loss_and_gradient_arm_scaled_prepared`] with the membrane time constant as
+/// a parameter.
+///
+/// `tau_m == MATCHED_PHYSICAL_TAU_MS` — the value every other entry point
+/// passes, and the 10.05 ms the campaign is calibrated at — reproduces that
+/// function bit-for-bit: `alpha` is computed from the same expression on the
+/// same two floats, and nothing else in the pass reads `tau_m` at all.
+/// `the_default_tau_is_bit_identical_to_the_constant_path` pins that.
+///
+/// # Why it is an argument and not a weight-file field
+///
+/// `tau_a` and `beta_a` live on [`ArmWeights`] because the adaptation block is
+/// part of the *model* the file describes. `tau_m` is registered per **cell**,
+/// exactly as `--surrogate-scale` is
+/// (`AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md`): a ladder over it
+/// runs the same initialisation at several values, and putting it in the file
+/// would mean a different weight file per rung and no way to pair them.
+pub fn loss_and_gradient_arm_tau(
+    weights: &ArmWeights,
+    layout: &ArmWeightLayout,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+    tau_m: f32,
+) -> Result<(MatchedForward, ArmGradient), String> {
+    if !(tau_m.is_finite() && tau_m > 0.0) {
+        return Err(format!("membrane tau must be finite and positive, got {tau_m}"));
+    }
     let base = &weights.base;
     let arm = weights.arm;
     if sample.n_inputs != base.n_inputs {
@@ -635,7 +671,7 @@ pub fn loss_and_gradient_arm_scaled_prepared(
     layout.check_compatible(weights)?;
     let t_steps = sample.frames.len();
     let hidden = base.hidden;
-    let alpha = (-sample.dt_ms / MATCHED_PHYSICAL_TAU_MS).exp();
+    let alpha = (-sample.dt_ms / tau_m).exp();
     let rho = (-1.0_f32 / weights.tau_a).exp();
     let beta_a = weights.beta_a;
 
@@ -2414,6 +2450,145 @@ mod tests {
         let (_, gradient) = loss_and_gradient_arm(&weights, &sample()).unwrap();
         for h in 0..hidden {
             assert_eq!(gradient.w_rec[h * hidden + h], 0.0);
+        }
+    }
+
+    /// The default `tau_m` path is the constant path, bit for bit.
+    ///
+    /// `loss_and_gradient_arm_scaled_prepared` now delegates, so every one of
+    /// the 784 archived cells is reproduced through an extra function call and
+    /// an extra float argument. Nothing about that *should* move a bit, and this
+    /// is where that stops being a should: the whole forward and the whole
+    /// backward are compared as raw bit patterns, on every arm.
+    #[test]
+    fn the_default_tau_is_bit_identical_to_the_constant_path() {
+        for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
+            let (sample, weights) = tau_fixture(arm, false);
+            let layout = ArmWeightLayout::prepare(&weights);
+            let (constant_forward, constant_gradient) =
+                loss_and_gradient_arm_scaled_prepared(&weights, &layout, &sample, 1.0).unwrap();
+            let (tau_forward, tau_gradient) = loss_and_gradient_arm_tau(
+                &weights,
+                &layout,
+                &sample,
+                1.0,
+                MATCHED_PHYSICAL_TAU_MS,
+            )
+            .unwrap();
+            assert_eq!(
+                constant_forward.loss.to_bits(),
+                tau_forward.loss.to_bits(),
+                "{} loss",
+                arm.label()
+            );
+            assert_eq!(
+                constant_forward.membrane, tau_forward.membrane,
+                "{} membrane",
+                arm.label()
+            );
+            assert_eq!(
+                constant_forward.spikes, tau_forward.spikes,
+                "{} spikes",
+                arm.label()
+            );
+            assert_eq!(
+                constant_gradient, tau_gradient,
+                "{} gradient",
+                arm.label()
+            );
+        }
+    }
+
+    /// A different `tau_m` is a different membrane, and a longer one fires more.
+    ///
+    /// The direction is the reason the ladder needs a saturation void rule
+    /// registered before it runs: a longer membrane integrates more input
+    /// before leaking it, so firing rates rise, and a rung that pins its units
+    /// on is not a measurement of anything but its own threshold.
+    /// A longer membrane fires more, **under purely excitatory drive**.
+    ///
+    /// The qualifier is not decoration. Written first against the signed Glorot
+    /// weights every other fixture here uses, this assertion failed: at
+    /// `dt = 4 ms` the total rate went 7.675 at `tau = 2.5` and 6.775 at
+    /// `tau = 5`. With mixed-sign input a larger `alpha` retains inhibition as
+    /// faithfully as it retains excitation, so the aggregate is not monotone in
+    /// `tau` and there is no direction to assert.
+    ///
+    /// That is worth keeping in the file rather than deleting, because the
+    /// ladder's registered void rule rests on the direction: it assumes longer
+    /// membranes push `saturated_fraction` up. They do, where the drive is
+    /// excitatory — and SHD's input weights are not constrained to be. The rule
+    /// is therefore registered as a threshold on the measured
+    /// `saturated_fraction`, not as a prediction about which rung will trip it.
+    #[test]
+    fn a_longer_membrane_fires_more_under_excitatory_drive() {
+        let (sample, weights) = tau_fixture(MatchedArm::FF_FIXED, true);
+        let layout = ArmWeightLayout::prepare(&weights);
+        let mut previous = 0.0_f32;
+        for tau_m in [2.5_f32, 5.0, 10.05, 20.0, 40.0] {
+            let (forward, _) =
+                loss_and_gradient_arm_tau(&weights, &layout, &sample, 1.0, tau_m).unwrap();
+            let rate: f32 = forward.rates.iter().sum();
+            assert!(
+                rate >= previous,
+                "tau {tau_m} fired {rate} against the shorter membrane's {previous}"
+            );
+            previous = rate;
+        }
+        assert!(previous > 0.0, "nothing in this fixture fired at all");
+    }
+
+    /// A fixture that works on every arm, including the attentive ones, and can
+    /// be made purely excitatory.
+    fn tau_fixture(arm: MatchedArm, excitatory: bool) -> (MatchedShdSample, ArmWeights) {
+        let (hidden, n_inputs, n_classes) = (24_usize, 30_usize, 8_usize);
+        let frames: Vec<Vec<(usize, f32)>> = (0..40)
+            .map(|t| {
+                (0..10)
+                    .map(|k| ((t * 13 + k * 7) % n_inputs, 1.0 + (k % 3) as f32))
+                    .collect()
+            })
+            .collect();
+        let sample = MatchedShdSample::new(5, frames, n_inputs, 4.0);
+        let mut base = MatchedWeights::deterministic(n_inputs, hidden, n_classes, 4242);
+        if excitatory {
+            for value in base.w_in.iter_mut() {
+                *value = value.abs();
+            }
+        }
+        let w_rec = if arm.recurrent {
+            (0..hidden * hidden)
+                .map(|index| (((index % 23) as f32) - 11.0) * 9e-3)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let weights = if arm.attention {
+            let attn = AttentionParams::deterministic(
+                hidden,
+                n_classes,
+                AttentionConfig::new(4, 1).unwrap(),
+                77,
+            )
+            .unwrap();
+            ArmWeights::new_attentive(base, arm, w_rec, attn).unwrap()
+        } else {
+            ArmWeights::new(base, arm, w_rec).unwrap()
+        };
+        (sample, weights)
+    }
+
+    /// A membrane constant that is not a time is refused rather than producing
+    /// an `alpha` of NaN or 1.0.
+    #[test]
+    fn a_degenerate_membrane_constant_is_refused() {
+        let (sample, weights) = dense_fixture(MatchedArm::FF_FIXED);
+        let layout = ArmWeightLayout::prepare(&weights);
+        for tau_m in [0.0_f32, -1.0, f32::NAN, f32::INFINITY] {
+            assert!(
+                loss_and_gradient_arm_tau(&weights, &layout, &sample, 1.0, tau_m).is_err(),
+                "tau {tau_m} was accepted"
+            );
         }
     }
 }
