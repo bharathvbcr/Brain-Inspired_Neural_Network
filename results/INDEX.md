@@ -2,11 +2,11 @@
 
 # Record index
 
-343 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+344 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 46 | 0 |
+| Preregistrations | 47 | 0 |
 | Results | 43 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
@@ -59,6 +59,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-03 | [PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md](PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md) | Preregistration — wave 26: the collapse's mechanism, the structural null, and the timescale |
 | 2026-09-03 | [PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md](PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md) | Preregistration — the estimators, bars and void rules for five instruments that do not yet have a wave |
 | 2026-09-02 | [PREREG_2026-09-02_THE_MEMBRANE_ABLATION.md](PREREG_2026-09-02_THE_MEMBRANE_ABLATION.md) | Preregistration — is the reference's fast membrane the term that offsets its kernel? |
 | 2026-09-02 | [PREREG_2026-09-02_THE_MECHANISM_WHERE_IT_IS_UNMEASURED.md](PREREG_2026-09-02_THE_MECHANISM_WHERE_IT_IS_UNMEASURED.md) | Preregistration — every place the mechanism claim is still asserted without a control |

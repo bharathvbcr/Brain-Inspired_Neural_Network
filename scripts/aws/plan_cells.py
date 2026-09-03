@@ -26,18 +26,45 @@ ANCHOR = ("published-2ms", "adjacent-sum-5")
 
 def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR[1],
          attn_dim=None, attn_layers=None, temporal="intact", surrogate_scale=None,
-         clip_grad_norm=None, n_train=8156):
+         clip_grad_norm=None, n_train=8156, attn_readout=None, tau_m=None,
+         probe_epochs=None, probe_max_samples=None, val_speakers=None):
+    """One planned cell.
+
+    The keys added on 2026-09-03 -- `attn_readout`, `tau_m`, `probe_epochs`,
+    `val_speakers` -- are all **omitted from the id and from the payload when
+    unset**, so every wave written before them produces a byte-identical plan
+    entry and a byte-identical command line. `run_cell.py` reads them with
+    `.get`, and its tests pin that a plan without them is unchanged.
+
+    Each one that changes the computation is in the id, because the id is the
+    filename in S3 and two cells differing only in read-out variant would
+    otherwise collide -- the second silently skipped as "already in the results
+    bucket", which is the mechanism that makes a spot interruption cheap and
+    would here make a wave wrong.
+
+    `probe_epochs` is deliberately NOT in the id: probing is asserted not to
+    change the cell (`probing_does_not_change_the_cell` compares every measured
+    field byte for byte), so a probed cell and an unprobed one at the same id
+    are the same cell, and treating them as different would be claiming an
+    effect the instrument is built to not have.
+    """
     parts = [wave, arm.replace("+", "-"), f"h{hidden}", f"e{epochs}", contract, geometry]
     if attn_dim is not None:
         parts.append(f"d{attn_dim}l{attn_layers}")
+    if attn_readout is not None and attn_readout != "default":
+        parts.append(attn_readout.replace("+", "-"))
     if temporal != "intact":
         parts.append(temporal)
+    if tau_m is not None:
+        parts.append(f"tau{tau_m}")
+    if val_speakers:
+        parts.append("val" + "-".join(str(s) for s in val_speakers))
     if surrogate_scale is not None:
         parts.append(f"ss{surrogate_scale}")
     if clip_grad_norm is not None:
         parts.append(f"clip{clip_grad_norm}")
     parts.append(f"s{seed}")
-    return {
+    entry = {
         "id": "__".join(parts),
         "wave": wave,
         "arm": arm,
@@ -55,6 +82,19 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
         "n_train": n_train,
         "n_inputs": 700 if geometry == "channels-700" else 140,
     }
+    # Appended only when used, so `plan_w8.json` and every archived plan entry
+    # compare equal to what this function produces today.
+    if attn_readout is not None:
+        entry["attn_readout"] = attn_readout
+    if tau_m is not None:
+        entry["tau_m"] = tau_m
+    if probe_epochs is not None:
+        entry["probe_epochs"] = list(probe_epochs)
+        if probe_max_samples is not None:
+            entry["probe_max_samples"] = probe_max_samples
+    if val_speakers:
+        entry["val_speakers"] = list(val_speakers)
+    return entry
 
 
 def wave1_converged():
@@ -1043,6 +1083,95 @@ def wave25_the_mechanism_where_it_is_unmeasured():
     return cells
 
 
+
+#: Registered probe grid for H26-1. Fixed in
+#: `PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md` before any cell,
+#: so a wave cannot add an epoch after seeing where the entropy turns.
+W26_PROBE_EPOCHS = (1, 25, 50, 100, 200, 400)
+#: Registered window-shuffle ladder. Seven rungs, fixed in
+#: `PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md` section 1.
+W26_WINDOWS = (2, 4, 8, 16, 32, 64, 128)
+
+
+def wave26_the_saturation_and_the_timescale():
+    """W26 - the collapse's mechanism, the structural null, and the timescale.
+
+    Registered in `PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md`.
+
+    Three groups, one wave, and **nothing is reused from any earlier wave**.
+    Every instrument this wave uses is new code, so the binary is new, and
+    section 0 of `PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md` forbids
+    pairing a cell from it against an archived half. That is why the rate arms
+    and the intact attention arms are re-run here even though the corpus already
+    holds hundreds of them: an `intact` cell from `w22cov` and a
+    `window-shuffled-w8` cell from this binary are not a pair.
+
+    # H26-1 - does the h1024 collapse saturate the read-out?
+
+    `RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md` established WHERE the
+    collapse happens - late, inside a budget the arm survives at e100 - and
+    `FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md` established that it
+    is a lost fit rather than overfitting. Neither says WHY, because no cell has
+    ever recorded anything about the read-out's internal state; wave 23 had loss
+    curves and nothing else.
+
+    These cells carry `--probe-epochs`. `d32l2` is the control the same result
+    identified: it moves only +0.0149 between e400 and e100 while `d32l4` moves
+    +0.2145, so if entropy collapse tracks the lost fit it must appear in one
+    and not the other.
+
+    # H26-2 - the structural null for the whole mechanism claim
+
+    Every order result in this paper removes order from the DATA. This removes
+    the read-out's ability to USE it: without the positional code, mean-pooled
+    attention is permutation-invariant, so the arm keeps every parameter and
+    every pairwise interaction and loses the only path to order. If the paper's
+    account is right the two must agree.
+
+    # H26-3 - at what timescale does the read-out use order?
+
+    `bin-shuffled` destroys order at every scale at once and cannot say which
+    one mattered. Seven windows, each destroying order below its own width and
+    leaving everything above it intact, turn one number into a curve. The
+    estimator (tau-half) and the conditions under which it is withheld were
+    fixed before this wave existed.
+
+    The rate arms of H26-3 are shared with H26-2's, which is why the intact and
+    `bin-shuffled` rungs are not restated here: they are the same cells, in the
+    same wave, on the same binary.
+    """
+    cells = []
+
+    # --- H26-1: the saturation probe -------------------------------------
+    for layers in (4, 2):
+        for seed in SEEDS:
+            cells.append(cell("w26sat", "ff+fixed+attn", 1024, 400, seed,
+                              attn_dim=32, attn_layers=layers,
+                              probe_epochs=W26_PROBE_EPOCHS,
+                              probe_max_samples=256))
+
+    # --- H26-2: the no-position structural null ---------------------------
+    for temporal in ("intact", "bin-shuffled"):
+        for seed in SEEDS:
+            cells.append(cell("w26pos", "ff+fixed", 128, 400, seed,
+                              temporal=temporal))
+            cells.append(cell("w26pos", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4, temporal=temporal))
+            cells.append(cell("w26pos", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4, temporal=temporal,
+                              attn_readout="no-position"))
+
+    # --- H26-3: the timescale ladder --------------------------------------
+    for window in W26_WINDOWS:
+        temporal = f"window-shuffled-w{window}"
+        for seed in SEEDS:
+            cells.append(cell("w26win", "ff+fixed", 128, 400, seed,
+                              temporal=temporal))
+            cells.append(cell("w26win", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4, temporal=temporal))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -1069,6 +1198,7 @@ WAVES = {
     "w23": wave23_the_collapse_is_late,
     "w24": wave24_order_synchrony_and_budget,
     "w25": wave25_the_mechanism_where_it_is_unmeasured,
+    "w26": wave26_the_saturation_and_the_timescale,
 }
 
 
