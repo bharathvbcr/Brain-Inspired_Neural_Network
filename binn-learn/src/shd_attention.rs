@@ -113,21 +113,145 @@ pub const DEFAULT_ATTENTION_DIM: usize = 32;
 /// this borrows from; depth is a separate axis and is not tested here.
 pub const DEFAULT_ATTENTION_LAYERS: usize = 1;
 
+/// Which read-out is being run.
+///
+/// # These are instruments, not levers
+///
+/// Both flags change what the attention block computes at **every** width, so a
+/// cell run with one is not comparable to the 784-cell corpus and cannot be
+/// paired against it. They exist to answer two specific questions and each
+/// carries its own registered bar at h128 — if the headline moves there, the
+/// variant is a different instrument and no result transfers across it.
+///
+/// Default is both off, which is bit-identical to before this type existed:
+/// `SHDWGT3` files carry no variant word and load as the default, and a default
+/// arm writes `SHDWGT3` again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct ReadoutVariant {
+    /// Zero the positional code.
+    ///
+    /// Without position, mean-pooled attention is permutation-invariant — see
+    /// `position_is_what_makes_the_read_out_order_sensitive`. This is therefore
+    /// the *structural* null for the whole mechanism claim: an arm that cannot
+    /// see order, built from the identical initialisation, at the identical
+    /// parameter count. Where `bin-shuffled` removes order from the data, this
+    /// removes the read-out's ability to use it, and the two should agree.
+    pub no_position: bool,
+    /// L2-normalise the query and key before the score.
+    ///
+    /// Registered against `PREREG_2026-08-25_THE_H1024_COLLAPSE`: if the
+    /// collapse is softmax saturation driven by `||q|| ||k||` growing without
+    /// bound, normalising removes the mechanism and the collapse with it. If it
+    /// is anything else, this changes nothing at h1024 and the hypothesis is
+    /// wrong.
+    pub qk_norm: bool,
+}
+
+impl ReadoutVariant {
+    pub const DEFAULT: Self = Self {
+        no_position: false,
+        qk_norm: false,
+    };
+
+    pub const fn is_default(self) -> bool {
+        !self.no_position && !self.qk_norm
+    }
+
+    /// Suffix appended to the arm label in a cell record. Empty for the default,
+    /// so every recorded cell keeps the label it has.
+    pub fn label_suffix(self) -> String {
+        let mut suffix = String::new();
+        if self.no_position {
+            suffix.push_str("+nopos");
+        }
+        if self.qk_norm {
+            suffix.push_str("+qknorm");
+        }
+        suffix
+    }
+
+    /// One word in the `SHDWGT4` container. Bit 0 is position, bit 1 is
+    /// QK-norm; code 0 is the default and is never written, because a default
+    /// arm writes `SHDWGT3` instead.
+    pub const fn code(self) -> u32 {
+        (self.no_position as u32) | ((self.qk_norm as u32) << 1)
+    }
+
+    pub fn from_code(code: u32) -> Result<Self, String> {
+        if code > 0b11 {
+            return Err(format!("unknown read-out variant code {code} in weight file"));
+        }
+        Ok(Self {
+            no_position: code & 1 != 0,
+            qk_norm: code & 2 != 0,
+        })
+    }
+}
+
+/// Fixed gain applied to the normalised score, as a multiple of `sqrt(d_model)`.
+///
+/// # Why a constant and why this one
+///
+/// Plain `q . k / sqrt(d)` and `qhat . khat / sqrt(d)` are not the same
+/// instrument at a different scale: normalised, the dot product is bounded by 1,
+/// so every score falls inside `+/- 1/sqrt(d)` — 0.18 at the registered d=32 —
+/// the softmax is within rounding of uniform, and the read-out is *dead* rather
+/// than *bounded*. A QK-norm arm crippled that way would fail its h128 bar for
+/// a reason that has nothing to do with the hypothesis it was built to test.
+///
+/// Multiplying the normalised score by `d_model` — that is, replacing
+/// `1/sqrt(d)` with `sqrt(d)` — restores an O(1) score, because two independent
+/// `d`-dimensional vectors have `qhat . khat ~ 1/sqrt(d)`. The result is
+/// attention that can still be as sharp as the task needs while `||q|| ||k||`
+/// no longer enters the score at all, which is precisely the term the collapse
+/// hypothesis names.
+///
+/// Registered here rather than tuned. If it were swept, the arm would stop
+/// being a test of the hypothesis and become a search for a working read-out.
+pub fn qk_norm_score_scale(d_model: usize) -> f32 {
+    (d_model as f32).sqrt()
+}
+
+/// Guard inside the norm, so `q / ||q||` is smooth at `q = 0` rather than
+/// branching there.
+///
+/// A silent trace with `no_position` also on gives `z = 0` exactly, hence
+/// `q = 0` exactly, and an unguarded normalisation would emit NaN into the
+/// logits — which `argmax` orders **above** every real number, so it would be
+/// counted as a confident prediction rather than a failure. Adding the guard
+/// inside the square root keeps the whole path differentiable, which is what
+/// lets the finite-difference tests cover it.
+pub const QK_NORM_EPSILON: f32 = 1e-12;
+
 /// Shape of the attention read-out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AttentionConfig {
     pub d_model: usize,
     pub layers: usize,
+    pub variant: ReadoutVariant,
 }
 
 impl AttentionConfig {
     pub const DEFAULT: Self = Self {
         d_model: DEFAULT_ATTENTION_DIM,
         layers: DEFAULT_ATTENTION_LAYERS,
+        variant: ReadoutVariant::DEFAULT,
     };
 
     pub fn new(d_model: usize, layers: usize) -> Result<Self, String> {
-        let config = Self { d_model, layers };
+        Self::with_variant(d_model, layers, ReadoutVariant::DEFAULT)
+    }
+
+    pub fn with_variant(
+        d_model: usize,
+        layers: usize,
+        variant: ReadoutVariant,
+    ) -> Result<Self, String> {
+        let config = Self {
+            d_model,
+            layers,
+            variant,
+        };
         config.validate()?;
         Ok(config)
     }
@@ -458,6 +582,12 @@ pub struct AttentionCache {
     /// a backward that each looked correct on its own
     /// (`DEFECT_2026-08-03_RECURRENT_ARM_FORWARD_BACKWARD_MISMATCH.md`).
     presentation: Option<Vec<usize>>,
+    /// Pre-normalisation `sqrt(||q||^2 + eps)` per timestep, per layer. Empty
+    /// unless the variant normalises, in which case `q` and `k` above hold the
+    /// **normalised** vectors and these are what the backward divides by.
+    q_norm: Vec<Vec<f32>>,
+    k_norm: Vec<Vec<f32>>,
+    variant: ReadoutVariant,
 }
 
 impl AttentionCache {
@@ -567,7 +697,15 @@ pub fn attention_forward_presented(
     }
     let d = params.config.d_model;
     let layers = params.blocks.len();
-    let inv_sqrt_d = 1.0 / (d as f32).sqrt();
+    let variant = params.config.variant;
+    // Under QK-norm the score is `qhat . khat * sqrt(d)`, not `q . k / sqrt(d)`.
+    // See `qk_norm_score_scale` for why the scale changes rather than staying
+    // put: a bounded dot product divided by `sqrt(d)` cannot leave the softmax.
+    let score_scale = if variant.qk_norm {
+        qk_norm_score_scale(d)
+    } else {
+        1.0 / (d as f32).sqrt()
+    };
 
     // --- embedding + position ------------------------------------------------
     let mut z0 = vec![0.0_f32; t_steps * d];
@@ -582,9 +720,18 @@ pub fn attention_forward_presented(
         // source timestep. That is the whole content of the manipulation: the
         // read-out is told this state came at time `t`, and under a shuffle it
         // did not.
-        positional_code(t, t_steps, &mut position);
+        //
+        // Under `no_position` the code is not computed at all rather than
+        // computed and multiplied by zero: `positional_code` draws nothing and
+        // consumes no randomness either way, so the two are identical in
+        // result, and not computing it says what the arm is.
         let stream = &mut z0[t * d..(t + 1) * d];
-        stream.copy_from_slice(&position);
+        if variant.no_position {
+            stream.fill(0.0);
+        } else {
+            positional_code(t, t_steps, &mut position);
+            stream.copy_from_slice(&position);
+        }
         let source = presentation.map_or(t, |order| order[t]);
         active.clear();
         for h in 0..hidden {
@@ -608,6 +755,8 @@ pub fn attention_forward_presented(
     let mut v_all = Vec::with_capacity(layers);
     let mut a_all = Vec::with_capacity(layers);
     let mut c_all = Vec::with_capacity(layers);
+    let mut q_norm_all = Vec::with_capacity(layers);
+    let mut k_norm_all = Vec::with_capacity(layers);
 
     for (layer, block) in params.blocks.iter().enumerate() {
         let input = &z[layer];
@@ -620,6 +769,15 @@ pub fn attention_forward_presented(
             apply_matrix(&block.w_k, stream, d, d, &mut k[t * d..(t + 1) * d]);
             apply_matrix(&block.w_v, stream, d, d, &mut v[t * d..(t + 1) * d]);
         }
+        // Normalise in place, keeping the divisor: the cache then holds exactly
+        // what the score consumed, and the backward has the one extra number it
+        // needs. Storing the raw vectors instead would leave the score backward
+        // reading a quantity the forward never used.
+        let (q_scale, k_scale) = if variant.qk_norm {
+            (normalise_rows(&mut q, t_steps, d), normalise_rows(&mut k, t_steps, d))
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
         let mut a = vec![0.0_f32; t_steps * t_steps];
         let mut c = vec![0.0_f32; t_steps * d];
@@ -630,7 +788,7 @@ pub fn attention_forward_presented(
             for (other, score) in scores.iter_mut().enumerate() {
                 let key = &k[other * d..(other + 1) * d];
                 let dot: f32 = query.iter().zip(key).map(|(a, b)| a * b).sum();
-                *score = dot * inv_sqrt_d;
+                *score = dot * score_scale;
                 if *score > maximum {
                     maximum = *score;
                 }
@@ -662,6 +820,8 @@ pub fn attention_forward_presented(
             }
         }
 
+        q_norm_all.push(q_scale);
+        k_norm_all.push(k_scale);
         q_all.push(q);
         k_all.push(k);
         v_all.push(v);
@@ -691,7 +851,29 @@ pub fn attention_forward_presented(
         c: c_all,
         pooled,
         presentation: presentation.map(<[usize]>::to_vec),
+        q_norm: q_norm_all,
+        k_norm: k_norm_all,
+        variant,
     })
+}
+
+/// Scale each `d`-long row to unit length, returning the divisors used.
+///
+/// `sqrt(sum + eps)` rather than a branch on zero: the whole path stays
+/// differentiable, so the finite-difference tests cover the degenerate case
+/// instead of stopping at its edge. See [`QK_NORM_EPSILON`].
+fn normalise_rows(values: &mut [f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut scales = Vec::with_capacity(rows);
+    for row in 0..rows {
+        let slice = &mut values[row * cols..(row + 1) * cols];
+        let square: f32 = slice.iter().map(|value| value * value).sum();
+        let norm = (square + QK_NORM_EPSILON).sqrt();
+        for value in slice.iter_mut() {
+            *value /= norm;
+        }
+        scales.push(norm);
+    }
+    scales
 }
 
 /// Gradient of `sum_c d_logits[c] * (W_a pooled)[c]` with respect to every
@@ -727,7 +909,19 @@ pub fn attention_gradient(
     if spikes.len() != t_steps * hidden {
         return Err("attention gradient spike shape does not match the cache".into());
     }
-    let inv_sqrt_d = 1.0 / (d as f32).sqrt();
+    let variant = params.config.variant;
+    if variant != cache.variant {
+        return Err(
+            "attention cache was produced by a different read-out variant than the \
+             parameters name"
+                .into(),
+        );
+    }
+    let score_scale = if variant.qk_norm {
+        qk_norm_score_scale(d)
+    } else {
+        1.0 / (d as f32).sqrt()
+    };
     let mut gradient = AttentionGradient::zeros_like(params);
 
     // --- read-out ------------------------------------------------------------
@@ -817,7 +1011,7 @@ pub fn attention_gradient(
             let scores = &d_attention[t * t_steps..(t + 1) * t_steps];
             let query = &q[t * d..(t + 1) * d];
             for other in 0..t_steps {
-                let error = scores[other] * inv_sqrt_d;
+                let error = scores[other] * score_scale;
                 if error == 0.0 {
                     continue;
                 }
@@ -825,6 +1019,38 @@ pub fn attention_gradient(
                 for index in 0..d {
                     d_q[t * d + index] += error * key[index];
                     d_k[other * d + index] += error * query[index];
+                }
+            }
+        }
+
+        // Back through the normalisation, if there was one. `q` and `k` above
+        // are the **normalised** vectors, which is exactly what this needs:
+        //
+        //     qhat = q / n,  n = sqrt(|q|^2 + eps)
+        //     dL/dq = (dL/dqhat - (qhat . dL/dqhat) qhat) / n
+        //
+        // The projection term is the whole content of the change. Dropping it
+        // — dividing by `n` and stopping — gives a gradient that points in a
+        // plausible direction, has a plausible norm, and trains to a plausible
+        // accuracy, which is why this is checked by finite difference rather
+        // than by inspection.
+        if variant.qk_norm {
+            for (values, unit, norms) in [
+                (&mut d_q, q, &cache.q_norm[layer]),
+                (&mut d_k, k, &cache.k_norm[layer]),
+            ] {
+                for t in 0..t_steps {
+                    let row = &mut values[t * d..(t + 1) * d];
+                    let normalised = &unit[t * d..(t + 1) * d];
+                    let projection: f32 = row
+                        .iter()
+                        .zip(normalised)
+                        .map(|(gradient, value)| gradient * value)
+                        .sum();
+                    let norm = norms[t];
+                    for (gradient, value) in row.iter_mut().zip(normalised) {
+                        *gradient = (*gradient - projection * value) / norm;
+                    }
                 }
             }
         }
@@ -1597,6 +1823,375 @@ mod tests {
                 attention_forward_presented(&params, &spikes, t_steps, Some(&bad)).is_err(),
                 "{bad:?} was accepted as a presentation order"
             );
+        }
+    }
+
+    fn variant_params(
+        hidden: usize,
+        n_classes: usize,
+        d_model: usize,
+        layers: usize,
+        variant: ReadoutVariant,
+    ) -> AttentionParams {
+        let mut params = AttentionParams::deterministic(
+            hidden,
+            n_classes,
+            AttentionConfig::with_variant(d_model, layers, variant).unwrap(),
+            0x5EED_0042,
+        )
+        .unwrap();
+        // `deterministic` zeroes `w_o`, which would make every gradient above
+        // the first block exactly zero — see `params`.
+        let mut rng = PortableRng::new(0x5EED_0043);
+        for block in params.blocks.iter_mut() {
+            for value in block.w_o.iter_mut() {
+                *value = rng.uniform(-0.4, 0.4);
+            }
+        }
+        params
+    }
+
+    /// Both variants are finite-difference checkable, and are checked.
+    ///
+    /// QK-norm's backward is the one that could plausibly be wrong and still
+    /// look right: dividing by the norm and stopping — dropping the projection
+    /// term `(qhat . dL/dqhat) qhat` — gives a gradient with a plausible
+    /// direction and a plausible magnitude that would train to a plausible
+    /// accuracy. Nothing downstream of a wrong QK-norm gradient reports an
+    /// error; the arm simply learns a slightly different function and the
+    /// h1024 result it was built to test becomes uninterpretable.
+    #[test]
+    fn every_read_out_variant_matches_finite_difference() {
+        let variants = [
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: false,
+            },
+            ReadoutVariant {
+                no_position: false,
+                qk_norm: true,
+            },
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: true,
+            },
+        ];
+        for variant in variants {
+            for layers in [1_usize, 2] {
+                let (t_steps, hidden, n_classes, d_model) = (9_usize, 6_usize, 4_usize, 4_usize);
+                let params = variant_params(hidden, n_classes, d_model, layers, variant);
+                let spikes = spike_train(t_steps, hidden);
+                let d_logits = vec![0.31_f32, -0.72, 0.14, 0.27];
+                let cache = attention_forward(&params, &spikes, t_steps).unwrap();
+                let (gradient, ds_attn) =
+                    attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+                let name = |what: &str| {
+                    format!(
+                        "{}{} layers {layers} {what}",
+                        if variant.no_position { "nopos " } else { "" },
+                        if variant.qk_norm { "qknorm" } else { "plain" }
+                    )
+                };
+
+                for index in [0_usize, 7, 13, 23] {
+                    assert_close(
+                        &name(&format!("w_e[{index}]")),
+                        gradient.w_e[index],
+                        central_difference(
+                            &params,
+                            &spikes,
+                            t_steps,
+                            &d_logits,
+                            |p| &mut p.w_e[index],
+                            1e-3,
+                        ),
+                    );
+                }
+                for layer in 0..layers {
+                    for index in [0_usize, 5, 11, 15] {
+                        for what in ["w_q", "w_k", "w_v", "w_o"] {
+                            let analytic = match what {
+                                "w_q" => gradient.blocks[layer].w_q[index],
+                                "w_k" => gradient.blocks[layer].w_k[index],
+                                "w_v" => gradient.blocks[layer].w_v[index],
+                                _ => gradient.blocks[layer].w_o[index],
+                            };
+                            assert_close(
+                                &name(&format!("block {layer} {what}[{index}]")),
+                                analytic,
+                                central_difference(
+                                    &params,
+                                    &spikes,
+                                    t_steps,
+                                    &d_logits,
+                                    |p| match what {
+                                        "w_q" => &mut p.blocks[layer].w_q[index],
+                                        "w_k" => &mut p.blocks[layer].w_k[index],
+                                        "w_v" => &mut p.blocks[layer].w_v[index],
+                                        _ => &mut p.blocks[layer].w_o[index],
+                                    },
+                                    1e-3,
+                                ),
+                            );
+                        }
+                    }
+                }
+                for &index in &[0_usize, 17, 31, 44] {
+                    let mut plus = spikes.clone();
+                    plus[index] += 1e-3;
+                    let mut minus = spikes.clone();
+                    minus[index] -= 1e-3;
+                    let numerical = (objective(&params, &plus, t_steps, &d_logits)
+                        - objective(&params, &minus, t_steps, &d_logits))
+                        / 2e-3;
+                    assert_close(&name(&format!("ds_attn[{index}]")), ds_attn[index], numerical);
+                }
+            }
+        }
+    }
+
+    /// Dropping the projection term would be detectable, and here is the
+    /// quantity that detects it.
+    ///
+    /// A finite-difference test only earns its keep if the wrong answer fails
+    /// it, and the plausible wrong answer here — divide by the norm, skip the
+    /// projection `(qhat . dL/dqhat) qhat` — produces a gradient with a
+    /// plausible direction and magnitude that trains to a plausible accuracy.
+    ///
+    /// The projection is exactly the **radial** component of `dL/dq`, and under
+    /// QK-norm the score cannot depend on the radius: scaling every query by a
+    /// positive constant leaves `qhat` unchanged. So the directional derivative
+    /// of the loss along `w_q -> (1 + eps) w_q`, which is `sum_ij dL/dw_q[ij] *
+    /// w_q[ij]`, must be **zero** under QK-norm and is generically non-zero
+    /// without it. A backward that skipped the projection would leave that sum
+    /// at the unnormalised path's magnitude.
+    ///
+    /// Both halves are asserted, because the zero alone would also be satisfied
+    /// by a gradient that was zero everywhere.
+    #[test]
+    fn the_qk_norm_gradient_has_no_radial_component() {
+        let (t_steps, hidden, n_classes, d_model) = (9_usize, 6_usize, 4_usize, 4_usize);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits = vec![0.31_f32, -0.72, 0.14, 0.27];
+
+        let radial = |variant| {
+            let params = variant_params(hidden, n_classes, d_model, 1, variant);
+            let cache = attention_forward(&params, &spikes, t_steps).unwrap();
+            let (gradient, _) = attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+            let along: f32 = gradient.blocks[0]
+                .w_q
+                .iter()
+                .zip(&params.blocks[0].w_q)
+                .map(|(g, w)| g * w)
+                .sum();
+            let scale: f32 = gradient.blocks[0].w_q.iter().map(|g| g.abs()).sum();
+            (along, scale)
+        };
+        let (normalised_along, normalised_scale) = radial(ReadoutVariant {
+            no_position: false,
+            qk_norm: true,
+        });
+        let (plain_along, _) = radial(ReadoutVariant::DEFAULT);
+
+        assert!(
+            normalised_scale > 1e-4,
+            "the qk-norm query gradient is ~0 everywhere ({normalised_scale:e}); \
+             a zero radial component would then prove nothing"
+        );
+        assert!(
+            plain_along.abs() > 1e-4,
+            "the unnormalised read-out has no radial gradient either \
+             ({plain_along:e}); this fixture cannot separate the two"
+        );
+        assert!(
+            normalised_along.abs() < normalised_scale * 1e-3,
+            "qk-norm carries a radial gradient of {normalised_along:e} against a \
+             gradient scale of {normalised_scale:e} - the projection term is \
+             missing or wrong"
+        );
+    }
+
+    /// The structural null: without position the read-out cannot see order.
+    ///
+    /// `position_is_what_makes_the_read_out_order_sensitive` shows the default
+    /// arm *is* order-sensitive. This measures both arms against the same
+    /// reversal and asserts the no-position one is four orders of magnitude
+    /// less sensitive.
+    ///
+    /// # Why this is not a bit-identity assertion
+    ///
+    /// It was written as one first, and it failed by a single ULP. Mean pooling
+    /// sums the residual stream over timesteps in stream order, so reversing
+    /// the trace reassociates that sum; the arm is permutation-invariant in
+    /// exact arithmetic and invariant only to rounding in f32.
+    ///
+    /// That is worth stating rather than hiding behind a tolerance, because it
+    /// is the difference between this arm and the `hidden-shuffled` rate arm.
+    /// The rate arm's null is **exactly** zero — it reads an unpermuted buffer,
+    /// so there is nothing to reassociate — and it is therefore the null the
+    /// campaign should read a "cost of order" of zero from. A no-position arm
+    /// can only ever say "smaller than rounding", which is the right claim but
+    /// a weaker one, and a wave that reported it as exact would be overstating
+    /// its own instrument.
+    #[test]
+    fn the_no_position_read_out_is_order_insensitive_to_rounding() {
+        let (t_steps, hidden, n_classes, d_model) = (12_usize, 6_usize, 4_usize, 4_usize);
+        let spikes = spike_train(t_steps, hidden);
+        let mut reversed = vec![0.0_f32; spikes.len()];
+        for t in 0..t_steps {
+            let source = (t_steps - 1 - t) * hidden;
+            reversed[t * hidden..(t + 1) * hidden]
+                .copy_from_slice(&spikes[source..source + hidden]);
+        }
+
+        let moved = |variant| {
+            let params = variant_params(hidden, n_classes, d_model, 1, variant);
+            let intact = attention_forward(&params, &spikes, t_steps).unwrap();
+            let flipped = attention_forward(&params, &reversed, t_steps).unwrap();
+            intact
+                .pooled
+                .iter()
+                .zip(&flipped.pooled)
+                .map(|(a, b)| (a - b).abs())
+                .sum::<f32>()
+        };
+        let with_position = moved(ReadoutVariant::DEFAULT);
+        let without = moved(ReadoutVariant {
+            no_position: true,
+            qk_norm: false,
+        });
+        assert!(
+            with_position > 1e-3,
+            "the default read-out did not notice the reversal ({with_position:e});              the contrast this test rests on is not there"
+        );
+        assert!(
+            without < with_position * 1e-4,
+            "no-position moved {without:e} under reversal against the default's              {with_position:e} - that is structure, not rounding"
+        );
+    }
+
+    /// Neither variant touches the initialisation lineage.
+    ///
+    /// Every estimator in this campaign is seed-paired: a variant arm at seed
+    /// *s* is read against a default arm at seed *s*, and the difference is
+    /// attributed to the read-out. That attribution is only sound if the two
+    /// start from the same weights. `positional_code` draws no randomness and
+    /// normalisation is applied after `deterministic` has finished, so nothing
+    /// *should* move — which is exactly the kind of claim this campaign has
+    /// repeatedly found to be false, so it is asserted rather than reasoned.
+    #[test]
+    fn no_read_out_variant_moves_the_initialisation() {
+        let reference =
+            AttentionParams::deterministic(17, 8, AttentionConfig::DEFAULT, 0x5EED_0011).unwrap();
+        for variant in [
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: false,
+            },
+            ReadoutVariant {
+                no_position: false,
+                qk_norm: true,
+            },
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: true,
+            },
+        ] {
+            let config = AttentionConfig::with_variant(
+                DEFAULT_ATTENTION_DIM,
+                DEFAULT_ATTENTION_LAYERS,
+                variant,
+            )
+            .unwrap();
+            let varied = AttentionParams::deterministic(17, 8, config, 0x5EED_0011).unwrap();
+            assert_eq!(
+                reference.parameter_count(),
+                varied.parameter_count(),
+                "{variant:?} changed the parameter count"
+            );
+            for (index, (a, b)) in reference.iter_all().zip(varied.iter_all()).enumerate() {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "{variant:?} moved initialisation parameter {index}"
+                );
+            }
+        }
+    }
+
+    /// QK-norm survives the input that would make an unguarded normalisation
+    /// produce NaN, and NaN here would be counted as a confident prediction.
+    #[test]
+    fn qk_norm_is_finite_on_a_trace_with_nothing_in_it() {
+        let (t_steps, hidden, n_classes, d_model) = (5_usize, 4_usize, 3_usize, 4_usize);
+        let variant = ReadoutVariant {
+            no_position: true,
+            qk_norm: true,
+        };
+        let params = variant_params(hidden, n_classes, d_model, 1, variant);
+        // No position and no spikes: `z0` is exactly zero, so `q` and `k` are
+        // exactly zero and the normalisation divides by its guard alone.
+        let spikes = vec![0.0_f32; t_steps * hidden];
+        let cache = attention_forward(&params, &spikes, t_steps).unwrap();
+        assert!(
+            cache.pooled.iter().all(|value| value.is_finite()),
+            "pooled: {:?}",
+            cache.pooled
+        );
+        let d_logits = vec![0.3_f32; n_classes];
+        let (gradient, ds_attn) =
+            attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+        assert!(gradient.all_finite(), "gradient went non-finite");
+        assert!(ds_attn.iter().all(|value| value.is_finite()));
+    }
+
+    /// QK-norm removes `||q|| ||k||` from the score, which is the term the
+    /// collapse hypothesis names.
+    ///
+    /// Scaling every query and key by a large constant — what unbounded growth
+    /// during training looks like — changes the default read-out's attention
+    /// rows completely and must leave the normalised one's untouched. If it did
+    /// not, the arm would not be testing the hypothesis it is registered
+    /// against.
+    #[test]
+    fn qk_norm_makes_the_score_invariant_to_the_scale_of_q_and_k() {
+        let (t_steps, hidden, n_classes, d_model) = (7_usize, 5_usize, 3_usize, 4_usize);
+        let spikes = spike_train(t_steps, hidden);
+        let variant = ReadoutVariant {
+            no_position: false,
+            qk_norm: true,
+        };
+        for (label, variant) in [("default", ReadoutVariant::DEFAULT), ("qk-norm", variant)] {
+            let params = variant_params(hidden, n_classes, d_model, 1, variant);
+            let mut inflated = params.clone();
+            for block in inflated.blocks.iter_mut() {
+                for value in block.w_q.iter_mut().chain(block.w_k.iter_mut()) {
+                    *value *= 8.0;
+                }
+            }
+            let base = attention_forward(&params, &spikes, t_steps).unwrap();
+            let grown = attention_forward(&inflated, &spikes, t_steps).unwrap();
+            let moved: f32 = (0..t_steps)
+                .flat_map(|t| {
+                    base.final_attention_row(t)
+                        .iter()
+                        .zip(grown.final_attention_row(t))
+                        .map(|(a, b)| (a - b).abs())
+                        .collect::<Vec<_>>()
+                })
+                .sum();
+            if label == "qk-norm" {
+                assert!(
+                    moved < 1e-4,
+                    "qk-norm attention moved by {moved:e} when q and k were scaled by 64"
+                );
+            } else {
+                assert!(
+                    moved > 1e-2,
+                    "the default read-out did not notice a 64x score change ({moved:e}); \
+                     the contrast this test rests on is not there"
+                );
+            }
         }
     }
 }

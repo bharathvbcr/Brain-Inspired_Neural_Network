@@ -30,7 +30,7 @@ use std::path::Path;
 
 use crate::shd_attention::{
     attention_forward_presented, attention_gradient, attention_logits, AttentionConfig,
-    AttentionGradient,
+    AttentionGradient, ReadoutVariant,
     AttentionParams,
 };
 use crate::shd_matched::{
@@ -44,6 +44,11 @@ pub const MATCHED_WEIGHTS_MAGIC_V2: &[u8; 8] = b"SHDWGT2\0";
 /// read-out. **Only attention arms write it**, so `SHDWGT1` and `SHDWGT2` files
 /// keep loading and rewriting byte-identically and Gate F is untouched.
 pub const MATCHED_WEIGHTS_MAGIC_V3: &[u8; 8] = b"SHDWGT3\0";
+/// Version 4 weight container: everything in `SHDWGT3` plus one word naming the
+/// read-out variant. **Only a non-default variant writes it**, so every
+/// `SHDWGT3` file keeps loading and rewriting byte-identically and Gate F is
+/// untouched — the same discipline that introduced `SHDWGT3` itself.
+pub const MATCHED_WEIGHTS_MAGIC_V4: &[u8; 8] = b"SHDWGT4\0";
 
 /// Mirrors `binn-learn/src/shd_alif.rs` `DEFAULT_TAU_A` / `DEFAULT_BETA_A`.
 pub const MATCHED_DEFAULT_TAU_A: f32 = 20.0;
@@ -291,10 +296,14 @@ impl ArmWeights {
         }
         let file = File::create(path).map_err(|error| error.to_string())?;
         let mut writer = BufWriter::new(file);
-        let magic = if self.arm.attention {
-            MATCHED_WEIGHTS_MAGIC_V3
-        } else {
-            MATCHED_WEIGHTS_MAGIC_V2
+        let variant = self
+            .attn
+            .as_ref()
+            .map_or(ReadoutVariant::DEFAULT, |params| params.config.variant);
+        let magic = match (self.arm.attention, variant.is_default()) {
+            (true, true) => MATCHED_WEIGHTS_MAGIC_V3,
+            (true, false) => MATCHED_WEIGHTS_MAGIC_V4,
+            (false, _) => MATCHED_WEIGHTS_MAGIC_V2,
         };
         writer.write_all(magic).map_err(|e| e.to_string())?;
         for value in [
@@ -325,6 +334,11 @@ impl ArmWeights {
         if let Some(params) = &self.attn {
             write_u32(&mut writer, params.config.d_model as u32)?;
             write_u32(&mut writer, params.config.layers as u32)?;
+            // Appended after the shape words, and only in the V4 container, so
+            // a default-variant file is byte-for-byte what it was.
+            if !variant.is_default() {
+                write_u32(&mut writer, variant.code())?;
+            }
             for &value in params.iter_all() {
                 writer
                     .write_all(&value.to_bits().to_le_bytes())
@@ -343,7 +357,8 @@ impl ArmWeights {
             drop(reader);
             return Ok(Self::feedforward(MatchedWeights::load(path)?));
         }
-        let attentive = &magic == MATCHED_WEIGHTS_MAGIC_V3;
+        let varied = &magic == MATCHED_WEIGHTS_MAGIC_V4;
+        let attentive = &magic == MATCHED_WEIGHTS_MAGIC_V3 || varied;
         if &magic != MATCHED_WEIGHTS_MAGIC_V2 && !attentive {
             return Err(format!("bad matched-weight magic in {}", path.display()));
         }
@@ -356,7 +371,11 @@ impl ArmWeights {
                 "{} declares arm {} but was written in the {} container",
                 path.display(),
                 arm.label(),
-                if attentive { "SHDWGT3" } else { "SHDWGT2" }
+                match (attentive, varied) {
+                    (true, true) => "SHDWGT4",
+                    (true, false) => "SHDWGT3",
+                    _ => "SHDWGT2",
+                }
             ));
         }
         let tau_a = read_f32(&mut reader)?;
@@ -372,7 +391,25 @@ impl ArmWeights {
         let attn = if attentive {
             let d_model = read_u32(&mut reader)? as usize;
             let layers = read_u32(&mut reader)? as usize;
-            let config = AttentionConfig::new(d_model, layers)?;
+            let variant = if varied {
+                let variant = ReadoutVariant::from_code(read_u32(&mut reader)?)?;
+                // A V4 file whose variant word is the default would round-trip
+                // to a V3 file, so `save` could not reproduce what `load` read.
+                // Refuse rather than silently rewrite it under a different
+                // magic — a weight file that does not save back as itself is
+                // how a reproduction gate starts lying.
+                if variant.is_default() {
+                    return Err(format!(
+                        "{} is a SHDWGT4 container carrying the default read-out \
+                         variant; that file should be SHDWGT3",
+                        path.display()
+                    ));
+                }
+                variant
+            } else {
+                ReadoutVariant::DEFAULT
+            };
+            let config = AttentionConfig::with_variant(d_model, layers, variant)?;
             let mut params = AttentionParams::deterministic(hidden, n_classes, config, 0)?;
             for value in params.iter_all_mut() {
                 *value = read_f32(&mut reader)?;
@@ -2201,6 +2238,137 @@ mod tests {
             loaded.attention_config(),
             Some(AttentionConfig::new(6, 1).unwrap())
         );
+    }
+
+    /// GATE F, storage. A default-variant attention arm must still write
+    /// `SHDWGT3` after `SHDWGT4` existed, byte for byte.
+    ///
+    /// This is the clause that keeps every archived weight file and every
+    /// reproduction of it valid. If a read-out variant word leaked into the
+    /// default container, every `init` invocation in the campaign would produce
+    /// a different file from the one its cells were trained from, and the
+    /// reproduction gate would fail on 784 cells for a reason that has nothing
+    /// to do with any of them.
+    #[test]
+    fn a_default_read_out_still_writes_the_v3_container() {
+        let directory = std::env::temp_dir().join("shd-arm-v4-default");
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("weights.bin");
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let hidden = base.hidden;
+        let weights = ArmWeights::new_attentive(
+            base,
+            MatchedArm::FF_FIXED_ATTN,
+            Vec::new(),
+            attention_params(hidden, 20),
+        )
+        .unwrap();
+        weights.save(&path).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(&bytes[..8], MATCHED_WEIGHTS_MAGIC_V3);
+        let loaded = ArmWeights::load(&path).unwrap();
+        assert_eq!(loaded, weights);
+        loaded.save(&path).unwrap();
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            bytes,
+            "a default-variant file must save back byte-identically"
+        );
+    }
+
+    /// `SHDWGT4` round-trips every non-default variant, and only those.
+    #[test]
+    fn v4_round_trip_preserves_the_read_out_variant() {
+        let directory = std::env::temp_dir().join("shd-arm-v4-roundtrip");
+        std::fs::create_dir_all(&directory).unwrap();
+        for variant in [
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: false,
+            },
+            ReadoutVariant {
+                no_position: false,
+                qk_norm: true,
+            },
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: true,
+            },
+        ] {
+            let path = directory.join(format!("weights-{}.bin", variant.code()));
+            let base = MatchedWeights::deterministic(40, 24, 20, 91);
+            let hidden = base.hidden;
+            let config = AttentionConfig::with_variant(6, 1, variant).unwrap();
+            let attn = AttentionParams::deterministic(hidden, 20, config, 5).unwrap();
+            let weights =
+                ArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), attn)
+                    .unwrap();
+            weights.save(&path).unwrap();
+            let bytes = std::fs::read(&path).unwrap();
+            assert_eq!(
+                &bytes[..8],
+                MATCHED_WEIGHTS_MAGIC_V4,
+                "{variant:?} must write SHDWGT4"
+            );
+            let loaded = ArmWeights::load(&path).unwrap();
+            assert_eq!(loaded, weights);
+            assert_eq!(loaded.attention_config().unwrap().variant, variant);
+            loaded.save(&path).unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), bytes, "{variant:?}");
+        }
+    }
+
+    /// A `SHDWGT4` file carrying the default variant is refused rather than
+    /// loaded and rewritten as `SHDWGT3`.
+    ///
+    /// Such a file would load fine and save back under a different magic with a
+    /// different length — a weight file that does not reproduce itself, which
+    /// is how a reproduction gate starts reporting a difference it cannot
+    /// explain.
+    #[test]
+    fn a_v4_container_claiming_the_default_variant_is_refused() {
+        let directory = std::env::temp_dir().join("shd-arm-v4-degenerate");
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("weights.bin");
+        let base = MatchedWeights::deterministic(40, 24, 20, 91);
+        let hidden = base.hidden;
+        let config = AttentionConfig::with_variant(
+            6,
+            1,
+            ReadoutVariant {
+                no_position: true,
+                qk_norm: false,
+            },
+        )
+        .unwrap();
+        let attn = AttentionParams::deterministic(hidden, 20, config, 5).unwrap();
+        ArmWeights::new_attentive(base, MatchedArm::FF_FIXED_ATTN, Vec::new(), attn)
+            .unwrap()
+            .save(&path)
+            .unwrap();
+        let mut bytes = std::fs::read(&path).unwrap();
+        // The variant word sits directly after `d_model` and `layers`, which
+        // follow the base weights. Find it by value rather than by offset: the
+        // code is 1 and there is exactly one such word after the header.
+        let parameter_bytes = AttentionParams::deterministic(
+            hidden,
+            20,
+            AttentionConfig::new(6, 1).unwrap(),
+            5,
+        )
+        .unwrap()
+        .parameter_count()
+            * 4;
+        let offset = bytes.len() - parameter_bytes - 4;
+        assert_eq!(
+            u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()),
+            1,
+            "the variant word is not where this test expects it"
+        );
+        bytes[offset..offset + 4].copy_from_slice(&0_u32.to_le_bytes());
+        std::fs::write(&path, &bytes).unwrap();
+        let error = ArmWeights::load(&path).expect_err("a default-variant V4 file must be refused");
+        assert!(error.contains("SHDWGT3"), "{error}");
     }
 
     /// The two constructors must not be able to produce an arm whose tag and

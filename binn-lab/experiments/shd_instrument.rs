@@ -14,7 +14,7 @@ use rayon::prelude::*;
 
 use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
 use binn_lab::timestamp::{iso8601_utc, unix_seconds};
-use binn_learn::shd_attention::{AttentionConfig, AttentionParams};
+use binn_learn::shd_attention::{AttentionConfig, AttentionParams, ReadoutVariant};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
 use binn_learn::{
@@ -81,6 +81,10 @@ fn print_help() {
            --seed N          provenance label recorded in the cell (no effect on results)\n\
            --attn-dim N      attention width, even (default 32)\n\
            --attn-layers N   attention blocks (default 1)\n\
+           --attn-readout V  default|no-position|qk-norm|no-position+qk-norm\n\
+                             (default: default). Anything but `default` is a\n\
+                             different instrument at every width, not a lever;\n\
+                             its cells cannot be paired against the corpus.\n\
          Optional on init, recurrent arms only:\n\
            --w-rec-scale F   multiplies the Glorot recurrent draw (default 1.0)\n\
          Optional on train-cell:\n\
@@ -257,10 +261,11 @@ fn init(args: &[String]) -> Result<(), String> {
             // are bit-identical to the same arm without attention at the same
             // seed. Any difference between the two is then the read-out, not a
             // different initialisation.
-            let config = AttentionConfig::new(
+            let config = AttentionConfig::with_variant(
                 optional_usize(args, "--attn-dim")?.unwrap_or(binn_learn::DEFAULT_ATTENTION_DIM),
                 optional_usize(args, "--attn-layers")?
                     .unwrap_or(binn_learn::DEFAULT_ATTENTION_LAYERS),
+                optional_readout(args)?,
             )?;
             let attn = AttentionParams::deterministic(
                 hidden,
@@ -523,6 +528,7 @@ const INIT_FLAGS: &[&str] = &[
     "--arm",
     "--attn-dim",
     "--attn-layers",
+    "--attn-readout",
     "--w-rec-scale",
 ];
 
@@ -996,9 +1002,17 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     };
     let attention_fields = match weights.attention_config() {
         Some(config) => {
+            // The variant is appended and is `"default"` for every recorded
+            // cell, so Gate F's explicit field list and every archived record
+            // are unaffected. It is emitted unconditionally rather than only
+            // for non-default arms: a reader must be able to tell "this cell
+            // ran the registered read-out" from "this cell was produced before
+            // variants existed", and an absent field says neither.
             format!(
-                ",\"attn_dim\":{},\"attn_layers\":{}",
-                config.d_model, config.layers
+                ",\"attn_dim\":{},\"attn_layers\":{},\"attn_readout\":\"{}\"",
+                config.d_model,
+                config.layers,
+                readout_label(config.variant)
             )
         }
         None => String::new(),
@@ -1205,6 +1219,52 @@ fn to_matched(sample: &FramedShdSample) -> MatchedShdSample {
         sample.n_inputs,
         sample.dt_ms,
     )
+}
+
+/// `--attn-readout default|no-position|qk-norm|no-position+qk-norm`.
+///
+/// Absent means `default`, which writes a `SHDWGT3` file byte-identical to what
+/// this subcommand produced before the flag existed.
+///
+/// Spelled as one flag with named values rather than two booleans so that a
+/// plan entry naming the read-out cannot be half-applied: `--attn-qk-norm` with
+/// a typo in a second flag would have produced a cell that ran one variant and
+/// was scored as another.
+fn readout_label(variant: ReadoutVariant) -> &'static str {
+    match (variant.no_position, variant.qk_norm) {
+        (false, false) => "default",
+        (true, false) => "no-position",
+        (false, true) => "qk-norm",
+        (true, true) => "no-position+qk-norm",
+    }
+}
+
+fn optional_readout(args: &[String]) -> Result<ReadoutVariant, String> {
+    let Some(index) = args.iter().position(|value| value == "--attn-readout") else {
+        return Ok(ReadoutVariant::DEFAULT);
+    };
+    let value = args
+        .get(index + 1)
+        .ok_or_else(|| "--attn-readout requires a value".to_string())?;
+    match value.as_str() {
+        "default" => Ok(ReadoutVariant::DEFAULT),
+        "no-position" => Ok(ReadoutVariant {
+            no_position: true,
+            qk_norm: false,
+        }),
+        "qk-norm" => Ok(ReadoutVariant {
+            no_position: false,
+            qk_norm: true,
+        }),
+        "no-position+qk-norm" => Ok(ReadoutVariant {
+            no_position: true,
+            qk_norm: true,
+        }),
+        other => Err(format!(
+            "unknown --attn-readout {other:?}; expected default, no-position, \
+             qk-norm or no-position+qk-norm"
+        )),
+    }
 }
 
 /// `--temporal <label>`. Absent means intact.
