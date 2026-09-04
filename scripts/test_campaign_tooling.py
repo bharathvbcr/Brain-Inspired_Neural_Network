@@ -1624,6 +1624,13 @@ class ControlPlaneCallsAreBoundedTest(unittest.TestCase):
 #: previous 953 of 1671, so the move was additive and no verdict was re-scored.
 #: See `AccuracyAndNonFiniteGateTest.test_the_archived_corpus_is_unaffected`.
 CORPUS_BASELINE = {
+    #: Landed 2026-09-04 with wave 26, the first corpus in the v3 bucket and on
+    #: the 434d38c2 binary. 264 cells, 264 valid, 0 INVALID -- the whole wave, no
+    #: failures. No archived verdict moved: the v1 and v2 entries below are
+    #: unchanged and `git status` reports 0 modified and 0 deleted under both.
+    #: See `RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`.
+    "shd_attention_campaign_v3":
+        (264, 264, "0f86cc5438eb2ac4"),
     "azure-d32l4-scope-v1":
         (95, 89, "8ecbe278f54b127f"),
     "equivalence_2026-08-22":
