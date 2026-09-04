@@ -1092,6 +1092,28 @@ W26_PROBE_EPOCHS = (1, 25, 50, 100, 200, 400)
 #: `PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md` section 1.
 W26_WINDOWS = (2, 4, 8, 16, 32, 64, 128)
 
+#: The rungs wave 26's ladder was missing. Its top rung reached 0.0596 against a
+#: half-maximum of 0.0604, so tau-half fell off the end of the registered ladder
+#: by 0.0008. These two bracket that crossing. The choice of WHERE to extend was
+#: informed by wave 26's ladder -- that is design, and it is disclosed in the
+#: registration; the tau-half estimator and its withholding rules are unchanged.
+#: 256 is the last power of two below T: `mean_steps` is 357.9 at the anchor, so
+#: a w256 window leaves a 102-bin trailing window, permuted at its own length.
+W27_WINDOWS = (192, 256)
+
+#: Registered in section 7 of the instrument preregistration. 10.05 is a rung and
+#: not a baseline appended to the ladder, so the calibrated point is measured the
+#: same way as the others -- and because `--tau-m 10.05` is the default path, that
+#: rung is also a cross-wave bit-identity check against wave 26's intact arms.
+W27_TAU_MS = (2.5, 5.0, 10.05, 20.0, 40.0)
+
+#: Held out of TRAINING, so they must be speakers that appear in train. Speakers
+#: 4 and 5 are test-only -- the instrument refuses them, loudly, which is how
+#: this was found. 3 and 6 are the two that leave the training set largest while
+#: still holding out two whole speakers: 1,169 of 8,156 trials, leaving 6,987.
+W27_VAL_SPEAKERS = (3, 6)
+W27_VAL_N_TRAIN = 6987
+
 
 def wave26_the_saturation_and_the_timescale():
     """W26 - the collapse's mechanism, the structural null, and the timescale.
@@ -1172,6 +1194,112 @@ def wave26_the_saturation_and_the_timescale():
     return cells
 
 
+def wave27_the_instruments_that_were_never_run():
+    """W27 - the five registered instruments wave 26 built and did not run.
+
+    Registered in `PREREG_2026-09-04_W27_THE_INSTRUMENTS_THAT_WERE_NEVER_RUN.md`.
+
+    **Reuse is deliberate and permitted here, where wave 26 forbade it.** Wave 26
+    could reuse nothing because its binary was new and section 0 of the instrument
+    registration forbids pairing a fresh cell against an archived half. No Rust
+    source has changed since `97a5d8a`, the commit that binary was built from, so
+    wave 27 runs on the SAME binary and section 9.1's rule -- one binary per wave,
+    every comparison self-contained inside it -- is satisfied by pairing against
+    wave 26's arms rather than by re-running them. The precedent is wave 25, which
+    reused `w22cov` arms on its pinned binary.
+
+    Reused, and the analyser prints it: `w26pos` rate `intact` / `bin-shuffled`
+    and attention `intact` / `bin-shuffled` at this exact anchor, and the
+    `w26win` ladder rungs below 192.
+
+    # H27-1 hidden shuffle - the only exact zero in the campaign
+
+    A rate read-out cannot see the hidden train's time axis, so permuting it must
+    cost that arm EXACTLY nothing: byte-identical on every scientific field, not
+    within a tolerance. Verified locally on this binary before the wave was
+    planned; this runs it in production, where it becomes a validity gate on the
+    whole wave rather than a unit test.
+
+    # H27-2 spike dropout - what a null under it would mean
+
+    Every other manipulation preserves per-channel counts exactly, so a null
+    under all of them is ambiguous between "order does not matter" and "the
+    measurement is insensitive". Dropout deletes spikes from a mask frozen before
+    the first epoch, and its registered bar is a check on the manipulation.
+
+    # H27-3 the ladder wave 26 could not finish
+
+    Wave 26's top rung reached 49% of the full shuffle and tau-half fell off the
+    end by 0.0008. Two rungs bracket the crossing.
+
+    # H27-4 QK-norm, at h128, with its motivation withdrawn and said so
+
+    Section 5 registered this to explain a COLLAPSE-SPECIFIC saturation. Wave 26
+    refuted the specificity: `d32l2` saturates too. The h128 bar is unchanged and
+    still worth running -- it asks whether qk-norm is the same instrument with the
+    score term bounded -- but it is now a read-out check, not a test of the
+    collapse hypothesis, and the registration says so.
+
+    # H27-5 the tau_m ladder, under the standing saturation gate
+
+    Five rungs, no exemption: `cell_validity.SATURATED_MAX` at 0.05 decides, and a
+    rung with more than 3 of 12 seeds void is void as a whole.
+
+    # H27-6 the speaker-held-out split - model selection only
+
+    SHD's test split is 81.3% speakers unseen in training, so a random hold-out is
+    not a proxy for it. Registered non-use: no headline number, no DiD, no bar.
+    These cells train on 6,987 samples and are NOT comparable to the corpus.
+    """
+    cells = []
+
+    # --- H27-1: hidden shuffle, the exact zero ----------------------------
+    for seed in SEEDS:
+        cells.append(cell("w27hid", "ff+fixed", 128, 400, seed,
+                          temporal="hidden-shuffled"))
+        cells.append(cell("w27hid", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, temporal="hidden-shuffled"))
+
+    # --- H27-2: spike dropout ---------------------------------------------
+    for seed in SEEDS:
+        cells.append(cell("w27drp", "ff+fixed", 128, 400, seed,
+                          temporal="spike-dropout-p30"))
+        cells.append(cell("w27drp", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4, temporal="spike-dropout-p30"))
+
+    # --- H27-3: the two rungs that bracket tau-half ------------------------
+    for window in W27_WINDOWS:
+        for seed in SEEDS:
+            cells.append(cell("w27lad", "ff+fixed", 128, 400, seed,
+                              temporal=f"window-shuffled-w{window}"))
+            cells.append(cell("w27lad", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4,
+                              temporal=f"window-shuffled-w{window}"))
+
+    # --- H27-4: QK-norm at h128, both halves in one wave -------------------
+    for temporal in ("intact", "bin-shuffled"):
+        for seed in SEEDS:
+            cells.append(cell("w27qk", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4,
+                              attn_readout="qk-norm", temporal=temporal))
+
+    # --- H27-5: the tau_m ladder ------------------------------------------
+    for tau in W27_TAU_MS:
+        for seed in SEEDS:
+            cells.append(cell("w27tau", "ff+fixed", 128, 400, seed, tau_m=tau))
+            cells.append(cell("w27tau", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4, tau_m=tau))
+
+    # --- H27-6: speaker-held-out validation, model selection only ----------
+    for seed in SEEDS:
+        cells.append(cell("w27spk", "ff+fixed", 128, 400, seed,
+                          val_speakers=W27_VAL_SPEAKERS, n_train=W27_VAL_N_TRAIN))
+        cells.append(cell("w27spk", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4,
+                          val_speakers=W27_VAL_SPEAKERS, n_train=W27_VAL_N_TRAIN))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -1199,6 +1327,7 @@ WAVES = {
     "w24": wave24_order_synchrony_and_budget,
     "w25": wave25_the_mechanism_where_it_is_unmeasured,
     "w26": wave26_the_saturation_and_the_timescale,
+    "w27": wave27_the_instruments_that_were_never_run,
 }
 
 
