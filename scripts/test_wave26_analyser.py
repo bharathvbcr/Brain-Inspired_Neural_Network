@@ -302,5 +302,48 @@ class Wave26Analyser(unittest.TestCase):
         self.assertIn("not above the bar", below)
 
 
+    def populate_win(self, rate_s=0.72, attn_s=0.78):
+        """The H26-3 ladder: window rungs only, no intact -- as planned."""
+        for window in (2, 4, 8, 16, 32, 64, 128):
+            for seed in range(5170001, 5170013):
+                base = (f"w26win__%s__h128__e400__published-2ms"
+                        f"__adjacent-sum-5%s__window-shuffled-w{window}__s{seed}")
+                self.write(base % ("ff-fixed", ""),
+                           cell_json(rate_s, arm="ff+fixed",
+                                     temporal=f"window-shuffled-w{window}"))
+                self.write(base % ("ff-fixed-attn", "__d32l4"),
+                           cell_json(attn_s,
+                                     temporal=f"window-shuffled-w{window}"))
+
+    def test_the_ladder_is_paired_against_the_wave_that_holds_intact(self):
+        """The prereg shares H26-2's intact rungs with H26-3.
+
+        `w26win` carries no `intact` cells by design, so a DiD that looks for
+        them inside `w26win` finds nothing and the whole registered ladder
+        reads as absent -- with 168 cells sitting on disk.
+        """
+        self.populate_pos()
+        self.populate_win()
+        cells, _ = self.module.index(self.results)
+        same, _, n_same = self.module.did(cells, "w26win", "window-shuffled-w8")
+        self.assertIsNone(same, "w26win has no intact rungs of its own")
+        self.assertEqual(n_same, 0)
+        value, _, n = self.module.did(cells, "w26win", "window-shuffled-w8",
+                                      intact_wave="w26pos")
+        self.assertEqual(n, 12)
+        # (0.83-0.78) - (0.74-0.72) = 0.03
+        self.assertAlmostEqual(value, 0.03, places=6)
+
+    def test_the_ladder_prints_numbers_once_it_is_paired(self):
+        self.populate_pos()
+        self.populate_win()
+        _, text = self.run_main()
+        for window in (2, 4, 8, 16, 32, 64, 128):
+            line = [l for l in text.splitlines()
+                    if l.strip().startswith(f"w{window} ")]
+            self.assertTrue(line, f"no rung printed for w{window}")
+            self.assertNotIn("NOT EVALUABLE", line[0])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

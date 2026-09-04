@@ -95,20 +95,30 @@ def paired(*arms):
     return sorted(shared)
 
 
-def did(cells, wave, condition, readout="default", baseline_readout=None):
+def did(cells, wave, condition, readout="default", baseline_readout=None,
+        intact_wave=None):
     """(mean, positive, n) for (attn_intact - attn_X) - (base_intact - base_X).
 
     `baseline_readout` of None means the rate arm, which is the campaign's
     estimator. Passing a read-out name puts that arm in the rate arm's place,
     which is what H26-2 reports and does not bar.
+
+    `intact_wave` names the wave holding the `intact` rungs, for a group that
+    does not carry its own. The wave-26 registration says of H26-3: "H26-3
+    shares H26-2's `intact` and `bin-shuffled` rungs -- the same cells, in the
+    same wave, on the same binary -- which is why they are not restated", so
+    the `w26win` ladder is paired against `w26pos` intact. Both groups are at
+    one operating point and it is the same one; the caller is responsible for
+    that, and `paired` still requires a common seed on every arm.
     """
-    ai = cells.get((wave, "ff+fixed+attn", "d32l4", readout, "intact"), {})
+    home = intact_wave or wave
+    ai = cells.get((home, "ff+fixed+attn", "d32l4", readout, "intact"), {})
     ax = cells.get((wave, "ff+fixed+attn", "d32l4", readout, condition), {})
     if baseline_readout is None:
-        bi = cells.get((wave, "ff+fixed", None, "default", "intact"), {})
+        bi = cells.get((home, "ff+fixed", None, "default", "intact"), {})
         bx = cells.get((wave, "ff+fixed", None, "default", condition), {})
     else:
-        bi = cells.get((wave, "ff+fixed+attn", "d32l4", baseline_readout, "intact"), {})
+        bi = cells.get((home, "ff+fixed+attn", "d32l4", baseline_readout, "intact"), {})
         bx = cells.get((wave, "ff+fixed+attn", "d32l4", baseline_readout, condition), {})
     shared = paired(ai, ax, bi, bx)
     if not shared:
@@ -426,7 +436,8 @@ def main() -> int:
     print("\n=== H26-3  at what timescale does the read-out use order? ===")
     ladder = {}
     for window in WINDOWS:
-        value, positive, n = did(cells, "w26win", f"window-shuffled-w{window}")
+        value, positive, n = did(cells, "w26win", f"window-shuffled-w{window}",
+                                 intact_wave="w26pos")
         ladder[window] = value
         print(f"  w{window:<4} DiD "
               f"{NOT_EVALUABLE if value is None else round(value, 4)}  "
