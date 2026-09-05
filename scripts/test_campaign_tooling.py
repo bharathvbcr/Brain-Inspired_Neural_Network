@@ -1629,8 +1629,14 @@ CORPUS_BASELINE = {
     #: failures. No archived verdict moved: the v1 and v2 entries below are
     #: unchanged and `git status` reports 0 modified and 0 deleted under both.
     #: See `RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`.
+    #:
+    #: Re-frozen 2026-09-05 on landing wave 27: 264 cells added, all valid.
+    #: 264 -> 528 and 264 -> 528, both +264, so nothing that was valid became
+    #: invalid and no archived verdict moved. The 264 wave-26 cells are still on
+    #: disk and `git status` reports 0 modified and 0 deleted under v1 and v2.
+    #: See `RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`.
     "shd_attention_campaign_v3":
-        (264, 264, "0f86cc5438eb2ac4"),
+        (528, 528, "31565549712f2c6b"),
     "azure-d32l4-scope-v1":
         (95, 89, "8ecbe278f54b127f"),
     "equivalence_2026-08-22":
