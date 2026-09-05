@@ -157,18 +157,34 @@ def arm_key(wave, attn, temporal="intact", readout="default", tau=None):
 
 
 def did(cells, wave, condition, readout="default", intact_wave="w26pos",
-        intact_readout=None, tau=None, intact_tau=None):
+        intact_readout=None, tau=None, intact_tau=None, baseline_wave=None):
     """(mean, positive, n) for (attn_intact - attn_X) - (rate_intact - rate_X).
 
-    `intact_wave` defaults to `w26pos` because wave 27 reuses wave 26's intact
-    arms throughout; every group here is at that one anchor and on that one
-    binary, and `paired` still requires a common seed on all four arms.
+    Each of the four arms is addressed by its own wave, because in this campaign
+    they genuinely live in different ones:
+
+      * `intact_wave` (default `w26pos`) holds the unmanipulated arms, which
+        wave 27 reuses throughout rather than re-running;
+      * `baseline_wave` holds BOTH rate arms, for a group that carries only
+        attention cells. H27-4 runs qk-norm on the attention arm alone and must
+        pair it against the same rate arms the default DiD uses -- otherwise the
+        two DiDs are not comparable and section 5's band compares nothing.
+
+    Wave 26's analyser assumed all four arms shared one wave; its amendment
+    added `intact_wave` and fixed that instance without fixing the shape, and
+    this is the same defect arriving a second time through the other arm. The
+    shape is fixed here: any arm may name its own wave.
+
+    `paired` still requires a common seed on all four arms, so a mismatched
+    reuse cannot silently produce a statistic over different seed sets.
     """
     ir = intact_readout or readout
+    base_x = baseline_wave or wave
+    base_i = baseline_wave or intact_wave
     ai = cells.get(arm_key(intact_wave, True, "intact", ir, intact_tau), {})
     ax = cells.get(arm_key(wave, True, condition, readout, tau), {})
-    bi = cells.get(arm_key(intact_wave, False, "intact", tau=intact_tau), {})
-    bx = cells.get(arm_key(wave, False, condition, tau=tau), {})
+    bi = cells.get(arm_key(base_i, False, "intact", tau=intact_tau), {})
+    bx = cells.get(arm_key(base_x, False, condition, tau=tau), {})
     shared = paired(ai, ax, bi, bx)
     if not shared:
         return None, 0, 0
@@ -326,7 +342,8 @@ def main() -> int:
     shared = paired(qi, di)
     acc_gap = statistics.fmean([qi[s] - di[s] for s in shared]) if shared else None
     qk_did, _, qk_n = did(cells, "w27qk", "bin-shuffled", readout="qk-norm",
-                          intact_wave="w27qk", intact_readout="qk-norm")
+                          intact_wave="w27qk", intact_readout="qk-norm",
+                          baseline_wave="w26pos")
     default_did = shuffle
     did_gap = (None if qk_did is None or default_did is None
                else qk_did - default_did)

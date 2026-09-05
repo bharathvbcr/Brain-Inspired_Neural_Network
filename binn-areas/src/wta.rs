@@ -178,22 +178,35 @@ pub fn k_wta_straight_through(
     (hard_winners, soft_weights)
 }
 
+/// Highest score among the cells that did **not** win.
+///
+/// This is the competition's decision boundary: every winner sits at or above
+/// it and every loser at or below it, so `score - boundary` is a cell's signed
+/// distance from changing the outcome. Returns `f32::NEG_INFINITY` when nothing
+/// lost (every finite-scored cell is a winner) — there is no boundary to be
+/// near, which callers must treat as "no near-miss exists" rather than as a
+/// distance of zero.
+///
+/// Takes the winner set rather than recomputing it, so it is equally valid for
+/// hard [`k_wta`] and for [`soft_k_wta`], whose winners are not the top `k`.
+pub fn boundary_below(scores: &[(CellId, f32)], winners: &[CellId]) -> f32 {
+    scores
+        .iter()
+        .filter(|(id, s)| s.is_finite() && !winners.contains(id))
+        .map(|(_, s)| *s)
+        .fold(f32::NEG_INFINITY, f32::max)
+}
+
 /// k-WTA that also returns the margin boundary potential.
 ///
-/// Returns `(winners, v_boundary)` where `v_boundary` is the (k+1)-th
-/// highest score (or `f32::NEG_INFINITY` if `scores.len() <= k`).
-/// Used by `MarginScaledCredit` to focus plasticity near the decision boundary.
+/// Returns `(winners, v_boundary)` where `v_boundary` is the highest score that
+/// did not win (`f32::NEG_INFINITY` when nothing lost). The boundary itself is
+/// computed by [`boundary_below`], which is the canonical owner of that
+/// definition and is what the live C1 counterfactual arm calls directly — it
+/// already holds its winners and must not re-run the selection to get them.
 pub fn k_wta_with_margin(scores: &[(CellId, f32)], k: usize) -> (Vec<CellId>, f32) {
     let winners = k_wta(scores, k);
-    let v_boundary = if scores.len() <= k {
-        f32::NEG_INFINITY
-    } else {
-        scores
-            .iter()
-            .filter(|(id, s)| !winners.contains(id) && s.is_finite())
-            .map(|(_, s)| *s)
-            .fold(f32::NEG_INFINITY, f32::max)
-    };
+    let v_boundary = boundary_below(scores, &winners);
     (winners, v_boundary)
 }
 
@@ -290,6 +303,38 @@ mod tests {
         assert!((w_1 - 1.0).abs() < 1e-6);
         let w_4 = soft.iter().find(|&&(id, _)| id == 4).unwrap().1;
         assert!(w_4 < 1.0 && w_4 > 0.0);
+    }
+
+    #[test]
+    fn boundary_below_is_the_best_loser_not_the_kth_winner() {
+        let scores = [(0, 1.0), (1, 5.0), (2, 3.0), (3, 4.0), (4, 0.5)];
+        // Winners [1, 3] hold 5.0 and 4.0; the best loser is id 2 at 3.0. The
+        // distinction is the whole point: the k-th *winner* is 4.0, and a rule
+        // that measured distance from 4.0 would call the actual boundary cell a
+        // full 1.0 away from the decision it lost by nothing.
+        let boundary = boundary_below(&scores, &[1, 3]);
+        assert_eq!(boundary.to_bits(), 3.0_f32.to_bits());
+    }
+
+    #[test]
+    fn boundary_below_accepts_winners_that_are_not_the_top_k() {
+        // `soft_k_wta` can return a low-scoring winner. The boundary must then
+        // be the best cell *it* left behind, which is higher than any winner —
+        // recomputing `k_wta` internally, as this function deliberately does
+        // not, would silently answer for a different competition.
+        let scores = [(0, 1.0), (1, 5.0), (2, 3.0), (3, 4.0), (4, 0.5)];
+        let boundary = boundary_below(&scores, &[0, 4]);
+        assert_eq!(boundary.to_bits(), 5.0_f32.to_bits());
+    }
+
+    #[test]
+    fn boundary_below_reports_no_boundary_when_nothing_lost() {
+        let scores = [(0, 1.0), (1, 5.0)];
+        assert_eq!(boundary_below(&scores, &[0, 1]), f32::NEG_INFINITY);
+        // Non-finite scores never won and must not be reported as the boundary:
+        // they were filtered out of the competition, not beaten by it.
+        let with_nan = [(0, 1.0), (1, f32::NAN)];
+        assert_eq!(boundary_below(&with_nan, &[0]), f32::NEG_INFINITY);
     }
 
     #[test]

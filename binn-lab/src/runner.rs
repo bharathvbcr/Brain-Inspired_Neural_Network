@@ -10,7 +10,9 @@
 use std::path::Path;
 use std::time::Instant;
 
-use binn_areas::{k_wta, project, soft_k_wta, wire, Area, AreaRole, Assembly, Pos, WiringPrior};
+use binn_areas::{
+    boundary_below, k_wta, project, soft_k_wta, wire, Area, AreaRole, Assembly, Pos, WiringPrior,
+};
 use binn_core::{Csr, Rng, Tick};
 use binn_data::{
     CoincidenceTask, Encoder, LatencyEncoder, Metrics, Sample, TemporalOrderExample, WorkCosts,
@@ -18,20 +20,21 @@ use binn_data::{
 };
 use binn_engine::{CellId, Engine, K};
 use binn_learn::{
-    reinforce_term, BpttBaseline, DenseTemporalExample, EpropReference, FixedRandomFeedback,
-    GradientExample, LearnedReinforceFeedback, Modulators, ReinforceFeedback, ShdExample,
-    SurrogateLifReference, ThreeFactor, REFERENCE_SEQUENCE_LEN,
+    margin_weight, reinforce_term, BpttBaseline, CandidateSpike, DenseTemporalExample,
+    EpropReference, FixedRandomFeedback, GradientExample, LearnedReinforceFeedback, Modulators,
+    ReinforceFeedback, ShdExample, SurrogateLifReference, ThreeFactor, REFERENCE_SEQUENCE_LEN,
 };
 
 use crate::config::{
-    Config, C1_DFA_LIVE_PROTOCOL_VERSION, C1_ELIG_RFB_PROTOCOL_VERSION, C1_ELIG_RFB_TAU_E,
-    C1_ISOLATION_PROTOCOL_VERSION, C1_PROJECT_PROTOCOL_VERSION, C1_PROTOCOL_VERSION,
-    C1_REINFORCE_FB_PROTOCOL_VERSION, C1_RFB_EPOCH_PROTOCOL_VERSION,
-    C1_SENSITIVITY_PROTOCOL_VERSION, C1_SFB_SOFT_TEMPERATURE, C1_SPIKE_PROTOCOL_VERSION,
-    C1_SPIKE_S_PROTOCOL_VERSION, C1_STRUCTURED_FB_CAPACITY_PROTOCOL_VERSION,
-    C1_STRUCTURED_FB_CONT_PROTOCOL_VERSION, C1_STRUCTURED_FB_EPOCH_PROTOCOL_VERSION,
-    C1_STRUCTURED_FB_FINTH_PROTOCOL_VERSION, C1_STRUCTURED_FB_PROTOCOL_VERSION,
-    C1_STRUCTURED_FB_SOFT_PROTOCOL_VERSION, C1_STRUCTURED_FB_TEACH_PROTOCOL_VERSION,
+    Config, CounterfactualCredit, C1_COUNTERFACTUAL_PROTOCOL_VERSION, C1_DFA_LIVE_PROTOCOL_VERSION,
+    C1_ELIG_RFB_PROTOCOL_VERSION, C1_ELIG_RFB_TAU_E, C1_ISOLATION_PROTOCOL_VERSION,
+    C1_PROJECT_PROTOCOL_VERSION, C1_PROTOCOL_VERSION, C1_REINFORCE_FB_PROTOCOL_VERSION,
+    C1_RFB_EPOCH_PROTOCOL_VERSION, C1_SENSITIVITY_PROTOCOL_VERSION, C1_SFB_SOFT_TEMPERATURE,
+    C1_SPIKE_PROTOCOL_VERSION, C1_SPIKE_S_PROTOCOL_VERSION,
+    C1_STRUCTURED_FB_CAPACITY_PROTOCOL_VERSION, C1_STRUCTURED_FB_CONT_PROTOCOL_VERSION,
+    C1_STRUCTURED_FB_EPOCH_PROTOCOL_VERSION, C1_STRUCTURED_FB_FINTH_PROTOCOL_VERSION,
+    C1_STRUCTURED_FB_PROTOCOL_VERSION, C1_STRUCTURED_FB_SOFT_PROTOCOL_VERSION,
+    C1_STRUCTURED_FB_TEACH_PROTOCOL_VERSION,
 };
 use crate::logging::{
     trace_export_seed, trace_out_path, RunLog, StructuredLogger, TraceArea, TraceEligEdge,
@@ -80,6 +83,37 @@ impl ConditionLabel {
             "gradient-reference" => Some(Self::GradientReference),
             "eligibility-reference" => Some(Self::EligibilityReference),
             _ => None,
+        }
+    }
+}
+
+/// What protocol 29 actually deposited, so a null can be read.
+///
+/// `considered` is every cell that lost a competition; `deposited` is the
+/// near-misses that were credited. Both are carried because the candidate budget
+/// is a cap: a run where the mechanism found no near-miss and a run where the
+/// cap bound on every trial are different findings, and one number cannot tell
+/// them apart. `deposited == 0` under a non-zero `considered` means the arm's
+/// result is about the margin gate, not about counterfactual credit — it never
+/// made any.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CounterfactualDiagnostics {
+    /// Cells that lost selection, summed over training trials.
+    pub considered: u64,
+    /// Near-misses credited, summed over training trials.
+    pub deposited: u64,
+    /// Training trials that ran the mechanism.
+    pub trials: u64,
+}
+
+impl CounterfactualDiagnostics {
+    /// Mean deposits per training trial (`0.0` when no trial ran).
+    #[inline]
+    pub fn deposits_per_trial(&self) -> f32 {
+        if self.trials == 0 {
+            0.0
+        } else {
+            self.deposited as f32 / self.trials as f32
         }
     }
 }
@@ -178,6 +212,12 @@ pub struct C1Report {
     pub mean_activity_sparsity: f32,
     /// Required scientific seed count from the preregistered power formula.
     pub required_scientific_n_seeds: usize,
+    /// Protocol-29 deposit counts, summed over seeds of the local-assembly arm.
+    ///
+    /// `None` means the mechanism did not run *or* was not recorded (an isolated
+    /// child condition cannot carry it back), never that it ran and deposited
+    /// nothing — that case is `Some` with `deposited == 0`.
+    pub counterfactual: Option<CounterfactualDiagnostics>,
     pub budgets: Vec<(ConditionLabel, BudgetDisclosure)>,
     pub emitted: Vec<RunRecord>,
     pub plot_notes: Vec<String>,
@@ -266,6 +306,16 @@ impl Runner {
                 config.protocol_version()
             ));
         }
+        if let Some(d) = &o.counterfactual {
+            // Carried across the isolate-child boundary so the parent's results
+            // note can report deposits instead of "not recorded". Absent for
+            // every other protocol, which is what keeps `None` meaning *not
+            // recorded* rather than *zero deposits*.
+            json.push_str(&format!(
+                ",\"cf_considered\":{},\"cf_deposited\":{},\"cf_trials\":{}",
+                d.considered, d.deposited, d.trials
+            ));
+        }
         json.push('}');
         json
     }
@@ -284,6 +334,7 @@ impl Runner {
         let mut plot_notes = Vec::new();
         let mut positive_control_acc = Vec::new();
         let mut budget_acc: Vec<(ConditionLabel, BudgetDisclosure)> = Vec::new();
+        let mut cf_totals: Option<CounterfactualDiagnostics> = None;
 
         for seed in config.seeds() {
             let split = freeze_trials(config, seed);
@@ -372,6 +423,13 @@ impl Runner {
                 budget_acc.push((cond, outcome.budget.clone()));
             }
 
+            if let Some(d) = local.counterfactual {
+                let acc = cf_totals.get_or_insert_with(CounterfactualDiagnostics::default);
+                acc.considered = acc.considered.saturating_add(d.considered);
+                acc.deposited = acc.deposited.saturating_add(d.deposited);
+                acc.trials = acc.trials.saturating_add(d.trials);
+            }
+
             seeds_out.push(SeedResult {
                 seed,
                 local_assembly: local.accuracy,
@@ -423,6 +481,7 @@ impl Runner {
             positive_control_mean,
             mean_activity_sparsity,
             required_scientific_n_seeds: required_n,
+            counterfactual: cf_totals,
             budgets: budget_acc,
             emitted,
             plot_notes,
@@ -438,7 +497,24 @@ impl Runner {
             "**Scientific protocol version:** `{}`\n\n",
             config.protocol_version()
         ));
-        if config.is_structured_fb_cont_protocol() {
+        if config.is_counterfactual_protocol() {
+            md.push_str(
+                "**claim_axis:** Novel-CS\n\
+                 **object_under_test:** Counterfactual eligibility on near-miss losers under hard k-WTA\n\
+                 **may_claim:** Whether crediting near-miss afferents moves the live gap that structured B could not\n\
+                 **must_not_claim:** That the forward pass changed; that a margin on *credit* was tested; λ_c grid search; biology\n\n",
+            );
+            let cf = config
+                .counterfactual_credit()
+                .map(|c| c.max_candidates)
+                .unwrap_or(0);
+            md.push_str(&format!(
+                "**Counterfactual × margin protocol:** `{C1_COUNTERFACTUAL_PROTOCOL_VERSION}` — v15 structured hidden `B` on the **unchanged** muted-θ / hard k-WTA / single-pass substrate: the same cells win and the same cells spike. Losers, which under v15 end every trial with zero afferent eligibility and so cannot be moved by any credit signal, receive `λ_c · φ(v)` of the STDP a real spike at the winners' tick would have written on their **afferents only** (no efferent edges, no pairing-table entry). `φ` is Gaussian proximity to the k-WTA boundary with `σ = {sigma_frac} · (v_top − v_boundary)`; deposits are capped at `{cf}` per selection (`{mult} × k_wta`). **λ_c = {lambda}**; `λ_c = 0` is v15's update rule bit-for-bit and is this ladder's control rung, not a separate arm. **Positive control stays on broadcast ±1**; does **not** remassage v15 hash `c1-493ddd56f8714fb6` or reopen protocol-v2 `c1-118207fbc3eaba53`.\n\n",
+                sigma_frac = config.cf_sigma_frac,
+                mult = config.cf_candidate_multiple,
+                lambda = config.cf_lambda,
+            ));
+        } else if config.is_structured_fb_cont_protocol() {
             md.push_str(
                 "**claim_axis:** Novel-CS\n\
                  **object_under_test:** Continuous/normalized structured B under muted-θ/k-WTA C1\n\
@@ -660,6 +736,54 @@ impl Runner {
                 frac_ge_floor
             ));
         }
+        if config.is_counterfactual_protocol() {
+            md.push_str("## Counterfactual deposits\n\n");
+            match report.counterfactual {
+                Some(d) => {
+                    let coverage = if d.considered == 0 {
+                        0.0
+                    } else {
+                        100.0 * d.deposited as f32 / d.considered as f32
+                    };
+                    md.push_str(&format!(
+                        "Training trials running the mechanism: **{}**. Cells that lost a \
+                         competition: **{}**. Near-misses actually credited: **{}** \
+                         (**{:.2}** per trial, cap **{}** per selection) — **{:.1}%** of the \
+                         losers.\n\n\
+                         That percentage is a **budget, not a measurement**. Everything outside \
+                         it sat further from the boundary than `cf_candidate_multiple × k_wta` \
+                         admits and was never weighed, so this arm tests whether crediting the \
+                         nearest misses is enough — not whether crediting all of them would be.\n\n",
+                        d.trials,
+                        d.considered,
+                        d.deposited,
+                        d.deposits_per_trial(),
+                        config
+                            .counterfactual_credit()
+                            .map(|c| c.max_candidates)
+                            .unwrap_or(0),
+                        coverage,
+                    ));
+                    if d.deposited == 0 {
+                        md.push_str(
+                            "**The mechanism deposited nothing.** Whatever this run's accuracy \
+                             and gap are, they are v15's numbers reached by v15's update rule, \
+                             and say nothing about counterfactual credit. Read this as a fact \
+                             about the margin gate — every loser fell outside it — and not as a \
+                             negative result for the arm.\n\n",
+                        );
+                    }
+                }
+                None => {
+                    md.push_str(
+                        "**Not recorded.** This run reconstructed its local-assembly outcome \
+                         from a structured log line (isolated child condition), which does not \
+                         carry the deposit counts. This is not a report of zero deposits, and \
+                         no reading of the arm should rest on it.\n\n",
+                    );
+                }
+            }
+        }
         match report.verdict {
             GateG2Verdict::Fail => {
                 md.push_str("## U-NEG\n\n");
@@ -803,6 +927,7 @@ struct CondOutcome {
     weight_steps: Vec<f64>,
     weight_trace: Vec<f64>,
     mac_probe: Option<MacProbeDiagnostics>,
+    counterfactual: Option<CounterfactualDiagnostics>,
 }
 
 pub fn freeze_trials(config: &Config, seed: u64) -> FrozenSplit {
@@ -930,7 +1055,22 @@ fn parse_condition_json(line: &str) -> Option<CondOutcome> {
     let cell_updates: u64 = field(line, "cell_updates")?.parse().ok()?;
     let plasticity_updates: u64 = field(line, "plasticity_updates")?.parse().ok()?;
     let work_per_accuracy: f64 = field(line, "work_per_accuracy")?.parse().ok()?;
+    // All three or none: a partial block would be a truncated line, and half a
+    // coverage count is worse than an honest "not recorded".
+    let counterfactual = match (
+        field(line, "cf_considered").and_then(|v| v.parse::<u64>().ok()),
+        field(line, "cf_deposited").and_then(|v| v.parse::<u64>().ok()),
+        field(line, "cf_trials").and_then(|v| v.parse::<u64>().ok()),
+    ) {
+        (Some(considered), Some(deposited), Some(trials)) => Some(CounterfactualDiagnostics {
+            considered,
+            deposited,
+            trials,
+        }),
+        _ => None,
+    };
     Some(CondOutcome {
+        counterfactual,
         accuracy,
         activity_sparsity,
         n_params,
@@ -1088,6 +1228,8 @@ fn run_gradient_reference(config: &Config, seed: u64, split: &FrozenSplit) -> Co
     };
     let wpa = Metrics::work_per_accuracy(work, WorkCosts::unit(), report.accuracy.max(1e-6) as f64);
     CondOutcome {
+        // Eligibility reference: same — no competition to be near-missed.
+        counterfactual: None,
         accuracy: report.accuracy,
         activity_sparsity: 1.0,
         n_params,
@@ -1135,6 +1277,9 @@ fn run_eligibility_reference(config: &Config, seed: u64, split: &FrozenSplit) ->
     };
     let wpa = Metrics::work_per_accuracy(work, WorkCosts::unit(), report.accuracy.max(1e-6) as f64);
     CondOutcome {
+        // Gradient reference: dense BPTT, no k-WTA competition, so there is
+        // no boundary and no near-miss. Not recorded rather than recorded zero.
+        counterfactual: None,
         accuracy: report.accuracy,
         activity_sparsity: 1.0,
         n_params,
@@ -1395,6 +1540,7 @@ fn run_spiking_condition(
         None
     };
     let soft_wta_temp = config.soft_k_wta_temperature();
+    let counterfactual = config.counterfactual_credit();
     let elig_preabsorb = config.uses_elig_rfb_preabsorb();
     let structured_target_teach = config.uses_structured_target_teach();
     // REINFORCE action sampler for live RFB family (Bernoulli from soft policy).
@@ -1406,6 +1552,9 @@ fn run_spiking_condition(
     let mut weight_trace = Vec::new();
     let mut t_cursor: Tick = 0;
     let mut plasticity_updates = 0u64;
+    let mut cf_considered = 0u64;
+    let mut cf_deposited = 0u64;
+    let mut cf_train_trials = 0u64;
 
     // Opt-in replay capture (viz only): read-only over engine state, no
     // effect on config hashes, accuracies, budgets, or the GC7 log.
@@ -1523,7 +1672,7 @@ fn run_spiking_condition(
                 assembly_hits: None,
                 n_in,
             });
-            let (_ok, _s, n_plas) = run_trial(
+            let (_ok, _s, trial_work) = run_trial(
                 &mut eng,
                 &mut learner,
                 &mut area,
@@ -1546,9 +1695,13 @@ fn run_spiking_condition(
                 dfa_live_fb.as_ref(),
                 soft_wta_temp,
                 seed ^ (global_step as u64),
+                counterfactual,
                 trial_trace.as_mut(),
             );
-            plasticity_updates = plasticity_updates.saturating_add(n_plas);
+            plasticity_updates = plasticity_updates.saturating_add(trial_work.plasticity_apps);
+            cf_considered = cf_considered.saturating_add(trial_work.cf_considered);
+            cf_deposited = cf_deposited.saturating_add(trial_work.cf_deposited);
+            cf_train_trials = cf_train_trials.saturating_add(1);
             if replay_out.is_some() {
                 replay_trials.push(ReplayTrial {
                     phase: "train",
@@ -1622,6 +1775,7 @@ fn run_spiking_condition(
             dfa_live_fb.as_ref(),
             soft_wta_temp,
             seed ^ 0x7E57_0000,
+            counterfactual,
             trial_trace.as_mut(),
         );
         if pred_ok {
@@ -1744,6 +1898,11 @@ fn run_spiking_condition(
         raster_cell,
         weight_steps,
         weight_trace,
+        counterfactual: counterfactual.map(|_| CounterfactualDiagnostics {
+            considered: cf_considered,
+            deposited: cf_deposited,
+            trials: cf_train_trials,
+        }),
         mac_probe: Some(MacProbeDiagnostics {
             measured_nnz: nnz,
             max_fan_out: config.max_fan_out,
@@ -1806,6 +1965,86 @@ struct SparsitySample {
     population: usize,
 }
 
+/// What one training trial spent, and what the counterfactual arm deposited.
+///
+/// `cf_considered` counts every cell that lost the competition; `cf_deposited`
+/// counts the near-misses that were actually credited. They are carried
+/// separately and reported separately: the budget is a **cap**, so reporting one
+/// number would let "the mechanism found nothing to do" and "the cap bound"
+/// print the same way, and only one of those is a result.
+#[derive(Clone, Copy, Debug, Default)]
+struct TrialWork {
+    plasticity_apps: u64,
+    cf_considered: u64,
+    cf_deposited: u64,
+}
+
+/// Near-miss candidates for one k-WTA selection, and how many cells lost.
+///
+/// The scale on each is `λ_c · φ(v)`, with `φ` Gaussian proximity to the
+/// boundary and `σ` a disclosed fraction of the winners' spread `v_top −
+/// v_boundary`. Membrane scores carry engine units, so a σ fixed in volts would
+/// mean a different experiment at every width; a σ fixed in units of the spread
+/// means the same one.
+///
+/// Returns `(considered, candidates)`. Empty candidates with a non-zero
+/// `considered` is a real and reportable state: cells lost, and none of them
+/// lost narrowly enough to be credited.
+fn counterfactual_candidates(
+    scores: &[(CellId, f32)],
+    winners: &[CellId],
+    winner_at: Tick,
+    cf: CounterfactualCredit,
+) -> (u64, Vec<CandidateSpike>) {
+    let v_boundary = boundary_below(scores, winners);
+    if !v_boundary.is_finite() {
+        // Nothing lost: every scored cell won. There is no boundary, so there is
+        // no near-miss — not a near-miss of size zero.
+        return (0, Vec::new());
+    }
+    let v_top = scores
+        .iter()
+        .filter(|(_, v)| v.is_finite())
+        .map(|&(_, v)| v)
+        .fold(f32::NEG_INFINITY, f32::max);
+
+    let mut losers: Vec<(CellId, f32)> = scores
+        .iter()
+        .copied()
+        .filter(|(id, v)| v.is_finite() && !winners.contains(id))
+        .collect();
+    let considered = losers.len() as u64;
+
+    let sigma = cf.sigma_frac * (v_top - v_boundary);
+    if !sigma.is_finite() || sigma <= 0.0 {
+        // Every winner sits exactly on the boundary, so the competition has no
+        // spread to measure a margin against. Report the losers; credit none.
+        return (considered, Vec::new());
+    }
+
+    // Highest score first, lower CellId breaking ties — the same total order
+    // `k_wta` selects under, so "the next ones after the winners" means the same
+    // cells here as it does there.
+    losers.sort_by(|a, b| match b.1.partial_cmp(&a.1) {
+        Some(ord) => ord.then_with(|| a.0.cmp(&b.0)),
+        None => a.0.cmp(&b.0),
+    });
+    losers.truncate(cf.max_candidates);
+
+    let candidates = losers
+        .into_iter()
+        .filter_map(|(cell, v)| {
+            let scale = cf.lambda * margin_weight(v, v_boundary, sigma);
+            (scale.is_finite() && scale > 0.0).then_some(CandidateSpike {
+                cell,
+                t: winner_at,
+                scale,
+            })
+        })
+        .collect();
+    (considered, candidates)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_trial(
     eng: &mut Engine,
@@ -1830,8 +2069,9 @@ fn run_trial(
     dfa_live_fb: Option<&FixedRandomFeedback>,
     soft_wta_temp: Option<f32>,
     soft_wta_seed: u64,
+    counterfactual: Option<CounterfactualCredit>,
     mut trace: Option<&mut TraceTrialHook<'_>>,
-) -> (bool, SparsitySample, u64) {
+) -> (bool, SparsitySample, TrialWork) {
     // True temporal input: encode every frame (no peak collapse).
     let frame_stride = enc.max_delay().saturating_add(1);
     let hidden_cells: Vec<CellId> = area.cells.clone().collect();
@@ -1988,6 +2228,25 @@ fn run_trial(
         .expect("winner time overflow");
     for &cell in &active_cells {
         eng.force_spike(cell, winner_at);
+    }
+
+    // Protocol 29: credit the nearest misses' afferents as if they had fired
+    // alongside the winners. Queued at the selection event that produced them
+    // and drained by the absorb inside the plasticity call below.
+    //
+    // Nothing is emitted into the engine — the loop above is still the complete
+    // set of hidden spikes — so this arm's forward pass is v15's. Only training
+    // trials queue: an evaluation trial runs no plasticity, so a candidate left
+    // queued there would be absorbed by the *next* training trial and credit a
+    // cell for losing a competition in a different sample.
+    let mut work = TrialWork::default();
+    if train {
+        if let Some(cf) = counterfactual {
+            let (considered, candidates) =
+                counterfactual_candidates(&scores, &active_cells, winner_at, cf);
+            work.cf_considered = considered;
+            work.cf_deposited = learner.queue_candidate_spikes(candidates) as u64;
+        }
     }
     let readout_until = winner_at
         .checked_add(eng.max_synaptic_delay().max(1) + 4)
@@ -2192,13 +2451,14 @@ fn run_trial(
     }
 
     let correct = pred == label;
+    work.plasticity_apps = plasticity_apps;
     (
         correct,
         SparsitySample {
             active,
             population: population.max(1),
         },
-        plasticity_apps,
+        work,
     )
 }
 
@@ -2976,6 +3236,138 @@ mod tests {
         assert!(std_error(&values) < var.sqrt());
     }
 
+    /// One local-assembly condition on the shared quick split.
+    fn cf_local(config: &Config, seed: u64) -> CondOutcome {
+        let split = freeze_trials(config, seed);
+        run_labeled_condition(config, seed, ConditionLabel::LocalAssembly, &split, None)
+    }
+
+    #[test]
+    fn counterfactual_at_lambda_zero_is_bit_identical_to_v15() {
+        // The control rung of the ladder is not "v15 plus a mechanism that
+        // happens to do nothing" — it has to be v15. If it were even a few ulps
+        // away, every gap the ladder reports would be measured against an arm
+        // that no other result in the package can be compared to.
+        let seed = 0xC1_0000_0029;
+        let v15 = cf_local(&Config::c1_structured_fb_quick(), seed);
+        let control = cf_local(&Config::c1_counterfactual_quick().with_cf_lambda(0.0), seed);
+
+        assert_eq!(
+            v15.accuracy.to_bits(),
+            control.accuracy.to_bits(),
+            "lambda_c = 0 diverged from v15: {} vs {}",
+            v15.accuracy,
+            control.accuracy
+        );
+        assert_eq!(
+            v15.activity_sparsity.to_bits(),
+            control.activity_sparsity.to_bits(),
+            "lambda_c = 0 changed the forward pass"
+        );
+        let v15_trace: Vec<u64> = v15.weight_trace.iter().map(|w| w.to_bits()).collect();
+        let control_trace: Vec<u64> = control.weight_trace.iter().map(|w| w.to_bits()).collect();
+        assert_eq!(v15_trace, control_trace, "lambda_c = 0 moved weights");
+        assert_eq!(
+            v15.budget.work.plasticity_updates,
+            control.budget.work.plasticity_updates
+        );
+        // And it is genuinely the off path, not the on path with zero scales.
+        assert_eq!(
+            control.counterfactual, None,
+            "the control rung recorded deposits it must not have made"
+        );
+    }
+
+    #[test]
+    fn counterfactual_deposits_and_moves_what_v15_could_not() {
+        let seed = 0xC1_0000_0029;
+        let control = cf_local(&Config::c1_counterfactual_quick().with_cf_lambda(0.0), seed);
+        let armed = cf_local(&Config::c1_counterfactual_quick(), seed);
+
+        let d = armed
+            .counterfactual
+            .expect("armed run recorded no counterfactual diagnostics");
+        assert!(d.trials > 0, "no training trial ran the mechanism");
+        assert!(
+            d.considered > 0,
+            "no cell lost the competition, so the arm had nothing to measure"
+        );
+        assert!(
+            d.deposited > 0,
+            "the mechanism ran and deposited nothing: {d:?}"
+        );
+
+        let control_trace: Vec<u64> = control.weight_trace.iter().map(|w| w.to_bits()).collect();
+        let armed_trace: Vec<u64> = armed.weight_trace.iter().map(|w| w.to_bits()).collect();
+        assert_ne!(
+            control_trace, armed_trace,
+            "deposits were made but no weight moved, so they reached no credited synapse"
+        );
+    }
+
+    #[test]
+    fn counterfactual_deposits_respect_the_disclosed_budget() {
+        let seed = 0xC1_0000_0029;
+        let cfg = Config::c1_counterfactual_quick();
+        let cap = cfg
+            .counterfactual_credit()
+            .expect("armed preset yields no parameters")
+            .max_candidates;
+        let d = cf_local(&cfg, seed)
+            .counterfactual
+            .expect("armed run recorded no diagnostics");
+        assert!(
+            d.deposited <= d.trials.saturating_mul(cap as u64),
+            "deposits {} exceeded the cap of {cap} across {} trials",
+            d.deposited,
+            d.trials
+        );
+        // Considered counts the whole loser population, not the capped sample,
+        // which is what makes the cap visible in the note instead of implied.
+        assert!(
+            d.considered > d.deposited,
+            "considered ({}) must exceed deposited ({}) at k=1 on a 64-cell area",
+            d.considered,
+            d.deposited
+        );
+    }
+
+    #[test]
+    fn counterfactual_counts_survive_the_isolate_child_boundary() {
+        // The parent runs each condition in a child process and reads one JSON
+        // line back. Before this was carried, every real run printed "not
+        // recorded" and the arm's coverage was invisible in exactly the runs
+        // that mattered — the honest message was true, and useless.
+        let cfg = Config::c1_counterfactual_quick();
+        let seed = 0xC1_0000_0029;
+        let line = Runner::condition_json(&cfg, seed, ConditionLabel::LocalAssembly, None);
+        let parsed = parse_condition_json(&line).expect("isolate JSON did not parse");
+        let d = parsed
+            .counterfactual
+            .expect("counterfactual counts were dropped crossing the boundary");
+
+        let direct = cf_local(&cfg, seed)
+            .counterfactual
+            .expect("in-process run recorded no diagnostics");
+        assert_eq!(d, direct, "round trip changed the counts");
+        assert!(d.deposited > 0);
+
+        // And a protocol that does not run the mechanism must come back as *not
+        // recorded*, not as a run that deposited zero.
+        let v15_line = Runner::condition_json(
+            &Config::c1_structured_fb_quick(),
+            seed,
+            ConditionLabel::LocalAssembly,
+            None,
+        );
+        assert_eq!(
+            parse_condition_json(&v15_line)
+                .expect("v15 isolate JSON did not parse")
+                .counterfactual,
+            None
+        );
+    }
+
     #[test]
     fn c1_quick_runs_and_emits_gc7_fields() {
         let mut runner = Runner::new();
@@ -3530,6 +3922,7 @@ mod tests {
                 None,
                 0,
                 None,
+                None,
             );
             t_cursor = eng.time() + 20;
         }
@@ -3745,6 +4138,7 @@ mod tests {
     fn render_mentions_four_state_verdicts() {
         let cfg = Config::c1_quick();
         let report = C1Report {
+            counterfactual: None,
             config_hash: cfg.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -3839,6 +4233,7 @@ mod tests {
         assert_eq!(iso.protocol_version(), C1_ISOLATION_PROTOCOL_VERSION);
         assert_ne!(iso.hash_string(), Config::c1_default().hash_string());
         let report = C1Report {
+            counterfactual: None,
             config_hash: iso.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -3937,6 +4332,7 @@ mod tests {
         assert_ne!(spike.hash_string(), Config::c1_default().hash_string());
         assert_ne!(spike.hash_string(), Config::c1_isolation().hash_string());
         let report = C1Report {
+            counterfactual: None,
             config_hash: spike.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -3978,6 +4374,7 @@ mod tests {
         assert_ne!(spike_s.hash_string(), "c1-09442acdbdc0c752");
         assert_ne!(spike_s.hash_string(), "c1-118207fbc3eaba53");
         let report = C1Report {
+            counterfactual: None,
             config_hash: spike_s.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -4028,6 +4425,7 @@ mod tests {
         );
 
         let report = C1Report {
+            counterfactual: None,
             config_hash: cfg.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -4068,6 +4466,7 @@ mod tests {
         assert_eq!(rfb.hash_string(), "c1-a57975f13b73a599");
 
         let report = C1Report {
+            counterfactual: None,
             config_hash: rfb.hash_string(),
             seeds: Vec::new(),
             summary: PairedSummary {
@@ -4157,6 +4556,7 @@ mod tests {
                 "{label} should use live RFB plasticity"
             );
             let report = C1Report {
+                counterfactual: None,
                 config_hash: cfg.hash_string(),
                 seeds: Vec::new(),
                 summary: PairedSummary {

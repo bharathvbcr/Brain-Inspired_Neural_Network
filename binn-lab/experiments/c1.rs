@@ -85,6 +85,8 @@ fn main() -> ExitCode {
     let mut structured_fb_soft = false;
     let mut structured_fb_finth = false;
     let mut structured_fb_cont = false;
+    let mut counterfactual = false;
+    let mut cf_lambda: Option<f32> = None;
     let mut match_undertrain = false;
     let mut export_trace: Option<PathBuf> = None;
     let mut mac_probe = false;
@@ -151,6 +153,22 @@ fn main() -> ExitCode {
                 structured_fb_finth = true
             }
             "--structured-fb-cont" | "--sfb-cont" | "--continuous-sfb" => structured_fb_cont = true,
+            "--counterfactual" | "--sfb-cf" | "--cf" => counterfactual = true,
+            "--cf-lambda" | "--lambda-c" => {
+                i += 1;
+                counterfactual = true;
+                match args.get(i).and_then(|v| v.parse::<f32>().ok()) {
+                    Some(v) if v.is_finite() && v >= 0.0 => cf_lambda = Some(v),
+                    other => {
+                        eprintln!(
+                            "--cf-lambda takes a finite non-negative number, got {:?}",
+                            args.get(i).map(String::as_str).unwrap_or("<missing>")
+                        );
+                        let _ = other;
+                        return ExitCode::from(2);
+                    }
+                }
+            }
             "--match-undertrain" | "--matched-undertrain" | "--match-ep4" => {
                 match_undertrain = true
             }
@@ -986,6 +1004,7 @@ fn main() -> ExitCode {
                     structured_fb_soft,
                     structured_fb_finth,
                     structured_fb_cont,
+                    counterfactual,
                     project,
                     spike_s,
                     spike,
@@ -1045,6 +1064,16 @@ fn main() -> ExitCode {
             Config::c1_structured_fb_epoch_quick()
         } else {
             Config::c1_structured_fb_epoch()
+        }
+    } else if counterfactual {
+        let base = if quick {
+            Config::c1_counterfactual_quick()
+        } else {
+            Config::c1_counterfactual()
+        };
+        match cf_lambda {
+            Some(l) => base.with_cf_lambda(l),
+            None => base,
         }
     } else if structured_fb {
         if quick {
@@ -1204,7 +1233,13 @@ fn main() -> ExitCode {
     let md = Runner::render_results_markdown(&report, &config);
 
     let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.is_structured_fb_cont_protocol() {
+        let default_name = if config.is_counterfactual_protocol() {
+            if config.quick {
+                "results/c1_sfb_cf_quick.md"
+            } else {
+                "results/c1_sfb_cf.md"
+            }
+        } else if config.is_structured_fb_cont_protocol() {
             if config.quick {
                 "results/c1_sfb_cont_quick.md"
             } else {
@@ -2168,6 +2203,12 @@ fn print_help() {
            c1 --structured-fb-cont [--quick] [--out results/c1_sfb_cont.md]\n\
          L2-normalized B proportional to (w1-w0); one construction.\n\
          \n\
+         Counterfactual eligibility x margin (protocol v29; new c1-sfb-cf* hash):\n\
+           c1 --counterfactual [--quick] [--cf-lambda 1.0] [--out results/c1_sfb_cf.md]\n\
+         v15 forward unchanged (same winners, same spikes); near-miss losers get\n\
+         lambda_c * phi(margin) of a spike's afferent STDP so credit can reach them.\n\
+         --cf-lambda 0 is v15's update rule bit-for-bit and is the control rung.\n\
+         \n\
          Live graded-DFA transfer (protocol v20; new c1-dfa-live* hash):\n\
            c1 --dfa-live [--quick] [--out results/c1_dfa_live.md]\n\
          Graded error x FixedRandomFeedback on muted-theta/k-WTA C1.\n\
@@ -2223,6 +2264,7 @@ struct ProtocolFlags<'a> {
     structured_fb_soft: bool,
     structured_fb_finth: bool,
     structured_fb_cont: bool,
+    counterfactual: bool,
     project: bool,
     spike_s: bool,
     spike: bool,
@@ -2299,6 +2341,12 @@ fn validate_protocol_flag_hash(
         return Err(format!(
             "--structured-fb-cont refuses non-c1-sfb-cont config-hash `{h}` — \
              use a continuous structured-B hash or omit --config-hash"
+        ));
+    }
+    if flags.counterfactual && !c.is_counterfactual_protocol() {
+        return Err(format!(
+            "--counterfactual refuses non-c1-sfb-cf config-hash `{h}` — \
+             use a counterfactual hash or omit --config-hash"
         ));
     }
     if flags.project && !c.is_project_protocol() {

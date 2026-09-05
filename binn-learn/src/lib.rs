@@ -43,9 +43,9 @@ pub use consolidation::{
 };
 pub use contrastive::ContrastiveWakeSleepLearner;
 pub use credit::{
-    reinforce_term, CreditSignal, FixedRandomFeedback, LearnedReinforceFeedback, LearnedRpeCritic,
-    MarginScaledCredit, MultiChannelComponents, MultiChannelNeuromodulator, PostSynapticCredit,
-    ReinforceFeedback, RunningMeanBaseline,
+    margin_weight, reinforce_term, CreditSignal, FixedRandomFeedback, LearnedReinforceFeedback,
+    LearnedRpeCritic, MarginScaledCredit, MultiChannelComponents, MultiChannelNeuromodulator,
+    PostSynapticCredit, ReinforceFeedback, RunningMeanBaseline,
 };
 pub use eligibility::{
     decay, stdp, stdp_surrogate, DualEligibility, Eligibility, PlateauGatedEligibility,
@@ -112,8 +112,8 @@ pub use shd_matched_arms::{
     loss_and_gradient_arm as shd_matched_loss_and_gradient_arm,
     loss_and_gradient_arm_scaled as shd_matched_loss_and_gradient_arm_scaled,
     loss_and_gradient_arm_scaled_prepared as shd_matched_loss_and_gradient_arm_scaled_prepared,
-    loss_and_gradient_arm_tau as shd_matched_loss_and_gradient_arm_tau,
-    ArmAdam as ShdArmAdam, ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
+    loss_and_gradient_arm_tau as shd_matched_loss_and_gradient_arm_tau, ArmAdam as ShdArmAdam,
+    ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
     ArmWeights as ShdArmWeights, MatchedArm, MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A,
     MATCHED_WEIGHTS_MAGIC_V2, MATCHED_WEIGHTS_MAGIC_V3,
 };
@@ -123,4 +123,4 @@ pub use shd_temporal::{
 pub use surrogate_lif_baseline::{
     SurrogateLifReference, DEFAULT_SURROGATE_BETA, SURROGATE_LIF_REFERENCE_LABEL,
 };
-pub use three_factor::{Learner, ThreeFactor};
+pub use three_factor::{CandidateSpike, Learner, ThreeFactor};

@@ -565,13 +565,46 @@ impl MultiChannelNeuromodulator {
     }
 }
 
+/// Gaussian proximity of a score to the k-WTA decision boundary.
+///
+/// `φ(v) = exp(−(v − v_boundary)² / (2σ²))`: `1.0` exactly at the boundary,
+/// falling away in both directions, so a deep winner and a hopeless loser are
+/// weighted alike and only the cells that nearly changed the outcome are not.
+///
+/// Returns `0.0` when the boundary or `σ` is degenerate — no boundary means
+/// nothing was near-missed. Callers that want a *neutral* weight in that case
+/// (credit scaling, where 1.0 leaves the signal alone) must apply it themselves
+/// rather than reading it into this function; the two conventions are opposite
+/// and silently picking one for both is how a disabled mechanism starts looking
+/// like a measured null.
+///
+/// Canonical owner of the margin-weight definition. The boundary itself is owned
+/// by `binn_areas::boundary_below`.
+#[inline]
+pub fn margin_weight(v: f32, v_boundary: f32, sigma: f32) -> f32 {
+    if !v.is_finite() || !v_boundary.is_finite() || !sigma.is_finite() || sigma <= 0.0 {
+        return 0.0;
+    }
+    let diff = v - v_boundary;
+    (-(diff * diff) / (2.0 * sigma * sigma)).exp()
+}
+
 /// Scales per-neuron credit by proximity to the k-WTA decision boundary.
 ///
 /// Neurons near the boundary (where v ≈ v_{k+1}) get full credit strength;
-/// neurons far from the boundary get attenuated credit. This focuses
-/// plasticity on the synapses that could flip a winner selection.
+/// neurons far from the boundary get attenuated credit.
 ///
-/// Margin weight: `φ(v_i) = exp(−(v_i − v_boundary)² / (2σ²))`
+/// Margin weight: `φ(v_i) = exp(−(v_i − v_boundary)² / (2σ²))`, from
+/// [`margin_weight`].
+///
+/// # This scales credit, and credit alone
+///
+/// Under hard k-WTA a losing cell never spikes, so its afferent eligibility is
+/// zero and `Δw = η · e · M` stays zero however `M` is scaled. Applied to the
+/// live C1 substrate this therefore reweights the *winners* and cannot move a
+/// near-miss at all. The counterfactual arm (`c1-sfb-cf`, protocol 29) does not
+/// use it for that reason: it weights the eligibility instead, and leaves every
+/// winner's credit exactly as v15 left it.
 #[derive(Clone, Debug)]
 pub struct MarginScaledCredit<S> {
     inner: S,
@@ -586,16 +619,25 @@ impl<S> MarginScaledCredit<S> {
         }
     }
 
-    pub fn update_margins(&mut self, membranes: &[f32], v_boundary: f32, sigma: f32) {
-        assert_eq!(membranes.len(), self.margin_weights.len());
-        if !v_boundary.is_finite() || sigma <= 0.0 {
-            self.margin_weights.fill(1.0);
+    /// Weight the competing cells by margin; leave every other cell neutral.
+    ///
+    /// `scores` holds only the cells that took part in the competition, keyed by
+    /// `CellId`. Everything else — inputs, read-outs, cells in other areas — is
+    /// reset to `1.0`.
+    ///
+    /// The previous signature took a dense `&[f32]` over *all* cells and wrote a
+    /// computed weight into every slot, so a read-out post, whose membrane is not
+    /// in the competition and is typically `0.0`, was scaled by `φ(0 − v_b)` and
+    /// silently attenuated. Passing only the competitors makes that unstateable.
+    pub fn update_margins_for(&mut self, scores: &[(CellId, f32)], v_boundary: f32, sigma: f32) {
+        self.margin_weights.fill(1.0);
+        if !v_boundary.is_finite() || !sigma.is_finite() || sigma <= 0.0 {
             return;
         }
-        let denom = 2.0 * sigma * sigma;
-        for (w, &v) in self.margin_weights.iter_mut().zip(membranes.iter()) {
-            let diff = v - v_boundary;
-            *w = (-(diff * diff) / denom).exp();
+        for &(cell, v) in scores {
+            if let Some(w) = self.margin_weights.get_mut(cell as usize) {
+                *w = margin_weight(v, v_boundary, sigma);
+            }
         }
     }
 
@@ -738,9 +780,8 @@ mod tests_extra {
     fn margin_scaled_credit_modulates_near_boundary() {
         let base = PostSynapticCredit::from_values(vec![1.0, 1.0, 1.0]);
         let mut scaled = MarginScaledCredit::new(base, 3);
-        let v_soma = [1.0, 2.0, 5.0];
         // boundary = 2.0, sigma = 1.0
-        scaled.update_margins(&v_soma, 2.0, 1.0);
+        scaled.update_margins_for(&[(0, 1.0), (1, 2.0), (2, 5.0)], 2.0, 1.0);
 
         let c1 = scaled.for_post(1);
         let c0 = scaled.for_post(0);
@@ -749,5 +790,52 @@ mod tests_extra {
         assert!((c1 - 1.0).abs() < 1e-6); // diff=0 -> exp(0)=1
         assert!((c0 - (-0.5f32).exp()).abs() < 1e-6); // diff=1 -> exp(-1/2)
         assert!(c2 < c0); // diff=3 -> exp(-9/2)
+    }
+
+    #[test]
+    fn margin_scaling_leaves_cells_outside_the_competition_alone() {
+        // Cell 2 is a read-out: it does not compete for a hidden k-WTA slot and
+        // its membrane is not in `scores`. The dense-slice API this replaced
+        // wrote a weight into every slot, so cell 2 was scaled by phi(0 - 2.0)
+        // = exp(-2) and its credit quietly shrank by 86% for no stated reason.
+        let base = PostSynapticCredit::from_values(vec![1.0, 1.0, 1.0]);
+        let mut scaled = MarginScaledCredit::new(base, 3);
+        scaled.update_margins_for(&[(0, 1.0), (1, 2.0)], 2.0, 1.0);
+        assert_eq!(
+            scaled.for_post(2).to_bits(),
+            1.0_f32.to_bits(),
+            "a non-competing post was rescaled by the competition's margin"
+        );
+    }
+
+    #[test]
+    fn a_degenerate_margin_disables_scaling_rather_than_zeroing_credit() {
+        let base = PostSynapticCredit::from_values(vec![1.0, 1.0]);
+        let mut scaled = MarginScaledCredit::new(base, 2);
+        scaled.update_margins_for(&[(0, 1.0), (1, 2.0)], f32::NEG_INFINITY, 1.0);
+        // Nothing lost, so there is no boundary. Credit scaling must fall back
+        // to neutral; `margin_weight` itself answers 0.0 for the same inputs,
+        // and the two conventions are deliberately not the same function.
+        assert_eq!(scaled.for_post(0).to_bits(), 1.0_f32.to_bits());
+        assert_eq!(scaled.for_post(1).to_bits(), 1.0_f32.to_bits());
+        assert_eq!(margin_weight(1.0, f32::NEG_INFINITY, 1.0), 0.0);
+    }
+
+    #[test]
+    fn margin_weight_peaks_at_the_boundary_and_is_symmetric() {
+        let sigma = 2.0;
+        assert!((margin_weight(5.0, 5.0, sigma) - 1.0).abs() < 1e-6);
+        let above = margin_weight(6.5, 5.0, sigma);
+        let below = margin_weight(3.5, 5.0, sigma);
+        assert_eq!(
+            above.to_bits(),
+            below.to_bits(),
+            "a winner and a loser equally far from the boundary must weigh the same"
+        );
+        assert!(above < 1.0 && above > 0.0);
+        // Degenerate widths are refusals, not silent full credit.
+        assert_eq!(margin_weight(5.0, 5.0, 0.0), 0.0);
+        assert_eq!(margin_weight(5.0, 5.0, f32::NAN), 0.0);
+        assert_eq!(margin_weight(f32::NAN, 5.0, sigma), 0.0);
     }
 }

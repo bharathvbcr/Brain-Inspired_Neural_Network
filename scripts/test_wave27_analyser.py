@@ -240,5 +240,67 @@ class Wave27(unittest.TestCase):
         self.assertIn("not reached", why)
 
 
+    # ---- an arm may live in a wave of its own -----------------------------
+    #
+    # Wave 26 shipped this defect once (the ladder had no intact baseline) and
+    # its amendment fixed that instance by adding `intact_wave`. The shape
+    # survived and arrived again through the other arm: H27-4 runs qk-norm on
+    # the attention arm only, so BOTH rate arms have to come from elsewhere.
+
+    def qk(self, intact=0.83, shuffled=0.70):
+        for s in SEEDS:
+            self.write(f"w27qk__ff-fixed-attn__{self.A}__d32l4__qk-norm__s{s}",
+                       cell_json(intact, readout="qk-norm"))
+            self.write(f"w27qk__ff-fixed-attn__{self.A}__d32l4__qk-norm"
+                       f"__bin-shuffled__s{s}",
+                       cell_json(shuffled, readout="qk-norm",
+                                 temporal="bin-shuffled"))
+
+    def test_a_group_with_no_rate_arm_pairs_against_the_wave_that_has_one(self):
+        self.baseline()
+        self.qk()
+        cells, _, _ = self.module.index(self.results)
+        # w27qk holds attention cells only, by design.
+        alone, _, n_alone = self.module.did(
+            cells, "w27qk", "bin-shuffled", readout="qk-norm",
+            intact_wave="w27qk", intact_readout="qk-norm")
+        self.assertIsNone(alone, "w27qk has no rate arm of its own")
+        self.assertEqual(n_alone, 0)
+        value, _, n = self.module.did(
+            cells, "w27qk", "bin-shuffled", readout="qk-norm",
+            intact_wave="w27qk", intact_readout="qk-norm",
+            baseline_wave="w26pos")
+        self.assertEqual(n, 12)
+        # (0.83-0.70) - (0.74-0.72) = 0.11
+        self.assertAlmostEqual(value, 0.11, places=6)
+
+    def test_the_qk_norm_bar_reads_both_halves_once_it_is_paired(self):
+        self.baseline()
+        self.hidden()
+        self.qk()
+        _, text = self.run_main()
+        line = [l for l in text.splitlines() if "under qk-norm" in l]
+        self.assertTrue(line, text)
+        self.assertNotIn("NOT EVALUABLE", line[0])
+        self.assertNotIn("NOT EVALUABLE", self.clause(text, "H27-4"))
+
+    def test_every_existing_call_site_keeps_its_baseline(self):
+        """The new parameter must not move any arm that was already right."""
+        self.baseline()
+        self.hidden()
+        for s in SEEDS:
+            self.write(f"w27drp__ff-fixed__{self.A}__spike-dropout-p30__s{s}",
+                       cell_json(0.60, arm="ff+fixed",
+                                 temporal="spike-dropout-p30"))
+            self.write(f"w27drp__ff-fixed-attn__{self.A}__d32l4"
+                       f"__spike-dropout-p30__s{s}",
+                       cell_json(0.70, temporal="spike-dropout-p30"))
+        cells, _, _ = self.module.index(self.results)
+        value, _, n = self.module.did(cells, "w27drp", "spike-dropout-p30")
+        self.assertEqual(n, 12)
+        # (0.83-0.70) - (0.74-0.60) = -0.01
+        self.assertAlmostEqual(value, -0.01, places=6)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -20,4 +20,6 @@ pub use multi_area::{InterAreaProjection, InterAreaStepOpts, MultiAreaNetwork};
 pub use predictive::PredictiveAreaProjection;
 pub use project::{associate, project, project_reference};
 pub use wiring::{intra_area_event_fraction, wire, AreaRole, Pos, WiringPrior};
-pub use wta::{k_wta, k_wta_straight_through, k_wta_with_margin, soft_k_wta, WtaAnnealer};
+pub use wta::{
+    boundary_below, k_wta, k_wta_straight_through, k_wta_with_margin, soft_k_wta, WtaAnnealer,
+};

@@ -8,6 +8,21 @@
 //! Memory is **O(1) in sequence length** (state is O(cells + synapses)).
 //! Eligibility is lazy-decayed per synapse from `last_elig_update` to event/now
 //! time; postsynaptic fan-in uses the engine CSC reverse index.
+//!
+//! # Counterfactual eligibility
+//!
+//! Every trace above is built from spikes the engine actually emitted. Under
+//! hard k-WTA that is a strictly smaller set than the cells that competed: a
+//! loser is muted before it can fire, so its afferent synapses end the trial at
+//! `e = 0` and `Δw = η · e · M` is zero for it *whatever* credit `M` says. A
+//! rule that only reweights `M` therefore cannot move a near-miss, and measures
+//! nothing when applied to one.
+//!
+//! [`CandidateSpike`] is the missing half. It credits a non-winner's **afferent**
+//! synapses with a scaled share of the STDP a real spike at the same tick would
+//! have written, without emitting a spike, without touching the engine, and
+//! without entering the pairing table. Forward dynamics stay bit-identical; only
+//! the trace the credit signal multiplies gets richer.
 
 use binn_core::{Csc, Csr, Tick};
 use binn_engine::{CellId, Engine};
@@ -15,6 +30,27 @@ use binn_engine::{CellId, Engine};
 use crate::eligibility::{self, Eligibility};
 use crate::modulators::Modulators;
 use crate::CreditSignal;
+
+/// A near-miss postsynaptic event: credit for a spike that competition prevented.
+///
+/// `cell` lost k-WTA, so the engine's spike log has no record of it and its
+/// afferent synapses would otherwise carry no eligibility at all. Queuing one of
+/// these on [`ThreeFactor::queue_candidate_spikes`] deposits `scale` times the
+/// STDP that a real spike at `t` would have written on those synapses.
+///
+/// `scale` is the caller's margin term: how nearly this cell won. It is applied
+/// to the eligibility, not to the credit signal, so the winners' updates are
+/// left exactly as they were and a `scale` of zero is indistinguishable from not
+/// running the mechanism.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CandidateSpike {
+    /// The cell that lost selection.
+    pub cell: CellId,
+    /// The tick the winners fired — the time this cell would have fired.
+    pub t: Tick,
+    /// Fraction of a real spike's afferent STDP to deposit. Finite and `> 0`.
+    pub scale: f32,
+}
 
 /// Production learning interface (no backward pass).
 pub trait Learner {
@@ -36,6 +72,8 @@ pub struct ThreeFactor {
     last_update: Tick,
     spike_cursor: usize,
     last_spike: Vec<Option<Tick>>,
+    /// Near-miss events to fold into the next absorb, then drained.
+    pending_candidates: Vec<CandidateSpike>,
 }
 
 impl ThreeFactor {
@@ -51,6 +89,7 @@ impl ThreeFactor {
             last_update: 0,
             spike_cursor: 0,
             last_spike: Vec::new(),
+            pending_candidates: Vec::new(),
         }
     }
 
@@ -72,6 +111,7 @@ impl ThreeFactor {
     pub fn resident_bytes(&self) -> usize {
         std::mem::size_of::<Self>()
             + self.last_spike.capacity() * std::mem::size_of::<Option<Tick>>()
+            + self.pending_candidates.capacity() * std::mem::size_of::<CandidateSpike>()
     }
 
     /// Number of cells tracked by the last-spike table.
@@ -91,6 +131,10 @@ impl ThreeFactor {
     /// (e.g. `c1-iso` / protocol v5) do.
     pub fn reset_pairing_state(&mut self) {
         self.last_spike.fill(None);
+        // A queued near-miss belongs to the selection event that produced it. If
+        // the trial ended without an absorb, it must not leak into the next one
+        // and credit a cell for losing a competition that is already over.
+        self.pending_candidates.clear();
     }
 
     /// Fully reset pairing state and spike cursor for clean trial boundaries.
@@ -98,6 +142,36 @@ impl ThreeFactor {
         self.reset_pairing_state();
         self.spike_cursor = 0;
         self.last_update = 0;
+    }
+
+    /// Queue near-miss events for the next absorb, which drains them.
+    ///
+    /// Entries with a non-positive or non-finite `scale` are dropped rather than
+    /// queued: a zero-scale candidate adds no eligibility but *would* still
+    /// advance its synapses' lazy-decay clock to `t`, splitting one decay into
+    /// two and perturbing the last bits of every afferent trace. Dropping them
+    /// is what makes "the mechanism off" and "the mechanism on at `λ_c = 0`"
+    /// the same numbers rather than merely close ones.
+    ///
+    /// Returns the number actually queued, which the caller must compare against
+    /// what it offered before reporting coverage.
+    pub fn queue_candidate_spikes(
+        &mut self,
+        candidates: impl IntoIterator<Item = CandidateSpike>,
+    ) -> usize {
+        let before = self.pending_candidates.len();
+        for candidate in candidates {
+            if candidate.scale.is_finite() && candidate.scale > 0.0 {
+                self.pending_candidates.push(candidate);
+            }
+        }
+        self.pending_candidates.len() - before
+    }
+
+    /// Near-miss events queued but not yet absorbed (tests / diagnostics).
+    #[inline]
+    pub fn pending_candidate_count(&self) -> usize {
+        self.pending_candidates.len()
     }
 
     /// Peek last-spike table (tests / diagnostics).
@@ -144,17 +218,67 @@ impl ThreeFactor {
         // No numerics change — same values, same order, same iteration.
         let conn = &engine.conn;
         let conn_rev = &engine.conn_rev;
-        for (cell, t) in new_spikes {
-            apply_spike_stdp(
-                engine.syn.as_mut_slice(),
-                conn,
-                conn_rev,
-                &mut self.last_spike,
-                &elig,
-                cell,
-                t,
-            );
+
+        if self.pending_candidates.is_empty() {
+            for (cell, t) in new_spikes {
+                apply_spike_stdp(
+                    engine.syn.as_mut_slice(),
+                    conn,
+                    conn_rev,
+                    &mut self.last_spike,
+                    &elig,
+                    cell,
+                    t,
+                );
+            }
+            return;
         }
+
+        // Near-miss deposits are interleaved into the same chronological stream
+        // rather than appended after it. `Eligibility::decay_to` rewinds a
+        // synapse's decay clock to whatever time it is handed, so depositing at
+        // `winner_at` *after* absorbing a later action spike would re-decay that
+        // synapse from an earlier instant and over-decay every trace on it.
+        //
+        // `new_spikes` is already sorted by time and `sort_by_key` is stable, so
+        // real events keep their engine-log order among themselves and a real
+        // event precedes a candidate at the same tick — a candidate is a spike
+        // that did not happen, and may not pre-empt one that did.
+        let mut events: Vec<(Tick, u8, CellId, f32)> = new_spikes
+            .into_iter()
+            .map(|(cell, t)| (t, 0u8, cell, 0.0))
+            .collect();
+        events.extend(
+            self.pending_candidates
+                .iter()
+                .map(|c| (c.t, 1u8, c.cell, c.scale)),
+        );
+        events.sort_by_key(|&(t, is_candidate, _, _)| (t, is_candidate));
+
+        for (t, is_candidate, cell, scale) in events {
+            if is_candidate == 0 {
+                apply_spike_stdp(
+                    engine.syn.as_mut_slice(),
+                    conn,
+                    conn_rev,
+                    &mut self.last_spike,
+                    &elig,
+                    cell,
+                    t,
+                );
+            } else {
+                apply_candidate_stdp(
+                    engine.syn.as_mut_slice(),
+                    conn_rev,
+                    &self.last_spike,
+                    &elig,
+                    cell,
+                    t,
+                    scale,
+                );
+            }
+        }
+        self.pending_candidates.clear();
     }
 
     fn apply_weights<S: CreditSignal>(&self, engine: &mut Engine, signal: &S, now: Tick) -> u64 {
@@ -266,6 +390,46 @@ fn apply_spike_stdp(
     last_spike[c] = Some(t);
 }
 
+/// Afferent-only STDP for a spike that competition prevented.
+///
+/// Deliberately narrower than [`apply_spike_stdp`] in two ways, both of which
+/// are what keeps the forward pass intact:
+///
+/// * **No efferent (CSR) edges.** Those carry `pre → post` credit for a spike
+///   this cell never delivered. Writing them would let a cell that stayed silent
+///   depress or potentiate its targets, which is a change to the network's
+///   behaviour and not to its credit assignment.
+/// * **No `last_spike` write.** The pairing table is the forward path's memory
+///   of what fired. A phantom entry there would re-time the STDP of every
+///   *real* spike that pairs against this cell afterwards, so the arm would no
+///   longer share a forward pass with the one it is compared to.
+///
+/// What remains is exactly the counterfactual question: of the inputs that
+/// arrived, which ones would have been responsible had this cell won?
+#[allow(clippy::needless_range_loop)]
+fn apply_candidate_stdp(
+    syns: &mut [binn_engine::Synapse],
+    conn_rev: &Csc,
+    last_spike: &[Option<Tick>],
+    elig: &Eligibility,
+    cell: CellId,
+    t: Tick,
+    scale: f32,
+) {
+    debug_assert!(scale.is_finite() && scale > 0.0, "scale must be positive");
+    let c = cell as usize;
+    if c >= conn_rev.ncols() {
+        return;
+    }
+    for (pre, edge) in conn_rev.incoming(c) {
+        let e = edge as usize;
+        elig.decay_to(&mut syns[e], t);
+        if let Some(t_pre) = last_spike[pre as usize] {
+            syns[e].eligibility += scale * eligibility::stdp(t as f32 - t_pre as f32);
+        }
+    }
+}
+
 /// Tiny coincidence wiring for acceptance tests.
 ///
 /// Cells: `0 = pre_a`, `1 = pre_b`, `2 = post`, `3 = distractor`.
@@ -294,6 +458,309 @@ pub fn run_coincidence_trial(
     engine.inject(2, 0, t0 + 2);
     engine.step_until(t0 + 5);
     learner.update(engine, m);
+}
+
+#[cfg(test)]
+mod counterfactual_tests {
+    use super::*;
+    use crate::credit::PostSynapticCredit;
+    use binn_core::Csr;
+
+    /// Two inputs (0, 1) drive two competitors (2, 3); each competitor drives a
+    /// shared downstream cell (4).
+    ///
+    /// Edge order is fixed and named below because the assertions address edges
+    /// by index: 0→2, 0→3, 1→2, 1→3, 2→4, 3→4.
+    const E_0_2: usize = 0;
+    const E_0_3: usize = 1;
+    const E_1_2: usize = 2;
+    const E_1_3: usize = 3;
+    const E_2_4: usize = 4;
+    const E_3_4: usize = 5;
+
+    const WINNER: CellId = 2;
+    const LOSER: CellId = 3;
+
+    fn competition_engine() -> Engine {
+        let mut eng = Engine::with_cells(5);
+        let row_ptr = vec![0u32, 2, 4, 5, 6, 6];
+        let col = vec![2u32, 3, 2, 3, 4, 4];
+        let conn = Csr::from_parts(row_ptr, col).expect("competition CSR");
+        eng.set_connectivity(conn, vec![0.1; 6]);
+        eng
+    }
+
+    /// Drive both inputs, then fire only the k-WTA winner. `LOSER` competed and
+    /// lost, so it never spikes — exactly the live C1 sequence, where hidden
+    /// thresholds are muted during integrate and only winners are force-fired.
+    fn run_selection(eng: &mut Engine) {
+        eng.force_spike(0, 10);
+        eng.force_spike(1, 11);
+        let _ = eng.step_until(19);
+        eng.force_spike(WINNER, 20);
+        let _ = eng.step_until(30);
+    }
+
+    /// Credit large enough that any non-zero eligibility would be visible.
+    fn credit_for(cell: CellId) -> PostSynapticCredit {
+        let mut signal = PostSynapticCredit::zeros(5);
+        signal.set(cell, 1000.0);
+        signal
+    }
+
+    fn elig_bits(eng: &Engine) -> Vec<u32> {
+        eng.syn
+            .as_slice()
+            .iter()
+            .map(|s| s.eligibility.to_bits())
+            .collect()
+    }
+
+    fn weight_bits(eng: &Engine) -> Vec<u32> {
+        eng.edge_w.iter().map(|w| w.to_bits()).collect()
+    }
+
+    #[test]
+    fn a_loser_cannot_be_taught_by_credit_alone() {
+        // The defect the counterfactual term exists to fix, stated as a test on
+        // the mechanism-off path: eligibility is built from emitted spikes, the
+        // loser emitted none, so `Δw = η · e · M` is zero on its afferents no
+        // matter how large `M` is. Any rule that only reshapes `M` — margin
+        // scaling included — is a no-op here and measures nothing.
+        let mut eng = competition_engine();
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+        let w0 = eng.edge_w.clone();
+
+        run_selection(&mut eng);
+        learner.update_with_credit_counted(&mut eng, &credit_for(LOSER));
+
+        assert_eq!(
+            eng.edge_w[E_0_3].to_bits(),
+            w0[E_0_3].to_bits(),
+            "afferent 0->loser moved without the counterfactual term"
+        );
+        assert_eq!(
+            eng.edge_w[E_1_3].to_bits(),
+            w0[E_1_3].to_bits(),
+            "afferent 1->loser moved without the counterfactual term"
+        );
+        // The same credit on the winner does move weights, so the null above is
+        // about the loser's missing eligibility and not about a dead harness.
+        let mut eng_w = competition_engine();
+        let mut learner_w = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut eng_w);
+        learner_w.update_with_credit_counted(&mut eng_w, &credit_for(WINNER));
+        assert!(
+            eng_w.edge_w[E_0_2] > w0[E_0_2],
+            "winner afferent did not potentiate: harness is not measuring anything"
+        );
+    }
+
+    #[test]
+    fn a_candidate_spike_credits_the_losers_afferents() {
+        let mut eng = competition_engine();
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+        let w0 = eng.edge_w.clone();
+
+        run_selection(&mut eng);
+        let queued = learner.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 1.0,
+        }]);
+        assert_eq!(queued, 1);
+        learner.update_with_credit_counted(&mut eng, &credit_for(LOSER));
+
+        assert!(
+            eng.edge_w[E_0_3] > w0[E_0_3],
+            "afferent 0->loser did not potentiate under counterfactual credit"
+        );
+        assert!(
+            eng.edge_w[E_1_3] > w0[E_1_3],
+            "afferent 1->loser did not potentiate under counterfactual credit"
+        );
+    }
+
+    #[test]
+    fn a_candidate_writes_neither_efferent_edges_nor_the_pairing_table() {
+        // Both properties are what keep the forward pass shared with the arm
+        // this one is compared against. An efferent write would credit cells
+        // downstream of a spike that never arrived; a pairing-table write would
+        // re-time the STDP of every real spike that pairs against this cell
+        // afterwards.
+        let mut eng = competition_engine();
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+
+        run_selection(&mut eng);
+        learner.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 1.0,
+        }]);
+        learner.update_with_credit_counted(&mut eng, &credit_for(LOSER));
+
+        assert_eq!(
+            eng.syn.as_slice()[E_3_4].eligibility.to_bits(),
+            0.0_f32.to_bits(),
+            "candidate wrote its efferent edge loser->downstream"
+        );
+        assert_eq!(
+            learner.last_spike_at(LOSER as usize),
+            None,
+            "candidate entered the pairing table as if it had fired"
+        );
+    }
+
+    #[test]
+    fn deposited_eligibility_is_linear_in_scale() {
+        // `λ_c` is the swept knob, so its effect on the trace must be the plain
+        // multiplier the protocol says it is, not a saturating or thresholded one.
+        let mut half = competition_engine();
+        let mut learner_half = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut half);
+        learner_half.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 0.25,
+        }]);
+        learner_half.observe_spikes(&mut half);
+
+        let mut full = competition_engine();
+        let mut learner_full = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut full);
+        learner_full.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 0.5,
+        }]);
+        learner_full.observe_spikes(&mut full);
+
+        for edge in [E_0_3, E_1_3] {
+            let e_half = half.syn.as_slice()[edge].eligibility;
+            let e_full = full.syn.as_slice()[edge].eligibility;
+            assert!(e_half > 0.0, "edge {edge} carried no counterfactual trace");
+            assert!(
+                (e_full - 2.0 * e_half).abs() < 1e-6,
+                "edge {edge}: doubling scale gave {e_full}, not 2 x {e_half}"
+            );
+        }
+    }
+
+    #[test]
+    fn no_candidates_is_bit_identical_to_the_mechanism_being_absent() {
+        // The `λ_c = 0` rung of the ladder is the arm it is compared against, so
+        // "identical" here has to mean every bit of every weight and trace, not
+        // agreement to a tolerance.
+        let mut plain = competition_engine();
+        let mut learner_plain = ThreeFactor::new(0.5, 0.001, 40.0);
+        run_selection(&mut plain);
+        learner_plain.update_with_credit_counted(&mut plain, &credit_for(WINNER));
+
+        let mut queued = competition_engine();
+        let mut learner_queued = ThreeFactor::new(0.5, 0.001, 40.0);
+        run_selection(&mut queued);
+        // Offered and rejected: a zero-scale candidate adds nothing but would
+        // still advance its afferents' lazy-decay clock, splitting one decay
+        // into two and perturbing the low bits.
+        let accepted = learner_queued.queue_candidate_spikes([
+            CandidateSpike {
+                cell: LOSER,
+                t: 20,
+                scale: 0.0,
+            },
+            CandidateSpike {
+                cell: LOSER,
+                t: 20,
+                scale: f32::NAN,
+            },
+            CandidateSpike {
+                cell: LOSER,
+                t: 20,
+                scale: -1.0,
+            },
+        ]);
+        assert_eq!(accepted, 0, "a degenerate scale was queued");
+        learner_queued.update_with_credit_counted(&mut queued, &credit_for(WINNER));
+
+        assert_eq!(weight_bits(&plain), weight_bits(&queued));
+        assert_eq!(elig_bits(&plain), elig_bits(&queued));
+    }
+
+    #[test]
+    fn a_candidate_does_not_disturb_a_later_real_spike() {
+        // `decay_to` rewinds a synapse's decay clock to whatever time it is
+        // given, so a deposit appended *after* a later real spike would
+        // re-decay that synapse from an earlier instant. The deposit is
+        // therefore interleaved chronologically; this checks that it was, by
+        // pinning every edge the candidate does not own.
+        let mut plain = competition_engine();
+        let mut learner_plain = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut plain);
+        plain.force_spike(1, 40);
+        let _ = plain.step_until(50);
+        learner_plain.observe_spikes(&mut plain);
+
+        let mut with_cand = competition_engine();
+        let mut learner_cand = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut with_cand);
+        with_cand.force_spike(1, 40);
+        let _ = with_cand.step_until(50);
+        learner_cand.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 1.0,
+        }]);
+        learner_cand.observe_spikes(&mut with_cand);
+
+        // Untouched edges: everything not afferent to the loser.
+        for edge in [E_0_2, E_1_2, E_2_4, E_3_4] {
+            assert_eq!(
+                plain.syn.as_slice()[edge].eligibility.to_bits(),
+                with_cand.syn.as_slice()[edge].eligibility.to_bits(),
+                "edge {edge} changed although no candidate addressed it"
+            );
+        }
+    }
+
+    #[test]
+    fn one_absorb_drains_the_queue() {
+        // A near-miss belongs to the selection event that produced it. Surviving
+        // into the next absorb would credit a cell for losing a competition that
+        // has already been resolved and its eligibility cleared.
+        let mut eng = competition_engine();
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut eng);
+        learner.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 1.0,
+        }]);
+        assert_eq!(learner.pending_candidate_count(), 1);
+        learner.observe_spikes(&mut eng);
+        assert_eq!(learner.pending_candidate_count(), 0);
+
+        let after_first: Vec<u32> = elig_bits(&eng);
+        learner.observe_spikes(&mut eng);
+        assert_eq!(
+            after_first,
+            elig_bits(&eng),
+            "a second absorb re-deposited a drained candidate"
+        );
+    }
+
+    #[test]
+    fn a_trial_boundary_reset_drops_unabsorbed_candidates() {
+        let mut eng = competition_engine();
+        let mut learner = ThreeFactor::new(0.5, 0.0, 40.0);
+        run_selection(&mut eng);
+        learner.queue_candidate_spikes([CandidateSpike {
+            cell: LOSER,
+            t: 20,
+            scale: 1.0,
+        }]);
+        learner.reset_pairing_state();
+        assert_eq!(learner.pending_candidate_count(), 0);
+    }
 }
 
 #[cfg(test)]

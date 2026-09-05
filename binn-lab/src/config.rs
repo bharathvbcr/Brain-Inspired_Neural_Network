@@ -142,6 +142,45 @@ pub const C1_RFB_LEARNED_PROTOCOL_VERSION: u64 = 25;
 /// Adaptive k-WTA schedule protocol (protocol 28, k: 16 -> 2).
 pub const C1_K_ANNEAL_PROTOCOL_VERSION: u64 = 28;
 
+/// Counterfactual eligibility × margin under hard k-WTA (protocol 29).
+///
+/// Same structured frozen `B`, muted-θ integrate, hard k-WTA selection and
+/// single-pass schedule as v15. The forward pass is bit-identical to it: the
+/// same cells win, the same cells spike, nothing is softened or unmuted.
+///
+/// What changes is the trace the credit signal multiplies. Under v15 a cell that
+/// loses selection never fires, so its afferent eligibility is exactly zero and
+/// `Δw = η · e · B` is zero for it whatever `B` says — which is why v13–v24
+/// could move accuracy by reshaping `B` and never move the gap. This protocol
+/// deposits, on the afferents of the nearest-miss losers only, `λ_c · φ(v)`
+/// times the STDP a real spike at the winners' tick would have written, where
+/// `φ` is Gaussian proximity to the k-WTA boundary.
+///
+/// `cf_lambda = 0` is v15's update rule exactly, and is the ladder's control
+/// rung rather than a separate arm. Fresh hash; does **not** remassage v15.
+pub const C1_COUNTERFACTUAL_PROTOCOL_VERSION: u64 = 29;
+
+/// Anchor `λ_c` for protocol 29: a loser *at* the boundary is credited with the
+/// full eligibility a real spike would have written. Values above 1 would credit
+/// a cell that lost more than one that won, which the arm does not test.
+pub const C1_CF_LAMBDA: f32 = 1.0;
+
+/// Anchor margin width for protocol 29, as a fraction of the winners' spread:
+/// `σ = C1_CF_SIGMA_FRAC · (v_top − v_boundary)`.
+///
+/// Scale-free by construction. Membrane scores carry engine units that move with
+/// `init_w`, `readout_boost` and width, so a σ in volts would silently mean a
+/// different experiment at every rung of a capacity sweep.
+pub const C1_CF_SIGMA_FRAC: f32 = 0.5;
+
+/// Anchor candidate budget for protocol 29: the top `2k` losers by score.
+///
+/// Every remaining loser is further from the boundary than these and would be
+/// weighted below `φ(2σ)`, but it is a **cap** and not a proof of irrelevance —
+/// the runner reports considered and deposited counts separately so a null can
+/// be told apart from a cap that bound.
+pub const C1_CF_CANDIDATE_MULTIPLE: usize = 2;
+
 /// Experiment-name prefix that marks a Tier-B sensitivity preset.
 pub const C1_SENSITIVITY_EXPERIMENT_PREFIX: &str = "c1-sens";
 
@@ -195,6 +234,24 @@ pub const C1_RFB_LEARNED_EXPERIMENT_PREFIX: &str = "c1-rfb-learned";
 
 /// Experiment-name prefix that marks adaptive k-WTA schedule (v28).
 pub const C1_K_ANNEAL_EXPERIMENT_PREFIX: &str = "c1-k-anneal";
+
+/// Experiment-name prefix that marks counterfactual eligibility × margin (v29).
+pub const C1_COUNTERFACTUAL_EXPERIMENT_PREFIX: &str = "c1-sfb-cf";
+
+/// Resolved protocol-29 counterfactual-credit parameters.
+///
+/// Produced by [`Config::counterfactual_credit`], which returns `None` whenever
+/// the mechanism is off — so holding one of these is itself the statement that
+/// deposits will be made.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CounterfactualCredit {
+    /// `λ_c`: eligibility a boundary-adjacent loser receives, relative to a spike.
+    pub lambda: f32,
+    /// Margin width as a fraction of `v_top − v_boundary`.
+    pub sigma_frac: f32,
+    /// Hard cap on deposits per selection (`cf_candidate_multiple × k_wta`).
+    pub max_candidates: usize,
+}
 
 /// Public, hashable C1 / harness configuration.
 ///
@@ -275,6 +332,13 @@ pub struct Config {
     pub init_w_rescale: bool,
     /// When true: normalize readout boost × mean readout fan-in toward baseline.
     pub readout_gain_normalize: bool,
+    /// Protocol 29 `λ_c`: counterfactual eligibility strength. `0` disables the
+    /// mechanism and reproduces v15 bit-for-bit.
+    pub cf_lambda: f32,
+    /// Protocol 29 margin width as a fraction of `v_top − v_boundary`.
+    pub cf_sigma_frac: f32,
+    /// Protocol 29 candidate budget as a multiple of `k_wta`.
+    pub cf_candidate_multiple: usize,
 }
 
 impl Config {
@@ -314,6 +378,9 @@ impl Config {
             max_fan_out: 256,
             init_w_rescale: false,
             readout_gain_normalize: false,
+            cf_lambda: 0.0,
+            cf_sigma_frac: 0.0,
+            cf_candidate_multiple: 0,
         }
     }
 
@@ -714,6 +781,45 @@ impl Config {
         c
     }
 
+    /// Protocol 29: counterfactual eligibility × margin at the anchor rung.
+    ///
+    /// Built from the v15 preset so the forward pass, feedback construction and
+    /// schedule are the ones it is compared against; only the counterfactual
+    /// knobs are added. Sweep `λ_c` with [`Self::with_cf_lambda`], whose `0.0`
+    /// rung is v15's update rule exactly.
+    pub fn c1_counterfactual() -> Self {
+        let mut c = Self::c1_structured_fb();
+        c.experiment = C1_COUNTERFACTUAL_EXPERIMENT_PREFIX.into();
+        c.cf_lambda = C1_CF_LAMBDA;
+        c.cf_sigma_frac = C1_CF_SIGMA_FRAC;
+        c.cf_candidate_multiple = C1_CF_CANDIDATE_MULTIPLE;
+        c
+    }
+
+    /// Quick/PILOT for protocol 29.
+    pub fn c1_counterfactual_quick() -> Self {
+        let mut c = Self::c1_structured_fb_quick();
+        c.experiment = C1_COUNTERFACTUAL_EXPERIMENT_PREFIX.into();
+        c.cf_lambda = C1_CF_LAMBDA;
+        c.cf_sigma_frac = C1_CF_SIGMA_FRAC;
+        c.cf_candidate_multiple = C1_CF_CANDIDATE_MULTIPLE;
+        c
+    }
+
+    /// One rung of the protocol-29 `λ_c` ladder.
+    ///
+    /// Every rung is a distinct hash, because `cf_lambda` is mixed under this
+    /// protocol: a ladder whose rungs shared a hash would let one rung's result
+    /// be cited for another's.
+    pub fn with_cf_lambda(mut self, lambda: f32) -> Self {
+        assert!(
+            lambda.is_finite() && lambda >= 0.0,
+            "cf_lambda must be finite and non-negative, got {lambda}"
+        );
+        self.cf_lambda = lambda;
+        self
+    }
+
     /// Protocol 28: adaptive k-WTA schedule (k=16 -> 2 over training).
     pub fn c1_k_anneal() -> Self {
         let mut c = Self::c1_default();
@@ -823,7 +929,7 @@ impl Config {
     }
 
     /// True when this config uses structured frozen feedback (protocol 15 only;
-    /// excludes `c1-sfb-em*` / `c1-sfb-cap*` / `c1-sfb-teach*` / soft/finth/cont).
+    /// excludes `c1-sfb-em*` / `c1-sfb-cap*` / `c1-sfb-teach*` / soft/finth/cont/cf).
     #[inline]
     pub fn is_structured_fb_protocol(&self) -> bool {
         self.experiment
@@ -834,6 +940,7 @@ impl Config {
             && !self.is_structured_fb_soft_protocol()
             && !self.is_structured_fb_finth_protocol()
             && !self.is_structured_fb_cont_protocol()
+            && !self.is_counterfactual_protocol()
     }
 
     /// True when this config is the v13 single-pass live `ReinforceFeedback` preset
@@ -859,6 +966,32 @@ impl Config {
         self.experiment.starts_with(C1_K_ANNEAL_EXPERIMENT_PREFIX)
     }
 
+    /// True when this config is counterfactual eligibility × margin (protocol 29).
+    #[inline]
+    pub fn is_counterfactual_protocol(&self) -> bool {
+        self.experiment
+            .starts_with(C1_COUNTERFACTUAL_EXPERIMENT_PREFIX)
+    }
+
+    /// Counterfactual credit parameters, or `None` when the mechanism is off.
+    ///
+    /// `None` for every protocol but 29, and also for a protocol-29 config whose
+    /// `λ_c` is zero: that rung must take the same code path as v15, not a path
+    /// that deposits nothing. A zero-scale deposit still advances a synapse's
+    /// lazy-decay clock, which would put the control rung a few float ulps away
+    /// from the arm it exists to be compared against.
+    #[inline]
+    pub fn counterfactual_credit(&self) -> Option<CounterfactualCredit> {
+        if !self.is_counterfactual_protocol() || self.cf_lambda <= 0.0 {
+            return None;
+        }
+        Some(CounterfactualCredit {
+            lambda: self.cf_lambda,
+            sigma_frac: self.cf_sigma_frac,
+            max_candidates: self.cf_candidate_multiple.saturating_mul(self.k_wta),
+        })
+    }
+
     /// True when main-arm plasticity uses production `ReinforceFeedback` credit
     /// (v13–v19, v21, v23–v25). Excludes graded-DFA live (v20).
     #[inline]
@@ -874,9 +1007,10 @@ impl Config {
             || self.is_structured_fb_soft_protocol()
             || self.is_structured_fb_finth_protocol()
             || self.is_structured_fb_cont_protocol()
+            || self.is_counterfactual_protocol()
     }
 
-    /// True when hidden `B` is structured from readout columns (v15–v19, v21, v23–v24).
+    /// True when hidden `B` is structured from readout columns (v15–v19, v21, v23–v24, v29).
     #[inline]
     pub fn uses_structured_feedback_weights(&self) -> bool {
         self.is_structured_fb_protocol()
@@ -887,6 +1021,7 @@ impl Config {
             || self.is_structured_fb_soft_protocol()
             || self.is_structured_fb_finth_protocol()
             || self.is_structured_fb_cont_protocol()
+            || self.is_counterfactual_protocol()
     }
 
     /// True when structured `B` uses continuous/normalized Δw (protocol 24).
@@ -949,6 +1084,8 @@ impl Config {
             C1_K_ANNEAL_PROTOCOL_VERSION
         } else if self.is_reinforce_fb_learned_protocol() {
             C1_RFB_LEARNED_PROTOCOL_VERSION
+        } else if self.is_counterfactual_protocol() {
+            C1_COUNTERFACTUAL_PROTOCOL_VERSION
         } else if self.is_structured_fb_cont_protocol() {
             C1_STRUCTURED_FB_CONT_PROTOCOL_VERSION
         } else if self.is_structured_fb_finth_protocol() {
@@ -1042,6 +1179,13 @@ impl Config {
             Self::c1_reinforce_fb_learned_quick(),
             Self::c1_k_anneal(),
             Self::c1_k_anneal_quick(),
+            Self::c1_counterfactual(),
+            Self::c1_counterfactual_quick(),
+            // The control rung is a preset in its own right: `--config-hash` has
+            // to resolve it, or the arm the ladder is measured against would be
+            // the one run that could not be reproduced from its own note.
+            Self::c1_counterfactual().with_cf_lambda(0.0),
+            Self::c1_counterfactual_quick().with_cf_lambda(0.0),
         ]
     }
 
@@ -1104,6 +1248,14 @@ impl Config {
         mix(&mut h, self.surrogate_beta.to_bits() as u64);
         mix(&mut h, u64::from(self.matched_budget_repeat));
         mix(&mut h, u64::from(self.quick));
+        // Counterfactual knobs are the scientific object of protocol 29 and must
+        // separate its rungs, but they did not exist when v2-v28 were frozen.
+        // Mixing them only under 29 keeps every archived hash byte-for-byte.
+        if self.is_counterfactual_protocol() {
+            mix(&mut h, self.cf_lambda.to_bits() as u64);
+            mix(&mut h, self.cf_sigma_frac.to_bits() as u64);
+            mix(&mut h, self.cf_candidate_multiple as u64);
+        }
         // Mac-probe geometry knobs: mix only when active so frozen C1 hashes stay.
         if self.is_mac_probe_geometry() {
             mix(&mut h, self.max_fan_out as u64);
@@ -1207,6 +1359,76 @@ mod tests {
         let mut e = Config::c1_default();
         e.g2_min_reference_gap = 0.20;
         assert_ne!(a.hash(), e.hash());
+    }
+
+    #[test]
+    fn counterfactual_is_its_own_protocol_not_v15() {
+        let cf = Config::c1_counterfactual();
+        // `c1-sfb-cf` also starts with `c1-sfb`. Without the exclusion this
+        // would answer v15 to every predicate and run protocol 29 under v15's
+        // version number and v15's disclosure text.
+        assert!(cf.is_counterfactual_protocol());
+        assert!(!cf.is_structured_fb_protocol());
+        assert_eq!(cf.protocol_version(), C1_COUNTERFACTUAL_PROTOCOL_VERSION);
+        assert!(cf.uses_structured_feedback_weights());
+        assert!(cf.uses_live_reinforce_feedback());
+        assert!(!cf.uses_soft_k_wta());
+        assert_ne!(cf.hash_string(), Config::c1_structured_fb().hash_string());
+    }
+
+    #[test]
+    fn counterfactual_knobs_do_not_disturb_any_other_protocol_hash() {
+        // The knobs are new Config fields, and every archived hash predates
+        // them. They are mixed only under protocol 29, so setting them on a v15
+        // config must be inert — checked here rather than assumed, because the
+        // failure mode is retroactively renaming every frozen result.
+        let base = Config::c1_structured_fb();
+        let mut poked = base.clone();
+        poked.cf_lambda = 0.75;
+        poked.cf_sigma_frac = 0.25;
+        poked.cf_candidate_multiple = 9;
+        assert_eq!(base.hash_string(), poked.hash_string());
+
+        let mut canonical = Config::c1_default();
+        canonical.cf_lambda = 1.0;
+        assert_eq!(canonical.hash_string(), "c1-118207fbc3eaba53");
+    }
+
+    #[test]
+    fn every_lambda_rung_mints_its_own_hash() {
+        let rungs = [0.0f32, 0.25, 0.5, 1.0];
+        let mut seen = Vec::new();
+        for l in rungs {
+            let h = Config::c1_counterfactual().with_cf_lambda(l).hash_string();
+            assert!(!seen.contains(&h), "lambda ladder collided at {l}: {h}");
+            seen.push(h);
+        }
+    }
+
+    #[test]
+    fn the_control_rung_arms_nothing() {
+        // `counterfactual_credit()` is the switch the runner reads. At lambda 0
+        // it must answer None — the *off* path — rather than parameters that
+        // deposit zero-scale candidates, which would still advance each
+        // afferent's decay clock and put the control a few ulps off v15.
+        assert_eq!(
+            Config::c1_counterfactual()
+                .with_cf_lambda(0.0)
+                .counterfactual_credit(),
+            None
+        );
+        let armed = Config::c1_counterfactual()
+            .counterfactual_credit()
+            .expect("anchor rung must arm");
+        assert_eq!(armed.lambda, C1_CF_LAMBDA);
+        assert_eq!(
+            armed.max_candidates,
+            C1_CF_CANDIDATE_MULTIPLE * Config::c1_counterfactual().k_wta
+        );
+        // Off for every other protocol, whatever its fields happen to hold.
+        let mut v15 = Config::c1_structured_fb();
+        v15.cf_lambda = 1.0;
+        assert_eq!(v15.counterfactual_credit(), None);
     }
 
     #[test]
