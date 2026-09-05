@@ -1114,6 +1114,23 @@ W27_TAU_MS = (2.5, 5.0, 10.05, 20.0, 40.0)
 W27_VAL_SPEAKERS = (3, 6)
 W27_VAL_N_TRAIN = 6987
 
+#: H27-2 failed its bar at p30: the rate arm lost 0.0124, 41% of the 0.03 it
+#: had to lose, in 0 of 12 seeds. The bar is a check on the MANIPULATION, so a
+#: failure means the instrument is insensitive and no null measured under it is
+#: interpretable. These rungs look for the rate at which it becomes sensitive.
+#:
+#: Chosen from a local single-seed pilot at this exact anchor on the macOS
+#: build -- p50 0.0225, p70 0.0384, p90 0.1135 against intact 0.7032 -- which
+#: is disclosed in the registration. The pilot is not campaign data: it is one
+#: seed on a binary that differs from the fleet's by the documented 0.0049.
+W28_RATE_PERCENTS = (50, 60, 70, 80, 90)
+#: The attention arms are 10.8 h each and the rate arms 0.15 h, so the ladder is
+#: swept wide on the arm the bar actually tests and narrow on the expensive one.
+#: p70 is the marginal rung the pilot puts just over the bar; p90 is the one it
+#: puts far above it while leaving the substrate healthy (silent 0.000,
+#: majority 0.084, 20 classes, accuracy 0.59 against chance 0.05).
+W28_ATTN_PERCENTS = (70, 90)
+
 
 def wave26_the_saturation_and_the_timescale():
     """W26 - the collapse's mechanism, the structural null, and the timescale.
@@ -1300,6 +1317,39 @@ def wave27_the_instruments_that_were_never_run():
     return cells
 
 
+def wave28_the_rate_at_which_dropout_bites():
+    """W28 - close H27-2 by finding the dropout rate the instrument can feel.
+
+    Registered in `PREREG_2026-09-05_W28_THE_RATE_AT_WHICH_DROPOUT_BITES.md`.
+
+    Same binary as waves 26 and 27, so wave 26's `intact` arms are the baseline
+    and are not re-run; wave 27's `w27drp` p30 rungs join the ladder as its
+    bottom rung rather than being repeated.
+
+    Dropout is the campaign's only manipulation that does NOT preserve
+    per-channel counts, which is the whole reason section 2 registered it: a
+    null under the count-preserving operators alone is ambiguous between "order
+    does not matter" and "the measurement cannot see it". At p30 the instrument
+    could not feel its own manipulation, so that ambiguity stayed open.
+
+    Dropout also PRESERVES order -- it deletes spikes, it does not move them --
+    which is what makes the pair of measurements decisive. If a sensitive
+    dropout still costs the read-out nothing while a shuffle costs it 0.1208,
+    the read-out's advantage is specific to order rather than to spike counts.
+    """
+    cells = []
+    for percent in W28_RATE_PERCENTS:
+        for seed in SEEDS:
+            cells.append(cell("w28drp", "ff+fixed", 128, 400, seed,
+                              temporal=f"spike-dropout-p{percent}"))
+    for percent in W28_ATTN_PERCENTS:
+        for seed in SEEDS:
+            cells.append(cell("w28drp", "ff+fixed+attn", 128, 400, seed,
+                              attn_dim=32, attn_layers=4,
+                              temporal=f"spike-dropout-p{percent}"))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -1328,6 +1378,7 @@ WAVES = {
     "w25": wave25_the_mechanism_where_it_is_unmeasured,
     "w26": wave26_the_saturation_and_the_timescale,
     "w27": wave27_the_instruments_that_were_never_run,
+    "w28": wave28_the_rate_at_which_dropout_bites,
 }
 
 
