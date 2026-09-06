@@ -181,5 +181,76 @@ class Wave28(unittest.TestCase):
         self.assertIn("not at h128", text)
 
 
+    # ---- the baseline must be the arm the registration names ---------------
+    #
+    # `w26pos` carries a `no-position` read-out beside the default one. An index
+    # key without `attn_readout` collapses them, and because "no-position"
+    # sorts before the bare seed suffix, first-wins silently makes the NULL ARM
+    # the baseline every DiD is measured against. Wave 27's analyser and this
+    # one disagreed by 0.075 on the same cells, which is how it was found.
+
+    def no_position(self, acc=0.7568):
+        for s in SEEDS:
+            self.write(f"w26pos__ff-fixed-attn__{A}__d32l4__no-position__s{s}",
+                       dict(cell_json(acc, arm="ff+fixed+attn"),
+                            attn_readout="no-position"))
+
+    def test_the_no_position_arm_is_not_mistaken_for_the_default_arm(self):
+        self.baseline(attn=0.83)
+        self.no_position(0.7568)
+        cells, _ = self.module.index(self.results)
+        default = cells[self.module.arm_key("w26pos", True)]
+        self.assertEqual(len(default), 12)
+        for value in default.values():
+            self.assertAlmostEqual(value, 0.83, places=6)
+        nopos = cells[self.module.arm_key("w26pos", True, readout="no-position")]
+        self.assertEqual(len(nopos), 12)
+
+    def test_the_did_uses_the_default_arm_as_its_baseline(self):
+        self.baseline(rate=0.74, attn=0.83)
+        self.no_position(0.7568)
+        self.rung(70, 0.70, attn_acc=0.79)
+        cells, _ = self.module.index(self.results)
+        value, _, n = self.module.did(cells, 70)
+        self.assertEqual(n, 12)
+        # (0.83-0.79) - (0.74-0.70) = 0.0 against the DEFAULT arm.
+        # Against the no-position arm it would be -0.0332, a different sign.
+        self.assertAlmostEqual(value, 0.0, places=6)
+
+    def test_an_index_collision_refuses_rather_than_picking_one(self):
+        """A key missing a dimension must be fatal, not resolved by sort order."""
+        self.baseline()
+        self.rung(70, 0.70)
+        # Two cells, same key and seed, differing only in a field the key drops.
+        for s in SEEDS:
+            self.write(f"w26pos__ff-fixed__{A}__DUPLICATE__s{s}",
+                       cell_json(0.11))
+        with self.assertRaises(SystemExit) as caught:
+            self.module.index(self.results)
+        self.assertIn("INDEX COLLISION", str(caught.exception))
+
+
+    def test_a_sensitive_rung_short_of_the_floor_does_not_decide_the_clause(self):
+        """A DiD over 6 quadruples is not a verdict. H28-1 applies the floor;
+        H28-2 must apply the same one, or a wave losing cells to a spot
+        reclaim silently decides its own primary clause on the survivors."""
+        self.baseline()
+        for p in (50, 60, 70, 80, 90):
+            self.rung(p, 0.64)
+        # p90 attention on only 6 of 12 seeds, as a spot reclaim would leave it
+        for s in list(SEEDS)[:6]:
+            self.write(f"w28drp__ff-fixed-attn__{A}__d32l4"
+                       f"__spike-dropout-p90__s{s}",
+                       cell_json(0.58, arm="ff+fixed+attn",
+                                 temporal="spike-dropout-p90"))
+        code, text = self.run_main()
+        self.assertIn("MET", self.clause(text, "H28-1"))
+        line = self.clause(text, "H28-2")
+        self.assertIn("NOT EVALUABLE", line)
+        self.assertNotIn("NOT MET", line)
+        self.assertIn("fewer than 9 seed pairs", line)
+        self.assertEqual(code, 3)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

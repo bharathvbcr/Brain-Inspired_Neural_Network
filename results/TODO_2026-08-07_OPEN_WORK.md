@@ -10,6 +10,10 @@ invalidate items in §3, so they come first.
 Status key: `[ ]` not started · `[~]` in flight · `[x]` done · `[!]` blocked on a
 human decision.
 
+Amended 2026-09-05: §9 added (external reading — sparse reward subsystem in
+LLMs — read against the record, with gaps and candidate experiments). §9
+schedules nothing and is not evidence.
+
 ---
 
 ## 1. Record repair — blocking everything downstream
@@ -186,8 +190,187 @@ with LCB −0.0048. Nobody has isolated why.
 
 ---
 
+## 9. External reading — the sparse reward subsystem in LLMs, read against the record (2026-09-05)
+
+**Source.** Xu, Yuksekgonul & Zou, *Sparse Reward Subsystem in Large Language
+Models*, arXiv:2602.00986 (v1 2026-02-01, v2 2026-05-11).
+<https://arxiv.org/abs/2602.00986>
+
+**Why it is in this register.** It is the closest published result to the
+G2 / C1 question from the other side: it shows what a reward subsystem looks
+like *after* backprop has built one. Nothing in it is BINN evidence. Every
+item in §9.6 needs its own `PREREG_` document and protocol hash before a
+single cell runs. **G2 stays closed** (`README.md` §7, `PAPER_DRAFT.md` §4.5).
+
+### 9.1 What the paper claims, with the numbers that matter
+
+- **Setup.** Frozen LLM (Qwen-2.5-7B/14B-SimpleRL-Zoo primary; Qwen2.5-7B-PPO-Zero,
+  Qwen3.5-0.8B, Phi-3.5-mini, Llama-3.1-8B-Instruct, Gemma-3-4B). "Neuron" =
+  one coordinate of the layer-*l* residual stream. Layers 2–5. Tasks GSM8K,
+  MATH500, ARC, MBPP+, IFEval, Minerva.
+- **Value neurons.** Two-layer MLP probe (hidden → 1024 → 1) trained by TD on
+  token-level steps, γ = 1 − 1e-5, target binary correctness. Sparsity is
+  measured by L1-pruning first-layer probe weights: AUROC at the *prompt
+  position* s₀ is flat up to pruning ratio 0.99, so "< 1 % of neurons
+  suffice" (≈ 51 of 5120 at 14B; absolute counts never stated).
+- **Absolute value-neuron AUROC at s₀ is modest:** 0.59–0.73 (Table 3; avg
+  0.67 vs 0.60 for a linear probe on the full hidden state). At the final
+  position it is "mostly above 0.8". On Qwen3.5-0.8B, *question length* beats
+  the value neurons (0.77 vs 0.71 MATH500).
+- **Causal ablation (Table 2).** Zero the top-1 % value neurons in one layer
+  of Qwen-2.5-7B-SimpleRL-Zoo, MATH500, base 75.2 %: layers 2/3/4/5 → 37.0 /
+  13.6 / 29.4 / 1.2, avg −54.9. Random 1 % −0.6; next-token-probe neurons +1.2;
+  magnitude −3.6; Wanda −9.4. Overlap of value and NTP neuron sets 0.7 %
+  (random 0.5 %).
+- **Appendix A — the item most relevant to us.** A probe trained on the
+  *terminal reward only* (no TD) selects neurons whose ablation costs −8.8;
+  the TD-trained probe's set costs −54.9. The TD target finds the
+  load-bearing population; the terminal target does not.
+- **Dopamine neurons.** Steps are *paragraphs*; V̂(s_t) from K Monte-Carlo
+  rollouts (K unstated); δ_t = γV̂(s_t) − V̂(s_{t−1}); only |δ_t| > 0.3 used.
+  Input is the per-neuron z-scored activation *mean-pooled over the paragraph*
+  ("firing rate over a temporal window", their words). MLP → 32 → 1, MSE.
+  Spearman vs pruning "largely invariant"; **no correlation values printed**.
+  Used as a step scorer for K = 4 search on MATH500: greedy 72.2 / random
+  72.2 / implicit PRM 75.0 / dopamine **77.8** (3 seeds).
+- **Layered dependence (Appendix H).** Zeroing top-20 % value neurons in
+  *earlier* layers destroys the RPE-like trajectory of dopamine neuron #1517
+  in layer 5; 20 % random ablation does not.
+- **Transfer.** Value-neuron set IoU across GSM8K / MATH500 / ARC, and across
+  two RLVR descendants of the same base, exceeds the hypergeometric baseline.
+  No IoU numbers printed.
+
+### 9.2 Read against the record
+
+| Their finding | Our record | What the pairing says |
+|---|---|---|
+| A sparse (~1 %) value population exists, and a localized RPE-tracking population sits *downstream* of it, in a backprop-trained model | G2 / C1: broadcast ±1 third factor stays at chance (0.5000, gap LCB 0.0000, `c1-match-5dc6822e71229e9e` FAIL); graded DFA 0.9387 and per-neuron RL 0.9200 pass on the identical forward | Their "dopamine" is not a global scalar — it is learned, layered, and addressed (Appendix H). That is the C1 negative stated from the interpretability side: backprop *produces* a reward subsystem; a broadcast scalar does not *train* one |
+| TD-shaped target finds the causal population; terminal-only target does not (−54.9 vs −8.8) | `binn-learn/src/credit.rs` has `LearnedRpeCritic` (delta-rule V(s), δ = r − V) and a modulator with directional `B_i · rpe` plus unsigned `\|rpe\|`; the `credit-assignment` binary has an RPE arm; BINN-Hybrid H0 used a *terminal* teacher only | Independent evidence that terminal reward is the wrong *shape* of third factor, separate from whether it is addressed. Bears on any H-series retry, not on G2 |
+| Value readout needs ~1 % of units | k-WTA target sparsity k/N, GC7 | Our activity sparsity is not what blocks a value representation. The block stays on delivery |
+| RPE is measured as a windowed mean rate, z-scored per unit | Eligibility traces e_ij(t) with τ_e; per-cell firing counts already logged | The paper's measurement is exactly a trace-filtered rate. A per-cell RPE probe costs us nothing new in instrumentation |
+| Value neurons transfer across tasks / sibling models | §3 transfer gap; live k-WTA transfer barrier (v13–v24) | Their transfer is of a *readout set*, not of a learning rule. Not the same gap; do not cite it as such |
+
+### 9.3 What the paper does not address
+
+No spiking, STDP, eligibility traces, three-factor rules, local learning,
+neuromodulation as a *training* signal, or non-backprop learning appear
+anywhere. Probes are AdamW-trained; the LLM is frozen. Whether the subsystem
+emerges from pretraining or from RL is not tested (no base model probed;
+instruct models show it too, which hints pretraining). The biology is naming
+plus two borrowed measurement conventions (windowed rate; value → dopamine
+ordering); no circuit mapping.
+
+### 9.4 Gaps in the paper (cite it with these in hand)
+
+- No absolute neuron counts for value neurons; only curves vs pruning ratio.
+- No Spearman values for dopamine neurons; no IoU values for transfer.
+- K for Monte-Carlo value estimation unstated. Whether TD training uses a
+  stop-gradient / target network unstated.
+- s₀ AUROC 0.59–0.73 is weak; a length baseline beats it on the smallest
+  model. The causal ablation is the strong result, not the probe accuracy.
+- Largest model 14B; Appendix K admits nothing > 32B was tried.
+- The ablation is single-layer zeroing of 1 % of the residual — a large
+  intervention on early layers of a residual network. Wanda at −9.4 shows
+  some of the drop is generic importance; they control for it, but the
+  random-1 % control is the weak one.
+
+### 9.5 What can be inferred for BINN
+
+1. **A framing sentence for §4 of the draft.** Models trained by backprop
+   develop a sparse, layered value/RPE subsystem (Xu et al.); a broadcast RPE
+   cannot build one on a matched forward (C1). The two results are converses,
+   not competitors.
+2. **A mechanistic signature we do not have.** We know *that* broadcast ±1
+   fails and DFA/RL pass. We have never asked whether the passing arms
+   *contain* a sparse value population and the failing arm does not. That is
+   a one-probe question on trace exports we already produce.
+3. **Third-factor shape.** Their Appendix A and our `LearnedRpeCritic` point
+   the same way: a TD-shaped δ_t, not terminal r, is the candidate scalar.
+   This is the only place the paper touches a *learning* choice we control,
+   and it is confined to the hybrid successor line.
+4. **A readout-sparsity number.** If a 1 %-sparse readout retains task
+   accuracy on our SHD arm, the attention readout's advantage is not about
+   reading *many* cells; if it does not, our substrate distributes value more
+   than an LLM residual does. Either answer is a sentence in §3.7.
+
+### 9.6 Candidate experiments — none preregistered, none scheduled
+
+Each item names the arm, the metric, the falsifier, and what it cannot
+authorize. Probes are offline, lab-side (Python under `scripts/` or
+`binn-lab`), on exported traces — GC1 is untouched. All reuse frozen current
+hashes; a retired hash anywhere in a prereg fails
+`scripts/test_published_hashes_resolve.py`.
+
+- [ ] **V1 — Value-population probe across the three matched arms.** Export
+      hidden activity at the post-encoding / pre-decision position and at the
+      terminal position for the broadcast ±1, DFA, and RL matched runs (same
+      forward, current frozen hashes). Train the paper's L1-pruned probe
+      (their recipe: MLP → 1024 → 1, AdamW 1e-4, wd 0.01) with (a) TD target,
+      (b) terminal-only target. Metric: AUROC vs pruning ratio, per arm, per
+      target. *Prediction:* a flat-to-0.99 curve under DFA/RL, not under
+      broadcast. *Falsifier:* if the broadcast arm carries an equally sparse,
+      equally accurate value population, the C1 failure is purely delivery and
+      not representational — which is also worth knowing. Cannot authorize: any
+      G2 reopening; any claim beyond the matched dense-LIF control.
+- [ ] **V2 — Causal ablation of the value population.** Mute the top-1 %
+      cells from V1 (θ = ∞, the existing k-WTA mute path) versus a random
+      1 % and a firing-rate-magnitude 1 %, at test time only, on the DFA and
+      RL arms. Metric: accuracy drop with LCB over the existing seed family.
+      *Prediction:* value-cell mute ≫ random. *Falsifier:* value ≈ magnitude
+      ≈ random ⇒ the probe found a correlate, not a mechanism. Depends on V1.
+- [ ] **V3 — Terminal vs TD probe target (their Appendix A, on our
+      substrate).** V2 run twice, with V1(a) and V1(b) cell sets. Metric:
+      ablation cost ratio. This is the cheapest way to test whether the
+      "TD finds the load-bearing set" result is substrate-independent.
+- [ ] **D1 — Do any cells track RPE unasked?** On the SHD attention arm and
+      on the RL matched arm, compute per-cell z-scored windowed rates (window
+      = one input segment; matches their paragraph pooling) and regress on
+      δ_t from `LearnedRpeCritic` and, separately, from MC rollouts (K
+      stated in the prereg). Metric: Spearman vs pruning ratio. *Prediction:*
+      RL arm > SHD arm > broadcast arm. *Falsifier:* nothing above the
+      shuffled-δ control anywhere. Cannot authorize: any dopamine-cell
+      *training* claim.
+- [ ] **D2 — Layered dependence (their Appendix H).** Only if D1 finds
+      RPE-tracking cells and only in a multi-area configuration: mute top-20 %
+      value cells in the upstream area, measure the downstream RPE-tracking
+      cells' Spearman. R1/R2 are opt-in and G4 is NO-GO; this item cannot
+      become a scaling claim.
+- [ ] **H4 — TD-shaped third factor in the hybrid line.** New protocol
+      version (H0 v3 is frozen `HYBRID_NO_GO`): replace the terminal teacher's
+      scalar with online δ_t from `LearnedRpeCritic` as M(t), with the
+      existing postsynaptic, least-squares postsynaptic, and direct-terminal
+      credit unchanged. Metric: C3 D\* against the D\* ≥ 6 gate on the
+      smooth surrogate first, then the production event-engine diagnostic.
+      *Prediction:* D\* rises above the direct-terminal 5. *Falsifier:* D\*
+      unchanged ⇒ the third factor's temporal shape is not the limiting term,
+      consistent with the identifiability reading in
+      `BINN_HYBRID_PROTOCOL.md`. Cannot authorize: H1/H2/H3; anything about
+      G2.
+- [ ] **S1 — 1 %-sparse readout on SHD.** Attention readout restricted to
+      the top-1 % cells by V1-style probe versus the full k-winner set versus
+      a random 1 %. Metric: accuracy over the 12-seed family, plus the
+      bin-shuffle collapse. *Prediction:* unknown — this is the one item
+      where either answer is informative (§9.5 item 4). Depends on the
+      SHD instrument being `Calibrated` for the readout arm.
+- [ ] **T1 — Value-set transfer (their IoU test).** IoU of V1 cell sets
+      across seeds and across the two passing arms, against the
+      hypergeometric expectation. Metric: IoU vs pruning ratio. Belongs in
+      §3 only as a *readout* transfer number, never as a rule-transfer
+      number.
+- [ ] **Draft edit.** One paragraph in `PAPER_DRAFT.md` §4.1 or §3.8 placing
+      C1 as the converse of Xu et al.; cite with §9.4 caveats. No result may
+      be cited from §9.6 until it exists under a hash.
+
+**Ordering.** V1 → V2 → V3 are one export and three probe fits; they come
+first because they can be done on the existing record without a new
+campaign. D1 is next. H4 is a hybrid-line decision and waits on the
+maintainer. S1 waits on §4. T1 is last.
+
+---
+
 ## The one-line version
 
 Repair the record (§1), find out whether the two surviving ceilings are real
 (§2), and only then design the transfer-gap experiment (§3). Everything in §4
-is real science that is already safe to continue.
+is real science that is already safe to continue. §9 is reading, not work,
+until a prereg exists.

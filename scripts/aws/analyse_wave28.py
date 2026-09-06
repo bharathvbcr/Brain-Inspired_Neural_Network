@@ -79,6 +79,7 @@ def index(results):
     out = collections.defaultdict(dict)
     voided = collections.Counter()
     offwidth = collections.Counter()
+    collisions = []
     for path in sorted(Path(results).glob("*.json")):
         wave = path.name.split("__", 1)[0]
         if wave not in THIS_WAVES and wave not in REUSE_WAVES:
@@ -102,13 +103,30 @@ def index(results):
             continue
         if arm == "ff+fixed" and depth is not None:
             continue
-        key = (wave, arm, depth, cell.get("temporal_condition") or "intact")
+        key = (wave, arm, depth, cell.get("attn_readout") or "default",
+               cell.get("temporal_condition") or "intact")
         if validity_problems(cell):
             voided[key] += 1
             continue
-        out[key].setdefault(int(seed.group(1)), cell["accuracy"])
+        # Never `setdefault`. If two cells land on one (key, seed) the key is
+        # missing a dimension the corpus actually varies, and first-wins
+        # silently answers with whichever file sorts first. `w26pos` carries a
+        # `no-position` read-out beside the default one; without `attn_readout`
+        # in the key it sorts first and becomes the baseline, which is a wrong
+        # number with no symptom. Collisions are fatal here, not resolved.
+        s_id = int(seed.group(1))
+        if s_id in out[key]:
+            collisions.append((key, s_id, path.name))
+            continue
+        out[key][s_id] = cell["accuracy"]
     if offwidth:
         print(f"  dropped, not at h{ANCHOR_HIDDEN}: {dict(offwidth)}")
+    if collisions:
+        raise SystemExit(
+            f"INDEX COLLISION: {len(collisions)} cells share a (key, seed) with "
+            f"another cell, so the index key is missing a dimension the corpus "
+            f"varies. First three: {collisions[:3]}. Refusing to analyse — a "
+            f"collision resolved by sort order is a wrong number with no symptom.")
     return out, voided
 
 
@@ -121,10 +139,10 @@ def paired(*arms):
     return sorted(shared)
 
 
-def arm_key(wave, attn, temporal="intact"):
+def arm_key(wave, attn, temporal="intact", readout="default"):
     if attn:
-        return (wave, "ff+fixed+attn", "d32l4", temporal)
-    return (wave, "ff+fixed", None, temporal)
+        return (wave, "ff+fixed+attn", "d32l4", readout, temporal)
+    return (wave, "ff+fixed", None, "default", temporal)
 
 
 def rate_cost(cells, percent, intact_wave="w26pos"):
@@ -217,13 +235,21 @@ def main() -> int:
     print("\n=== H28-2  does destroying counts cost the read-out its advantage? ===")
     print("  Dropout deletes spikes; it does not move them. Order survives it.")
     usable = []
+    short = []
     for percent in ATTN_PERCENTS:
         value, outside, n = did(cells, percent)
         mark = ""
         if percent in sensitive:
-            mark = "  (sensitive)"
-            if value is not None:
+            if value is not None and n >= MIN_PAIRS:
+                mark = "  (sensitive)"
                 usable.append((percent, value))
+            else:
+                # The campaign's seed-paired floor, applied here as it is to
+                # H28-1. A DiD over 6 or 7 quadruples is not a verdict, and a
+                # rung short of the floor makes the clause unevaluable rather
+                # than contributing a number to it.
+                mark = f"  (sensitive, but {n} pairs < floor {MIN_PAIRS})"
+                short.append(percent)
         elif value is not None:
             mark = "  (NOT sensitive - no reading taken)"
         print(f"  p{percent:<3} DiD "
@@ -233,6 +259,10 @@ def main() -> int:
     if not sensitive:
         blocked2 = (f"{NOT_EVALUABLE}: no rung is sensitive, so no null "
                     "measured here is interpretable")
+    elif short:
+        blocked2 = (f"{NOT_EVALUABLE}: sensitive rung(s) "
+                    f"{', '.join('p%d' % p for p in short)} have fewer than "
+                    f"{MIN_PAIRS} seed pairs")
     elif not usable:
         blocked2 = (f"{NOT_EVALUABLE}: no sensitive rung has an attention arm")
     else:

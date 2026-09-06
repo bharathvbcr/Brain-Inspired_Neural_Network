@@ -2,18 +2,18 @@
 
 # Record index
 
-344 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+353 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 47 | 0 |
-| Results | 43 | 2 |
+| Preregistrations | 49 | 0 |
+| Results | 45 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
-| Amendments | 15 | 1 |
+| Amendments | 18 | 1 |
 | Defects | 8 | 0 |
 | Hardening | 9 | 0 |
-| Audits | 3 | 0 |
+| Audits | 4 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
@@ -30,7 +30,7 @@
 | Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
-| Other | 27 | 0 |
+| Other | 28 | 0 |
 
 ## Retired documents
 
@@ -59,6 +59,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-05 | [PREREG_2026-09-05_W28_THE_RATE_AT_WHICH_DROPOUT_BITES.md](PREREG_2026-09-05_W28_THE_RATE_AT_WHICH_DROPOUT_BITES.md) | Preregistration — the dropout rate at which the instrument can feel its own hand |
+| 2026-09-04 | [PREREG_2026-09-04_W27_THE_INSTRUMENTS_THAT_WERE_NEVER_RUN.md](PREREG_2026-09-04_W27_THE_INSTRUMENTS_THAT_WERE_NEVER_RUN.md) | Preregistration — the five instruments wave 26 built and did not run |
 | 2026-09-03 | [PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md](PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md) | Preregistration — wave 26: the collapse's mechanism, the structural null, and the timescale |
 | 2026-09-03 | [PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md](PREREG_2026-09-03_THE_INSTRUMENT_BEFORE_THE_WAVE.md) | Preregistration — the estimators, bars and void rules for five instruments that do not yet have a wave |
 | 2026-09-02 | [PREREG_2026-09-02_THE_MEMBRANE_ABLATION.md](PREREG_2026-09-02_THE_MEMBRANE_ABLATION.md) | Preregistration — is the reference's fast membrane the term that offsets its kernel? |
@@ -113,6 +115,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-05 | [RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md) | Wave 27 — the read-out's order-dependence has a timescale, and it is 261 ms |
+| 2026-09-04 | [RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md) | Wave 26 — the saturation is real, and it is not specific to the collapse |
 | 2026-09-03 | [RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md) | Result — synchrony is an axis, depth is a scope limit, the budget limit is gone, and the recurrent question could not be asked |
 | 2026-09-02 | [RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md) | Result — the shuffle cost is about order, it survives a second budget, and at one point synchrony matters too |
 | 2026-09-02 | [RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md](RESULT_2026-09-02_THE_MEMBRANE_ABLATION.md) | Result — the membrane is 81.5% of the term the kernel ablation could not name |
@@ -205,6 +209,9 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-05 | [AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md](AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md) | Amendment — the same defect, arriving a second time through the other arm |
+| 2026-09-04 | [AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md](AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md) | Amendment — the H26-3 ladder was paired against a wave that holds no `intact` |
+| 2026-09-03 | [AMENDMENT_2026-09-03_A_CLAUSE_THAT_DID_NOT_RUN.md](AMENDMENT_2026-09-03_A_CLAUSE_THAT_DID_NOT_RUN.md) | Amendment — the wave-26 analyser could not say "this did not run" |
 | 2026-08-27 | [AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md](AMENDMENT_2026-08-27_H17_2_MERGED_TWO_READOUT_DEPTHS.md) | Amendment — H17-2 merged a four-layer intact arm with a one-layer shuffled control |
 | 2026-08-26 | [AMENDMENT_2026-08-26_SURROGATE_SCALE_IS_THE_WRONG_LEVER_FOR_A_FEEDFORWARD_ARM.md](AMENDMENT_2026-08-26_SURROGATE_SCALE_IS_THE_WRONG_LEVER_FOR_A_FEEDFORWARD_ARM.md) | Amendment — the primary lever's rationale was wrong, and it was derivable before registering |
 | 2026-08-22 | [AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md](AMENDMENT_2026-08-22_WAVE4_WITHOUT_CLIPPING.md) | Amendment: re-run wave 4 without gradient clipping |
@@ -259,6 +266,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-05 | [AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md](AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md) | Audit — the cross-repository review of September 4, read against the record |
 | 2026-08-30 | [AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md](AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md) | Audit — `shd_alif.rs` and `shared_bptt.rs` |
 | 2026-08-07 | [AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md](AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md) | Audit — the July campaign's scoring path, starting from the arms that score 1.0000 |
 | 2026-08-03 | [AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md](AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md) | Rust defect register and audit coverage |
@@ -544,6 +552,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-05 | [DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md](DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md) | The counterfactual arm — instrument built, no wave registered |
 | 2026-09-03 | [CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md) | §0's citations, read against their primary sources |
 | 2026-08-02 | [PERF_AUDIT_2026-08-02.md](PERF_AUDIT_2026-08-02.md) | Performance audit — hot path, 2026-08-02 |
 | 2026-07-25 | [MOVING_FORWARD_2026-07-25.md](MOVING_FORWARD_2026-07-25.md) | Moving forward — 2026-07-25 |
