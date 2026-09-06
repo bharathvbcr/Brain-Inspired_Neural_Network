@@ -1635,8 +1635,16 @@ CORPUS_BASELINE = {
     #: invalid and no archived verdict moved. The 264 wave-26 cells are still on
     #: disk and `git status` reports 0 modified and 0 deleted under v1 and v2.
     #: See `RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`.
+    #:
+    #: Re-frozen 2026-09-06 on landing wave 28: 84 cells added, all valid.
+    #: 528 -> 612 on both counts, so nothing that was valid became invalid and
+    #: no archived verdict moved. 264 + 264 + 84 = 612 files on disk across
+    #: waves 26, 27 and 28; git status reports 0 modified and 0 deleted under
+    #: v1 and v2. Eleven of wave 28's cells are from a recovery run after a spot
+    #: reclaim -- same binary, same plan entries, disclosed in the result.
+    #: See `RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`.
     "shd_attention_campaign_v3":
-        (528, 528, "31565549712f2c6b"),
+        (612, 612, "d0b83a8c6df0cf71"),
     "azure-d32l4-scope-v1":
         (95, 89, "8ecbe278f54b127f"),
     "equivalence_2026-08-22":
