@@ -111,6 +111,28 @@ with LCB −0.0048. Nobody has isolated why.
       prediction that the gap would narrow was **refuted**)
 - [x] H1 at converged budget (24 cells, 6 seeds, NOT SUPPORTED at both budgets;
       outcome 4 of 4 as named in advance)
+- [~] **The count-destruction asymmetry needs its own bar — registered
+      2026-09-07, not yet run.** H28-2 registered `|DiD| < 0.03`, a **two-sided**
+      band on a one-sided question, and reported NOT MET at p90 on a DiD of
+      **−0.0382** — the read-out lost 0.0698 where the substrate lost 0.1080, so
+      its advantage *grew*. The band cannot tell that from the advantage
+      falling, and the registered NOT-MET text asserts the opposite of the sign
+      it printed against. Rule §9.3 forbids re-reading that bar on wave 28's
+      cells.
+
+      **Registered:** [`PREREG_2026-09-07_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](PREREG_2026-09-07_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md),
+      with `scripts/aws/analyse_wave29.py` frozen and committed in the same
+      change, before any cell exists. Two one-sided clauses — H29-1 refuted only
+      by DiD > +0.03, H29-2 asking whether the growth clears −0.03 — on a fresh
+      seed block `5290001`–`5290012` that the analyser enforces **by seed value**,
+      so the replacement bar cannot be evaluated on the cells that motivated it.
+      Ten tests, and restoring `abs()` to the two counts fails exactly the two
+      that assert one-sidedness.
+
+      **Blocked on compute, and only that.** 48 cells at a median 32,944 s each
+      is roughly **440 core-hours** — a cloud campaign, not a local run. The
+      paper reports H28-2 as NOT MET meanwhile, which is correct and stays.
+
 - [ ] **Contract axis at convergence.** Six timing contracts are closed only at
       e100. This is the last scope qualifier on the 0.7378 ceiling. Resolution
       invariance held at the short budget, but the width and geometry axes both

@@ -2,11 +2,11 @@
 
 # Record index
 
-357 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+358 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
-| Preregistrations | 49 | 0 |
+| Preregistrations | 50 | 0 |
 | Results | 46 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
@@ -60,6 +60,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-07 | [PREREG_2026-09-07_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md](PREREG_2026-09-07_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md) | Preregistration — wave 29: the asymmetry gets the bar it should have had |
 | 2026-09-05 | [PREREG_2026-09-05_W28_THE_RATE_AT_WHICH_DROPOUT_BITES.md](PREREG_2026-09-05_W28_THE_RATE_AT_WHICH_DROPOUT_BITES.md) | Preregistration — the dropout rate at which the instrument can feel its own hand |
 | 2026-09-04 | [PREREG_2026-09-04_W27_THE_INSTRUMENTS_THAT_WERE_NEVER_RUN.md](PREREG_2026-09-04_W27_THE_INSTRUMENTS_THAT_WERE_NEVER_RUN.md) | Preregistration — the five instruments wave 26 built and did not run |
 | 2026-09-03 | [PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md](PREREG_2026-09-03_W26_THE_SATURATION_AND_THE_TIMESCALE.md) | Preregistration — wave 26: the collapse's mechanism, the structural null, and the timescale |
