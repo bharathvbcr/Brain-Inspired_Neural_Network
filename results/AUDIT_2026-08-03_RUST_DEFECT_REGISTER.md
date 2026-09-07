@@ -12,6 +12,16 @@
 > is read link by link, and part of §3's gap list is closed, in
 > [`AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md`](AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md).
 > Everything else here stands, including the ten defects and the clustering.
+>
+> **Two rows of §3 are also closed.** The ~20 experiment binaries (~8,000 lines,
+> in fact 31 files and 17,358) were swept against all five classes on
+> 2026-09-07, finding **one defect**: `read_event_cache` clamped a short cache
+> silently. That is **defect #5's own class**, and §1 records #5 as "FIXED at
+> call site" — a case fix that every later call site inherited around. It is now
+> fixed at the owner. See
+> [`AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md`](AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md).
+> Note also that §2 records `shd_instrument.rs` as swept at **875 lines**; it is
+> now **2,726**, so two thirds of it postdates its own row.
 
 This exists because defects were being recorded in whichever result document
 happened to touch them, so nothing answered the two questions that matter:

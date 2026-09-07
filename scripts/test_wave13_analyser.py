@@ -85,6 +85,11 @@ def healthy_cell(scale: float, accuracy: float, peak: float) -> dict:
         "non_finite_events": 0,
         "temporal_condition": "intact",
         "surrogate_scale": as_f32(scale),
+        # `plan_entry` pins n_train and every archived cell records it. Absent
+        # here, the whole grid voided the moment n_train entered
+        # PLAN_PINNED_FIELDS on 2026-09-07 -- for a mismatch that existed only
+        # in this fixture.
+        "n_train": 8156,
         "epoch_max_gradient_norm": [1.0, peak, 12.0],
     }
 

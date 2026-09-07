@@ -215,9 +215,23 @@ with LCB −0.0048. Nobody has isolated why.
       established by two-directional mutation to be a performance hint rather
       than a correctness invariant, so no test pins it and none should.
 
+      **Swept 2026-09-07, second pass:** all 31 `binn-lab/experiments/*.rs`,
+      **17,358 lines**, against the five defect classes that produced all ten
+      defects in the register — each matcher calibrated against the register's
+      own defects before its result was believed, and every hit read rather than
+      counted. Classes A, B and E: **zero**. Class D: 16 production panics, all
+      fail-loud on invariants or I/O. **Class C: one defect**, found and fixed at
+      its owner — `read_event_cache` clamped a request to the file it found and
+      returned quietly (defect #5's own shape, recorded as "FIXED at call site",
+      which is a case fix), and `n_train` was absent from `PLAN_PINNED_FIELDS`
+      so nothing compared a cell's realised sample count to the plan that asked
+      for it ([`AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md`](AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md)).
+
       **Still open:** `binn-engine/src/{cell,engine,resting,parallel,synapse,
-      spikelog}.rs`, `binn-areas/`, and the ~20 `binn-lab/experiments/*`
-      binaries, which are now the largest audit gap in the repository.
+      spikelog}.rs` and `binn-areas/`, which have had the generic class greps
+      (2026-08-03) but no semantic audit. Nothing in the repository is now
+      unswept at the class level; what remains is semantic, and it is bounded to
+      those files.
 - [x] July campaign scoring path (`AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md`)
 - [x] Rust instrument defect register (`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`)
 

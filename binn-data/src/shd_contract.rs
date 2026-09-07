@@ -293,6 +293,19 @@ pub fn read_speaker_sidecar(path: &Path) -> Result<Vec<u16>, String> {
 
 /// Read the count-preserving event cache produced by
 /// `scripts/shd_calibration/data.py`.
+///
+/// `max_samples` takes a **prefix**, and asking for more than the cache holds
+/// is an error rather than a shorter answer. It used to clamp
+/// (`max_samples.unwrap_or(n_file).min(n_file)`) and return quietly, which is
+/// defect #5 of `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` — `--samples 256`
+/// against a 100-sample cache reported a mean over 100. That was recorded as
+/// "FIXED at call site", and the call sites added since inherited the original
+/// behaviour: `load_shd_dense_examples` checks only for emptiness, so a short
+/// cache produced a shorter training set and nothing said so.
+///
+/// Every caller passing `Some(n)` wants exactly `n`: a prefix to reach one
+/// indexed sample, or the `--max-train` / `--max-test` a cell is registered
+/// with. `None` still means "all of it".
 pub fn read_event_cache(
     path: &Path,
     max_samples: Option<usize>,
@@ -309,7 +322,17 @@ pub fn read_event_cache(
         return Err(format!("bad SHD event magic in {}", path.display()));
     }
     let n_file = read_u32(&mut reader)? as usize;
-    let n = max_samples.unwrap_or(n_file).min(n_file);
+    if let Some(requested) = max_samples {
+        if requested > n_file {
+            return Err(format!(
+                "SHD event cache {} holds {n_file} samples and {requested} were \
+                 requested; a short read here is a mean over fewer samples than \
+                 the caller recorded asking for",
+                path.display()
+            ));
+        }
+    }
+    let n = max_samples.unwrap_or(n_file);
     let mut samples = Vec::with_capacity(n);
     for index in 0..n_file {
         let label = read_u32(&mut reader)?;
@@ -360,6 +383,85 @@ fn read_f32(reader: &mut impl Read) -> Result<f32, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Write an `SHDEVT1` cache of `samples` one-event samples.
+    ///
+    /// Mirrors `scripts/shd_calibration/data.py::write_event_cache`: little
+    /// endian throughout, `u32` count, then per sample a `u32` label, a `u32`
+    /// event count, and an eight-byte `(f32 time_s, u16 channel, u16 reserved)`
+    /// per event -- the reserved half is what the reader's skip path sizes at
+    /// `n_events * 8`.
+    fn write_cache(path: &std::path::Path, samples: usize) {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(SHD_EVENT_MAGIC);
+        bytes.extend_from_slice(&(samples as u32).to_le_bytes());
+        for index in 0..samples {
+            bytes.extend_from_slice(&((index % 20) as u32).to_le_bytes());
+            bytes.extend_from_slice(&1_u32.to_le_bytes());
+            bytes.extend_from_slice(&0.5_f32.to_bits().to_le_bytes());
+            bytes.extend_from_slice(&((index % 700) as u16).to_le_bytes());
+            // The record is eight bytes: f32 time, u16 channel, u16 reserved.
+            bytes.extend_from_slice(&0_u16.to_le_bytes());
+        }
+        std::fs::write(path, bytes).expect("write the fixture cache");
+    }
+
+    fn temp_cache(name: &str, samples: usize) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "binn_shd_cache_{name}_{}_{samples}.events",
+            std::process::id()
+        ));
+        write_cache(&path, samples);
+        path
+    }
+
+    /// Asking for more than the cache holds is an error, not a shorter answer.
+    ///
+    /// This is defect #5 of the Rust defect register: `read_event_cache` used
+    /// to clamp with `.min(n_file)` and return quietly, so `--samples 256`
+    /// against a 100-sample cache reported a mean over 100. The register
+    /// recorded it "FIXED at call site", and every call site added afterwards
+    /// inherited the clamp -- `load_shd_dense_examples` checks only that the
+    /// result is non-empty. Fixed here, at the one owner all of them go
+    /// through, on 2026-09-07.
+    #[test]
+    fn over_requesting_a_short_cache_is_an_error() {
+        let path = temp_cache("short", 100);
+        let err = read_event_cache(&path, Some(256))
+            .expect_err("a 256-sample request against a 100-sample cache must fail");
+        assert!(err.contains("100"), "{err}");
+        assert!(err.contains("256"), "{err}");
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// The guard must not fire on the requests that are legitimate, or the
+    /// whole campaign stops loading.
+    #[test]
+    fn exact_and_partial_requests_still_read() {
+        let path = temp_cache("exact", 100);
+
+        let all = read_event_cache(&path, None).expect("None reads the whole cache");
+        assert_eq!(all.len(), 100);
+
+        let exact = read_event_cache(&path, Some(100)).expect("an exact request reads");
+        assert_eq!(exact.len(), 100);
+
+        let prefix = read_event_cache(&path, Some(7)).expect("a prefix request reads");
+        assert_eq!(prefix.len(), 7);
+        assert_eq!(prefix[0].label, all[0].label);
+        assert_eq!(prefix[6].label, all[6].label);
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// One past the end is the boundary the old clamp swallowed.
+    #[test]
+    fn one_more_than_the_cache_holds_is_refused() {
+        let path = temp_cache("boundary", 12);
+        assert!(read_event_cache(&path, Some(12)).is_ok());
+        assert!(read_event_cache(&path, Some(13)).is_err());
+        std::fs::remove_file(&path).ok();
+    }
 
     fn boundary_fixture(label: u32) -> ShdEventSample {
         ShdEventSample {

@@ -323,6 +323,19 @@ PLAN_PINNED_FIELDS = {
     "attn_layers": "attn_layers",
     "tau_m": "tau_m",
     "val_speakers": "val_speakers",
+    # Added 2026-09-07. `read_event_cache` clamps a request to the file it
+    # finds -- `max_samples.unwrap_or(n_file).min(n_file)` -- and returns
+    # quietly, and no call site on the train-cell path errors when it gets
+    # fewer samples than it asked for. That is defect #5's class
+    # (`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`), whose entry reads "FIXED at
+    # call site" -- a case fix, not a class fix.
+    #
+    # The cell is honest about it: `n_train` is written from `train.len()`, the
+    # realised count. So the evidence that a cell trained on a short cache was
+    # already on disk in every cell, and nothing compared it to the plan that
+    # asked for it. A cell that quietly trained on 5,000 of a requested 8,156
+    # would have passed every check in this file.
+    "n_train": "n_train",
 }
 
 

@@ -33,6 +33,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "aws"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import analyse_wave14 as a14  # noqa: E402
+import cell_validity as cv  # noqa: E402
 
 SEEDS = a14.SEEDS
 
@@ -78,6 +79,7 @@ def cell_for(arm: str, accuracy: float) -> dict:
         "accuracy": accuracy, "classes_predicted": 20, "majority_prediction": 0.11,
         "silent_fraction": 0.02, "saturated_fraction": 0.0, "non_finite_events": 0,
         "temporal_condition": "intact", "surrogate_scale": as_f32(0.4),
+        "n_train": 8156,
         "hidden": 128, "epochs": 400, "contract": "published-2ms",
         "geometry": "adjacent-sum-5",
         "epoch_max_gradient_norm": [1.0, 4.0, 12.0],
@@ -232,12 +234,20 @@ class Wave14AnalyserTest(unittest.TestCase):
             self.assertTrue(real, f"no committed cell matches {glob}")
             real_cell = json.loads(real[0].read_text())
             fixture = cell_for(arm, 0.83)
-            for field in ("attn_dim", "attn_layers"):
+            # Every field cell_validity pins, not a list written here. The
+            # first version of this guard named `attn_dim` and `attn_layers`
+            # literally, so it was a fix for the case that had just broken --
+            # and it duly missed the next one. `n_train` joined
+            # PLAN_PINNED_FIELDS on 2026-09-07 and voided this fixture's whole
+            # grid without this test saying a word.
+            for field in sorted(cv.PLAN_PINNED_FIELDS.values()):
                 with self.subTest(arm=arm, field=field):
                     self.assertEqual(
                         field in fixture, field in real_cell,
                         f"{arm}: the fixture and {real[0].name} disagree about "
-                        f"whether a cell records {field}")
+                        f"whether a cell records {field}. cell_validity pins "
+                        f"it, so the analyser will void every fixture cell "
+                        f"while the corpus is fine.")
 
     def test_the_reused_arm_is_read_from_wave_13_ids(self):
         outcomes = self.outcomes(self.full())
