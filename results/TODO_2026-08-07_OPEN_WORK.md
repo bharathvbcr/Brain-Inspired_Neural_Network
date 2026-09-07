@@ -144,11 +144,20 @@ with LCB −0.0048. Nobody has isolated why.
       first cell. The ordering that carries the epistemic weight is attested by
       git history rather than by prose and mtimes.
 - [~] **Gate F to 13/13 on the current binary.** Currently 7 cells, 0 failures.
-- [!] **`matrix_authorized`.** False since 2026-08-03, with
-      `historical_reference` and `clean_reference` also false. **Not closeable by
-      code** — `AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md` withdrew
-      itself. Either accept on content evidence (human decision) or re-run the
-      six reference cells.
+- [x] **`matrix_authorized`.** *(Closed 2026-08-23; this entry was stale until
+      2026-09-07.)* It was false since 2026-08-03 alongside
+      `historical_reference` and `clean_reference`, and this entry said the
+      choice was between accepting on content evidence and re-running the six
+      reference cells. **The cells were re-run**, and every one reproduced its
+      archived value to every recorded digit. `results/shd_instrument_v4/gates.json`
+      carries all three gates `true`; v1, v2 and v3 still carry the false ones,
+      which is what an archive is for. `PAPER_DRAFT.md` §4.6 has said so since
+      2026-08-23.
+
+      **The entry outlived the decision by five weeks**, flagged `[!]` — human
+      decision required — for something already decided by measurement. That is
+      the same defect class as the record checks pointing at a corpus that had
+      moved: a document nothing verifies against the artefacts it describes.
 - [!] **Provenance flag.** Default-off, awaiting a human decision.
 
 ## 6. Audit debt

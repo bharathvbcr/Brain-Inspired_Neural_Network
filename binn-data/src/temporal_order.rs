@@ -299,7 +299,119 @@ mod tests {
         let b = TemporalOrderSplit::generate(40, 20, difficulty, 91).unwrap();
         assert_eq!(a, b);
         assert_eq!(a.fingerprint(), b.fingerprint());
+        // Determinism only. This line is satisfied by any implementation that
+        // ignores its seed, including one that returns its input unchanged --
+        // `find_weak_checks.py` says so and is right. The four tests below are
+        // what make it a check: that the operator permutes, that the
+        // permutation is a permutation, that it is shared across the quartet,
+        // and that it moves with the seed.
         assert_eq!(time_shuffle(&a.test, 12), time_shuffle(&a.test, 12));
+    }
+
+    /// One quartet whose every time slice is uniquely identifiable, so a
+    /// permutation can be read straight back off the output.
+    ///
+    /// Channel 0 of example `e` at time `t` holds `e * 1000 + t`, which is
+    /// distinct across the whole quartet. Everything else is zero.
+    fn labelled_quartet() -> Vec<TemporalOrderExample> {
+        (0..TEMPORAL_ORDER_N_CLASSES)
+            .map(|e| {
+                let mut frames = vec![0.0f32; TEMPORAL_ORDER_T * TEMPORAL_ORDER_N_IN];
+                for t in 0..TEMPORAL_ORDER_T {
+                    frames[t * TEMPORAL_ORDER_N_IN] = (e * 1000 + t) as f32;
+                }
+                TemporalOrderExample { frames, label: e as u32 }
+            })
+            .collect()
+    }
+
+    /// `[output time -> source time]`, recovered from the marker above.
+    fn recovered_permutation(example: &TemporalOrderExample, e: usize) -> Vec<usize> {
+        (0..TEMPORAL_ORDER_T)
+            .map(|t| example.frames[t * TEMPORAL_ORDER_N_IN] as usize - e * 1000)
+            .collect()
+    }
+
+    #[test]
+    fn time_shuffle_actually_permutes() {
+        // The determinism assertion above is satisfied by `|x, _| x.to_vec()`
+        // and by any function returning a constant. This is the assertion that
+        // is not: the operator exists to destroy absolute motif order, and a
+        // shuffle that returns its input destroys nothing.
+        let quartet = labelled_quartet();
+        let moved = (0..32u64)
+            .filter(|&seed| time_shuffle(&quartet, seed) != quartet)
+            .count();
+        assert_eq!(moved, 32, "time_shuffle left its input unchanged at some seed");
+    }
+
+    #[test]
+    fn time_shuffle_is_a_permutation_of_time_slices() {
+        // It must MOVE slices, not rewrite them: every source time appears
+        // exactly once in the output.
+        for seed in 0..8u64 {
+            let shuffled = time_shuffle(&labelled_quartet(), seed);
+            assert_eq!(shuffled.len(), TEMPORAL_ORDER_N_CLASSES, "nothing to check");
+            for (e, example) in shuffled.iter().enumerate() {
+                let mut seen = recovered_permutation(example, e);
+                seen.sort_unstable();
+                assert_eq!(
+                    seen,
+                    (0..TEMPORAL_ORDER_T).collect::<Vec<_>>(),
+                    "seed {seed}, example {e} is not a permutation of its time axis"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn one_permutation_is_shared_by_every_quartet_member() {
+        // The documented contract, and the reason this operator exists in this
+        // form: "the same permutation is applied to every quartet member,
+        // preserving paired nuisance structure". A per-example permutation
+        // would also pass every other test here and would silently break the
+        // pairing that makes the four classes comparable.
+        for seed in 0..8u64 {
+            let shuffled = time_shuffle(&labelled_quartet(), seed);
+            let first = recovered_permutation(&shuffled[0], 0);
+            for e in 1..TEMPORAL_ORDER_N_CLASSES {
+                assert_eq!(
+                    recovered_permutation(&shuffled[e], e),
+                    first,
+                    "seed {seed}: example {e} was permuted differently from example 0"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn time_shuffle_depends_on_its_seed() {
+        // A shuffle that ignores its seed satisfies the determinism assertion
+        // perfectly, and would make every seed of a shuffled arm the same run.
+        let quartet = labelled_quartet();
+        let baseline = recovered_permutation(&time_shuffle(&quartet, 0)[0], 0);
+        let differing = (1..32u64)
+            .filter(|&seed| recovered_permutation(&time_shuffle(&quartet, seed)[0], 0) != baseline)
+            .count();
+        assert!(differing >= 30, "only {differing} of 31 seeds gave a different permutation");
+    }
+
+    #[test]
+    fn time_shuffle_leaves_labels_and_per_channel_rates_alone() {
+        // Permuting the time axis cannot change a per-channel mean, and the
+        // task's whole design rests on rates being label-insufficient. If this
+        // ever fails, the shuffled arm has become an easier or a different task
+        // rather than the same one with its order destroyed.
+        let split = TemporalOrderSplit::generate(40, 20, TEMPORAL_DIFFICULTIES[2], 91).unwrap();
+        let shuffled = time_shuffle(&split.test, 5);
+        // A `zip` of two empty vectors compares nothing and passes.
+        assert_eq!(shuffled.len(), 20, "nothing to check");
+        for (before, after) in split.test.iter().zip(&shuffled) {
+            assert_eq!(before.label, after.label);
+            for (b, a) in before.rate_features().iter().zip(&after.rate_features()) {
+                assert!((b - a).abs() < 1e-5, "per-channel rate moved: {b} -> {a}");
+            }
+        }
     }
 
     #[test]

@@ -977,9 +977,59 @@ mod tests {
             suite.iter().map(|v| v.connectivity.as_str()).collect();
         let depths: std::collections::BTreeSet<_> =
             suite.iter().map(|v| (v.min_depth, v.max_depth)).collect();
+        // Coverage only: a suite of two variants differing in everything at
+        // once satisfies all three of these. `every_variant_moves_exactly_one_
+        // axis_off_the_baseline` below is what makes the suite an ablation.
         assert!(widths.len() >= 2, "width axis");
         assert!(conns.len() >= 2, "connectivity axis");
         assert!(depths.len() >= 2, "depth axis");
+    }
+
+    #[test]
+    fn every_variant_moves_exactly_one_axis_off_the_baseline() {
+        // Three distinct values per axis is not an ablation. A suite of two
+        // variants differing in width AND connectivity AND depth satisfies the
+        // assertions above completely, and attributes nothing: no effect it
+        // measures could be assigned to any one axis.
+        //
+        // What makes this suite an ablation is that it is one-factor-at-a-time
+        // from `suite()[0]`. That is a property of the design, so it is
+        // asserted rather than left to whoever edits the list next.
+        let suite = AblationVariant::suite();
+        assert!(suite.len() >= 3, "an ablation needs a baseline and variants");
+        let baseline = &suite[0];
+        let mut moved: std::collections::BTreeSet<&str> = Default::default();
+        for variant in &suite[1..] {
+            let axes: Vec<&str> = [
+                ("width", variant.n_states != baseline.n_states),
+                (
+                    "connectivity",
+                    variant.connectivity.as_str() != baseline.connectivity.as_str(),
+                ),
+                (
+                    "depth",
+                    (variant.min_depth, variant.max_depth)
+                        != (baseline.min_depth, baseline.max_depth),
+                ),
+            ]
+            .into_iter()
+            .filter_map(|(name, differs)| differs.then_some(name))
+            .collect();
+            assert_eq!(
+                axes.len(),
+                1,
+                "`{}` differs from the baseline `{}` on {:?}; an ablation                  variant must move exactly one axis or its effect cannot be                  attributed to one",
+                variant.name,
+                baseline.name,
+                axes,
+            );
+            moved.insert(axes[0]);
+        }
+        assert_eq!(
+            moved,
+            ["connectivity", "depth", "width"].into_iter().collect(),
+            "every axis must be moved by at least one variant",
+        );
     }
 
     #[test]

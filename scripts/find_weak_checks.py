@@ -89,12 +89,75 @@ CALIBRATION_FIXTURE = """
         let m = thing_under_test();
         assert_eq!(m.for_post(999), m.for_post(0));
     }
+
+    #[test]
+    fn calibration_loop_over_possibly_empty() {
+        let out = thing_under_test();
+        for item in &out {
+            assert!(item.value > 0.5);
+        }
+    }
 """
 #: Not a real path. Anything attributed to it is dropped before reporting.
 CALIBRATION_FIXTURE_PATH = "<calibration fixture>"
 CALIBRATION_CASE = "calibration_no_strong_assertion"
 LENGTH_CALIBRATION = "calibration_length_only"
 TAUTOLOGY_CALIBRATION = "calibration_tautological_eq"
+EMPTY_LOOP_CALIBRATION = "calibration_loop_over_possibly_empty"
+
+#: A `for` head whose iterable is a range between integer literals or
+#: SCREAMING_CASE constants. Those run a known number of times, so an assertion
+#: inside one cannot vanish. Everything else iterates something sized at
+#: runtime -- a `Vec`, an iterator, a `zip` -- and can run zero times.
+STATIC_RANGE = re.compile(
+    r"^\s*for\s+.+?\s+in\s+"
+    r"-?\d+\w*\s*\.\.=?\s*(?:-?\d+\w*|[A-Z][A-Z0-9_]*)\s*\{")
+FOR_HEAD = re.compile(r"^\s*for\s+.+?\s+in\s+(?P<iter>.+?)\s*\{\s*$")
+#: Iterables whose size is fixed at compile time, so the loop always runs.
+#: An array or slice literal written in the test (`[a, b, c]`), and a
+#: SCREAMING_CASE constant or associated const (`MatchedArm::ALL`,
+#: `TEMPORAL_DIFFICULTIES`) -- the first version of this detector had neither
+#: exclusion and reported 73 findings, almost all of them these. A scanner that
+#: reports everything is read as reporting nothing.
+STATIC_ITERABLE = re.compile(
+    r"^&?(?:\[.*\]|(?:[A-Za-z_]\w*::)*[A-Z][A-Z0-9_]*)"
+    r"(?:\.iter\(\)|\.into_iter\(\)|\.copied\(\)|\.enumerate\(\))*$")
+#: An assertion that establishes the collection is not empty. Any one of these
+#: anywhere in the body discharges the finding, because the loop below it is
+#: then known to run.
+NON_EMPTY_GUARD = re.compile(
+    r"assert[\w!]*\s*\(.*(?:\.len\(\)|is_empty|\.count\(\)|\.contains\()")
+
+
+def assertions_only_run_if_something_is_there(body: str) -> bool:
+    """True when every assertion sits inside a runtime-sized loop, unguarded.
+
+    The shape `find_weak_checks` could not see, and the one the audit register
+    names as five of the SHD instrument's ten defects: code that reports success
+    while measuring nothing. An empty `Vec` makes every assertion below it
+    disappear and the test still prints `ok`.
+
+    A single assertion on a length, a count or an emptiness -- anywhere in the
+    body -- discharges it, because the loop is then known to run.
+    """
+    lines = body.splitlines()
+    if any(NON_EMPTY_GUARD.search(line) for line in lines):
+        return False
+    depth, dynamic_loop_depths, asserts, guarded = 0, [], 0, 0
+    for line in lines:
+        stripped = line.strip()
+        head = FOR_HEAD.match(line)
+        if (head and not STATIC_RANGE.match(line)
+                and not STATIC_ITERABLE.match(head.group("iter").strip())):
+            dynamic_loop_depths.append(depth)
+        if "assert" in stripped:
+            asserts += 1
+            if dynamic_loop_depths:
+                guarded += 1
+        depth += line.count("{") - line.count("}")
+        while dynamic_loop_depths and depth <= dynamic_loop_depths[-1]:
+            dynamic_loop_depths.pop()
+    return asserts > 0 and asserts == guarded
 
 
 def split_two_args(text: str) -> tuple[str, str] | None:
@@ -167,9 +230,9 @@ def main() -> int:
             return False
         return bool(STRONG.search(assertion))
 
-    rows, tautologies = [], []
+    rows, tautologies, empty_loops = [], [], []
     seen = {CALIBRATION_CASE: False, LENGTH_CALIBRATION: False,
-            TAUTOLOGY_CALIBRATION: False}
+            TAUTOLOGY_CALIBRATION: False, EMPTY_LOOP_CALIBRATION: False}
 
     def sources():
         """The fixture first, then the tree. The fixture is not a real path, so
@@ -188,6 +251,10 @@ def main() -> int:
                     tautologies.append((path, name, assertion))
                     if name in seen:
                         seen[name] = True
+            if assertions_only_run_if_something_is_there(body):
+                empty_loops.append((path, name, len(asserts)))
+                if name in seen:
+                    seen[name] = True
             if not asserts or any(strong(a) for a in asserts):
                 continue
             if all(weak(a) for a in asserts):
@@ -198,6 +265,7 @@ def main() -> int:
     # The fixture is calibration, not a finding.
     rows = [r for r in rows if r[0] != CALIBRATION_FIXTURE_PATH]
     tautologies = [t for t in tautologies if t[0] != CALIBRATION_FIXTURE_PATH]
+    empty_loops = [e for e in empty_loops if e[0] != CALIBRATION_FIXTURE_PATH]
 
     missed = [case for case, found in seen.items() if not found]
     if missed:
@@ -225,6 +293,14 @@ def main() -> int:
     print(f"\n{len(rows)} test(s) whose assertions a degenerate result would satisfy:\n")
     for path, name, count in rows:
         print(f"  {path}::{name}  ({count} assertion(s))")
+    if empty_loops:
+        print(f"\n{len(empty_loops)} test(s) whose assertions ALL sit inside a "
+              f"runtime-sized loop, with nothing asserting it is non-empty:\n")
+        for path, name, count in empty_loops:
+            print(f"  {path}::{name}  ({count} assertion(s))")
+        print("\nAn empty collection makes every one of those assertions disappear "
+              "and the\ntest still prints `ok`. One assertion on a length, a count "
+              "or an emptiness\nanywhere in the body is enough to discharge it.")
     print("\nNot all of these are defects - robustness and smoke tests belong here.")
     print("The question for each is: would this pass if the thing under test did nothing?")
     return 0
