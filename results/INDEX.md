@@ -2,7 +2,7 @@
 
 # Record index
 
-355 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+356 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -10,7 +10,7 @@
 | Results | 46 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
-| Amendments | 19 | 1 |
+| Amendments | 20 | 1 |
 | Defects | 8 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 4 | 0 |
@@ -211,6 +211,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-07 | [AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md](AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md) | Amendment — `binn-engine` is on the Gate G2 path, and the register says it is not |
 | 2026-09-06 | [AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md](AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md) | Amendment — the wave-28 analyser measured against the null arm |
 | 2026-09-05 | [AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md](AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md) | Amendment — the same defect, arriving a second time through the other arm |
 | 2026-09-04 | [AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md](AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md) | Amendment — the H26-3 ladder was paired against a wave that holds no `intact` |

@@ -3,6 +3,16 @@
 **Date:** 2026-08-03
 **Scope:** rust only. Python is deliberately out of scope and **unswept** — see §4.
 
+> **AMENDED 2026-09-07 — do not cite one claim below.** §2b and §3 both say that
+> **no current result depends on** `binn-engine` / `binn-areas` / `binn-core`.
+> **That is false.** Gate G2 — frozen hash `c1-118207fbc3eaba53`, the paper's
+> lead negative — executes both `binn_engine::Engine` and `binn_areas` on its
+> canonical path, through `binn-lab/src/runner.rs`. What is true is the narrower
+> statement that these crates are not on the **SHD instrument** path. The chain
+> is read link by link, and part of §3's gap list is closed, in
+> [`AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md`](AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md).
+> Everything else here stands, including the ten defects and the clustering.
+
 This exists because defects were being recorded in whichever result document
 happened to touch them, so nothing answered the two questions that matter:
 **where do defects cluster**, and **what has actually been swept**. Anecdote is

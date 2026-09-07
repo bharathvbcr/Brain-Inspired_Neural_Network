@@ -194,12 +194,30 @@ with LCB −0.0048. Nobody has isolated why.
 
 ## 6. Audit debt
 
-- [ ] **~8,000 lines of BINN proper are unswept.** `binn-engine`, `binn-areas`,
-      `binn-core` and ~20 experiment binaries have never had the treatment the
-      SHD instrument got, which found ten defects, five of them the class *code
-      reporting success while measuring nothing*. Clippy found none of them; they
-      are semantic. Whatever Gate 2 eventually says is worth nothing until this
-      is done.
+- [~] **BINN proper is partly swept; ~8,000 lines of experiment binaries are
+      not.** `binn-engine`, `binn-areas`, `binn-core` and ~20 experiment binaries
+      have never had the treatment the SHD instrument got, which found ten
+      defects, five of them the class *code reporting success while measuring
+      nothing*. Clippy found none of them; they are semantic.
+
+      **This entry's premise was right and the register beside it was wrong.**
+      `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b/§3 said no current result
+      depends on those crates; Gate G2 executes `binn_engine::Engine` and
+      `binn_areas` through `binn-lab/src/runner.rs`, so "whatever Gate 2 says is
+      worth nothing until this is done" is the correct reading and the
+      register's was not
+      ([`AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md`](AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md)).
+
+      **Swept 2026-09-07:** the three invariants the register named as the place
+      a BINN-proper defect would live — timing-wheel ordering, event-queue
+      correctness, `sparse.rs` CSR/CSC consistency. **No defect.** Both files
+      carry reference-parity and property tests that execute; `level_for` was
+      established by two-directional mutation to be a performance hint rather
+      than a correctness invariant, so no test pins it and none should.
+
+      **Still open:** `binn-engine/src/{cell,engine,resting,parallel,synapse,
+      spikelog}.rs`, `binn-areas/`, and the ~20 `binn-lab/experiments/*`
+      binaries, which are now the largest audit gap in the repository.
 - [x] July campaign scoring path (`AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md`)
 - [x] Rust instrument defect register (`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`)
 
