@@ -67,6 +67,15 @@ track the gain (Spearman **ρ = −0.1430** against a bar of +0.829). We claim
 presence, not proportion, and report four scope limits — width, read-out depth,
 geometry, and a substrate on which the question could not be asked.
 
+Two things make those numbers citable, and we report both as results. Every
+claim carries a numeric bar fixed before the run, on a frozen configuration
+hash, behind a kill-gate that is permanent once failed (§2.4). And **seven
+results have been withdrawn from this package, three of them PASSes** —
+including a 1.0000 — across two repair episodes, one of which found an entire
+matched-architecture suite running on a forward pass that emitted **zero spikes
+at any seed**. Every one of those defects produced plausible numbers, and none
+was caught by an arm's own accuracy (§4.7).
+
 ## Abstract — matched-architecture kill gate (secondary program)
 
 Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a single ±1 reward — fails a preregistered accuracy and gap bar when the dense leaky-integrate-and-fire forward pass is held identical to a SuperSpike backpropagation-through-time reference. The arm remains at chance on **both** matched forward graphs (feed-forward 0.5000, gap lower confidence bound 0.0000; recurrent 0.5100, LCB −0.0192), against a gradient reference at 1.0000, n = 20 seeds. Every other rule tested on that forward now clears the gate: graded direct feedback alignment (0.9925 / 0.9875), directional REINFORCE with frozen per-neuron feedback (0.9950 / 0.9812), broadcast graded error (0.9975), and a discrete EventProp-style spike-adjoint (0.9450 / 0.8900). **The task therefore separates one rule from a field that otherwise saturates, and it no longer ranks the field**: with every reference at exactly 1.0000, each of those passes reduces to "the arm scored above 0.75". Live k-WTA transfer of the matched REINFORCE and DFA families remains a scoped **negative** across twelve gap-close variants (v13–v24), best gap LCB 0.3127 against a 0.5 threshold.
@@ -258,6 +267,47 @@ Two properties of the block are stated explicitly because they bound what the re
 
 The benchmark tests temporal structure preservation across depth ($L \in \{1, 2, 4\}$), width ($h \in \{128, 256, 384, 512, 768, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), temporal resolution at fixed window (`fixed-t100/t250/t500`), temporal shuffling controls (`bin-shuffled`, `channel-shuffled`), and — for the substitution question of §3.7 — the **spiking substrate itself**: $\{$feed-forward, recurrent$\} \times \{$fixed threshold, adaptive threshold$\}$, written `ff+fixed`, `ff+alif`, `rec+fixed`, `rec+alif`.
 
+### 2.4 Preregistration, frozen hashes, and kill-gates
+
+Four disciplines separate this record from an ablation sweep. Each is enforced
+by tooling rather than by intention, which is the only reason any of them can be
+cited as evidence.
+
+**Frozen configuration hashes.** Every scientific run is named by a hash over its
+configuration. A protocol may not be reinterpreted under its old hash; a new
+hypothesis requires a new hash. `c1-118207fbc3eaba53` (Gate G2) and
+`r2-afafa0fa6f43e3fc` (Gate G4) are frozen and are reopened by no downstream
+result here. When a hash is found to name two experiments — as four `c1-*`
+hashes were, having never mixed in the load-bearing `MATCHED_INPUT_SCALE` — it is
+retired rather than quietly reinterpreted, and `scripts/test_published_hashes_resolve.py`
+fails if a retired hash is cited anywhere in the repository as a live result.
+
+**Kill-gates are permanent.** G2 FAIL is terminal: every downstream experiment
+(C2, C3, R1, R2) requires an explicit opt-in flag (`--enable-c2`, and so on) to
+run at all, so that post-G2 work cannot be mistaken for a rescue of G2.
+
+**Preregistered bars and falsifiers.** Each claim carries a numeric bar fixed
+before the run and a stated falsifier, registered in a PREREG document whose
+analyser is committed before the first cell of that wave exists — a constraint
+the git history attests rather than the prose. Where a preregistered prediction
+failed we report it as failed; the registered size prediction of §3.5 is the
+worked case. A bar that turns out to be wrong is reported as a wrong bar
+together with the result it produced, and a replacement bar governs the *next*
+wave on new cells. Re-reading the same cells against a bar chosen afterwards is
+the failure this rule exists to prevent.
+
+**A check that could not run must not report what a check that ran and passed
+reports.** `scripts/record_checks.sh` runs twelve gates over the manuscript and
+the archived cells, with the coverage boundary stated in §0. One audits the
+others: `scripts/find_weak_checks.py` reports every assertion that would still
+print `ok` if the thing under test did nothing — an ablation whose variants all
+equal the baseline, a shuffle that is the identity, a loop over a possibly empty
+collection. It exists because silent success is the dominant class in this
+instrument's own defect register, **five of its ten defects**
+([`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`](AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md);
+[`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md)).
+Its count is a standing figure that may not rise unexplained.
+
 ---
 
 ## 3. Results
@@ -322,7 +372,7 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
 
    **Synchrony is an axis, not a single point.** Wave 24 found the term at `fixed-t250` and nowhere else, and both remaining rungs of that ladder now answer the same way: destroying cross-channel synchrony on top of temporal order costs **+0.1308** more at `fixed-t100` (DiD +0.2631 against +0.1323) and **+0.0575** more at `fixed-t500` (+0.1736 against +0.1161), while both `published-2ms` points sit inside the ±0.03 band and slightly negative. **The read-out reads cross-channel synchrony as well as temporal order, and how much depends on the contract.** As an observation carrying no registered claim, the term falls monotonically as bins get finer — +0.1308, +0.1038, +0.0575 at 14.0, 5.6 and 2.8 ms, and absent at 2 ms — which is the direction a bin-width account predicts, because a wider bin holds more coincident spikes for `channel-shuffled` to destroy and `bin-shuffled` to preserve. Three rungs are three points, no curve is fitted, and the `published-2ms` points differ in sequence length as well as bin width so they are not a fourth rung. ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md))
 
-   **What the advantage runs through** (waves 26–28, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it. **Position:** a `no-position` arm keeps every parameter and every spike and deletes only the read-out's positional encoding, and its gain falls to **+0.0506** from **+0.1258** — a cost of **0.0752**, above the +0.03 bar in **12 of 12**. Registered beside it as a question and answered *no*: deleting the read-out's access leaves +0.0506 where destroying order in the data leaves **+0.0050**, a difference of **0.0456** outside a ±0.03 band, so something besides the positional code carries order here and this paper does not say what. **A timescale:** permuting bins inside a sliding window destroys order below it and preserves it above, and across windows of 2 to 256 bins the difference-in-differences climbs **+0.0066 to +0.1260** against the full shuffle's +0.1208, reaching half its effect at **130.33 bins — 261 ms**, about 36% of the 716 ms mean utterance. **Not spike counts:** random deletion at p30 costs the rate arm **0.0124** and clears the 0.03 bar in **0 of 12**, so a null measured under it means nothing; laddering the rate makes **p70** the smallest sensitive rung (**0.0388**, 11/12) and p90 costs **0.1080** at 12/12, with no cell voided and p90 cells still predicting all twenty classes at **0.5982** against chance 0.05. Against that instrument the advantage does not fall but **grows** — +0.1390 at p70 and **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. **That clause is recorded NOT MET and is reported as NOT MET**: a two-sided band was registered for a one-sided question and fires identically when the advantage strengthens, so the asymmetry needs its own registration before it is a claim. What stands is the comparison — destroying order costs the read-out **0.1208**, destroying counts costs it nothing. **All three properties are measured at one operating point** — h128, feed-forward, `published-2ms`, `d32/L4`, e400 — and none of them transfers to h1024 or to a recurrent substrate on this evidence; the difference-in-differences itself travels to twenty-one points, its decomposition does not. Read-out access is separable from input structure throughout: a `hidden-shuffled` operator permutes the time axis the read-out sees and leaves the substrate's input alone, and the rate arm pays **exactly 0.0000**, twelve of twelve cells byte-identical on every scientific field. ([`RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md); [`RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md); [`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md))
+   **What the advantage runs through** (waves 26–28, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it, all at one operating point — h128, feed-forward, `published-2ms`, `d32/L4`, e400. **Position** carries part of it but not all: deleting only the read-out's positional encoding drops the gain to **+0.0506** from **+0.1258**, a cost of **0.0752** in 12 of 12, yet destroying order in the data leaves just **+0.0050**, so something besides the positional code carries order here and this paper does not say what. **The timescale is long**: permuting bins inside a sliding window reaches half the full shuffle's effect at **130.33 bins — 261 ms**, about 36% of the 716 ms mean utterance. **It is not spike counts**: under random deletion the advantage does not fall but **grows**, to **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. That clause was registered two-sided for a one-sided question and **is recorded NOT MET and reported as NOT MET**. What stands is the comparison — destroying order costs the read-out **0.1208**, destroying counts costs it nothing. None of this decomposition transfers to h1024 or to a recurrent substrate on this evidence: the difference-in-differences travels to twenty-one points, its decomposition does not. **Appendix F** carries the three manipulations in full.
 
    **The budget limit is retired.** Wave 24 measured the contrast at `e100` at two of the twenty-one — **+0.1183** at h128/`d32`/L2 and **+0.0633** at h1024/`d32`/L1, each positive in **12 of 12** seed quadruples and each within 0.005 of its own `e400` value, with reversal still flat at both (−0.0068, −0.0307). Wave 25 measured the other nineteen. **All nineteen clear the +0.03 bar**, seventeen at 12/12 seed quadruples and the weakest at 11/12, ranging from **+0.0469** (h1024 `d32l2`) to **+0.1381** (h128 `d64l4`). **Every one of the twenty-one operating points now carries the difference-in-differences at two budgets, and the mechanism is not a property of the anchor budget.** Two budgets are still two budgets; nothing here maps the contrast as a function of training length.
 
@@ -332,26 +382,8 @@ Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-
 
    **The size of the effect is not the gain.** Spearman ρ between the six per-width gains and their DiDs is **−0.1430** against a preregistered bar of **+0.829**, the n = 6 one-tailed critical value — not a weak positive, absent and faintly negative. h768 buys the least on the ladder and carries the largest DiD in the wave. The registered reading is that the difference-in-differences is a property of the read-out and **not a quantitative account of what the gain is made of**. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
 3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. **The denominator is the `d32/L1` arm at convergence (0.7483), not the `d32/L4` headline** — against the headline's 0.8320 the same cell is 88.2%. The two operating points differ: the L1 ladder's e400 gain is +0.0421, not +0.1258. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
-4. **Scope limits** (Figure 3): gain inverts at width h1024, and on a six-rung ladder that inversion is a **threshold rather than a continuing slope**: +0.1258 (h128), +0.0966 (h256), +0.0760 (h384), +0.0876 (h512), +0.0560 (h768), −0.1618 (h1024). The drop into h1024 is **0.2178**, **6.9×** the largest gap below it (0.0316) and more than twice the registered 3× bar, so the collapse sits between **h768 and h1024** and the rungs below it remain positive. **Every rung of this ladder is measured at `d32/L4`, and the inversion is a property of that read-out depth rather than of the width.** At h1024 and the same budget, `d32/L2` gains **+0.0405** in **20/20** seeds and `d32/L3` gains **+0.0371** in 18/20, against L4's −0.1318 in 3/20; the optimum in depth at that width is interior, and it is not established which of L2 or L3 holds it — they differ by 0.0034. So this row bounds *deep* read-outs at h1024 and does not bound h1024. What makes an arm collapse is still unexplained: L3 sits above the registered gradient-norm sickness threshold at 1.347 and gains anyway, which is why the numerical account was refused ([`RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md`](RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md)). The decay above the collapse is **not strictly ordered** — h384 and h512 are not distinguishable at twelve seeds (paired difference −0.0116, sd 0.0253, negative in 7 of 12) — so no monotonicity is claimed. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md); [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
-
-   **The collapse is late, and stopping early avoids it** (wave 23, preregistered). No cell at `h1024/d32/L4` had ever run at any budget but e400. At **e100** the same arm gains **+0.0827** over its rate control in **12 of 12** seeds — against **−0.1318** in 3 of 20 at e400, an improvement of **+0.2145** against a registered bar of +0.10 — and reaches **0.8153** where e400 gives 0.5768. At **e200** the gain is +0.0564 in 11 of 12, so the degradation is progressive rather than a cliff. **The control is what makes this interpretable**: `d32/L2`, which does not collapse, moves only **+0.0149** over the same budget change against a ±0.03 bar, so the effect is specific to the collapsing arm and this is *not* the weaker statement that e400 is past the optimum for every deep read-out here. The arm also **keeps its fit**: 0 of 12 e100 cells end above 3× their own best training loss, where 63 of 68 do at e400. The rate arm is budget-insensitive throughout (0.7326 / 0.7390 / 0.7386), so the movement is in the attention arm and not its baseline. ([`RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md`](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md))
-
-   **That excludes overfitting**, which this section previously recorded as "neither excluded nor supported": at e400, 63 of 68 intact `d32/L4` cells reach a training-loss minimum around epoch 39–99 and end **56×** above it, while `d32/L1` (0/20), `d32/L2` (4/32) and the rate arm (0/32) hold theirs — and an arm that overfits keeps a low training loss ([`FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md`](FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md)).
-
-   **Three things this does not settle.** Not *why* the fit is lost — H15-1's refusal of the gradient-norm account stands, so the collapse is **located, bounded in time, and still unexplained**. Not h1024 in general: one width, one read-out depth, two budgets. And not the headline, which stays `h128` at e400; what changes is that the anchor budget is now known to be past the optimum at this width and depth. One caveat travels with it: wave 21's h1024 difference-in-differences of +0.1122 was measured at e400 between two arms **both** in late collapse, and nothing says what it would be at e100.
-
-   **What the h1024 collapse is not.** Three preregistered levers — surrogate scale 0.5 and 0.25, and gradient clipping at 1000.0 — were run at h1024/d32/L4 to test whether the inversion is an optimisation failure. All three are **negative and worse than the arm they were meant to rescue** (−0.2106, −0.2565, −0.0904). Clipping moves the median epoch-mean gradient norm from 55.494 to 11.660, a real effect in the intended direction, and accuracy does not follow. **No mechanism for the collapse is offered here**; what wave 23 adds above is a bound on *when* it happens, not an account of *why*.
-
-   **And it is not the temporal-order account in disguise.** If the inversion and the mechanism were the same phenomenon, then where the read-out buys nothing there should be no order-dependent benefit left to destroy. That prediction was registered before the cells existed and it **failed**: at h1024 the difference-in-differences is **+0.1122** in **10 of 12** seeds against a registered ceiling of +0.02, while the gain over those same twelve seeds is **−0.1618**. The read-out consumes temporal order while performing worse than no read-out at all. Nothing in this paper's account permits that, and per the preregistration it is the paper's **leading open problem** rather than a caveat. It also leaves the overfitting alternative exactly where it was: that argument was conditional on the shuffle cost collapsing, and it did not. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
-5. **Temporal resolution is an axis, and the gain falls as bins get finer** (Figure 4). The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
-
-   | contract | bin | `ff+fixed` | d32/L4 | gain | gain > 0 | ≥ 0.80 |
-   |---|---:|---:|---:|---:|---:|---:|
-   | `fixed-t100` | 14.0 ms | 0.6672 | 0.8599 | **+0.1927** | 12/12 | 12/12 |
-   | `fixed-t250` | 5.6 ms | 0.6844 | 0.8594 | **+0.1751** | 12/12 | 12/12 |
-   | `fixed-t500` | 2.8 ms | 0.7069 | 0.8543 | **+0.1474** | 12/12 | 12/12 |
-
-   gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks with finer resolution** — the opposite of the direction S-5 predicted, on the axis S-5 could not isolate. The baseline drifts +0.0397 across the same ladder, inside the 0.05 confound bar, so this is a property of the read-out and not of the substrate beneath it. All three rungs clear the 0.80 gate at 12/12, the coarsest most comfortably. ([`RESULT_2026-08-22_W10_RESOLUTION_LADDER.md`](RESULT_2026-08-22_W10_RESOLUTION_LADDER.md))
+4. **Scope limits:** the gain inverts at width h1024 — +0.1258 at h128 falling to +0.0560 at h768 and then to **−0.1618** — and that inversion is a **threshold rather than a continuing slope**, sitting between h768 and h1024 at **6.9×** the largest gap below it. It is a property of read-out *depth* at that width rather than of the width: `d32/L2` and `d32/L3` both gain there. Three preregistered rescue levers are negative and no mechanism is offered. The difference-in-differences nonetheless stays **positive** at h1024 (**+0.1122**, 10 of 12 seeds) — the read-out consumes temporal order while performing worse than no read-out at all, which §4.8 records as this paper's leading open problem. **Appendix E** carries the ladder, the budget dependence, the rescue attempts and what each does not settle. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`).
+5. **Temporal resolution is an axis, and the gain falls as bins get finer.** The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the frame count, the read-out helps at **every** rung and the gain is monotone in resolution — **+0.1927** at 14.0 ms bins, **+0.1751** at 5.6 ms, **+0.1474** at 2.8 ms, each 12/12 seeds positive and 12/12 over the 0.80 gate. gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks** as bins get finer while never reversing. **Appendix I** carries the ladder.
 
 ---
 
@@ -508,24 +540,75 @@ outside the registered 0.10 bar. And every manipulated cell in the corpus is
 feed-forward — the registered attempt to measure the recurrent substrate under
 shuffling and reversal returned **NOT EVALUABLE**, ten of its cells lost to the
 instrument's non-finite-training guard.
-We do not claim calibration, and the reason has changed.
 
-Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
-
-**The 0.80 `CELL_PASS` floor should not be read as a standard the instrument is failing to meet.** It was derived from one configuration of a reference that is a different model class, and four preregistered ablations of that reference show three of its choices are neutral or harmful to it: its second hidden layer costs 0.0145, its batchnorm appears to cost 0.0058, and its non-spiking summed readout buys 0.0012. Only its dropout clearly earns its place ([`RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md`](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md)). A fifth ablation, which removes the reference's temporal kernel rather than a configuration value, is worth **0.3111** — so the floor rests overwhelmingly on one architectural choice the instrument does not make (§3.8).
+**We do not claim calibration**, and what blocks it is criterion 5 — a Python
+mirror of the attention axis, which does not exist and is not attempted here
+(§4.8). The two criteria that previously read `false` no longer do, and they
+were false for a provenance reason rather than an accuracy one; nor should **the
+0.80 `CELL_PASS` floor be read as a standard the instrument is failing to
+meet**. Both are matters of the third-party reference artifact rather than of
+the read-out, and **Appendix G** carries them.
 
 We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
 
-The following suites are explicitly **withdrawn**:
-1. `track-b-rescue` v130 online learned FB PASS (withdrawn under v131 `INVALID_HARNESS`).
-2. `deep-snn-scaling` depth collapse (withdrawn under v134; all ceilings at chance).
-3. `shd-scientific-sweep` (withdrawn; synthetic data).
+Seven suites are explicitly **withdrawn**. §4.7 states the count and what it
+cost; Appendix C is the ledger, entry by entry.
+
+### 4.7 The withdrawal ledger
+
+**Seven results have been withdrawn from this package, three of them PASSes.**
+We report the count in the main text because a record that shows only surviving
+results tells a reader nothing about how hard the instrument was tried, and
+because the withdrawals are what license the survivors. The episode-by-episode
+ledger, with the diagnosis for each, is
+Appendix C.
+
+Two episodes produced them. The **2026-08-19→22 record repair** withdrew four,
+including this project's most spectacular number — an online learned-feedback
+arm at **1.0000**, which a ceiling-health repair re-reads as saturation rather
+than credit assignment. The **2026-08-25 matched re-run** withdrew three more on
+the finding that every previously published matched-architecture number had been
+produced on a forward pass emitting **zero spikes at any seed**. **The lead
+negative survived both episodes on both forward graphs, which is the only reason
+it is reported at all.**
+
+The generalisable point is not that defects occurred. It is that **every one of
+these defects produced plausible numbers, and none was caught by an arm's own
+accuracy.** All were caught by instrument-health checks that ask a different
+question — could this run have produced this number for the wrong reason? The
+zero-spike forward is the cautionary case: it ran for weeks, produced
+publishable-looking results across an entire suite, and was invisible to every
+experiment's own verdict. A harness that scores whatever it is given will
+eventually score an artefact.
+
+### 4.8 Open problems
+
+We state these as open rather than as future work, because each is a thing this
+paper's own evidence cannot currently settle.
+
+**The gain/DiD dissociation** is the leading one. The order-dependence is present at all twenty-one operating points, but its *size* is uncorrelated with the size of the gain it is supposed to explain (Spearman $\rho$ = −0.1430 over the six widths), and two waves of narrowing widened the puzzle rather than closing it. Nothing here explains why a read-out whose contribution depends everywhere on temporal order should contribute an amount unrelated to how much order it consumes. **The h1024 threshold** is located between h768 and h1024, unexplained, with three rescue levers negative and order-dependence persisting through the collapse (Appendix E). **Calibration** is unmet: criterion 5, a Python mirror of the attention axis, does not exist and is not attempted here, so no number in this paper is comparable to an externally recorded one. **The kernel attribution** — the 0.087 calibration residual assigned to a 25-tap learned temporal kernel — is by elimination, not by an ablation that added one (§3.8). And **whether any local rule crosses the k-WTA transfer barrier** is open, given that a structured feedback matrix moves accuracy but not the gap (§4.2).
 
 ---
 
 ## 5. Reproducibility
 
-Scientific hashes and commands are listed in [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md) and [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Rebuild with `cargo test --locked --workspace` from `binn/`. Camera-ready citations must point at on-disk notes or exact `--config-hash` replays. Attention campaign artifacts are preserved under `results/shd_attention_campaign_v1/` (waves 1–7 plus `r1cal`) and `results/shd_attention_campaign_v2/` (wave 8 as `w8*__`, wave 9 as `w9dim__` / `w9shf__`).
+Scientific hashes and commands are listed in [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md) and [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Camera-ready citations must point at on-disk notes or exact `--config-hash` replays.
+
+The full record rebuilds and re-checks itself from a clean checkout with `cargo test --locked --workspace`, `./scripts/gc_checks.sh` (GC1-GC7) and `./scripts/record_checks.sh` (twelve gates, 125 SHD-campaign assertions); **Appendix H** lists the commands, including the canonical Gate G2 replay.
+
+Post-G2 gates require explicit opt-in (`--enable-c2`, `--enable-c3`,
+`--enable-r1`, `--enable-r2`); see §2.4. The current matched figures come from
+the 2026-08-25 re-run recorded in
+[`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md),
+not from the four hashes retired with it.
+
+Attention-campaign cells are preserved in four corpora, all four of which the
+number sweep reads: `results/shd_attention_campaign_v1/cells` (waves 1–7 plus
+`r1cal`), `results/shd_attention_campaign_v2` (waves 8–25), the Azure d32/L4
+scope cells under `results/azure-d32l4-scope-v1/results`, and
+`results/shd_attention_campaign_v3` (waves 26–28). A corpus that exists but is
+not in that list is a corpus whose cells derive nothing, which is a failure this
+paper has had once and now tests against.
 
 ---
 
@@ -536,3 +619,143 @@ Cross-trial STDP pairing times (`ThreeFactor.last_spike`) are retained on canoni
 ## Appendix B — Post-G2 harvest (banner)
 
 G3 / G4 / hybrid H0 numbers and hashes: [`APPENDIX_POST_G2.md`](APPENDIX_POST_G2.md). Mechanism figure cells: [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) Figure M. These rows do not reopen G2.
+
+## Appendix C — The withdrawal ledger in full
+
+Seven results have been withdrawn from this package. §4.7 states the count and
+the lesson; this appendix is the ledger itself, because a count without
+diagnoses is not auditable.
+
+**Episode 1 — the 2026-08-19→22 record repair.** Four results withdrawn, three
+of them PASSes:
+
+- **`track-b-rescue` v130 online learned feedback alignment, PASS at 1.0000 (gap
+  LCB 0.9988) — withdrawn.** At v131 the arm reports `INVALID_HARNESS`: a
+  ceiling-inverted warning fires on 3 of 20 learned-feedback seeds and the code
+  **refuses to emit a PASS while it is present**. Re-read under both repairs it
+  is 1.0000 against a ceiling of 1.0000 with zero variance — a *saturation*
+  result, not a credit-assignment one.
+- **The depth-collapse / deep-SNN scaling result — withdrawn** (v134
+  `INVALID_HARNESS`: every depth-matched gradient ceiling was at chance).
+- **`shd-scientific-sweep` — withdrawn.** It ran on synthetic 24-channel /
+  16-timestep data and **never loaded SHD**
+  ([`DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`](DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md)).
+- **The `live-transfer-rescue` arms — `INVALID_HARNESS`**, and the protocol was
+  misnamed: it is matched-only, not live-engine (§2.2).
+
+Separately, three gradient *references* were found at or near chance on tasks
+their own treatments solve; two are diagnosed (`MatchedDeepGradient` collapses to
+silence, `ShdEpropCeiling` is a constant predictor by a different mechanism).
+None is used in any claim here.
+
+**Episode 2 — the 2026-08-25 matched re-run.** Every previously published
+matched-architecture number was produced on a forward pass that emitted **zero
+spikes at any seed**. Three more results were withdrawn:
+
+- **The discrete EventProp-style spike-adjoint FAIL** (0.5000 → 0.9450 / 0.8900
+  PASS). The failure mode is instructive: *a method whose entire mechanism is the
+  spike had no spikes to differentiate through*, while every other arm could
+  still separate classes by sub-threshold membrane rate. The defect was
+  maximally misleading precisely on the arm that most depended on the broken
+  quantity — and the prior explanation offered for that number ("discrete hard
+  spike-gate adjoint ≠ continuous Wunderlich–Pehle") was an explanation for an
+  artefact, and is retired with it.
+- **Both RL broadcast contrasts** (0.5250 → 0.9100; 0.5113 → 0.7962). The
+  reading they supported — "continuous magnitude without spatial directionality
+  is insufficient on this gate" — no longer has evidence behind it.
+
+**The lead negative survived both episodes** on both forward graphs
+([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
+
+**What the record repair changed structurally.** Configuration hashes that did
+not mix in a semantically load-bearing constant (`MATCHED_INPUT_SCALE`) were
+found to name *two* experiments each; they are now retired rather than silently
+reinterpreted (§2.4). Ceiling-health checks were added such that a reference at
+chance **fails the harness** instead of scoring the treatment against it.
+Machine-checked prose assertions were added over the SHD campaign, and now
+number 125.
+
+## Appendix D — Non-claims: the matched and engine programs
+
+§0 states the SHD programme's boundaries against the literature and §4.6 its
+scope limits. This appendix records the non-claims of the secondary programme,
+reproduced from the claim freeze, because summarising them away is how a claim
+ladder degrades.
+
+No biology or cortex. No Assembly Calculus PASS (`project` is wired under
+`c1-project-*` and FAILs there). No natural-spiking G2 verdict (`c1-spike-*` are
+`INVALID_HARNESS`). No neuromorphic-hardware claim. **No impossibility in
+principle** — these are scoped, operationalised negatives about one substrate
+under one set of rules. No reopening of frozen hashes by threshold massage. No
+widening of the lead FAIL to "any broadcast". Undertraining is not the cause: the
+v22 arm at four times the epochs is still at chance. **No ranking among the
+passing matched arms** — the gate saturates, so it can name one failure and
+cannot order the survivors. No live-engine rescue from a matched PASS. No claim
+that the discrete spike-adjoint is a negative result, and none that it is
+equivalent to continuous EventProp. No digital-brain or brain-equivalence claim.
+
+On the SHD programme, four further non-claims that §0 does not cover. The
+headline fraction is of the **gain**, not of accuracy. The 0.087 calibration
+residual is not a tuning gap. No temporal-*resolution* mechanism is claimed —
+that hypothesis was withdrawn, and the `fixed-tN` ladder moves the opposite way.
+And no recurrent-substrate win is claimed anywhere (§3.7).
+
+## Appendix E — The width collapse at h1024
+
+This is finding 4 of §3.5 in full. The main text states the shape of the collapse and the open problem it leaves; the arithmetic is here.
+
+**Scope limits** (Figure 3): gain inverts at width h1024, and on a six-rung ladder that inversion is a **threshold rather than a continuing slope**: +0.1258 (h128), +0.0966 (h256), +0.0760 (h384), +0.0876 (h512), +0.0560 (h768), −0.1618 (h1024). The drop into h1024 is **0.2178**, **6.9×** the largest gap below it (0.0316) and more than twice the registered 3× bar, so the collapse sits between **h768 and h1024** and the rungs below it remain positive. **Every rung of this ladder is measured at `d32/L4`, and the inversion is a property of that read-out depth rather than of the width.** At h1024 and the same budget, `d32/L2` gains **+0.0405** in **20/20** seeds and `d32/L3` gains **+0.0371** in 18/20, against L4's −0.1318 in 3/20; the optimum in depth at that width is interior, and it is not established which of L2 or L3 holds it — they differ by 0.0034. So this row bounds *deep* read-outs at h1024 and does not bound h1024. What makes an arm collapse is still unexplained: L3 sits above the registered gradient-norm sickness threshold at 1.347 and gains anyway, which is why the numerical account was refused ([`RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md`](RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md)). The decay above the collapse is **not strictly ordered** — h384 and h512 are not distinguishable at twelve seeds (paired difference −0.0116, sd 0.0253, negative in 7 of 12) — so no monotonicity is claimed. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md); [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
+
+**The collapse is late, and stopping early avoids it** (wave 23, preregistered). No cell at `h1024/d32/L4` had ever run at any budget but e400. At **e100** the same arm gains **+0.0827** over its rate control in **12 of 12** seeds — against **−0.1318** in 3 of 20 at e400, an improvement of **+0.2145** against a registered bar of +0.10 — and reaches **0.8153** where e400 gives 0.5768. At **e200** the gain is +0.0564 in 11 of 12, so the degradation is progressive rather than a cliff. **The control is what makes this interpretable**: `d32/L2`, which does not collapse, moves only **+0.0149** over the same budget change against a ±0.03 bar, so the effect is specific to the collapsing arm and this is *not* the weaker statement that e400 is past the optimum for every deep read-out here. The arm also **keeps its fit**: 0 of 12 e100 cells end above 3× their own best training loss, where 63 of 68 do at e400. The rate arm is budget-insensitive throughout (0.7326 / 0.7390 / 0.7386), so the movement is in the attention arm and not its baseline. ([`RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md`](RESULT_2026-08-30_W23_THE_COLLAPSE_IS_LATE.md))
+
+**That excludes overfitting**, which this section previously recorded as "neither excluded nor supported": at e400, 63 of 68 intact `d32/L4` cells reach a training-loss minimum around epoch 39–99 and end **56×** above it, while `d32/L1` (0/20), `d32/L2` (4/32) and the rate arm (0/32) hold theirs — and an arm that overfits keeps a low training loss ([`FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md`](FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md)).
+
+**Three things this does not settle.** Not *why* the fit is lost — H15-1's refusal of the gradient-norm account stands, so the collapse is **located, bounded in time, and still unexplained**. Not h1024 in general: one width, one read-out depth, two budgets. And not the headline, which stays `h128` at e400; what changes is that the anchor budget is now known to be past the optimum at this width and depth. One caveat travels with it: wave 21's h1024 difference-in-differences of +0.1122 was measured at e400 between two arms **both** in late collapse, and nothing says what it would be at e100.
+
+**What the h1024 collapse is not.** Three preregistered levers — surrogate scale 0.5 and 0.25, and gradient clipping at 1000.0 — were run at h1024/d32/L4 to test whether the inversion is an optimisation failure. All three are **negative and worse than the arm they were meant to rescue** (−0.2106, −0.2565, −0.0904). Clipping moves the median epoch-mean gradient norm from 55.494 to 11.660, a real effect in the intended direction, and accuracy does not follow. **No mechanism for the collapse is offered here**; what wave 23 adds above is a bound on *when* it happens, not an account of *why*.
+
+**And it is not the temporal-order account in disguise.** If the inversion and the mechanism were the same phenomenon, then where the read-out buys nothing there should be no order-dependent benefit left to destroy. That prediction was registered before the cells existed and it **failed**: at h1024 the difference-in-differences is **+0.1122** in **10 of 12** seeds against a registered ceiling of +0.02, while the gain over those same twelve seeds is **−0.1618**. The read-out consumes temporal order while performing worse than no read-out at all. Nothing in this paper's account permits that, and per the preregistration it is the paper's **leading open problem** rather than a caveat. It also leaves the overfitting alternative exactly where it was: that argument was conditional on the shuffle cost collapsing, and it did not. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
+
+## Appendix F — What the advantage runs through
+
+This is the waves 26–28 block of §3.5 finding 2 in full: the three manipulations that ask what in the read-out consumes temporal order, rather than how much order the data carries. All are measured at a single operating point, and §3.5 states that limit where the result is used.
+
+**What the advantage runs through** (waves 26–28, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it. **Position:** a `no-position` arm keeps every parameter and every spike and deletes only the read-out's positional encoding, and its gain falls to **+0.0506** from **+0.1258** — a cost of **0.0752**, above the +0.03 bar in **12 of 12**. Registered beside it as a question and answered *no*: deleting the read-out's access leaves +0.0506 where destroying order in the data leaves **+0.0050**, a difference of **0.0456** outside a ±0.03 band, so something besides the positional code carries order here and this paper does not say what. **A timescale:** permuting bins inside a sliding window destroys order below it and preserves it above, and across windows of 2 to 256 bins the difference-in-differences climbs **+0.0066 to +0.1260** against the full shuffle's +0.1208, reaching half its effect at **130.33 bins — 261 ms**, about 36% of the 716 ms mean utterance. **Not spike counts:** random deletion at p30 costs the rate arm **0.0124** and clears the 0.03 bar in **0 of 12**, so a null measured under it means nothing; laddering the rate makes **p70** the smallest sensitive rung (**0.0388**, 11/12) and p90 costs **0.1080** at 12/12, with no cell voided and p90 cells still predicting all twenty classes at **0.5982** against chance 0.05. Against that instrument the advantage does not fall but **grows** — +0.1390 at p70 and **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. **That clause is recorded NOT MET and is reported as NOT MET**: a two-sided band was registered for a one-sided question and fires identically when the advantage strengthens, so the asymmetry needs its own registration before it is a claim. What stands is the comparison — destroying order costs the read-out **0.1208**, destroying counts costs it nothing. **All three properties are measured at one operating point** — h128, feed-forward, `published-2ms`, `d32/L4`, e400 — and none of them transfers to h1024 or to a recurrent substrate on this evidence; the difference-in-differences itself travels to twenty-one points, its decomposition does not. Read-out access is separable from input structure throughout: a `hidden-shuffled` operator permutes the time axis the read-out sees and leaves the substrate's input alone, and the rate arm pays **exactly 0.0000**, twelve of twelve cells byte-identical on every scientific field. ([`RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md); [`RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md); [`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md))
+
+## Appendix G — The calibration criteria and the 0.80 floor
+
+Two paragraphs lifted from §4.6 on 2026-09-07. Both are about the third-party reference artifact this instrument is calibrated against, not about the attention read-out, and §4.6 states each conclusion where it is used.
+
+Criteria 3 and 4 — `clean_reference` and `historical_reference` — were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit** — a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
+
+**The 0.80 `CELL_PASS` floor should not be read as a standard the instrument is failing to meet.** It was derived from one configuration of a reference that is a different model class, and four preregistered ablations of that reference show three of its choices are neutral or harmful to it: its second hidden layer costs 0.0145, its batchnorm appears to cost 0.0058, and its non-spiking summed readout buys 0.0012. Only its dropout clearly earns its place ([`RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md`](RESULT_2026-08-24_EVERY_CONFIGURABLE_DIFFERENCE_IS_MEASURED.md)). A fifth ablation, which removes the reference's temporal kernel rather than a configuration value, is worth **0.3111** — so the floor rests overwhelmingly on one architectural choice the instrument does not make (§3.8).
+
+## Appendix H — Reproduction commands
+
+Every claim in this paper is reachable from a clean checkout with:
+
+```
+cargo test --locked --workspace
+cargo clippy --locked --workspace --all-targets -- -D warnings
+./scripts/gc_checks.sh          # GC1-GC7, the enforced global constraints
+./scripts/record_checks.sh      # twelve gates, 125 SHD-campaign assertions
+python3 scripts/build_paper.py  # this manuscript, page-limit enforced
+cargo run --locked --release -p binn-lab --bin c1 -- \
+  --config-hash c1-118207fbc3eaba53 --out results/c1_g2_replay.md   # Gate G2
+```
+
+Post-G2 gates require explicit opt-in (`--enable-c2`, `--enable-c3`, `--enable-r1`, `--enable-r2`); see §2.4.
+
+## Appendix I — The resolution ladder
+
+Finding 5 of §3.5 in full, with the per-rung table. §3.5 states the direction and the withdrawn S-5 test where the result is used.
+
+**Temporal resolution is an axis, and the gain falls as bins get finer** (Figure 4). The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
+
+| contract | bin | `ff+fixed` | d32/L4 | gain | gain > 0 | ≥ 0.80 |
+|---|---:|---:|---:|---:|---:|---:|
+| `fixed-t100` | 14.0 ms | 0.6672 | 0.8599 | **+0.1927** | 12/12 | 12/12 |
+| `fixed-t250` | 5.6 ms | 0.6844 | 0.8594 | **+0.1751** | 12/12 | 12/12 |
+| `fixed-t500` | 2.8 ms | 0.7069 | 0.8543 | **+0.1474** | 12/12 | 12/12 |
+
+gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks with finer resolution** — the opposite of the direction S-5 predicted, on the axis S-5 could not isolate. The baseline drifts +0.0397 across the same ladder, inside the 0.05 confound bar, so this is a property of the read-out and not of the substrate beneath it. All three rungs clear the 0.80 gate at 12/12, the coarsest most comfortably. ([`RESULT_2026-08-22_W10_RESOLUTION_LADDER.md`](RESULT_2026-08-22_W10_RESOLUTION_LADDER.md))

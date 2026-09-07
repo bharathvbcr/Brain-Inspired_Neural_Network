@@ -14,6 +14,19 @@ Amended 2026-09-05: §9 added (external reading — sparse reward subsystem in
 LLMs — read against the record, with gaps and candidate experiments). §9
 schedules nothing and is not evidence.
 
+Amended 2026-09-07: **the two-manuscript split is closed — there is now one
+paper.** `PAPER_BINN_INSTRUMENT_2026-08-31.md` was the superset and
+`PAPER_DRAFT.md` its §7 expanded; the superset stopped at wave 23 and **no
+verification script had ever read it**. Its four load-bearing sections were
+merged into `PAPER_DRAFT.md` (§2.4 preregistration and kill-gates, §4.7 and
+Appendix C the withdrawal ledger, §4.8 open problems, Appendix D the secondary
+programme's non-claims, Appendix H the reproduction commands), which builds at
+9 content pages of 9 and is swept by every check. The instrument document now
+carries a SUPERSEDED banner naming the three claims in it that are no longer
+true. This register never listed the split as open work, which is why it stood
+for seven days; `scripts/test_paper_number_sweep.py` now fails if any
+abstract-bearing document is neither swept nor bannered.
+
 ---
 
 ## 1. Record repair — blocking everything downstream

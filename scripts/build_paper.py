@@ -86,8 +86,11 @@ ARTWORK = re.compile(r"\*\*Artwork target:\*\* `[^`]*figures/([A-Za-z0-9_]+)\.")
 FIGURE_PLACEMENT = {
     "leadfig1_the_conditional": "main",
     "leadfig2_headline_accuracy": "main",
-    "leadfig3_width_ladder": "main",
-    "leadfig4_resolution_ladder": "main",
+    # Both followed their sections into the appendix on 2026-09-07: the width
+    # ladder to Appendix E and the resolution ladder to Appendix I. A figure
+    # placed away from the text that reads it is worse than no figure.
+    "leadfig3_width_ladder": "appendix",
+    "leadfig4_resolution_ladder": "appendix",
     "figS_substrate": "main",
     "figM_mechanism_richness_addressability": "appendix",
     "fig2_matched_means": "appendix",
@@ -179,8 +182,13 @@ def rewrite_record_links(body: str, register: dict[str, int]) -> str:
 
 def to_latex(markdown: str) -> str:
     proc = subprocess.run(
+        # --no-highlight: a fenced block tagged with a language makes pandoc
+        # emit `Shaded`/`Highlighting`, which need pandoc's own colour macros in
+        # the preamble. Without them the build dies at `\begin{Shaded}` with no
+        # PDF. Untagged fences are unaffected, so this turns a whole class of
+        # "someone wrote ```bash" build failures into plain verbatim.
         ["pandoc", "-f", "markdown+pipe_tables", "-t", "latex",
-         "--top-level-division=section", "--wrap=preserve"],
+         "--top-level-division=section", "--wrap=preserve", "--no-highlight"],
         input=markdown, capture_output=True, text=True)
     if proc.returncode != 0:
         fail(f"pandoc failed: {proc.stderr.strip()}")

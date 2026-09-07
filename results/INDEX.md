@@ -2,7 +2,7 @@
 
 # Record index
 
-355 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+355 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -17,7 +17,7 @@
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
-| Paper | 4 | 5 |
+| Paper | 3 | 6 |
 | Campaign control | 4 | 0 |
 | Writing | 2 | 0 |
 | Gates | 1 | 0 |
@@ -40,6 +40,7 @@ Read these only through the document that retired them.
 |---|---|
 | [AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md](AMENDMENT_2026-08-03_REFERENCE_FINGERPRINT_SCOPE.md) | 2026-08-03 — the diagnosis in §1 was incomplete and the |
 | [HANDOFF_2026-08-02.md](HANDOFF_2026-08-02.md) | IN PART, 2026-08-03 / 2026-08-04 — read this before acting on anything below |
+| [PAPER_BINN_INSTRUMENT_2026-08-31.md](PAPER_BINN_INSTRUMENT_2026-08-31.md) | 2026-09-07 — merged into [`PAPER_DRAFT.md`](PAPER_DRAFT.md), which is now the only manuscript.** |
 | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) | IN PART — 2026-08-25 matched-architecture re-run, banner added |
 | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) | IN PART — 2026-08-25 matched-architecture re-run |
 | [PAPER_SKELETON.md](PAPER_SKELETON.md) | IN PART — 2026-08-25 matched-architecture re-run |
@@ -305,7 +306,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
-| 2026-08-31 | [PAPER_BINN_INSTRUMENT_2026-08-31.md](PAPER_BINN_INSTRUMENT_2026-08-31.md) | A Preregistered Instrument for Backpropagation-Free Learning: Four Negative Gates, One Conditional Positive, and Seven Withdrawals |
+| 2026-08-31 | [PAPER_BINN_INSTRUMENT_2026-08-31.md](PAPER_BINN_INSTRUMENT_2026-08-31.md) **[retired]** | A Preregistered Instrument for Backpropagation-Free Learning: Four Negative Gates, One Conditional Positive, and Seven Withdrawals |
 | 2026-08-29 | [PAPER_GAPS_2026-08-29.md](PAPER_GAPS_2026-08-29.md) | The paper's gaps, consolidated — 2026-08-29 |
 | 2026-08-20 | [PAPER_STATUS_2026-08-20.md](PAPER_STATUS_2026-08-20.md) **[retired]** | What is left for the paper — 2026-08-20 |
 | — | [PAPER_VERIFY.md](PAPER_VERIFY.md) **[retired]** | Paper scientific verify — 2026-07-23 |

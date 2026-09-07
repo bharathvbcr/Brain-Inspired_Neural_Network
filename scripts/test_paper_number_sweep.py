@@ -35,6 +35,101 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import check_every_number as CEN  # noqa: E402
 
 
+class EveryLiveManuscriptIsSweptTest(unittest.TestCase):
+    """A second manuscript may not exist outside the sweep without saying so.
+
+    This file's own opening records the hole this closes for one document:
+    "the one artefact a reader outside this repository will ever see was the
+    one artefact no mechanical check touched." It was closed for
+    `PAPER_DRAFT.md` and stayed open as a *class* -- on 2026-09-07 a second
+    743-line manuscript, `PAPER_BINN_INSTRUMENT_2026-08-31.md`, was found
+    making publishable claims with **no verification script reading it at
+    all**: not this sweep, not the terminology check, not the citation check,
+    not the paper build. It had been that way since 2026-08-31.
+
+    Nothing structural had prevented it, so nothing prevented the next one. The
+    rule enforced here is the general form: a document that carries an abstract
+    is a manuscript, and a manuscript is either the one this sweep reads or one
+    that says on its face that it is not live.
+
+    Retirement is judged by `build_results_index.describe`, which already owns
+    that question for the results index, rather than by a second banner matcher
+    written here that could drift away from it.
+    """
+
+    @staticmethod
+    def _index():
+        spec = importlib.util.spec_from_file_location(
+            "build_results_index", ROOT / "scripts/build_results_index.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    @staticmethod
+    def _manuscripts() -> list[Path]:
+        """Documents carrying an abstract, which is what makes one a paper."""
+        return sorted(
+            path for path in (ROOT / "results").glob("*.md")
+            if re.search(r"^#{1,3} Abstract", path.read_text(errors="replace"),
+                         re.M))
+
+    def test_the_detector_finds_the_manuscripts_that_exist(self):
+        """A criterion matching nothing would pass the next test forever.
+
+        Two are known: the swept draft and the merged-away instrument paper.
+        """
+        found = {p.name for p in self._manuscripts()}
+        self.assertIn(CEN.PAPER.name, found)
+        self.assertIn("PAPER_BINN_INSTRUMENT_2026-08-31.md", found)
+        self.assertGreaterEqual(len(found), 2)
+
+    def test_every_manuscript_is_swept_or_retired(self):
+        index = self._index()
+        stray = [p.name for p in self._manuscripts()
+                 if p != CEN.PAPER and not index.describe(p)["retired"]]
+        self.assertEqual(
+            stray, [],
+            "these documents carry an abstract, so a reader will read them as "
+            "papers, but this sweep does not check their numbers and they do "
+            "not open with a WITHDRAWN or SUPERSEDED banner:\n  "
+            + "\n  ".join(stray)
+            + "\nEither add the document to the sweep or say on its face that "
+              "it is not live. An unchecked manuscript is how "
+              "PAPER_BINN_INSTRUMENT_2026-08-31.md accrued 743 lines of claims "
+              "that nothing verified.")
+
+    def test_a_new_unbannered_manuscript_would_be_caught(self):
+        """The rule above, exercised against a document that breaks it.
+
+        Written into `results/` because that is the directory the rule scans;
+        removed in the same test whatever happens.
+        """
+        intruder = ROOT / "results" / "PAPER_TEST_INTRUDER_DELETE_ME.md"
+        intruder.write_text("# A second paper\n\n## Abstract\n\nWe claim 0.9999.\n")
+        try:
+            self.assertIn(intruder, self._manuscripts())
+            index = self._index()
+            self.assertFalse(index.describe(intruder)["retired"])
+            with self.assertRaises(AssertionError) as caught:
+                self.test_every_manuscript_is_swept_or_retired()
+            self.assertIn(intruder.name, str(caught.exception))
+        finally:
+            intruder.unlink()
+
+    def test_a_bannered_manuscript_is_accepted(self):
+        """The escape hatch has to work, or the rule is unsatisfiable."""
+        retired = ROOT / "results" / "PAPER_TEST_RETIRED_DELETE_ME.md"
+        retired.write_text(
+            "# An old paper\n\n> **SUPERSEDED 2026-09-07 by the merge.**\n\n"
+            "## Abstract\n\nWe claimed 0.9999.\n")
+        try:
+            index = self._index()
+            self.assertTrue(index.describe(retired)["retired"])
+            self.test_every_manuscript_is_swept_or_retired()
+        finally:
+            retired.unlink()
+
+
 class SweepPaperTest(unittest.TestCase):
     """Drive `sweep_paper` against a scripted manuscript and source tree."""
 

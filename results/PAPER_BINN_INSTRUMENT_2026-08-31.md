@@ -2,7 +2,37 @@
 
 **BINN — Brain-Inspired Neural Network Substrate**
 
-*Whole-project manuscript, 2026-08-31. Companion to [`PAPER_DRAFT.md`](PAPER_DRAFT.md), which is the camera-ready treatment of the SHD read-out program alone. This paper covers the instrument and the full experimental record.*
+> **SUPERSEDED 2026-09-07 — merged into [`PAPER_DRAFT.md`](PAPER_DRAFT.md), which is now the only manuscript.**
+> This file is retained as a historical snapshot. **Do not cite it as a live
+> manuscript, and do not cite two claims in it that are now false** (below).
+>
+> There were never two competing papers: this document was the superset and
+> `PAPER_DRAFT.md` was its §7 expanded to fill nine pages. The merge moved the
+> four sections that made this one heavier into that one — §4 (preregistration,
+> hashes, kill-gates) became **§2.4**; §10 (the withdrawal ledger) became **§4.7**
+> plus **Appendix C**; §11.1 (open problems) became **§4.8**; §9's non-claims for
+> the matched and engine programs became **Appendix D**; §12's commands became
+> **Appendix H**. The merged manuscript builds at 9 content pages of 9.
+>
+> **Why the merge went in that direction rather than this one.** This document
+> stops at wave 23: it carries none of waves 24–28 — no reversal-control second
+> term, no `no-position` arm, no 261 ms timescale, no spike-dropout ladder. And
+> **no verification script has ever covered it.** `scripts/check_every_number.py`,
+> `scripts/build_paper.py`, `check_terminology.py`, `check_section0_citations.py`,
+> `verify_published_numbers.py` and `mechanism_coverage.py` all point at
+> `PAPER_DRAFT.md` and none of them reads this file, so its 743 lines of claims
+> have never been through the machinery that makes the rest of this record
+> citable. Merging into the covered document put the harvested material under
+> that machinery; merging into this one would have taken verified prose out of it.
+>
+> **Three places here are now false, all saying the same thing.** §8.1 ("A note
+> on the repository README") says the README reports DFA 0.9387 and RL 0.9200 and
+> cites retired `c1-*` hashes; the README was repaired on 2026-09-07 and now
+> carries the post-re-run figures and hashes that resolve. §12 repeats the claim
+> about those hashes, and the "Authority and provenance" note immediately below
+> asserts the README is stale. All three were true when written and are not now.
+
+*Whole-project manuscript, 2026-08-31. Superseded; see the banner above. Written as a companion to [`PAPER_DRAFT.md`](PAPER_DRAFT.md) when that document was the camera-ready treatment of the SHD read-out program alone.*
 
 ---
 

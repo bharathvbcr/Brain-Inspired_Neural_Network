@@ -22,12 +22,15 @@ sections = [
   "1. Introduction",
   "2. Methods",
   "2.3 SHD attention readout",
+  "2.4 Preregistration, frozen hashes, and kill-gates",
   "3. Results",
   "3.5 SHD attention read-out and mechanism",
   "3.7 The read-out does not substitute for temporal state in the substrate",
   "4. Discussion and limitations",
   "4.1 Lead claim and mechanism",
   "4.6 Neuromorphic benchmark scope and non-claims",
+  "4.7 The withdrawal ledger",
+  "4.8 Open problems",
   "5. Reproducibility",
 ]
 
@@ -58,4 +61,34 @@ sections = [
   "4.5 Appendix-only: G3 / G4 / H0 (do not reopen G2)",
   "Appendix A — Integrity limitations (protocol v2)",
   "Appendix B — Post-G2 harvest (banner)",
+  # Merged in from the standalone instrument manuscript on 2026-09-07. The
+  # main text carries the count, the two episodes and the lesson (4.7); the
+  # entry-by-entry ledger and the secondary programme's non-claims are here,
+  # where the appendix has room for them and the page budget does not.
+  "Appendix C — The withdrawal ledger in full",
+  "Appendix D — Non-claims: the matched and engine programs",
+  # Finding 4 of 3.5, moved out of the main text 2026-09-07 to pay for the
+  # merged method (2.4), ledger (4.7) and open problems (4.8). The main text
+  # keeps the shape of the collapse and the open problem it leaves; what moved
+  # is the rung-by-rung arithmetic, the budget dependence and the three
+  # negative rescue levers.
+  "Appendix E — The width collapse at h1024",
+  "Appendix F — What the advantage runs through",
+  # The waves 26-28 decomposition, moved out of 3.5 on 2026-09-07. It is the
+  # deepest material in the paper and the most narrowly scoped -- three
+  # manipulations at ONE operating point, supporting a contrast already
+  # established at twenty-one. The main text keeps each finding and the scope
+  # limit; the arithmetic moved.
+  # Two paragraphs lifted out of 4.6 on 2026-09-07: both are about the
+  # third-party reference artifact rather than the read-out, and 3.8 -- the
+  # section that owns that subject -- is already here.
+  "Appendix G — The calibration criteria and the 0.80 floor",
+  # A verbatim block in the main text costs a full page here: it breaks
+  # float placement for the five full-width figures, which are themselves
+  # main-text pages. 5 states the same commands in prose and points here.
+  "Appendix H — Reproduction commands",
+  # A seven-column table in the main text is expensive twice over: its own
+  # height, and the float displacement it forces on the five full-width
+  # figures. 3.5 keeps every number from it in prose.
+  "Appendix I — The resolution ladder",
 ]
