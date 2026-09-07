@@ -212,7 +212,25 @@ with LCB −0.0048. Nobody has isolated why.
       decision required — for something already decided by measurement. That is
       the same defect class as the record checks pointing at a corpus that had
       moved: a document nothing verifies against the artefacts it describes.
-- [!] **Provenance flag.** Default-off, awaiting a human decision.
+- [x] **Provenance flag.** *(Decided 2026-08-05; this entry was stale until
+      2026-09-07.)* `PROVENANCE_DISCHARGE_ENABLED` is **`True`** at
+      `scripts/shd_calibration/runner.py:334`, and the comment above it records
+      why: it shipped default-off because discharging a provenance freeze is a
+      judgement about what counts as evidence rather than an engineering call —
+      "and that judgement was not the agent's to make. **It has now been
+      made.**" Enabling it is not a bypass: `gate_f_discharge` still requires a
+      PASS for *this* binary hash over at least `PROVENANCE_MIN_GATE_F_CELLS`
+      cells spanning two geometries and two widths, and data-file changes stay
+      undischargeable regardless.
+
+      **This entry outlived its decision by 33 days**, flagged `[!]` — human
+      decision required — for something a human had already decided. That is the
+      **third** instance of one class found on 2026-09-07, after
+      `matrix_authorized` (five weeks) and the defect register's claim that no
+      result depends on `binn-engine`. All three are documents nothing verifies
+      against the artefacts they describe.
+      `scripts/test_open_work_is_current.py` now closes the two that are
+      mechanically checkable.
 
 ## 6. Audit debt
 
