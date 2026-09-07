@@ -33,7 +33,20 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CAMPAIGN = ROOT / "results/shd_attention_campaign_v2"
+#: Waves 26-28 landed in a third campaign directory beside the second, and a
+#: single hardcoded `CAMPAIGN` could not see their verdicts however they were
+#: spelled. Resolution is across all of them and an ambiguous name is an error,
+#: so a `VERDICTS_W28.md` in two corpora fails rather than silently picking one.
+CAMPAIGNS = [
+    ROOT / "results/shd_attention_campaign_v2",
+    ROOT / "results/shd_attention_campaign_v3",
+]
+
+
+def resolve(name: str) -> Path | None:
+    """The one campaign directory holding `name`, or None if not exactly one."""
+    found = [c / name for c in CAMPAIGNS if (c / name).is_file()]
+    return found[0] if len(found) == 1 else None
 
 #: `(generated verdicts, the write-up that must agree with them)`.
 PAIRS = [
@@ -56,6 +69,12 @@ PAIRS = [
      "RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md"),
     ("VERDICTS_W25.md",
      "RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md"),
+    ("VERDICTS_W26.md",
+     "RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md"),
+    ("VERDICTS_W27.md",
+     "RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md"),
+    ("VERDICTS_W28.md",
+     "RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md"),
 ]
 
 #: Wave results this check CANNOT cross-check, each with the reason.
@@ -112,6 +131,19 @@ GENERATED = re.compile(
 #: exists rather than a silently empty comparison.
 GENERATED_INLINE = re.compile(
     rf"\*\*([A-Z]\d*-\d+[a-z]?):\s*({VERDICT})\*\*")
+#: The wave-26, -27 and -28 analysers print for a terminal, not for markdown:
+#: `H28-1  dropout becomes a manipulation the substrate can feel: MET`, with no
+#: emphasis anywhere. Neither pattern above matches a single character of that,
+#: so the `if not generated` guard was the only thing standing between the
+#: campaign's three newest waves and a check that read nothing — and it could
+#: not fire, because they were never in PAIRS at all.
+#:
+#: The verdict must run to end of line, and no colon may precede it on that
+#: line. That is what keeps `H26-1c (secondary, reported not required): entropy
+#: at e400/d32l4 = 0.002..., threshold 0.3 -> below` — a real line, with a real
+#: colon, about a hypothesis carrying no verdict — from matching.
+GENERATED_PLAIN = re.compile(
+    rf"^[ \t]*([A-Z]\d*-\d+[a-z]?)\b[^\n:]*:[ \t]*({VERDICT})[ \t]*$", re.M)
 #: A write-up states it either as a heading, `**X-1 — VERDICT`, or in a table.
 HAND_PROSE = re.compile(rf"\*\*([A-Z]\d*-\d+[a-z]?)\s*[—–-]+\s*({VERDICT})")
 #: A write-up's verdict table. The column count is not fixed: waves 8 and 12-14
@@ -120,6 +152,37 @@ HAND_PROSE = re.compile(rf"\*\*([A-Z]\d*-\d+[a-z]?)\s*[—–-]+\s*({VERDICT})")
 #: — loudly, which is the only reason it was found rather than passed over.
 HAND_TABLE = re.compile(
     rf"\*\*([A-Z]\d*-\d+[a-z]?)\*\*(?:[^\n|]*\|){{1,4}}[^\n]*?\*\*({VERDICT})\*\*")
+#: `**H28-1: MET.**` — waves 26 and 28. `HAND_PROSE` demands a dash and
+#: `GENERATED_INLINE`'s identical-looking pattern demands `**` immediately after
+#: the verdict, so the sentence-ending period defeats both. The trailing `\.?`
+#: is the whole difference. `\*\*` still closes the match, so a verdict token
+#: cannot be matched as the prefix of a longer word.
+HAND_COLON = re.compile(
+    rf"\*\*([A-Z]\d*-\d+[a-z]?):\s*({VERDICT})\.?\*\*")
+#: Wave 27 puts the hypothesis in the section heading and opens the section
+#: body with a bare `**NOT MET.**`. Nothing joins the two but position, so the
+#: verdict is read from the heading's own section and no further: the scan stops
+#: at the next `##`, and a heading naming two hypotheses (`## 5. H27-5 and
+#: H27-6 — questions and thresholds, carrying no verdict`) is skipped rather
+#: than having one section's verdict attributed to both of them.
+HAND_HEADING = re.compile(r"^##[^\n]*$", re.M)
+HAND_HEADING_ID = re.compile(r"\b([A-Z]\d*-\d+[a-z]?)\b")
+HAND_HEADING_VERDICT = re.compile(rf"\*\*({VERDICT})\.?\*\*")
+
+
+def heading_scoped(text: str) -> dict[str, str]:
+    """`{hypothesis: verdict}` for headings naming exactly one hypothesis."""
+    found: dict[str, str] = {}
+    headings = list(HAND_HEADING.finditer(text))
+    for i, heading in enumerate(headings):
+        ids = HAND_HEADING_ID.findall(heading.group())
+        if len(ids) != 1:
+            continue
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(text)
+        verdict = HAND_HEADING_VERDICT.search(text, heading.end(), end)
+        if verdict:
+            found[ids[0]] = verdict.group(1)
+    return found
 
 
 def main() -> int:
@@ -145,7 +208,13 @@ def main() -> int:
           f"{len(NO_VERDICTS)} declared uncheckable")
 
     for generated_name, hand_name in PAIRS:
-        generated_path, hand_path = CAMPAIGN / generated_name, ROOT / "results" / hand_name
+        generated_path = resolve(generated_name)
+        hand_path = ROOT / "results" / hand_name
+        if generated_path is None:
+            problems.append(
+                f"{generated_name}: not found in exactly one of "
+                f"{', '.join(c.name for c in CAMPAIGNS)}")
+            continue
         # Scoped to this pair. Testing the global `problems` list meant one
         # problem in the first document silently skipped every document after
         # it, so a single missing file could reduce the check to one comparison.
@@ -156,10 +225,25 @@ def main() -> int:
             continue
 
         generated_text = generated_path.read_text()
-        generated = {k: v for k, _, v in GENERATED.findall(generated_text)}
-        generated |= dict(GENERATED_INLINE.findall(generated_text))
+        # An analyser that states one hypothesis twice — once in its section and
+        # again in a closing summary — must state it the same way both times.
+        # `dict()` would keep the last silently, which is how a summary line
+        # could contradict the section above it and publish the contradiction.
+        generated: dict[str, str] = {}
+        for key, verdict in ([(k, v) for k, _, v in GENERATED.findall(generated_text)]
+                             + GENERATED_INLINE.findall(generated_text)
+                             + GENERATED_PLAIN.findall(generated_text)):
+            if generated.setdefault(key, verdict) != verdict:
+                problems.append(
+                    f"{generated_name}: {key} appears twice with different "
+                    f"verdicts ({generated[key]!r} and {verdict!r}). The "
+                    f"analyser contradicts itself; nothing downstream can be "
+                    f"cross-checked against it.")
         hand_text = hand_path.read_text()
-        hand = dict(HAND_PROSE.findall(hand_text)) | dict(HAND_TABLE.findall(hand_text))
+        hand = (dict(HAND_PROSE.findall(hand_text))
+                | dict(HAND_TABLE.findall(hand_text))
+                | dict(HAND_COLON.findall(hand_text))
+                | heading_scoped(hand_text))
 
         if not generated:
             problems.append(f"{generated_name}: no verdicts parsed; the analyser's "

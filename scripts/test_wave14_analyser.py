@@ -57,7 +57,23 @@ def spec_for(arm: str, seed: int) -> dict:
 
 
 def cell_for(arm: str, accuracy: float) -> dict:
-    return {
+    """A cell shaped like the ones on disk, which is not what this was.
+
+    `spec_for` has always pinned `attn_dim`/`attn_layers` on the attention arms
+    and this fixture never wrote them into the cell, so the fixture cell and the
+    real cell disagreed about the run they describe. It did not show while
+    `cell_validity` compared the plan on a handful of fields; commit 837a4d5
+    ("A cell must have run what the plan asked for, on more than one field")
+    added both to `PLAN_PINNED_FIELDS`, and every attention cell in this fixture
+    started voiding for a mismatch that exists only here. Checked against the
+    corpus rather than guessed: a real `w14sub__ff-fixed-attn` cell records
+    `attn_dim: 32` and `attn_layers: 4`, and a real `w14sub__ff-fixed` cell
+    records neither -- so the condition below is the corpus's own.
+
+    The four tests that broke are the four that call `collect`. They were the
+    ones exercising the analyser on cells no run produces.
+    """
+    cell = {
         "schema": "shd-cal-cell-v1", "arm": arm, "mechanical_status": "COMPLETE",
         "accuracy": accuracy, "classes_predicted": 20, "majority_prediction": 0.11,
         "silent_fraction": 0.02, "saturated_fraction": 0.0, "non_finite_events": 0,
@@ -66,6 +82,9 @@ def cell_for(arm: str, accuracy: float) -> dict:
         "geometry": "adjacent-sum-5",
         "epoch_max_gradient_norm": [1.0, 4.0, 12.0],
     }
+    if arm.endswith("+attn"):
+        cell |= {"attn_dim": 32, "attn_layers": 4}
+    return cell
 
 
 class Wave14AnalyserTest(unittest.TestCase):
@@ -188,6 +207,37 @@ class Wave14AnalyserTest(unittest.TestCase):
         self.assertIn("No mean is reported", m1)
 
     # --- the reused arm ------------------------------------------------------
+
+    def test_a_clean_grid_voids_nothing(self):
+        """The invariant that broke, stated directly.
+
+        Four tests failed with wrong arithmetic and a confusing message when
+        `cell_validity` started pinning two more fields, because a voided cell
+        and an absent cell reach `completions` the same way: not counted. This
+        says the fixture is a grid of VALID cells, so the next widening of
+        `PLAN_PINNED_FIELDS` fails here with the field name in the message
+        rather than four assertion errors about numbers.
+        """
+        outcomes = self.outcomes(self.full())
+        voided = {k: o["why"] for k, o in outcomes.items() if o["state"] == "voided"}
+        self.assertEqual(voided, {}, voided)
+
+    def test_the_fixture_cell_carries_what_a_real_cell_carries(self):
+        """The fixture is only evidence about the analyser if it is shaped like
+        the corpus. Read from a committed wave-14 cell, not from memory."""
+        corpus = ROOT / "results/shd_attention_campaign_v2"
+        for arm, glob in (("ff+fixed+attn", "w14sub__ff-fixed-attn__*.json"),
+                          ("ff+fixed", "w14sub__ff-fixed__*.json")):
+            real = sorted(corpus.glob(glob))
+            self.assertTrue(real, f"no committed cell matches {glob}")
+            real_cell = json.loads(real[0].read_text())
+            fixture = cell_for(arm, 0.83)
+            for field in ("attn_dim", "attn_layers"):
+                with self.subTest(arm=arm, field=field):
+                    self.assertEqual(
+                        field in fixture, field in real_cell,
+                        f"{arm}: the fixture and {real[0].name} disagree about "
+                        f"whether a cell records {field}")
 
     def test_the_reused_arm_is_read_from_wave_13_ids(self):
         outcomes = self.outcomes(self.full())

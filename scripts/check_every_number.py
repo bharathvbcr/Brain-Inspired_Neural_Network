@@ -51,7 +51,27 @@ CORPORA = [
     # recomputed. Its own write-up said the figures had been "re-derived from
     # those files"; by hand, once, by the person who wrote them down.
     ROOT / "results/azure-d32l4-scope-v1/results",
+    # Waves 26-28 landed in a THIRD corpus directory and this list was last
+    # edited at wave 25, so all 612 of their cells sat outside the sweep while
+    # it went on reporting a count. The symptom was thirteen numbers in three
+    # wave results declared underivable -- correctly, because the cells that
+    # produce them were not being read. The floor below is what makes the same
+    # omission fail loudly the next time a corpus is added.
+    ROOT / "results/shd_attention_campaign_v3",
 ]
+
+#: Cells the sweep must find before it may report on anything. A corpus path
+#: that stops matching -- renamed, moved, or a directory nobody added -- reads
+#: as an empty glob, and an empty glob makes every number resting on it
+#: "underivable" rather than making the sweep say it lost its evidence. That is
+#: the difference between a wrong number and an unread corpus, and this script
+#: reported the second as the first for three waves.
+#:
+#: 3,886 cells load today. The floor is set so that losing ANY corpus trips it,
+#: including the smallest: azure is 95 cells, and 3,886 - 95 = 3,791 < 3,800.
+#: `len(groups) < 50` above cannot do this job -- v2 alone carries hundreds of
+#: configurations, so three of the four corpora can vanish beneath it.
+MIN_CELLS = 3800
 
 #: The wave results. Each rests on the cell corpora above and nothing else.
 # Wave results, by wave number rather than by date. The pattern was
@@ -152,6 +172,39 @@ KNOWN_COINCIDENCE = {
               "dense-LIF C1 program, from "
               "`results/matched_rerun_2026-08-25/c1_match_recurrent.md`. That "
               "program does not run on the SHD instrument at all.",
+    # Surfaced on 2026-09-07 when waves 26-28's 612 cells were added to CORPORA
+    # -- the corpus that had been sitting unread while thirteen of their own
+    # numbers were reported as underivable. Checked rather than assumed: with
+    # the v3 corpus removed, `explain` returns None for all seven, so not one of
+    # them was reachable by any generator before those cells landed. That is the
+    # flicker `0.0192` is declared on, seven times over.
+    #
+    # Six name a source in the C1 / matched-architecture / Track B program.
+    # Grepped: not one of those six documents contains the string "SHD". They
+    # are a different task, a different substrate and a different harness, and
+    # no cell of this campaign computes anything they report.
+    "0.1380": "the structured-feedback continual-learning gap lower bound "
+              "(z=1.960, n=20) from `results/c1_sfb_cont.md`.",
+    "0.2601": "the live-DFA gap lower bound (z=1.960, n=20) from "
+              "`results/c1_dfa_live.md`. Same program, same reasoning.",
+    "0.7262": "the mean local-assembly accuracy of structured-B from "
+              "`results/c1_sfb.md` (0.7262 +- 0.059176).",
+    "0.9925": "the matched-architecture graded-error x DFA arm's dense "
+              "reference accuracy, from "
+              "`results/matched_rerun_2026-08-25/c1_matched-dfa_feedforward.md`.",
+    "0.9950": "the matched-architecture REINFORCE x DFA-feedback arm's dense "
+              "reference accuracy, from the rerun beside it. Same program.",
+    "0.9988": "the gap-closed figure of Track B v130 E1.3, from a result this "
+              "repository WITHDREW on 2026-08-19. A withdrawn number is still a "
+              "published one and still has to be traceable; that it is now also "
+              "reachable by an SHD cell pair is arithmetic.",
+    # Already carried in ELSEWHERE as a second-order gain difference. It now
+    # additionally collides with a `pooled` value, so it needs both: the
+    # ELSEWHERE entry says what it is, this says the generator does not derive
+    # it. `0.9972` is carried in both for the same reason.
+    "0.2145": "H23-2, gain(e100) - gain(e400) at h1024/d32L4, declared in "
+              "ELSEWHERE as second order. The `pooled` collision arrived with "
+              "the v3 cells and is not a derivation of a difference of gains.",
     "0.6825": "the local accuracy of structured-B on a capacity substrate, from "
               "`results/c1_sfb_cap.md` — the same program, the same reasoning.",
     "0.9875": "the graded-DFA gap LCB, from "
@@ -466,6 +519,29 @@ ELSEWHERE = [
     ("0.9972", "the same, over its 48 `bin-shuffled` cells. The `reversed` "
                "figure of 0.9986 is NOT here: a first-order value happens to "
                "collide with it, so the sweep reaches it and needs no entry"),
+    # Waves 26 and 27. The read-out probe is a SECOND corpus -- 24
+    # `probes/*.jsonl` files carrying `normalised_entropy`, `q_norm` and
+    # `k_norm` per epoch -- and this sweep loads `*.json` cells and reads
+    # `accuracy` from them, so no generator reaches a probe quantity however
+    # dense the cells get. Same reason as the `relocated_fraction` pair above.
+    # Every figure below is printed by `scripts/aws/analyse_wave26.py`, the
+    # wave's frozen analyser, and is reproduced verbatim in
+    # `results/shd_attention_campaign_v3/VERDICTS_W26.md`.
+    ("0.0801", "H26-1a, the d32l2 control's mean normalised attention entropy "
+               "at e400 (n=12). A probe field, not an accuracy"),
+    ("0.2118", "H26-1a, the d32l4 entropy drop e100 -> e400 (0.2138 -> 0.0021). "
+               "A difference of probe quantities, so second order on a corpus "
+               "this sweep does not load at all"),
+    ("0.1216", "H26-1a's specificity clause: the d32l4 drop of 0.2118 less the "
+               "d32l2 drop of 0.0902. A difference OF differences of probe "
+               "quantities, and the number the clause FAILED on -- the "
+               "registered margin was >= 0.15"),
+    # Wave 27. A different cell field, not a different corpus.
+    ("0.7035", "H27-6's rate-arm accuracy on the held-out-speaker validation "
+               "split. The cells carry it beside `accuracy`, which is the test "
+               "split and the only field this sweep generates from; the two are "
+               "different numbers on different data. Registered as model "
+               "selection only -- no headline number, no DiD, no bar"),
     # Wave 25. The same class again, one order further out for the second.
     ("0.2631", "H25-2, the seed-paired DiD under `channel-shuffled` at "
                "h128 / `fixed-t100`. Second order"),
@@ -886,6 +962,14 @@ def main() -> int:
     if len(groups) < 50:
         print(f"only {len(groups)} configurations loaded; the corpora are not "
               "where this expects them", file=sys.stderr)
+        return 1
+    cells = sum(len(seeds) for seeds in groups.values())
+    if cells < MIN_CELLS:
+        print(f"{cells} cells loaded from {len(CORPORA)} corpora, below the "
+              f"floor of {MIN_CELLS}. A corpus has moved, been renamed, or was "
+              f"never added to CORPORA. Do NOT read the report below as "
+              f"'these numbers are underivable' — the cells that derive them "
+              f"are not being read.", file=sys.stderr)
         return 1
     if len(DOCUMENTS) < MIN_DOCUMENTS:
         print(f"{len(DOCUMENTS)} wave-result documents matched, below the floor "

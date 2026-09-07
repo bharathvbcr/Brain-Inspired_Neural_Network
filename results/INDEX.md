@@ -2,15 +2,15 @@
 
 # Record index
 
-353 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+355 documents. **14 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 49 | 0 |
-| Results | 45 | 2 |
+| Results | 46 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 12 | 0 |
-| Amendments | 18 | 1 |
+| Amendments | 19 | 1 |
 | Defects | 8 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 4 | 0 |
@@ -115,6 +115,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-06 | [RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md) | Wave 28 — the read-out survives what the substrate cannot |
 | 2026-09-05 | [RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md) | Wave 27 — the read-out's order-dependence has a timescale, and it is 261 ms |
 | 2026-09-04 | [RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md) | Wave 26 — the saturation is real, and it is not specific to the collapse |
 | 2026-09-03 | [RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md) | Result — synchrony is an axis, depth is a scope limit, the budget limit is gone, and the recurrent question could not be asked |
@@ -209,6 +210,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-06 | [AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md](AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md) | Amendment — the wave-28 analyser measured against the null arm |
 | 2026-09-05 | [AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md](AMENDMENT_2026-09-05_THE_SAME_DEFECT_THROUGH_THE_OTHER_ARM.md) | Amendment — the same defect, arriving a second time through the other arm |
 | 2026-09-04 | [AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md](AMENDMENT_2026-09-04_THE_LADDER_HAD_NO_BASELINE.md) | Amendment — the H26-3 ladder was paired against a wave that holds no `intact` |
 | 2026-09-03 | [AMENDMENT_2026-09-03_A_CLAUSE_THAT_DID_NOT_RUN.md](AMENDMENT_2026-09-03_A_CLAUSE_THAT_DID_NOT_RUN.md) | Amendment — the wave-26 analyser could not say "this did not run" |

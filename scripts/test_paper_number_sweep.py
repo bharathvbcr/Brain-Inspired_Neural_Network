@@ -187,6 +187,32 @@ class TheRealTableTest(unittest.TestCase):
         for value, relpath, what in CEN.PAPER_SOURCES:
             self.assertTrue(what.strip(), f"{value} ({relpath}) has no reason")
 
+    def test_the_v3_corpus_is_swept(self):
+        """Waves 26-28 landed in a third corpus directory and CORPORA was last
+        edited at wave 25, so all 612 of their cells sat outside this sweep
+        while it reported thirteen of their own numbers as underivable. An
+        empty corpus and a wrong number are not the same finding."""
+        names = {c.name for c in CEN.CORPORA}
+        self.assertIn("shd_attention_campaign_v3", names, names)
+
+    def test_the_cell_floor_fires_when_a_corpus_goes_missing(self):
+        """`len(groups) < 50` cannot do this job: v2 alone carries hundreds of
+        configurations, so three of the four corpora can vanish beneath it.
+        Losing the smallest corpus must still trip the floor."""
+        loaded = CEN.load()
+        cells = sum(len(seeds) for seeds in loaded.values())
+        self.assertGreaterEqual(cells, CEN.MIN_CELLS)
+        smallest = min(sum(1 for _ in root.glob("*.json")) for root in CEN.CORPORA)
+        self.assertLess(cells - smallest, CEN.MIN_CELLS,
+                        f"{cells} cells and the smallest corpus is {smallest}; "
+                        f"the floor of {CEN.MIN_CELLS} would not notice it going")
+
+    def test_the_cell_floor_is_read_and_defined_once(self):
+        """A floor that could not fire is what `MIN_DOCUMENTS` was for a week."""
+        source = (ROOT / "scripts/check_every_number.py").read_text()
+        self.assertEqual(source.count("\nMIN_CELLS = "), 1)
+        self.assertIn("cells < MIN_CELLS", source)
+
     def test_the_document_floor_is_read_and_defined_once(self):
         """`MIN_DOCUMENTS` was declared on 2026-08-24 and never used: a floor
         that could not fire. It was also defined twice for part of 2026-08-27,
