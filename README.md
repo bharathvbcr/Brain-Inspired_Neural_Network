@@ -175,8 +175,9 @@ The central thesis was that compartmental LIF cells, sparse $k$-WTA assemblies, 
 
 ### What the Experiments Found
 1. **Broadcast $\pm 1$ Three-Factor Insufficiency (Lead Negative — Gate G2 / C1):**
-   - On an identical dense-LIF forward pass, broadcast $\pm 1$ scalar reward fails to guide credit assignment, remaining at chance accuracy (**0.5000**, gap LCB **0.0000**; `c1-match-5dc6822e71229e9e`, **FAIL**).
-   - In contrast, graded feedback alignment (**Matched DFA: 0.9387**) and per-neuron feedback (**Matched RL: 0.9200**) pass the gate. Spatial addressability or gradient-aligned signals are strictly required.
+   - On an identical dense-LIF forward pass, broadcast $\pm 1$ scalar reward fails to guide credit assignment, remaining at chance accuracy (**0.5000** feed-forward, **0.5100** recurrent; gap LCB **0.0000** and **−0.0192**; `c1-match-6f6000f148f7d30c`, **FAIL** on both graphs, $n=20$).
+   - In contrast, graded feedback alignment (**Matched DFA: 0.9925**) and per-neuron feedback (**Matched RL: 0.9950**) pass the gate. Spatial addressability or gradient-aligned signals are strictly required.
+   - These are the **post-repair** figures. The 2026-07 record reported 0.9387 and 0.9200 for the same two arms on a forward pass that emitted **zero spikes at every seed**; the repair and the 20-seed rerun that replaced them are in [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](results/RESULT_2026-08-25_MATCHED_ARCH_RERUN.md), which also **retired the four config hashes** those numbers were published under. The lead negative is the one arm that survived the repair unchanged.
 2. **Live $k$-WTA Transfer Barrier:**
    - Transferring successful continuous credit rules to event-driven $k$-WTA architectures encounters severe performance drops due to hard competition boundaries and muted thresholds (v13–v24).
 3. **Temporal Attention Readout on LIF (SHD Breakthrough):**
@@ -224,11 +225,11 @@ graph BT
 | Gate | Result | Metric / Hash | Scientific Verdict |
 |---|---|---|---|
 | **G2 (C1 Crux)** | **FAIL** | `c1-118207fbc3eaba53` | Local 3-factor / assembly learning stayed near chance; matched gradient reference passed |
-| **Matched DFA** | **PASS** | `c1-dfa-c8c4fe0899908b84` | Accuracy **0.9387**, Gap LCB **0.6894** (disclose broadcast-graded **0.9863**) |
-| **Matched RL** | **PASS** | `c1-rl-42eddc9c801308e9` | Accuracy **0.9200**, Gap LCB **0.6846** (REINFORCE × frozen $B_i$) |
+| **Matched DFA** | **PASS** | `c1-dfa-f79c01ea36fe27d7` | Accuracy **0.9925**, Gap LCB **0.9689** (disclose broadcast-graded **0.9975**) |
+| **Matched RL** | **PASS** | `c1-rl-d35e13c758e522f8` | Accuracy **0.9950**, Gap LCB **0.9765** (REINFORCE × frozen $B_i$) |
 | **G3 (C2 Continual)** | **FAIL** | Local forgetting 0.8948 vs replay baseline 0.2725 | Plasticity alone does not prevent catastrophic forgetting without replay |
 | **G4 (R2 Scaling)** | **NO-GO** | Degrading curve (slope −0.1924 vs ln(#areas)) | Area composition does not compound accuracy without hierarchy |
-| **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–9, $n=12$, 0 voided | Headline **0.8320** (+0.1258 over rate readout). Mechanism is **temporal order** (+0.1337 shuffle drop) |
+| **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–28, $n=12$ at the anchor, 0 voided | Headline **0.8320** (+0.1258 over rate readout; **0.8332**/+0.1275 at $n=32$). Mechanism is **temporal order** (+0.1337 shuffle drop at $n=12$, **+0.1347 in 32/32**), and it **runs through position** (−0.0752), **has a timescale** ($\tau_{1/2}$ = **261 ms**) and **does not run through spike counts** |
 
 ---
 
@@ -249,15 +250,15 @@ cargo run --locked --release -p binn-lab --bin c1 -- --quick
 # 3. Replay exact scientific hashes
 # Matched broadcast ±1 (FAIL):
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch \
-  --config-hash c1-match-5dc6822e71229e9e
+  --config-hash c1-match-6f6000f148f7d30c
 
 # Matched DFA (PASS):
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa \
-  --config-hash c1-dfa-c8c4fe0899908b84
+  --config-hash c1-dfa-f79c01ea36fe27d7
 
 # Matched RL (PASS):
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl \
-  --config-hash c1-rl-42eddc9c801308e9
+  --config-hash c1-rl-d35e13c758e522f8
 
 # Canonical C1 / Gate G2 Replay:
 cargo run --locked --release -p binn-lab --bin c1 -- \

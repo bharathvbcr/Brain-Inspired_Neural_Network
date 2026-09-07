@@ -103,9 +103,31 @@ def retired_hashes() -> set[str]:
     return {r for r, _, _ in freeze_blocks().values()}
 
 
+#: Directories that hold no published claim: build output, tooling caches, and
+#: version control. Everything else is in scope.
+NOT_THE_RECORD = {".git", "target", "node_modules", ".venv", "__pycache__",
+                  ".devcouncil", ".pytest_cache"}
+
+
 def record_documents() -> list[Path]:
-    """Every markdown file in `results/`, at any depth."""
-    return sorted((ROOT / "results").rglob("*.md"))
+    """Every markdown file in the repository, at any depth.
+
+    This swept `results/` only, and the repository's front door is `README.md`.
+    On 2026-09-07 that file was still publishing three `--config-hash` replay
+    commands naming hashes retired on 2026-08-25, beside the pre-repair 0.9387
+    and 0.9200 the rerun withdrew -- the exact defect this file was written to
+    catch, in the one document a visitor reads first, one directory outside the
+    only directory it looked at.
+
+    A scope drawn around where the problem was found last time will keep missing
+    it. So: everything tracked, minus build output and caches. The per-test
+    exclusions still apply -- `runs/` is history and is skipped below, and
+    `RETIREMENT_RECORDS` names the documents whose subject IS the retirement.
+    """
+    return sorted(
+        path for path in ROOT.rglob("*.md")
+        if not NOT_THE_RECORD & set(path.relative_to(ROOT).parts)
+    )
 
 
 class FreezeCommentsTest(unittest.TestCase):
@@ -141,6 +163,23 @@ class ReproductionCommandsTest(unittest.TestCase):
         found = [h for doc in record_documents()
                  for h in re.findall(r"--config-hash\s+(c1[\w-]+)", doc.read_text())]
         self.assertGreater(len(found), 5, found)
+
+    def test_the_repository_front_door_is_in_scope(self):
+        """`README.md` is one directory outside `results/` and is the document
+        most likely to be read and least likely to be re-checked. It published
+        three retired hashes for thirteen days while every test here passed."""
+        docs = record_documents()
+        self.assertIn(ROOT / "README.md", docs)
+        self.assertTrue(
+            re.search(r"--config-hash\s+(c1[\w-]+)", (ROOT / "README.md").read_text()),
+            "README.md publishes no replay command; this test now checks nothing")
+
+    def test_the_scan_reaches_outside_results(self):
+        """The whole point of the widening. A scope that silently narrows back
+        to `results/` would make the front door unguarded again."""
+        outside = [d for d in record_documents()
+                   if d.relative_to(ROOT).parts[0] != "results"]
+        self.assertGreater(len(outside), 10, len(outside))
 
     def test_no_published_command_names_a_retired_hash(self):
         offences = []
