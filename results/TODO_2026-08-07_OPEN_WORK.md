@@ -143,7 +143,26 @@ with LCB −0.0048. Nobody has isolated why.
       registered and had their analyser frozen in commits that precede their
       first cell. The ordering that carries the epistemic weight is attested by
       git history rather than by prose and mtimes.
-- [~] **Gate F to 13/13 on the current binary.** Currently 7 cells, 0 failures.
+- [x] **Gate F on the current binary.** *(Run 2026-09-07: **218/218
+      bit-identical, 0 failures, PASS**.)* This entry asked for 13/13 and said
+      the standing coverage was 7 cells. Both numbers were stale: the committed
+      report already carried 14, and `--all` re-runs **218**.
+
+      `scripts/gate_f_rust.py --all` against binary
+      `8485b6f717b3a8ee74c915abb772c71f461fe5f459cac56b701101f762bbb89b`. The
+      archived report was cut on `fe7904a48dd41609...`, a build that no longer
+      exists, so this is the first Gate F pass on the binary in the tree.
+
+      **The reference was not touched.** Gate F reads
+      `shd_instrument_v4/cells/` and writes its observations to
+      `shd_instrument_v4/gate-f-rust/`, unlinking each before the re-run so an
+      instrument that exits 0 without writing cannot be scored BIT_IDENTICAL
+      against a stale file. `git status` on `cells/` is empty.
+
+      Every non-timestamp difference in the refreshed observations is a field
+      the archived cells predate — `tau_m`, `surrogate_scale`, the clipping
+      counters, `epoch_max_gradient_*`, and five `temporal_audit` sub-fields,
+      all absent before and present now. **Not one field changed value.**
 - [x] **`matrix_authorized`.** *(Closed 2026-08-23; this entry was stale until
       2026-09-07.)* It was false since 2026-08-03 alongside
       `historical_reference` and `clean_reference`, and this entry said the
@@ -194,8 +213,23 @@ with LCB −0.0048. Nobody has isolated why.
 - [!] **Python arm.** Unswept by instruction; `matrix_verdict` reports `FAIL`
       with the cross-backend criterion explicitly unmet. Rerunning all 216 under
       the amended instrument is ≈4.4 days and cannot change any conclusion.
-- [ ] **Gate E / G7.** No cross-backend recurrent fixture; agreement is argued,
-      not measured.
+- [x] **Gate E / G7.** *(Measured 2026-09-07.)* There is a cross-backend
+      recurrent fixture and it agrees. `scripts/gate_e_recurrent_parity.py`
+      reports **GATE E: PASS**, 30 of 30 fields within 1e-09 absolute or 1e-05
+      relative, across all four arms — and **16 of 16 on the recurrent arms**,
+      which is the claim this entry called argued. `grad_w_rec` agrees at
+      **exactly 0.000e+00** on both `rec+fixed` and `rec+alif`; spikes, rates
+      and logits are exact on every arm. The script says so in its own closing
+      line.
+
+      **It was never unrunnable — it was unrun.** The blocker was `h5py`, which
+      `requirements-shd-calibration.txt` has always declared and which was not
+      installed, so the gate raised `ModuleNotFoundError` and two Python suites
+      reported "could not run". `gate_e_recurrent_parity.py` needs only `h5py`
+      and `numpy`; the torch stack in that requirements file belongs to the
+      PyTorch reference, not to this gate. Provisioning those two also unblocked
+      `test_provenance_discharge.py` (13 tests) and `test_shd_calibration.py`
+      (8 tests), both of which pass.
 
 ---
 
