@@ -2,7 +2,7 @@
 
 # Record index
 
-359 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+360 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -13,7 +13,7 @@
 | Amendments | 20 | 1 |
 | Defects | 8 | 0 |
 | Hardening | 9 | 0 |
-| Audits | 5 | 0 |
+| Audits | 6 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
@@ -273,6 +273,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-09-07 | [AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md](AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md) | Audit — the experiment binaries |
+| 2026-09-07 | [AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md](AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md) | Audit — `binn-engine` and `binn-areas`, semantically |
 | 2026-09-05 | [AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md](AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md) | Audit — the cross-repository review of September 4, read against the record |
 | 2026-08-30 | [AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md](AUDIT_2026-08-30_SHD_ALIF_AND_SHARED_BPTT.md) | Audit — `shd_alif.rs` and `shared_bptt.rs` |
 | 2026-08-07 | [AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md](AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md) | Audit — the July campaign's scoring path, starting from the arms that score 1.0000 |

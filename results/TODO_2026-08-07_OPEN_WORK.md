@@ -304,11 +304,29 @@ with LCB −0.0048. Nobody has isolated why.
       so nothing compared a cell's realised sample count to the plan that asked
       for it ([`AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md`](AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md)).
 
-      **Still open:** `binn-engine/src/{cell,engine,resting,parallel,synapse,
-      spikelog}.rs` and `binn-areas/`, which have had the generic class greps
-      (2026-08-03) but no semantic audit. Nothing in the repository is now
-      unswept at the class level; what remains is semantic, and it is bounded to
-      those files.
+      **Swept 2026-09-07, third pass — and this entry is now closed.**
+      `binn-engine/src/{cell,engine,resting,parallel,synapse,spikelog}.rs` and
+      all of `binn-areas/src/` read semantically, with three mutations run to
+      test whether the suites are live rather than judged by reading
+      ([`AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md`](AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md)).
+      **No defect.** Reversing k-WTA so it selects the lowest scores fails four
+      tests; deleting the dendritic leak fails four more, against closed-form
+      solutions rather than recorded fingerprints.
+
+      **The result worth carrying forward:** that same corrupted membrane fails
+      exactly three `binn-lab` tests, and **all three are positive controls**.
+      Gate G2 executes the engine, so a corrupted substrate is detectable at the
+      harness level and the thing detecting it is the arm meant to succeed — a
+      suite of negatives cannot tell a broken substrate from a real negative.
+      `binn-areas`' own 28 tests pass against it, which is correct scoping and
+      is stated so nobody reads them as a net for dynamics.
+
+      Also recorded: per-file `#[test]` counts are misleading here — five files
+      showing zero are covered by `binn-areas/tests/determinism.rs`, which
+      carries 11 tests including a negative control that the locality gate *can*
+      fail. One dead-code candidate, `SpikeLog::extend_from`, is reported and
+      **not** removed: one signal, and `devmap dead` returned no rows, which is
+      absence of evidence.
 - [x] July campaign scoring path (`AUDIT_2026-08-07_JULY_CAMPAIGN_SCORING_PATH.md`)
 - [x] Rust instrument defect register (`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`)
 
