@@ -2,14 +2,14 @@
 
 # Record index
 
-361 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+362 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 51 | 0 |
 | Results | 46 | 2 |
 | Findings | 14 | 0 |
-| Measurements | 12 | 0 |
+| Measurements | 13 | 0 |
 | Amendments | 21 | 1 |
 | Defects | 8 | 0 |
 | Hardening | 9 | 0 |
@@ -194,6 +194,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-07 | [MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md](MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md) | Measurement — the transfer-gap decomposition has no task to run on |
 | 2026-08-27 | [MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md](MEASUREMENT_2026-08-27_W20_THE_PLAIN_RECURRENT_ARM_IS_COMPLETE.md) | Measurement — wave 20's plain recurrent arm is complete, and H20-2 is now decidable in advance |
 | 2026-08-27 | [MEASUREMENT_2026-08-27_THE_RECURRENT_FOLLOW_UP_IS_NOT_WARRANTED.md](MEASUREMENT_2026-08-27_THE_RECURRENT_FOLLOW_UP_IS_NOT_WARRANTED.md) | The recurrent-stability follow-up wave is not warranted, and the record already says so |
 | 2026-08-27 | [MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md](MEASUREMENT_2026-08-27_THE_FLEET_RAN_TWO_THREAD_COUNTS.md) | Measurement — the fleet ran two thread counts, and the cells did not notice |

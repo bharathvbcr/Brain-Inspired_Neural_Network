@@ -7,6 +7,20 @@ part of the registration.
 **Design it makes concrete:** [`DESIGN_TRANSFER_GAP_DECOMPOSITION.md`](DESIGN_TRANSFER_GAP_DECOMPOSITION.md)
 **Discharges:** `TODO_2026-08-07_OPEN_WORK.md` §3, "Write the decomposition preregistration"
 
+> **STATUS 2026-09-07 — NOT EVALUABLE on the §4 task precondition. No cell of
+> this wave is scheduled.** The requirement that the dense pole score in 0.7–0.9
+> was tested rather than assumed and cannot be met: `max_lag` is the only knob
+> `CoincidenceTask` exposes (`n_features` is hard-coded, `sequence_len` is the
+> compile-time `REFERENCE_SEQUENCE_LEN = 8`, and `difficulty`/`depth` are
+> overwritten for every frame), its six reachable values were swept end to end
+> at n=20 on all three matched suites, and the ceiling's minimum is 0.9750 and
+> non-monotone while every G2-passing arm stays at 0.93 or above.
+> [`MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md`](MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md)
+> carries the sweep. **Nothing below is withdrawn** — this is §7's
+> "A precondition in §3 unbuildable" row, reported as it requires. The §3
+> instrument preconditions are correspondingly **not built**: an instrument
+> built for a wave that cannot run is the more expensive mistake.
+
 ---
 
 ## 1. The observation, on numbers that survived the repair

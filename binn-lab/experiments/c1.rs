@@ -12,6 +12,7 @@
 //! cargo run -p binn-lab --bin c1 -- --isolation --out results/c1_iso.md
 //! cargo run -p binn-lab --bin c1 -- --matched-arch --quick
 //! cargo run -p binn-lab --bin c1 -- --matched-arch --out results/c1_match.md
+//! cargo run -p binn-lab --bin c1 -- --matched-arch --quick --max-lag 5
 //! cargo run -p binn-lab --bin c1 -- --matched-dfa --quick
 //! cargo run -p binn-lab --bin c1 -- --matched-dfa --out results/c1_dfa.md
 //! cargo run -p binn-lab --bin c1 -- --matched-rl --quick
@@ -58,6 +59,18 @@ fn main() -> ExitCode {
     let mut match_nnz: Option<usize> = None;
     let mut sensitivity: Option<String> = None;
     let mut matched_arch = false;
+    // Task-difficulty override for the matched suite. `None` means "leave the
+    // preset alone", which is what keeps every archived hash reproducible.
+    //
+    // `max_lag` is the ONLY difficulty knob this suite has. `CoincidenceTask`
+    // hard-codes `n_features: 2`, and `sequence_len` is pinned to
+    // `REFERENCE_SEQUENCE_LEN = 8` -- a compile-time constant with `T` baked
+    // into 30 fixed-size arrays across `bptt_baseline.rs` and
+    // `matched_local_baseline.rs`, and asserted at `runner_match.rs:53`. A
+    // `--sequence-len` flag was written here and removed: every value but 8
+    // panicked the runner after printing a config hash, which is worse than no
+    // flag.
+    let mut match_max_lag: Option<usize> = None;
     // The forward graph for every matched suite. `None` keeps each suite's
     // historical default, so an unflagged run reproduces its archived hash.
     let mut matched_forward: Option<MatchedForward> = None;
@@ -117,6 +130,16 @@ fn main() -> ExitCode {
                         return ExitCode::from(2);
                     }
                 };
+            }
+            "--max-lag" => {
+                i += 1;
+                match args.get(i).and_then(|v| v.parse::<usize>().ok()) {
+                    Some(v) if v >= 1 => match_max_lag = Some(v),
+                    other => {
+                        eprintln!("--max-lag takes a positive integer, got {other:?}");
+                        return ExitCode::from(2);
+                    }
+                }
             }
             "--matched-dfa" | "--matched-arch-dfa" => matched_dfa = true,
             "--matched-rl" | "--matched-arch-rl" => matched_rl = true,
@@ -389,6 +412,12 @@ fn main() -> ExitCode {
         eprintln!("--shd-hidden requires --shd-cal");
         return ExitCode::from(2);
     }
+    // A difficulty flag that silently does nothing is how a sweep comes back
+    // flat and gets read as "difficulty does not move the pole".
+    if match_max_lag.is_some() && !(matched_arch || matched_dfa || matched_rl) {
+        eprintln!("--max-lag requires --matched-arch, --matched-dfa or --matched-rl");
+        return ExitCode::from(2);
+    }
 
     if matched_arch {
         return run_matched_arch(
@@ -396,6 +425,7 @@ fn main() -> ExitCode {
             hash.as_deref(),
             out,
             matched_forward,
+            match_max_lag,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -421,6 +451,7 @@ fn main() -> ExitCode {
             hash.as_deref(),
             out,
             matched_forward,
+            match_max_lag,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -445,6 +476,7 @@ fn main() -> ExitCode {
             hash.as_deref(),
             out,
             matched_forward,
+            match_max_lag,
             sensitivity.is_some()
                 || isolation
                 || spike
@@ -1401,11 +1433,13 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_matched_arch(
     quick: bool,
     hash: Option<&str>,
     out: Option<PathBuf>,
     forward: Option<MatchedForward>,
+    max_lag: Option<usize>,
     conflicting_flag: bool,
     undertrain: bool,
 ) -> ExitCode {
@@ -1450,7 +1484,40 @@ fn run_matched_arch(
     if let Some(forward) = forward {
         config.forward = forward;
     }
+    // Task difficulty, applied at the same seam and under the same rule: an
+    // explicit value moves the config hash with it, and omitting the flag
+    // reproduces the archived hash exactly.
+    //
+    // This exists because `PREREG_2026-09-07_THE_TRANSFER_GAP_DECOMPOSITION.md`
+    // makes a task on which the dense pole scores 0.7-0.9 a precondition of the
+    // whole decomposition wave, and the suite's default `max_lag 1` saturates
+    // the pole at exactly 1.0000 with zero variance. Positives carry lag
+    // `0..=max_lag` and negatives `max_lag+1..=len-1`, so raising `max_lag`
+    // toward `len/2` moves the decision boundary out of the tail and into the
+    // bulk of the lag distribution.
+    if let Some(lag) = max_lag {
+        config.base.max_lag = lag;
+    }
+    // `CoincidenceTask::new` silently raises a too-short sequence to
+    // `max_lag + 2`, which would leave the printed hash describing a task the
+    // run did not use. At the pinned `sequence_len = 8` that caps `max_lag` at
+    // 6; refuse rather than let the task quietly re-write itself.
+    if config.base.sequence_len < config.base.max_lag + 2 {
+        eprintln!(
+            "--max-lag {} needs sequence_len >= {}, but this suite pins it at \
+             {}: CoincidenceTask would silently raise the sequence, leaving \
+             this config hash describing a task that did not run",
+            config.base.max_lag,
+            config.base.max_lag + 2,
+            config.base.sequence_len
+        );
+        return ExitCode::from(2);
+    }
     println!("C1-MATCH config hash: {}", config.hash_string());
+    println!(
+        "task: sequence_len {} / max_lag {}",
+        config.base.sequence_len, config.base.max_lag
+    );
     println!(
         "protocol version: {} (matched-architecture control)",
         config.protocol_version
@@ -1504,6 +1571,7 @@ fn run_matched_dfa(
     hash: Option<&str>,
     out: Option<PathBuf>,
     forward: Option<MatchedForward>,
+    max_lag: Option<usize>,
     conflicting_flag: bool,
 ) -> ExitCode {
     if conflicting_flag {
@@ -1539,6 +1607,22 @@ fn run_matched_dfa(
     // the flag reproduces the archived hash exactly.
     if let Some(forward) = forward {
         config.forward = forward;
+    }
+    // Same seam and same rule as --matched-arch: an explicit value moves the
+    // config hash with it, omitting the flag reproduces the archived hash, and
+    // a value the pinned sequence cannot hold is refused rather than silently
+    // re-written by CoincidenceTask.
+    if let Some(lag) = max_lag {
+        config.base.max_lag = lag;
+    }
+    if config.base.sequence_len < config.base.max_lag + 2 {
+        eprintln!(
+            "--max-lag {} needs sequence_len >= {}, but this suite pins it at {}",
+            config.base.max_lag,
+            config.base.max_lag + 2,
+            config.base.sequence_len
+        );
+        return ExitCode::from(2);
     }
     println!("C1-DFA config hash: {}", config.hash_string());
     println!(
@@ -1594,6 +1678,7 @@ fn run_matched_rl(
     hash: Option<&str>,
     out: Option<PathBuf>,
     forward: Option<MatchedForward>,
+    max_lag: Option<usize>,
     conflicting_flag: bool,
 ) -> ExitCode {
     if conflicting_flag {
@@ -1632,6 +1717,22 @@ fn run_matched_rl(
     // the flag reproduces the archived hash exactly.
     if let Some(forward) = forward {
         config.forward = forward;
+    }
+    // Same seam and same rule as --matched-arch: an explicit value moves the
+    // config hash with it, omitting the flag reproduces the archived hash, and
+    // a value the pinned sequence cannot hold is refused rather than silently
+    // re-written by CoincidenceTask.
+    if let Some(lag) = max_lag {
+        config.base.max_lag = lag;
+    }
+    if config.base.sequence_len < config.base.max_lag + 2 {
+        eprintln!(
+            "--max-lag {} needs sequence_len >= {}, but this suite pins it at {}",
+            config.base.max_lag,
+            config.base.max_lag + 2,
+            config.base.sequence_len
+        );
+        return ExitCode::from(2);
     }
     println!("C1-RL config hash: {}", config.hash_string());
     println!(

@@ -138,6 +138,22 @@ with LCB −0.0048. Nobody has isolated why.
       is already separable. §3 registers those as preconditions, including that
       the canonical path stay bit-identical with every new switch off.
 
+      **Resolved 2026-09-07 — the wave is NOT EVALUABLE and its 160 cells are
+      not scheduled, and the §3 instrument is deliberately not built.** §4's
+      task requirement was tested instead of assumed:
+      [`MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md`](MEASUREMENT_2026-09-07_THE_DECOMPOSITION_HAS_NO_TASK.md).
+      `max_lag` is the only knob `CoincidenceTask` has — `n_features` is
+      hard-coded, `sequence_len` is the compile-time `REFERENCE_SEQUENCE_LEN`,
+      and `difficulty`/`depth` are overwritten for every frame the task draws —
+      and all six reachable values were swept at n=20 across `--matched-arch`,
+      `--matched-dfa` and `--matched-rl`. The ceiling's minimum is **0.9750**
+      and it is not monotone; every G2-passing arm stays at **0.93 or above**;
+      broadcast ±1 sits at chance. Only the RL suite's two degraded controls
+      reach 0.7–0.9, and they are there by construction rather than by task
+      difficulty. **This is §7's named "precondition unbuildable" outcome, not
+      a withdrawal** — the four factors and the 16-rung lattice stand, waiting
+      on a task that does not exist yet.
+
       **Still open:** building the two switches, and finding a task that puts
       the dense pole in 0.7–0.9. `CoincidenceTask` at `N_IN = 2` is excluded by
       the registration, not by preference — the matched gate saturates at
