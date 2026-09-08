@@ -14,6 +14,7 @@ from scripts.aws.plan_cells import estimated_seconds
 from scripts.azure.launch import DEFAULT_HOURS, DEFAULT_SKU
 from scripts.azure.plan_cells import BUDGETS, CONTRACTS, NODE_COUNT, WIDTHS, planned_cells
 from scripts.azure.run_shard import (
+    LocalStore,
     ScheduleError,
     shard,
     simulate_schedule,
@@ -206,6 +207,81 @@ class AnalyserProvenanceTests(unittest.TestCase):
         self.assertIn("**5 arm(s) partially run**, holding 35 cells", out)
         for row in ("| 10 / 12 |", "| 9 / 12 |", "| 8 / 12 |", "| 4 / 12 |"):
             self.assertIn(row, out, f"the coverage table lost the {row} arms")
+
+
+class LocalStoreTests(unittest.TestCase):
+    """The destination seam a cloudless run goes through.
+
+    `run_one` skips a cell when `exists` says its result is already there, so an
+    `exists` that is wrong in either direction is expensive: wrong-true silently
+    drops a cell from the wave and reports SKIPPED_EXISTING, wrong-false spends a
+    cell's compute twice. Neither has a symptom at the end of a run.
+    """
+
+    def test_a_cell_is_absent_until_it_is_written_and_present_after(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LocalStore(tmp)
+            self.assertFalse(store.exists("results/c.json"))
+            store.put("results/c.json", b'{"accuracy": 0.5}')
+            self.assertTrue(store.exists("results/c.json"))
+            self.assertEqual(
+                (Path(tmp) / "results" / "c.json").read_bytes(), b'{"accuracy": 0.5}')
+
+    def test_the_blob_layout_is_preserved_so_a_local_run_lands_like_a_fleet_one(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LocalStore(tmp)
+            for name in ("results/c.json", "logs/c.log",
+                         "failures/c.json", "summaries/node-0.json"):
+                store.put(name, b"x")
+            written = sorted(str(q.relative_to(tmp))
+                             for q in Path(tmp).rglob("*") if q.is_file())
+            self.assertEqual(written, ["failures/c.json", "logs/c.log",
+                                       "results/c.json", "summaries/node-0.json"])
+
+    def test_no_partial_file_is_left_where_the_next_pass_would_skip_it(self) -> None:
+        """A half-written cell that `exists` reports as present is a cell
+        dropped from the wave with no symptom."""
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LocalStore(tmp)
+            store.put("results/c.json", b"payload")
+            leftovers = [q.name for q in Path(tmp).rglob("*.partial")]
+            self.assertEqual(leftovers, [], f"partial files survived: {leftovers}")
+
+    def test_a_name_that_climbs_out_of_the_root_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = LocalStore(str(Path(tmp) / "root"))
+            with self.assertRaises(ValueError):
+                store.put("results/../../escaped.json", b"x")
+
+
+class RunShardDestinationTests(unittest.TestCase):
+    """Exactly one destination, because both defaults are silent failures: a
+    mistyped `--storage-account` would write a cloud campaign to local disk, and
+    a local run without `--results-dir` would reach for an instance metadata
+    endpoint that is not there and report every cell as a RUNNER_ERROR."""
+
+    def _run(self, *extra: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "scripts/azure/run_shard.py",
+             "--node-index", "0", "--node-count", "1", "--binary", "x", *extra],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).resolve().parent.parent.parent))
+
+    def test_no_destination_is_refused(self) -> None:
+        result = self._run()
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("give a destination", result.stderr)
+
+    def test_two_destinations_are_refused(self) -> None:
+        result = self._run("--results-dir", "/tmp/x",
+                           "--storage-account", "a", "--container", "c")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("two", result.stderr)
+
+    def test_half_an_azure_destination_is_refused(self) -> None:
+        result = self._run("--storage-account", "a")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("together", result.stderr)
 
 
 if __name__ == "__main__":

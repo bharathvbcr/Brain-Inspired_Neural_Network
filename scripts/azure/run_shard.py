@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Run one deterministic VMSS shard and persist every outcome to Blob Storage."""
+"""Run one deterministic shard of a campaign and persist every outcome.
+
+The destination is a two-method seam -- `exists` and `put` -- so the same
+scheduler, the same per-cell timeout, the same failure persistence and the same
+`scripts/aws/run_cell.py` invocation serve a VMSS node writing to Blob Storage
+and a single workstation writing to a directory. Wave 29 runs on the latter
+(`AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md`); standing up a
+second runner beside this one would have meant a second scheduler to keep
+correct, and the first-fit core-token loop below is the part that is easy to get
+wrong.
+"""
 
 from __future__ import annotations
 
@@ -162,7 +172,43 @@ class BlobClient:
             pass
 
 
-def run_one(spec: dict, args: argparse.Namespace, blobs: BlobClient) -> dict:
+class LocalStore:
+    """`BlobClient`'s contract against a directory, for a run with no cloud.
+
+    The blob layout is preserved verbatim -- `results/`, `logs/`, `failures/`,
+    `summaries/` under one root -- so a local run and a fleet run produce the
+    same tree and `collect.py`'s notion of "landing" stays a separate, deliberate
+    step. A local run that wrote straight into a corpus directory would make
+    "the wave ran" and "the wave landed" the same event, and landing is the
+    moment a freeze changes.
+    """
+
+    def __init__(self, root: str) -> None:
+        self.root = Path(root)
+
+    def _path(self, name: str) -> Path:
+        # `name` is built from a cell id, which `plan_cells.py` assembles from a
+        # fixed vocabulary; refuse anything that could climb out of the root
+        # rather than trusting that to stay true.
+        candidate = (self.root / name).resolve()
+        if not candidate.is_relative_to(self.root.resolve()):
+            raise ValueError(f"{name!r} escapes the store root")
+        return candidate
+
+    def exists(self, name: str) -> bool:
+        return self._path(name).is_file()
+
+    def put(self, name: str, data: bytes) -> None:
+        path = self._path(name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Write-then-rename: an interrupted run leaves no half-written cell for
+        # the next pass to skip as "already done".
+        temporary = path.with_suffix(path.suffix + ".partial")
+        temporary.write_bytes(data)
+        temporary.replace(path)
+
+
+def run_one(spec: dict, args: argparse.Namespace, blobs: BlobClient | LocalStore) -> dict:
     cell_id = spec["id"]
     if blobs.exists(f"results/{cell_id}.json"):
         return {
@@ -230,9 +276,26 @@ def main() -> int:
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--cell-timeout-secs", type=int, default=57_600)
     parser.add_argument("--work-root", default="/tmp/binn-cells")
-    parser.add_argument("--storage-account", required=True)
-    parser.add_argument("--container", required=True)
+    parser.add_argument("--storage-account")
+    parser.add_argument("--container")
+    parser.add_argument("--results-dir",
+                        help="write the blob layout to this directory instead of "
+                             "Blob Storage, for a run with no cloud behind it")
     args = parser.parse_args()
+
+    # Exactly one destination. Defaulting to either would mean a mistyped
+    # `--storage-account` silently writes a campaign to the local disk, or a
+    # local run silently tries to reach an instance metadata endpoint that is
+    # not there and reports every cell as a RUNNER_ERROR.
+    azure = bool(args.storage_account or args.container)
+    if azure and args.results_dir:
+        parser.error("--results-dir and --storage-account/--container are two "
+                     "destinations; give one")
+    if azure and not (args.storage_account and args.container):
+        parser.error("--storage-account and --container are given together")
+    if not azure and not args.results_dir:
+        parser.error("give a destination: --results-dir, or "
+                     "--storage-account with --container")
 
     if args.threads < 1 or args.wide_threads < 1 or args.concurrency < 1:
         parser.error("thread counts and concurrency must be positive")
@@ -244,7 +307,8 @@ def main() -> int:
 
     cells = json.loads(Path(args.plan).read_text())
     selected = shard(cells, args.node_index, args.node_count)
-    blobs = BlobClient(args.storage_account, args.container)
+    blobs = (BlobClient(args.storage_account, args.container)
+             if azure else LocalStore(args.results_dir))
     print(
         f"node {args.node_index}/{args.node_count}: {len(selected)} cells, "
         f"{host_cores} cores, up to {args.concurrency} cells, "
