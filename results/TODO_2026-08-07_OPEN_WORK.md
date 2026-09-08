@@ -271,11 +271,12 @@ with LCB −0.0048. Nobody has isolated why.
 
 ## 6. Audit debt
 
-- [~] **BINN proper is partly swept; ~8,000 lines of experiment binaries are
-      not.** `binn-engine`, `binn-areas`, `binn-core` and ~20 experiment binaries
-      have never had the treatment the SHD instrument got, which found ten
-      defects, five of them the class *code reporting success while measuring
-      nothing*. Clippy found none of them; they are semantic.
+- [x] **BINN proper is swept.** *(Closed 2026-09-07 in three passes.)* The
+      entry read "~8,000 lines of BINN proper are unswept": `binn-engine`,
+      `binn-areas`, `binn-core` and ~20 experiment binaries had never had the
+      treatment the SHD instrument got, which found ten defects, five of them
+      the class *code reporting success while measuring nothing*. Clippy found
+      none of them; they are semantic.
 
       **This entry's premise was right and the register beside it was wrong.**
       `AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md` §2b/§3 said no current result
