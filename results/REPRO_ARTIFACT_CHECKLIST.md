@@ -135,7 +135,7 @@ cargo run --locked --release -p binn-lab --bin c1 -- --dfa-live \
 cargo run --locked --release -p binn-lab --bin c1 -- --structured-fb-soft \
   --config-hash c1-f975db8fb3e5d569 --out results/c1_sfb_soft.md
 cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --match-undertrain \
-  --config-hash c1-match-b46b23549b37d90a --out results/c1_match_ep4.md
+  --out results/c1_match_ep4.md   # mints c1-match-afc3f531dc910130
 cargo run --locked --release -p binn-lab --bin c1 -- --structured-fb-finth \
   --config-hash c1-4bbaf4b24c2d1da2 --out results/c1_sfb_finth.md
 cargo run --locked --release -p binn-lab --bin c1 -- --structured-fb-cont \

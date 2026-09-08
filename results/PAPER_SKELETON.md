@@ -526,19 +526,35 @@ The three commands this section used to carry passed `c1-match-5dc6822e71229e9e`
 **deliberately retired** — `MATCHED_INPUT_SCALE` was not mixed into them, so each
 named two different experiments — and `from_hash` no longer resolves them
 ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md) §8).
-**Those commands could not run as written.** The current hashes, per graph:
+**Those commands could not run as written.**
+
+**And their replacements could not run either, for a different reason — repaired
+2026-09-07.** The eight matched-series commands below were written as
+`--matched-forward <graph> --config-hash <the hash that combination mints>`, and
+every one of them failed with `unknown ... hash`. `--config-hash` resolves a
+**preset**; `--matched-forward` then overrides the preset and mints a *new*
+hash, which is not itself a preset and which `from_hash` therefore cannot
+resolve. Passing the minted hash back in is not redundant, it is fatal.
+
+The flags alone mint exactly the archived hashes — verified on 2026-09-07 for
+all eight, against `matched_rerun_2026-08-25/` and the table in §7 — so the
+repair is to drop the `--config-hash` argument, not to change a hash. **No
+archived hash moved and no number changed.** `scripts/test_published_hashes_resolve.py`
+now fails on a published `--config-hash` whose value is not a preset of the
+suite it is passed to, which is the check that would have caught both rounds of
+this.
 
 ```bash
 # Matched series — feed-forward graph
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --matched-forward feedforward --config-hash c1-match-6f6366f148fab635
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa  --matched-forward feedforward --config-hash c1-dfa-f79c01ea36fe27d7
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl   --matched-forward feedforward --config-hash c1-rl-d35e13c758e522f8
-cargo run --locked --release -p binn-lab --bin c1 -- --eventprop    --matched-forward feedforward --config-hash c1-eventprop-f1eba7c2975894f1
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --matched-forward feedforward   # c1-match-6f6366f148fab635
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa  --matched-forward feedforward   # c1-dfa-f79c01ea36fe27d7
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl   --matched-forward feedforward   # c1-rl-d35e13c758e522f8
+cargo run --locked --release -p binn-lab --bin c1 -- --eventprop    --matched-forward feedforward   # c1-eventprop-f1eba7c2975894f1
 # Matched series — recurrent graph
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --matched-forward recurrent --config-hash c1-match-6f6000f148f7d30c
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa  --matched-forward recurrent --config-hash c1-dfa-f7989bea36fb44ae
-cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl   --matched-forward recurrent --config-hash c1-rl-d36179c758e80621
-cargo run --locked --release -p binn-lab --bin c1 -- --eventprop    --matched-forward recurrent --config-hash c1-eventprop-f1e841c29755b1c8
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-arch --matched-forward recurrent     # c1-match-6f6000f148f7d30c
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-dfa  --matched-forward recurrent     # c1-dfa-f7989bea36fb44ae
+cargo run --locked --release -p binn-lab --bin c1 -- --matched-rl   --matched-forward recurrent     # c1-rl-d36179c758e80621
+cargo run --locked --release -p binn-lab --bin c1 -- --eventprop    --matched-forward recurrent     # c1-eventprop-f1e841c29755b1c8
 # Canonical + live transfer
 cargo run --locked --release -p binn-lab --bin c1 -- --config-hash c1-118207fbc3eaba53
 cargo run --locked --release -p binn-lab --bin c1 -- --reinforce-fb --config-hash c1-660401d74db3c88d
