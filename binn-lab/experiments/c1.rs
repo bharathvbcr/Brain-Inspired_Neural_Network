@@ -1525,26 +1525,22 @@ fn run_matched_arch(
     println!("does not reopen protocol-v2 hash c1-118207fbc3eaba53");
     println!("seeds: {:?}", config.seeds());
 
+    // Any of these makes the run something other than the canonical one, so
+    // the canonical record is not its output. See `resolve_report_path`.
+    let config_was_moved = hash.is_some() || forward.is_some() || max_lag.is_some();
+    let default_name = if config.quick {
+        "results/c1_match_quick.md"
+    } else {
+        "results/c1_match.md"
+    };
+    let out_path = match resolve_report_path(out, default_name, config_was_moved, "C1-MATCH") {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+
     let mut runner = MatchRunner::new();
     let report = runner.run(&config);
     let md = MatchRunner::render_markdown(&report, &config);
-
-    let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.quick {
-            "results/c1_match_quick.md"
-        } else {
-            "results/c1_match.md"
-        };
-        let candidates = [
-            PathBuf::from(default_name),
-            PathBuf::from(format!("binn/{default_name}")),
-            PathBuf::from(format!("binn-lab/{default_name}")),
-        ];
-        candidates
-            .into_iter()
-            .find(|p| p.parent().map(|d| d.exists()).unwrap_or(false))
-            .unwrap_or_else(|| PathBuf::from(default_name))
-    });
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1632,26 +1628,22 @@ fn run_matched_dfa(
     println!("does not reopen protocol-v2 hash c1-118207fbc3eaba53");
     println!("seeds: {:?}", config.seeds());
 
+    // Any of these makes the run something other than the canonical one, so
+    // the canonical record is not its output. See `resolve_report_path`.
+    let config_was_moved = hash.is_some() || forward.is_some() || max_lag.is_some();
+    let default_name = if config.quick {
+        "results/c1_dfa_quick.md"
+    } else {
+        "results/c1_dfa.md"
+    };
+    let out_path = match resolve_report_path(out, default_name, config_was_moved, "C1-DFA") {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+
     let mut runner = DfaMatchRunner::new();
     let report = runner.run(&config);
     let md = DfaMatchRunner::render_markdown(&report, &config);
-
-    let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.quick {
-            "results/c1_dfa_quick.md"
-        } else {
-            "results/c1_dfa.md"
-        };
-        let candidates = [
-            PathBuf::from(default_name),
-            PathBuf::from(format!("binn/{default_name}")),
-            PathBuf::from(format!("binn-lab/{default_name}")),
-        ];
-        candidates
-            .into_iter()
-            .find(|p| p.parent().map(|d| d.exists()).unwrap_or(false))
-            .unwrap_or_else(|| PathBuf::from(default_name))
-    });
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1743,26 +1735,22 @@ fn run_matched_rl(
     println!("does not retune failed v11 rl_graded (c1-rl-ef504db58916720d)");
     println!("seeds: {:?}", config.seeds());
 
+    // Any of these makes the run something other than the canonical one, so
+    // the canonical record is not its output. See `resolve_report_path`.
+    let config_was_moved = hash.is_some() || forward.is_some() || max_lag.is_some();
+    let default_name = if config.quick {
+        "results/c1_rl_quick.md"
+    } else {
+        "results/c1_rl.md"
+    };
+    let out_path = match resolve_report_path(out, default_name, config_was_moved, "C1-RL") {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+
     let mut runner = RlMatchRunner::new();
     let report = runner.run(&config);
     let md = RlMatchRunner::render_markdown(&report, &config);
-
-    let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.quick {
-            "results/c1_rl_quick.md"
-        } else {
-            "results/c1_rl.md"
-        };
-        let candidates = [
-            PathBuf::from(default_name),
-            PathBuf::from(format!("binn/{default_name}")),
-            PathBuf::from(format!("binn-lab/{default_name}")),
-        ];
-        candidates
-            .into_iter()
-            .find(|p| p.parent().map(|d| d.exists()).unwrap_or(false))
-            .unwrap_or_else(|| PathBuf::from(default_name))
-    });
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1823,18 +1811,22 @@ fn run_matched_mech(
     println!("does not reopen protocol-v2 / c1-match-* / c1-dfa-* / c1-rl-* hashes");
     println!("seeds: {:?}", config.seeds());
 
+    // Any of these makes the run something other than the canonical one, so
+    // the canonical record is not its output. See `resolve_report_path`.
+    let config_was_moved = hash.is_some();
+    let default_name = if config.quick {
+        "results/c1_credit_mech_quick.md"
+    } else {
+        "results/c1_credit_mech.md"
+    };
+    let out_path = match resolve_report_path(out, default_name, config_was_moved, "C1-MECH") {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+
     let mut runner = MechRunner::new();
     let report = runner.run(&config);
     let md = MechRunner::render_markdown(&report, &config);
-
-    let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.quick {
-            "results/c1_credit_mech_quick.md"
-        } else {
-            "results/c1_credit_mech.md"
-        };
-        resolve_results_path(default_name)
-    });
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -1909,18 +1901,22 @@ fn run_matched_eventprop(
     println!("does not reopen protocol-v2 / c1-match-* / c1-dfa-* / c1-rl-* hashes");
     println!("seeds: {:?}", config.seeds());
 
+    // Any of these makes the run something other than the canonical one, so
+    // the canonical record is not its output. See `resolve_report_path`.
+    let config_was_moved = hash.is_some() || forward.is_some();
+    let default_name = if config.quick {
+        "results/c1_eventprop_quick.md"
+    } else {
+        "results/c1_eventprop.md"
+    };
+    let out_path = match resolve_report_path(out, default_name, config_was_moved, "C1-EVENTPROP") {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+
     let mut runner = EventPropMatchRunner::new();
     let report = runner.run(&config);
     let md = EventPropMatchRunner::render_markdown(&report, &config);
-
-    let out_path = out.unwrap_or_else(|| {
-        let default_name = if config.quick {
-            "results/c1_eventprop_quick.md"
-        } else {
-            "results/c1_eventprop.md"
-        };
-        resolve_results_path(default_name)
-    });
     if let Some(parent) = out_path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -2144,6 +2140,50 @@ fn run_shd_cal(
     }
     println!("results note: {}", out_path.display());
     ExitCode::SUCCESS
+}
+
+/// Where a suite's report goes, refusing the canonical record when the config
+/// has been moved off the preset that owns it.
+///
+/// The default path names the suite's **committed** record — a document other
+/// documents cite and `scripts/check_every_number.py` traces paper numbers to.
+/// A run at a different config is not that record. Writing it there replaces a
+/// scientific record with output from a different experiment, and does so
+/// silently: the file changes, the run prints its verdict, and nothing says the
+/// document no longer describes what its name claims.
+///
+/// Not hypothetical. On 2026-09-07 a hash-resolution scan run without `--out`
+/// overwrote `results/c1_dfa.md` and `results/c1_eventprop.md`. Nothing in
+/// either run noticed. What caught it, two steps later, was
+/// `check_every_number.py` reporting that the draft's 0.9150 no longer appeared
+/// in the source it is traced to — a paper-level check standing in for a guard
+/// that belonged here.
+///
+/// `moved` is true when a flag that changes the config was given:
+/// `--config-hash`, `--matched-forward`, or `--max-lag`. Those are exactly the
+/// flags that make a run something other than the canonical one, so the guard
+/// has no false positives and record generation — which passes none of them —
+/// is untouched.
+fn resolve_report_path(
+    out: Option<PathBuf>,
+    default_name: &str,
+    moved: bool,
+    suite: &str,
+) -> Result<PathBuf, ExitCode> {
+    if let Some(path) = out {
+        return Ok(path);
+    }
+    if moved {
+        eprintln!(
+            "{suite}: this run is not the canonical configuration (a \
+             --config-hash, --matched-forward or --max-lag was given), so it \
+             will not be written to `{default_name}` — that path is the \
+             committed record of the canonical run and other documents cite it. \
+             Pass an explicit --out."
+        );
+        return Err(ExitCode::from(2));
+    }
+    Ok(resolve_results_path(default_name))
 }
 
 fn resolve_results_path(default_name: &str) -> PathBuf {
