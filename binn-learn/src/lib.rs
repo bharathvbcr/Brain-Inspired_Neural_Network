@@ -98,7 +98,7 @@ pub use shd_eprop_baseline::{
     shd_out_scale, ShdArmReport, ShdBroadcastPm1, ShdDfa, ShdEpropCeiling, ShdExample,
     ShdRlLearnedFb, ShdRlReinforceFb, ShdSuperSpikeCeiling, ShdTrainConfig,
     MODULATOR_PARITY_TOLERANCE, SHD_BROADCAST_PM1_LABEL, SHD_DFA_LABEL, SHD_EPROP_CEILING_LABEL,
-    SHD_RL_REINFORCE_FB_LABEL, SHD_SUPERSPIKE_CEILING_LABEL,
+    SHD_RL_LEARNED_FB_LABEL, SHD_RL_REINFORCE_FB_LABEL, SHD_SUPERSPIKE_CEILING_LABEL,
 };
 pub use shd_matched::{
     load_epoch_orders, loss_and_gradient as shd_matched_loss_and_gradient, one_cycle_lr,

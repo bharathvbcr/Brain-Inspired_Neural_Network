@@ -41,6 +41,7 @@ pub const MODULATOR_PARITY_TOLERANCE: f32 = 3.5;
 pub const SHD_BROADCAST_PM1_LABEL: &str = "SHD_BROADCAST_PM1";
 pub const SHD_DFA_LABEL: &str = "SHD_DFA";
 pub const SHD_RL_REINFORCE_FB_LABEL: &str = "SHD_RL_REINFORCE_FB";
+pub const SHD_RL_LEARNED_FB_LABEL: &str = "SHD_RL_LEARNED_FB";
 pub const SHD_EPROP_CEILING_LABEL: &str = "SHD_EPROP_CEILING";
 pub const SHD_SUPERSPIKE_CEILING_LABEL: &str = "SHD_SUPERSPIKE_CEILING";
 
@@ -465,10 +466,23 @@ impl ShdRlLearnedFb {
         }
         let (accuracy, loss) = self.arch.evaluate(test);
         ShdArmReport {
-            label: "SHD_RL_LEARNED_FB",
+            label: SHD_RL_LEARNED_FB_LABEL,
             accuracy,
             loss,
         }
+    }
+
+    /// The current feedback vector `B`.
+    ///
+    /// Mirrors [`ShdRlReinforceFb::feedback_weights`], and exists for the same
+    /// reason it does: `B` is the **only** thing distinguishing these two arms.
+    /// Both sample an action, both reward `±1`, both update `wout` identically;
+    /// this one learns `B` and the other holds it frozen. Without an accessor
+    /// that difference is unobservable from outside, and an arm that silently
+    /// stopped updating `B` would keep reporting a finite accuracy under a name
+    /// that says it learns its feedback.
+    pub fn feedback_weights(&self) -> &[f32] {
+        self.feedback.weights()
     }
 
     fn step(&mut self, ex: &ShdExample) {
@@ -1131,6 +1145,104 @@ mod tests {
         assert_eq!(r.label, SHD_RL_REINFORCE_FB_LABEL);
         assert!(r.accuracy.is_finite());
         assert!(r.loss.is_finite());
+    }
+
+    // ---- ShdRlLearnedFb, 2026-09-07 ----------------------------------------
+    //
+    // This arm had **no test at all**. The two `rl_fb_*` tests above read as its
+    // coverage and are not: they construct `ShdRlReinforceFb`, the frozen-`B`
+    // sibling one line away in the source and one word away in the name. The
+    // only site in the workspace that built `ShdRlLearnedFb` was
+    // `synthetic-arm-smoke`, whose own header states that no accuracy it prints
+    // is evidence about anything -- so the arm was exercised exclusively by a
+    // binary that disclaims its own numbers.
+
+    #[test]
+    fn rl_learned_fb_starts_from_the_reinforce_lineage() {
+        let ex = &toy_data(1, 16, 8, 4, 9)[0];
+        let cfg = ShdTrainConfig {
+            hidden: 24,
+            n_classes: 4,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 1,
+        };
+        let seed = 0x54D0_F1B0_0002;
+        let arm = ShdRlLearnedFb::new(ex, cfg, seed);
+        let product = LearnedReinforceFeedback::new(cfg.hidden, seed, 0.01);
+        assert_eq!(
+            arm.feedback_weights(),
+            product.weights(),
+            "the learned arm must start from the same B the frozen arm holds, or \
+             a difference between the two is a difference in initialisation \
+             rather than in learning"
+        );
+    }
+
+    #[test]
+    fn rl_learned_fb_actually_learns_its_feedback() {
+        // The load-bearing test. Deleting `self.feedback.update(..)` in `step`
+        // leaves an arm that trains, evaluates, reports a finite accuracy and a
+        // finite loss, and is `ShdRlReinforceFb` wearing the learned arm's
+        // label. Nothing else in this file would notice.
+        let train = toy_data(40, 16, 8, 4, 3);
+        let cfg = ShdTrainConfig {
+            hidden: 32,
+            n_classes: 4,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 4,
+        };
+        let mut arm = ShdRlLearnedFb::new(&train[0], cfg, 0xF1B0_54D0_0002);
+        let before = arm.feedback_weights().to_vec();
+        let test = toy_data(20, 16, 8, 4, 4);
+        arm.train_and_evaluate(cfg.epochs, &train, &test);
+        let after = arm.feedback_weights();
+
+        assert_eq!(before.len(), after.len());
+        assert_ne!(
+            before.as_slice(),
+            after,
+            "B is unchanged after training: this arm is the frozen-feedback one \
+             under a different name"
+        );
+        let moved = before.iter().zip(after).filter(|(a, b)| a != b).count();
+        assert!(
+            moved * 4 >= before.len(),
+            "only {moved} of {} feedback weights moved; a learned-feedback arm \
+             that updates a handful of units is not learning its feedback",
+            before.len()
+        );
+        for (i, b) in after.iter().enumerate() {
+            assert!(b.is_finite(), "feedback weight {i} is not finite: {b}");
+        }
+        // The `[-1, 1]` clamp is NOT asserted here. At `lr_b = 0.01` over four
+        // epochs of a toy task `B` never approaches the bound, so the assertion
+        // would pass whether or not the clamp existed -- verified by deleting
+        // the clamp and watching this test stay green. It is tested where it
+        // can fail, at its owner: `credit.rs`,
+        // `learned_reinforce_feedback_is_clamped_to_the_unit_interval`.
+    }
+
+    #[test]
+    fn rl_learned_fb_runs_on_toy() {
+        let train = toy_data(40, 16, 8, 4, 3);
+        let test = toy_data(20, 16, 8, 4, 4);
+        let cfg = ShdTrainConfig {
+            hidden: 32,
+            n_classes: 4,
+            lr: 0.05,
+            beta: 5.0,
+            epochs: 8,
+        };
+        let mut arm = ShdRlLearnedFb::new(&train[0], cfg, 0xF1B0_54D0_0003);
+        let r = arm.train_and_evaluate(cfg.epochs, &train, &test);
+        assert_eq!(r.label, SHD_RL_LEARNED_FB_LABEL);
+        assert!(r.accuracy.is_finite());
+        assert!(r.loss.is_finite());
+        // A report is not a result: this task is trivially separable and the arm
+        // is exploratory. Only the mechanics are pinned here.
+        assert!((0.0..=1.0).contains(&r.accuracy));
     }
 
     // ---- characterization of a known defect, 2026-08-22 --------------------

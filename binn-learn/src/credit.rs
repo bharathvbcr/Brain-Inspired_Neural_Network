@@ -450,6 +450,43 @@ mod tests {
     }
 
     #[test]
+    fn learned_reinforce_feedback_is_clamped_to_the_unit_interval() {
+        // `update` promises `B ∈ [-1, 1]`, and every caller relies on it: the
+        // credit it hands out is `B * directional`, so an unbounded `B` turns a
+        // learned-feedback arm into an unbounded gain on the hidden update.
+        //
+        // The arm-level test in `shd_eprop_baseline.rs` cannot see this. At
+        // `lr_b = 0.01` on a toy task `B` never reaches the bound, so the
+        // assertion passes with the clamp deleted. Driven here instead.
+        let mut fb = LearnedReinforceFeedback::new(4, 42, 0.5);
+        let post_act = vec![1.0, 1.0, 1.0, 1.0];
+        for _ in 0..40 {
+            fb.update(1.0, &post_act);
+        }
+        for (i, &b) in fb.weights().iter().enumerate() {
+            assert!(b <= 1.0, "weight {i} ran past the upper clamp: {b}");
+        }
+        assert!(
+            fb.weights().iter().any(|&b| (b - 1.0).abs() < 1e-6),
+            "no weight reached the bound, so this test did not exercise the \
+             clamp: {:?}",
+            fb.weights()
+        );
+
+        for _ in 0..120 {
+            fb.update(-1.0, &post_act);
+        }
+        for (i, &b) in fb.weights().iter().enumerate() {
+            assert!(b >= -1.0, "weight {i} ran past the lower clamp: {b}");
+        }
+        assert!(
+            fb.weights().iter().any(|&b| (b + 1.0).abs() < 1e-6),
+            "no weight reached the lower bound: {:?}",
+            fb.weights()
+        );
+    }
+
+    #[test]
     fn learned_rpe_critic_reduces_error() {
         let mut critic = LearnedRpeCritic::new(2, 0.1);
         let features = vec![1.0, 0.5];
