@@ -22,6 +22,7 @@ import io
 import json
 import os
 import re
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -103,6 +104,86 @@ class PlanIdentityTest(unittest.TestCase):
         # the two would differ in state the id does not describe.
         self.assertIsNotNone(shuffled["temporal_seed"])
         self.assertIsNone(intact["temporal_seed"])
+
+
+
+class Wave29SeedBlockTest(unittest.TestCase):
+    """Rule 9.3, pinned on both sides of the refusal.
+
+    Wave 28 registered a two-sided band for a one-sided question, and reported
+    NOT MET on the outcome nobody had named. Wave 29 replaces the bar, and the
+    replacement may only be read on cells that did not motivate it.
+
+    `analyse_wave29.py` enforces that by rejecting `5170001`-`5170012` by VALUE,
+    so a re-tagged wave-28 cell cannot enter the analysis. That refusal is only
+    half a guarantee: it stops wave-28 cells being *read*, and does nothing to
+    stop wave 29 being *planned* onto the same block, which would produce cells
+    that are legitimately wave 29's and are silently dropped by their own
+    analyser. These tests are the other half.
+    """
+
+    def test_wave_29_shares_no_seed_with_any_earlier_wave(self):
+        w29 = {c["seed"] for c in plan_cells.wave29_the_asymmetry_has_its_own_bar()}
+        earlier = set()
+        for name, generator in plan_cells.WAVES.items():
+            if name == "w29":
+                continue
+            earlier |= {c["seed"] for c in generator()}
+        overlap = w29 & earlier
+        self.assertEqual(
+            overlap, set(),
+            f"wave 29 plans {len(overlap)} seed(s) an earlier wave already used: "
+            f"{sorted(overlap)[:5]}. Rule 9.3 forbids reading the replacement bar "
+            f"on the cells that motivated it.")
+
+    def test_the_planner_and_the_analyser_agree_on_the_block(self):
+        """A plan the analyser silently drops is worse than a plan it refuses."""
+        sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+        import analyse_wave29
+        planned = {c["seed"] for c in plan_cells.wave29_the_asymmetry_has_its_own_bar()}
+        self.assertEqual(
+            planned, set(analyse_wave29.REGISTERED_SEEDS),
+            "plan_cells and analyse_wave29 disagree about wave 29's seed block; "
+            "every cell outside the analyser's block is compute spent on a cell "
+            "that will be dropped as `seed outside this wave's registered block`")
+        self.assertEqual(
+            planned & set(analyse_wave29.FORBIDDEN_SEEDS), set(),
+            "wave 29 plans a seed its own analyser rejects by value")
+
+    def test_the_wave_is_the_forty_eight_cells_its_stopping_rule_names(self):
+        """Section 6 of the registration: 48 cells, and rungs are not added."""
+        cells = plan_cells.wave29_the_asymmetry_has_its_own_bar()
+        self.assertEqual(len(cells), 48, "the registered wave is 48 cells")
+        shape = collections.Counter((c["arm"], c["temporal"]) for c in cells)
+        self.assertEqual(
+            dict(shape),
+            {("ff+fixed", "intact"): 12,
+             ("ff+fixed", "spike-dropout-p90"): 12,
+             ("ff+fixed+attn", "intact"): 12,
+             ("ff+fixed+attn", "spike-dropout-p90"): 12},
+            "the registered shape is {intact, p90} x {rate, attn} x 12 seeds")
+
+    def test_the_platform_gate_is_pinned_to_the_corpus_it_cites(self):
+        """The gate hard-codes the fleet mean so a moving corpus cannot shift it
+        underneath the amendment. That is only safe while the two agree."""
+        sys.path.insert(0, str(ROOT / "scripts" / "aws"))
+        import check_wave29_platform as gate
+        corpus = ROOT / "results/shd_attention_campaign_v3"
+        accuracies = []
+        for path in corpus.glob(
+                "w26pos__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s*.json"):
+            cell_json = json.loads(path.read_text())
+            if (cell_json.get("temporal_condition") or "intact") == "intact":
+                accuracies.append(cell_json["accuracy"])
+        self.assertGreaterEqual(len(accuracies), 12,
+                                "the fleet baseline the gate cites is not on disk")
+        observed = statistics.fmean(accuracies)
+        self.assertAlmostEqual(
+            observed, gate.FLEET_INTACT_MEAN, places=4,
+            msg=f"check_wave29_platform.FLEET_INTACT_MEAN is "
+                f"{gate.FLEET_INTACT_MEAN} but the {len(accuracies)} w26pos "
+                f"intact cells now mean {observed:.4f}. The amendment registered "
+                f"the first number; correct the corpus or re-register the gate.")
 
 
 class SchedulingCostTest(unittest.TestCase):

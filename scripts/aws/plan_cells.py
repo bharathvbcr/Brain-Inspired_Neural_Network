@@ -1350,6 +1350,57 @@ def wave28_the_rate_at_which_dropout_bites():
     return cells
 
 
+#: Wave 29's seed block. **Disjoint from `SEEDS` by construction**, because
+#: rule 9.3 is the whole reason the wave exists: wave 28's bar was two-sided on
+#: a one-sided question, and a replacement bar read on the cells that motivated
+#: it is HARKing however the clause is worded. `analyse_wave29.py` rejects
+#: `5170001`-`5170012` by VALUE, so a re-tagged wave-28 cell cannot enter the
+#: analysis -- this constant is the other half of that refusal, and the two are
+#: pinned against each other in `test_campaign_tooling.py`.
+SEEDS_W29 = [5290001 + i for i in range(12)]
+#: p90 only. It is the rung where wave 28's band fired and where the effect is
+#: largest. The registration measures p70 as a secondary direction "if its cells
+#: land" and requires it for no primary clause; on a fresh seed block no p70
+#: cell exists, so H29-3 is reported as not evaluated rather than manufactured
+#: by widening the wave past the 48 cells its stopping rule names.
+W29_PERCENT = 90
+
+
+def wave29_the_asymmetry_has_its_own_bar():
+    """W29 - wave 28's question, with a bar that can only be failed one way.
+
+    Registered in `PREREG_2026-09-07_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`,
+    whose section 3 names this cell set exactly: 48 cells,
+    `{intact, spike-dropout-p90} x {ff+fixed, ff+fixed+attn} x 12 seeds`.
+
+    **The intact arms are re-run rather than reused from `w26pos`.** That is the
+    one place this wave differs from every cheap wave before it, and it is
+    deliberate: a new seed block has no intact twin, and pairing a `5290003`
+    treatment against a `5170003` control is not pairing. `did()` in the
+    analyser takes only seeds present in all four arms, so reusing wave 26 would
+    not produce a wrong number -- it would produce an empty one, silently.
+
+    Same pinned source, same anchor, same manipulation seed as wave 28, so the
+    only registered differences between the two waves are the block the training
+    seeds come from, the direction of the bar, and the platform -- wave 29 is
+    produced on `aarch64-apple-darwin` rather than on the glibc fleet, which is
+    registered in `AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md`
+    and is why its cells land in `results/shd_attention_wave29_local/` rather
+    than in the v3 corpus.
+    """
+    cells = []
+    for seed in SEEDS_W29:
+        cells.append(cell("w29asy", "ff+fixed", 128, 400, seed))
+        cells.append(cell("w29asy", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4))
+        cells.append(cell("w29asy", "ff+fixed", 128, 400, seed,
+                          temporal=f"spike-dropout-p{W29_PERCENT}"))
+        cells.append(cell("w29asy", "ff+fixed+attn", 128, 400, seed,
+                          attn_dim=32, attn_layers=4,
+                          temporal=f"spike-dropout-p{W29_PERCENT}"))
+    return cells
+
+
 WAVES = {
     "w1": wave1_converged,
     "w2": wave2_design_space,
@@ -1379,6 +1430,7 @@ WAVES = {
     "w26": wave26_the_saturation_and_the_timescale,
     "w27": wave27_the_instruments_that_were_never_run,
     "w28": wave28_the_rate_at_which_dropout_bites,
+    "w29": wave29_the_asymmetry_has_its_own_bar,
 }
 
 
