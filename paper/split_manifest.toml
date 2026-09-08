@@ -91,4 +91,10 @@ sections = [
   # height, and the float displacement it forces on the five full-width
   # figures. 3.5 keeps every number from it in prose.
   "Appendix I — The resolution ladder",
+  # Framing, not a result, and the page budget decided its home rather than its
+  # importance: at 9 of 9 pages a single sentence of it in 4.1 displaces the
+  # five full-width figures onto a tenth page. Measured, not assumed -- the
+  # full paragraph, a three-sentence version and a one-sentence pointer were
+  # each built and each cost a page. The appendix says so in its last line.
+  "Appendix J — A converse result, and what it does not license",
 ]

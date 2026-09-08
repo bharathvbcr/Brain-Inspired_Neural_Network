@@ -550,9 +550,18 @@ hashes; a retired hash anywhere in a prereg fails
       hypergeometric expectation. Metric: IoU vs pruning ratio. Belongs in
       §3 only as a *readout* transfer number, never as a rule-transfer
       number.
-- [ ] **Draft edit.** One paragraph in `PAPER_DRAFT.md` §4.1 or §3.8 placing
-      C1 as the converse of Xu et al.; cite with §9.4 caveats. No result may
-      be cited from §9.6 until it exists under a hash.
+- [x] **Draft edit.** *Resolved 2026-09-07 — landed as `PAPER_DRAFT.md`
+      Appendix J, not in §4.1, and the reason is measured rather than
+      preferred.* The framing, the §9.4 caveats and the explicit statement
+      that §9.6 is unregistered and unrun are all there. **The placement
+      deviates from this entry** and the appendix says so in its own last
+      line: main text is at 9 of 9 permitted pages, and the full paragraph, a
+      three-sentence version and a one-sentence pointer were each built into
+      §4.1 and each cost a tenth page by displacing the five full-width
+      figures. `references.bib` gains `xu2026reward`, with every field read
+      from the arXiv abstract page on 2026-09-07 rather than from §9 of this
+      register — which had the surnames and both dates right and is, being a
+      reading note, a claim rather than a source.
 
 **Ordering.** V1 → V2 → V3 are one export and three probe fits; they come
 first because they can be done on the existing record without a new
