@@ -85,7 +85,7 @@ const KNOWN_UNAUDITED: &[&str] = &[
     "experiments/shd_frozen_attention.rs",
     "experiments/shd_input_control.rs",
     "experiments/shd_instrument.rs",
-    "experiments/shd_scientific_sweep.rs",
+    "experiments/synthetic_arm_smoke.rs",
     "experiments/shortcut_accessibility_contrast.rs",
     "experiments/temporal_eligibility_diagnostic.rs",
     "src/runner.rs",

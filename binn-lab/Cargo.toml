@@ -99,8 +99,8 @@ name = "deep-snn-scaling"
 path = "experiments/deep_snn_scaling.rs"
 
 [[bin]]
-name = "shd-scientific-sweep"
-path = "experiments/shd_scientific_sweep.rs"
+name = "synthetic-arm-smoke"
+path = "experiments/synthetic_arm_smoke.rs"
 
 [[bin]]
 name = "shd-arch-ablation"

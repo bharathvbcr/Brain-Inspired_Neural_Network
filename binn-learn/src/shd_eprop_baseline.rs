@@ -1135,7 +1135,8 @@ mod tests {
 
     // ---- characterization of a known defect, 2026-08-22 --------------------
     //
-    // `shd-scientific-sweep` reported the e-prop ceiling at 0.2140 against a
+    // `shd-scientific-sweep` (renamed `synthetic-arm-smoke` 2026-09-07)
+    // reported the e-prop ceiling at 0.2140 against a
     // chance of 0.2000. These localise that and **pin the broken behaviour**.
     // They assert the defect, not a fix: there is no fix, and a green suite must
     // not imply one. A repair makes them fail, which is the intended signal.

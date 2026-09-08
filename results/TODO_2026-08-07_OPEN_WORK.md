@@ -63,16 +63,36 @@ live in the paper.
       `N_IN = 2`, so a 256⁴ stack on two-dimensional near-noiseless input has no
       depth structure to exploit. The 1.0000-to-0.4525 collapse is weak evidence
       either way and must not be cited as local learning failing with depth.
-- [!] **SUPERSEDED 2026-08-20 — do not port the guard.** `shd_scientific_sweep`
+- [x] **SUPERSEDED 2026-08-20 — do not port the guard.** `shd_scientific_sweep`
       **never loads SHD.** It fabricates 5 classes over 24 channels and 16
       timesteps, with each label firing only in its own three reserved channels —
       linearly separable from spike counts, with no temporal structure at all.
       Porting `ceiling_inverted` would put a correct label on a comparison that
       should not be made. The binary's self-description has been corrected
-      (`DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`); **retire-vs-rename is a
-      maintainer call** and the report cannot be regenerated regardless, because
-      the binary is refused by `authorize_campaign(LocalLearning)` while the
-      instrument is `Uncalibrated`.
+      (`DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`) and the report cannot be
+      regenerated regardless, because the binary is refused by
+      `authorize_campaign(LocalLearning)` while the instrument is
+      `Uncalibrated`.
+
+      **Decided 2026-09-07: renamed, not retired.** The binary is now
+      `synthetic-arm-smoke` / `experiments/synthetic_arm_smoke.rs`. The defect
+      was the *name* — a target called `shd-scientific-sweep` writing a report
+      titled *SHD Multi-Seed Scientific Sweep* is how a withdrawn result gets
+      cited by someone who read only the name — so renaming fixes it at its
+      cause. **Retiring was not free:** `binn_learn::ShdRlLearnedFb` is
+      constructed nowhere else in the workspace and has **no test of its own**
+      (the other four `Shd*` arms are exercised by `shd_eprop_baseline.rs`'s
+      test module; this one is not), so deleting the file would have traded a
+      naming bug for an export with no caller. It would also have removed the
+      subject of two guards — `campaign_gate_refuse.rs`, which proves the binary
+      is refused, and `readout_audit_coverage.rs`. Both were updated and pass.
+      The withdrawn report keeps its own filename, and the historical reference
+      in `shd_eprop_baseline.rs` keeps the name the number was reported under,
+      with a pointer to the new one.
+
+      **Left open by this:** `ShdRlLearnedFb` has no test. That is a real gap
+      this decision surfaced rather than created, and it is smaller than the one
+      retiring would have opened.
 - [x] **Re-run `ei-inhibition-sweep` at v135.** Done — v135 report on disk
       (`results/ei_inhibition_results_v135.md`).
 
@@ -96,15 +116,32 @@ A local rule passes on the matched dense substrate (0.9387 / LCB 0.6894 and
 variants, best gap LCB 0.3127 against a 0.5 threshold, canonical protocol 0.4912
 with LCB −0.0048. Nobody has isolated why.
 
-- [ ] **Write the decomposition preregistration.** Four named suspects, never
-      tested individually: sticky `last_spike`, partial membrane reset, θ=∞
-      muting, hard k-WTA instead of soft competition. One factor per arm, plus
-      the registered stopping rule and the named-outcomes table before any cell
-      runs. *(§2 unblocked 2026-08-19; design drafted in
-      `DESIGN_TRANSFER_GAP_DECOMPOSITION.md`.)*
+- [x] **Write the decomposition preregistration.** *(Written 2026-09-07:
+      [`PREREG_2026-09-07_THE_TRANSFER_GAP_DECOMPOSITION.md`](PREREG_2026-09-07_THE_TRANSFER_GAP_DECOMPOSITION.md).)*
+      Four named suspects — sticky `last_spike`, partial membrane reset, θ=∞
+      muting, hard k-WTA — one factor per arm, with the stopping rule and the
+      named-outcomes table registered before any cell runs.
 
-## 4. SHD instrument — remaining scope and caveats
+      **Two things the writing established.** The design's own §1 motivating
+      contrast (1.0000 vs 0.5188) cites `live_transfer_rescue.md`, which is
+      **withdrawn** — `INVALID_HARNESS`, and matched-only rather than
+      live-engine. The registration is built on the surviving form instead: the
+      matched arms clear the gate at 0.9925–0.9975 and no live k-WTA variant
+      does, best gap LCB 0.3127 against 0.5.
 
+      And **the instrument does not exist yet.** `runner.rs:2422` is one branch
+      on one boolean: `reset_c1_dynamic_state` (partial membrane reset) and
+      `learner.reset_pairing_state()` (sticky `last_spike`) fire together, so no
+      configuration separates the two suspects — which is precisely why the
+      existing `c1-iso-*` family cannot answer this at any seed count. Hard
+      k-WTA has no off switch; `k_wta` is a width, not a mode. Only θ=∞ muting
+      is already separable. §3 registers those as preconditions, including that
+      the canonical path stay bit-identical with every new switch off.
+
+      **Still open:** building the two switches, and finding a task that puts
+      the dense pole in 0.7–0.9. `CoincidenceTask` at `N_IN = 2` is excluded by
+      the registration, not by preference — the matched gate saturates at
+      exactly 1.0000.
 - [x] Budget axis closed (final doubling e400→e800 buys +0.000294)
 - [x] Width axis closed (h512→h1024 buys +0.000883)
 - [x] Geometry axis closed (`channels-700` 0.0283 *worse* at e400; the registered

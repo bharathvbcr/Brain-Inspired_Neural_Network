@@ -28,7 +28,7 @@ const BLOCKED: &[(&str, CampaignKind, &[&str])] = &[
     ("shd-depth-scaling", CampaignKind::LocalLearning, &["run"]),
     ("shd-frozen-attention", CampaignKind::LocalLearning, &[]),
     ("shd-arch-ablation", CampaignKind::LocalLearning, &[]),
-    ("shd-scientific-sweep", CampaignKind::LocalLearning, &[]),
+    ("synthetic-arm-smoke", CampaignKind::LocalLearning, &[]),
     (
         "shortcut-accessibility-contrast",
         CampaignKind::LocalLearning,

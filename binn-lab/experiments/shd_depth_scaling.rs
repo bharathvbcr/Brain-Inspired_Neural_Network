@@ -27,7 +27,7 @@
 //! refuses while `SHD_INSTRUMENT_STATE` is `Uncalibrated`.
 //! `results/SHD_INSTRUMENT_STATUS.md` blocks "new SHD local-learning or
 //! architecture-ablation campaigns" outright, and its siblings
-//! `shd-arch-ablation`, `shd-frozen-attention` and `shd-scientific-sweep` are
+//! `shd-arch-ablation`, `shd-frozen-attention` and `synthetic-arm-smoke` are
 //! refused identically. That constant has no flag and no environment override,
 //! by design; **do not flip it to run this.** It *is* the claim that the
 //! instrument measures what it says it measures, and flipping it would falsify

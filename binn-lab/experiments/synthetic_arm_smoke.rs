@@ -1,8 +1,18 @@
-//! Multi-seed local-rule sweep on **synthetic** frames (Suite 4).
+//! Multi-seed local-rule smoke test on **synthetic** frames (Suite 4).
 //!
 //! # This binary does not touch SHD
 //!
-//! Despite its name, it never loads the Spiking Heidelberg Digits corpus.
+//! Renamed from `shd-scientific-sweep` on 2026-09-07. The old name claimed both
+//! SHD and science and delivered neither, and a report titled *SHD Multi-Seed
+//! Scientific Sweep* printing "PASS -- Learns multi-class SHD audio digits!" is
+//! how a withdrawn result gets cited by someone reading only the name
+//! (`DEFECT_2026-08-20_SHD_SWEEP_IS_SYNTHETIC.md`). The defect was the name;
+//! this is the fix for it. Retiring the file instead would have left
+//! [`binn_learn::ShdRlLearnedFb`] with no constructor anywhere in the
+//! workspace -- it has no test of its own, and this is the only site that
+//! builds it.
+//!
+//! It never loads the Spiking Heidelberg Digits corpus.
 //! [`generate_synthetic_frames`] fabricates its own data: 5 classes, 24 input
 //! channels, 16 timesteps, 100 train / 50 test examples per seed. Real SHD is
 //! 700 channels and 20 classes over thousands of utterances, and the loader for
@@ -35,7 +45,7 @@ use binn_learn::{
 };
 
 const PROTOCOL_VERSION: u64 = 135;
-const EXPERIMENT_NAME: &str = "shd-scientific-sweep (SYNTHETIC DATA)";
+const EXPERIMENT_NAME: &str = "synthetic-arm-smoke (SYNTHETIC DATA, not SHD)";
 
 /// Fabricate the synthetic frames this binary trains on.
 ///
@@ -71,7 +81,7 @@ fn generate_synthetic_frames(
 
 fn main() -> ExitCode {
     if let Err(error) = binn_lab::authorize_campaign(binn_lab::CampaignKind::LocalLearning) {
-        eprintln!("shd-scientific-sweep: {error}");
+        eprintln!("synthetic-arm-smoke: {error}");
         return ExitCode::from(3);
     }
     let args: Vec<String> = env::args().skip(1).collect();
@@ -90,7 +100,7 @@ fn main() -> ExitCode {
                 out = Some(PathBuf::from(value));
             }
             "-h" | "--help" => {
-                println!("Usage: cargo run --release -p binn-lab --bin shd-scientific-sweep [-- --quick] [--out PATH]");
+                println!("Usage: cargo run --release -p binn-lab --bin synthetic-arm-smoke [-- --quick] [--out PATH]");
                 return ExitCode::SUCCESS;
             }
             other => {
