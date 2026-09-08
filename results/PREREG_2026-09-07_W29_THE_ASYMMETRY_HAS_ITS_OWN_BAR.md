@@ -71,9 +71,23 @@ seeds`. The intact arms are re-run rather than reused from `w26pos`, because a
 new seed block has no intact twin and pairing across seed blocks is not pairing.
 
 **Cost, stated because it is the reason this wave is registered before it is
-run:** the campaign's median cell is **32,944 s** of wall time — about 9.2
-hours. 48 cells is roughly **440 core-hours**, which is a cloud campaign and not
-a local run.
+run — and corrected on the same day it was written.** The first version of this
+paragraph read "the campaign's median cell is 32,944 s, so 48 cells is roughly
+440 core-hours". Both halves were wrong. That median is over the whole v3
+corpus, which is three-fifths attention cells, and **the two arms differ by
+77×**: at h128 / e400 the attention arm at `d32/L4` medians **38,946 s (10.82
+h, n=300)** and the rate arm medians **507 s (0.14 h, n=288)**. Half of this
+wave's cells are rate cells, so applying one median to all 48 overstated it.
+
+The wave is **24 attention + 24 rate cells = 263 cell-hours** of wall clock.
+"Core-hours" was also the wrong unit: training runs `par_iter` over
+`PARALLEL_CHUNK` batches, so each cell is already multi-threaded and its
+`wall_secs` is a duration, not a core count.
+
+**The practical read:** fanned out one cell per worker it is about **11 hours of
+wall clock**, bounded by the slowest attention cell; run serially it is about 11
+days. That is a cloud campaign, but a considerably smaller one than the first
+figure implied.
 
 ---
 

@@ -166,9 +166,18 @@ with LCB −0.0048. Nobody has isolated why.
       Ten tests, and restoring `abs()` to the two counts fails exactly the two
       that assert one-sidedness.
 
-      **Blocked on compute, and only that.** 48 cells at a median 32,944 s each
-      is roughly **440 core-hours** — a cloud campaign, not a local run. The
-      paper reports H28-2 as NOT MET meanwhile, which is correct and stays.
+      **Blocked on compute, and only that — and less of it than first
+      stated.** The first estimate here applied the v3 corpus-wide median
+      (32,944 s) to all 48 cells and called the result 440 core-hours. Both
+      halves were wrong: that median is dominated by attention cells, and **the
+      two arms differ by 77×** — at h128 / e400 the attention arm at `d32/L4`
+      medians 38,946 s (10.82 h, n=300) and the rate arm 507 s (0.14 h, n=288).
+      Half this wave is rate cells. It is **24 + 24 = 263 cell-hours of wall
+      clock**, about **11 hours** fanned out one cell per worker and about 11
+      days serially. "Core-hours" was also the wrong unit — each cell already
+      runs `par_iter` over `PARALLEL_CHUNK` batches, so `wall_secs` is a
+      duration, not a core count. Still a cloud campaign, but a much smaller one.
+      The paper reports H28-2 as NOT MET meanwhile, which is correct and stays.
 
 - [ ] **Contract axis at convergence.** Six timing contracts are closed only at
       e100. This is the last scope qualifier on the 0.7378 ceiling. Resolution
