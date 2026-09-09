@@ -401,7 +401,7 @@ must_not_claim: Transfer PASS; remassage v13–v19; biology
 |---|---|---|---|---:|---:|---:|
 | v20 live DFA | `c1-4db53e645405fae0` | Novel-CS | **FAIL** | 0.7325 | 0.2601 | 0.3321 |
 | v21 soft-WTA×SFB | `c1-f975db8fb3e5d569` | Novel-CS | **FAIL** | 0.5025 | 0.0406 | 0.0122 |
-| v22 match 4×ep | `c1-match-b46b23549b37d90a` | Integrity | **FAIL** | 0.5000 | 0.0000 | — |
+| v22 match 4×ep | `c1-match-b46b23549b37d90a` — **retired**, pre-repair | Integrity | **FAIL** | 0.5000 | 0.0000 | — |
 | v23 finite-θ SFB | `c1-4bbaf4b24c2d1da2` | Integrity | **FAIL** | 0.6638 | 0.2370 | 0.2370 |
 | v24 continuous B | `c1-840f820b7c07b512` | Novel-CS | **FAIL** | 0.6437 | 0.1380 | 0.1163 |
 

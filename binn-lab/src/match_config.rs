@@ -261,6 +261,18 @@ mod tests {
         //                       from the hash entirely)
         //     current: c1-match-6f6000f148f7d30c   (MATCHED_INPUT_SCALE = 2.0, mixed in)
         //
+        // `scientific()` is not the only preset. The scale and the forward
+        // graph enter the hash of EVERY `MatchConfig`, so the move retired all
+        // four of this family's presets -- and recording one of four is how a
+        // stale label stays citable: `c1-match-b46b23549b37d90a` stood in the
+        // reviewer's checklist until 2026-09-07. Each value below is the
+        // `config hash:` header of the report named beside it, and `from_hash`
+        // refuses all four today.
+        //
+        //     retired: c1-match-85e9548f0615b85a   (quick -- results/c1_match_quick.md)
+        //     retired: c1-match-b46b23549b37d90a   (ep4 -- results/c1_match_ep4.md)
+        //     retired: c1-match-4f37c70adaf02102   (ep4-quick -- runs/2026-07-23-paper-hard-both/)
+        //
         // The silent-initialisation repair moved the input scale 0.5 -> 2.0
         // while the constant was not part of the hash, so the retired value
         // named two different experiments -- `c1-match-5dc6822e71229e9e` appears in the

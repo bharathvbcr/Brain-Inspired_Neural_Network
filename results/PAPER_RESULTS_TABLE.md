@@ -414,7 +414,7 @@ the h1024 collapse; any ordering of read-out depth at h1024; anything from
 | v19 structured×teach | `c1-dfab4a7ec19f17c2` | **FAIL** | **0.6700** | 0.2238 | [`c1_sfb_teach.md`](c1_sfb_teach.md) |
 | **v20** live DFA | `c1-4db53e645405fae0` | **FAIL** | **0.7325** | 0.2601 | [`c1_dfa_live.md`](c1_dfa_live.md) · chance LCB 0.3321 |
 | **v21** soft-WTA×SFB | `c1-f975db8fb3e5d569` | **FAIL** | 0.5025 | 0.0406 | [`c1_sfb_soft.md`](c1_sfb_soft.md) |
-| **v22** match 4×ep | `c1-match-b46b23549b37d90a` | **FAIL** | 0.5000 | 0.0000 | [`c1_match_ep4.md`](c1_match_ep4.md) |
+| **v22** match 4×ep | `c1-match-b46b23549b37d90a` — **retired**, pre-repair | **FAIL** | 0.5000 | 0.0000 | [`c1_match_ep4.md`](c1_match_ep4.md) |
 | **v23** finite-θ SFB | `c1-4bbaf4b24c2d1da2` | **FAIL** | **0.6638** | 0.2370 | [`c1_sfb_finth.md`](c1_sfb_finth.md) |
 | **v24** continuous B | `c1-840f820b7c07b512` | **FAIL** | 0.6437 | 0.1380 | [`c1_sfb_cont.md`](c1_sfb_cont.md) |
 | P4 spiking true-DFA | `c1x-dfa-spike-true-dfa-a911e793e590b0ed` | **FAIL** | 0.6513 | 0.0733 | [`credit_dfa_spike.md`](credit_dfa_spike.md) |

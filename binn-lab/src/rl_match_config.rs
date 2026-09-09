@@ -232,6 +232,22 @@ mod tests {
         //                       from the hash entirely)
         //     current: c1-rl-d35e13c758e522f8   (MATCHED_INPUT_SCALE = 2.0, mixed in)
         //
+        // The move retired the v12 quick preset alongside it -- one hash
+        // function, every preset:
+        //
+        //     retired: c1-rl-9a41bc8f876617a5   (v12 quick -- results/c1_rl_quick.md)
+        //
+        // And protocol v11 was retired earlier, by supersession rather than by
+        // the hash-composition change: `rl_graded` as primary failed and v12
+        // replaced it with `rl_reinforce_fb` (`results/c1_rl.md` says so in its
+        // own header). Its two labels are recorded here because a citation
+        // check cannot tell the two reasons apart -- both name a hash
+        // `from_hash` refuses, and citing either as a live result is one defect
+        // with one shape:
+        //
+        //     retired: c1-rl-ef504db58916720d   (v11 scientific -- results/c1_rl_v11_graded_primary.md)
+        //     retired: c1-rl-8f65af11eb7af21d   (v11 quick -- results/c1_rl_v11_quick.md)
+        //
         // The silent-initialisation repair moved the input scale 0.5 -> 2.0
         // while the constant was not part of the hash, so the retired value
         // named two different experiments -- `c1-rl-42eddc9c801308e9` appears in the

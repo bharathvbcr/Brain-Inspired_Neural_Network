@@ -214,6 +214,12 @@ mod tests {
         //                       from the hash entirely)
         //     current: c1-dfa-f79c01ea36fe27d7   (MATCHED_INPUT_SCALE = 2.0, mixed in)
         //
+        // The move retired the quick preset too -- one hash function, every
+        // preset. It is recorded here for the same reason the scientific one
+        // is, and is the `config hash:` header of the report beside it:
+        //
+        //     retired: c1-dfa-c887a1117d28d518   (quick -- results/c1_dfa_quick.md)
+        //
         // The silent-initialisation repair moved the input scale 0.5 -> 2.0
         // while the constant was not part of the hash, so the retired value
         // named two different experiments -- `c1-dfa-c8c4fe0899908b84` appears in the

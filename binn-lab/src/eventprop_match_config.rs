@@ -197,6 +197,12 @@ mod tests {
         //                       from the hash entirely)
         //     current: c1-eventprop-f1e841c29755b1c8   (MATCHED_INPUT_SCALE = 2.0, mixed in)
         //
+        // The move retired the quick preset too -- one hash function, every
+        // preset. It is recorded here for the same reason the scientific one
+        // is, and is the `config hash:` header of the report beside it:
+        //
+        //     retired: c1-eventprop-d664f18d1390a416   (quick -- results/c1_eventprop_quick.md)
+        //
         // The silent-initialisation repair moved the input scale 0.5 -> 2.0
         // while the constant was not part of the hash, so the retired value
         // named two different experiments -- `c1-eventprop-5bb083d5e88d0ad2` appears in the

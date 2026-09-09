@@ -42,7 +42,9 @@ hashes; this sheet lists the hash whose frozen-hash test asserts it.
 | DFA (v5) | `c1-dfa-f79c01ea36fe27d7` | Novel-CS | **PASS** both | 0.9925 / 0.9875 | 0.9689 / 0.9509 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
 | RL×B (v12) | `c1-rl-d35e13c758e522f8` | Novel-CS | **PASS** both | 0.9950 / 0.9812 | 0.9765 / 0.9079 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
 | Discrete EventProp (v28) | `c1-eventprop-f1e841c29755b1c8` | Novel-CS | **PASS** both | 0.9450 / 0.8900 | 0.7911 / 0.6494 | [`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) |
-| Undertrain 4×ep (v22) | `c1-match-b46b23549b37d90a` | Integrity | **FAIL** | 0.5000 | 0.0000 | [`c1_match_ep4.md`](c1_match_ep4.md) |
+| Undertrain 4×ep (v22) | `c1-match-b46b23549b37d90a` — **retired**, pre-repair | Integrity | **FAIL** | 0.5000 | 0.0000 | [`c1_match_ep4.md`](c1_match_ep4.md) |
+
+**The v22 row is the only pre-repair hash in this table, and it is marked rather than replaced.** `c1-match-b46b23549b37d90a` is the `ep4` preset's July value; the 2026-08-25 change moved it to `c1-match-afc3f531dc910130`, and the undertrain check was **not** among the eight cells re-run that day ([`matched_rerun_2026-08-25/`](matched_rerun_2026-08-25/) holds no `ep4` report). Substituting the current hash would attach this number to a config that never produced it, so the retired label stays and says so. Reproduce with `--matched-arch --match-undertrain`, which mints the current value.
 
 **The gate no longer ranks this field.** The SuperSpike reference saturates at
 **1.0000** on both graphs, so every PASS above reduces to "the arm scored above
