@@ -1,8 +1,8 @@
 # Defect — nine published reproduction commands could not run, and the gate for that passed
 
 **Date:** 2026-09-07
-**Status:** the nine commands are repaired and the gate is extended; one exposure
-is left open and named in §5.
+**Status:** the nine commands are repaired, the gate is extended, and the
+citation exposure §5 named is **closed 2026-09-09** — see §5.
 **Gate:** [`scripts/test_published_hashes_resolve.py`](../scripts/test_published_hashes_resolve.py)
 **Found by:** accident, while sweeping `--config-hash` values for an unrelated
 measurement. Nothing was looking for it.
@@ -89,24 +89,75 @@ pre-repair `ep4` value `c1-match-b46b23549b37d90a` stood in the reviewer's
 checklist until today.
 
 The allowlist makes this moot for **commands**: a stale preset hash fails it
-whether or not anyone recorded the retirement.
+whether or not anyone recorded the retirement. As of 2026-09-09 the parser
+holds every pair, and **twelve** retirements are recorded where four were.
 
-## 5. What is left open, named rather than closed quietly
+## 5. The citation exposure, and how it was closed
 
-**Citations, as opposed to commands.** The allowlist reads `--config-hash`
-arguments. A stale preset hash sitting in a *table* — `c1-match-b46b23549b37d90a`
-as the label of "Break-it v22 undertrain FAIL", `c1-match-85e9548f0615b85a` in
-the `c1_match_quick.md` header — is not a command and is not checked by it.
-Assertion (3) of the gate would catch these, but only for hashes on the
-blocklist, and these are the ones the blocklist never held.
+**Stated open on 2026-09-07.** The allowlist reads `--config-hash` *arguments*.
+A stale preset hash sitting in a **table** — `c1-match-b46b23549b37d90a` as the
+label of "Break-it v22 undertrain FAIL" — is not a command and was not checked
+by it. Assertion (3) would have caught it, but only for hashes on the
+blocklist, and these were exactly the ones the blocklist never held.
 
-Closing it properly means enumerating the pre-repair hash of every preset of
-every affected family, which is a git-history exercise, and extending
-`freeze_blocks()` past one pair per file. **Neither is done here.** The acute
-defect was that published commands could not run; that is fixed and guarded.
-This is the residue, and it is a labelling problem rather than a runnability
-one — no number depends on it, and `check_every_number.py` continues to trace
-every paper number to a source that still contains it.
+**Closed 2026-09-09, and not by enumerating them.** Writing the missing hashes
+into a list would have closed this instance and left the identical hole open
+for the next retirement — the same shape as the defect itself. The set is
+**derived** instead:
+
+> Every `config hash:` header in the record names either a hash its suite still
+> accepts or a hash that suite's freeze comment records as retired.
+
+Every C1 report writes that header, so a preset that moves and is not recorded
+fails the moment its report is written. The live half is read from the binary,
+which is the authority on what `from_hash` resolves; the retired half is read
+from the freeze comments, which is what goes stale and is now what gets caught.
+
+**`freeze_blocks()` was the reason it could not.** It used `re.search`, so it
+held one `retired:` line per file — a parser shaped so it *cannot* hold the
+whole answer, which is the same defect class as a check that cannot fail. It is
+`re.findall` now, and the comments carry **twelve** retirements against four:
+
+| config | retired | which |
+|---|---:|---|
+| `match_config.rs` | 4 | scientific, quick, `ep4`, `ep4-quick` |
+| `dfa_match_config.rs` | 2 | scientific, quick |
+| `rl_match_config.rs` | 4 | v12 scientific + quick; **v11** scientific + quick |
+| `eventprop_match_config.rs` | 2 | scientific, quick |
+
+The two v11 values were retired by **supersession** rather than by the
+2026-08-25 hash change — `rl_graded` as primary failed and v12 replaced it. Both
+reasons are recorded, because a citation check cannot tell them apart and should
+not try: each names a hash `from_hash` refuses, and citing either as a live
+result is one defect with one shape.
+
+**One exemption, named and tested.** `results/matched_rerun_2026-08-25/` holds
+the `--matched-forward` reruns, whose headers are override-minted rather than
+retired — never presets, and still reproducible today from the flags. The
+exemption is a directory rather than eight hashes, and a test asserts it is
+*load-bearing* (something in there really is override-minted) and *narrow*
+(something in there really is a live preset, so it is not a blanket hole, and
+nothing in it is also on the blocklist).
+
+**What the check then found.** Three paper-side tables citing
+`c1-match-b46b23549b37d90a` with no marker — `PAPER_METRICS_FULL.md`,
+`PAPER_RESULTS_TABLE.md`, `PUBLISHABLE_CLAIMS.md`. They are **marked, not
+replaced**: substituting the current `ep4` hash `c1-match-afc3f531dc910130`
+would attach a July number to a config that never produced it, and the
+undertrain check was not among the eight cells re-run on 2026-08-25.
+
+**Mutation-proven, five ways.** Restoring `re.search` fails two tests; deleting
+one `retired:` line fails the same two; making the header regex match nothing
+fails the scan's own negative control; widening the exemption to all of
+`results/` fails the narrowness test. The fifth was not staged — unmarking those
+three rows *was* the pre-fix state, and the check failed on it before they were
+marked.
+
+**What is still not checked.** Only the four matched families. `c1x-*`,
+`c1-micro-*` and `c1-mac-probe-*` headers are outside `SUITE_OF` and outside
+this; extending it means giving each family its suite flag, which is mechanical
+and was not done here. No number depends on it, and `check_every_number.py`
+continues to trace every paper number to a source that still contains it.
 
 ## 6. What this cost, and what it did not
 
