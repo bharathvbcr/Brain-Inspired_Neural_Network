@@ -243,6 +243,21 @@ python3 -m scripts.matched_arch_deep --exp depth_locality --seeds 12 --epochs 90
 | `shd_attention_campaign_v1/cells/` | 528 complete of 552 planned (24 diverged, 0 voided) | `22d97c51ab02` | Waves 1–7 (budget ladder, sample efficiency, width/geometry contrasts) plus the 36 `r1cal__` recalibration cells | `manifest.json` + `gates/` (per-instance) |
 | `shd_attention_campaign_v2/`, cells `w8*__` | 72 complete (0 voided) | `22d97c51ab02` | Wave 8: d32/L4 headline at e400 (0.8320), width & geometry scope | `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
 | `shd_attention_campaign_v2/`, cells `w9dim__` / `w9shf__` | 24 complete (0 voided) | `22d97c51ab02` | Wave 9: temporal order mechanism proof (M-1/M-2 +0.1337 shuffle drop) | same `manifest.json` (`cell_count` 96 = wave 8 + wave 9) |
+| `shd_attention_campaign_v2/`, cells `w10*__`–`w25*__` | 2,555 complete (11 INVALID of 2,651 across the whole corpus) | `22d97c51ab02` through wave 21, `3afd4434431a` from wave 24 | Waves 10–25: resolution ladder, recurrence, the h1024 collapse, the depth optimum, mechanism travel, 21-point coverage, order/synchrony/budget | no per-wave manifest; the corpus manifest covers waves 8–9 only |
+| `azure-d32l4-scope-v1/results/` | 95 files, **89 valid** (6 INVALID) | see `RESULT_2026-08-22_AZURE_TRUNCATED_AT_95_OF_252.md` | Azure d32/L4 scope cells, truncated at 95 of 252 planned; the one result whose numbers nothing recomputed until this corpus was added to the number sweep | none |
+| `shd_attention_campaign_v3/` | 612 complete (0 voided) | `434d38c2904e` | Waves 26–28: position, the 261 ms timescale, the dropout rate ladder | none; frozen as `(612, 612, d0b83a8c6df0cf71)` in `CORPUS_BASELINE` |
+| `shd_attention_wave29_local/` | 48 complete (0 voided, 0 failures) | `fec6c4042095` | Wave 29: the count-destruction asymmetry, both clauses MET. **`aarch64-apple-darwin`, not the glibc fleet** — see `AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md` | `plan_w29.json` + `VERDICTS_W29.md` in the corpus |
+
+**Per-wave detail lives in the `RESULT_*_W*.md` documents and the `VERDICTS_W*.md`
+files beside the cells**, not here; this table is an inventory of what exists and
+under which binary. Waves 10–14, 22 and 23 state no binary hash in their own
+result documents, so none is claimed for them above — the two pins given are the
+ones the record actually carries, from waves 15–21 and 24–25 respectively.
+
+**Valid counts are `CORPUS_BASELINE` in `scripts/test_campaign_tooling.py`**,
+which is the frozen census rather than a hand count: v1 528/528, v2 2,640/2,651,
+azure 89/95, v3 612/612, wave 29 48/48. A cell that fails the validity gate is
+kept and counted, not deleted.
 
 ---
 
