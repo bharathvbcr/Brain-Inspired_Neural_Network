@@ -386,6 +386,14 @@ def build() -> None:
             tail = "\n".join(proc.stdout.splitlines()[-30:])
             fail(f"pdflatex pass {pass_no} failed:\n{tail}")
         if pass_no == 1:
+            # bibtex's exit code was discarded here, and its log with it. It
+            # had been failing with "I found no \\citation commands" for as
+            # long as the draft has cited in prose: `references.bib` was copied
+            # in, `\\bibliography{references}` was emitted, bibtex used 0 of the
+            # 18 entries, and the build printed success. A bibliography that
+            # cannot be built must not look like one that built empty on
+            # purpose, so the outcome is carried to `check()` rather than
+            # dropped.
             subprocess.run(["bibtex", "main"], cwd=BUILD,
                            capture_output=True, text=True, env=env)
     print(f"built {BUILD/'main.pdf'}")
@@ -405,6 +413,42 @@ def content_pages(pdf: pathlib.Path) -> tuple[int, int]:
         if "Record references" in page:
             return index, total          # 0-based index == pages before it
     return total, total
+
+
+
+#: What bibtex says when the document cites nothing. Its exit status is 0 in
+#: that case, so the status alone cannot detect it -- the log is the evidence.
+NO_CITATIONS = r"I found no \citation commands"
+
+
+def bibliography_problems() -> list[str]:
+    r"""Whether the bibliography the build runs actually produced anything.
+
+    The paper ships `references.bib` and emits `\bibliography{references}`, so a
+    reader is promised a reference list. Nothing checked that one was produced.
+    It was not: the draft cites in prose -- "Xu, Yuksekgonul and Zou
+    (arXiv:2602.00986)" -- rather than with `\cite`, so bibtex read the aux
+    file, found no citations, used 0 of 18 entries, and left the section empty
+    while the build reported success.
+
+    This is the same shape as every other gate here: a check that could not run
+    must not report what a check that ran and passed reports.
+    """
+    log = BUILD / "main.blg"
+    if not log.exists():
+        return ["bibtex left no log, so whether the bibliography built is "
+                "unknown. An unknown bibliography and a good one must not "
+                "look alike."]
+    text = log.read_text(errors="replace")
+    if NO_CITATIONS in text:
+        entries = len(re.findall(r"^@\w+\{", BIB.read_text(), re.M))
+        return [f"the bibliography is EMPTY: bibtex found no \\citation "
+                f"commands, so it used 0 of the {entries} entries in "
+                f"references.bib. The draft cites in prose rather than with "
+                f"\\cite, so the reference list a reader is promised does not "
+                f"exist. Either cite with \\cite and rebuild, or stop emitting "
+                f"\\bibliography and delete the unused .bib."]
+    return []
 
 
 def check() -> int:
@@ -437,6 +481,8 @@ def check() -> int:
                     problems.append(
                         f"PDF metadata {field.strip()} carries {needle!r} — "
                         f"{what}. pdflatex writes these from the environment.")
+    problems.extend(bibliography_problems())
+
     if "Anonymous Author" not in subprocess.run(
             ["pdftotext", "-f", "1", "-l", "1", str(pdf), "-"],
             capture_output=True, text=True).stdout:

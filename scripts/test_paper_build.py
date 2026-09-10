@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import re
+from unittest import mock
 import shutil
 import subprocess
 import sys
@@ -196,6 +198,83 @@ class BuiltPaperTest(unittest.TestCase):
         for stem, _ in bp.spec_captions():
             self.assertTrue((bp.BUILD / "figures" / f"{stem}.pdf").exists(),
                             f"{stem} was not copied into the build")
+
+
+class BibliographyIsNotSilentlyEmptyTest(unittest.TestCase):
+    r"""A bibliography that could not build must not look like one that did.
+
+    `build_paper.py` copies `references.bib` into the build and emits
+    `\bibliography{references}`, so the document promises a reference list. It
+    then ran bibtex with `capture_output=True` and discarded both the exit
+    status and the log. bibtex had been reporting
+
+        I found no \citation commands---while reading file main.aux
+        You've used 0 entries,
+
+    for as long as the draft has cited in prose, and the build printed success
+    every time. Eighteen curated entries, zero of them rendered, nothing saying
+    so.
+
+    bibtex exits 0 in that case, so the status alone cannot detect it -- which
+    is why the check reads the log.
+    """
+
+    @staticmethod
+    def _builder():
+        spec = importlib.util.spec_from_file_location("build_paper", BUILDER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_the_no_citations_log_is_detected(self):
+        bp = self._builder()
+        log = bp.BUILD / "main.blg"
+        self.assertTrue(log.exists(), "no bibtex log; build the paper first")
+        found = bp.NO_CITATIONS in log.read_text(errors="replace")
+        problems = bp.bibliography_problems()
+        self.assertEqual(
+            bool(problems), found,
+            "the log says the bibliography is empty but the check is silent, "
+            "or the reverse")
+
+    def test_a_missing_log_is_a_problem_not_a_pass(self):
+        """An absent log means 'unknown', and unknown must not read as good."""
+        bp = self._builder()
+        with mock.patch.object(bp, "BUILD", pathlib.Path("/nonexistent-build")):
+            self.assertTrue(bp.bibliography_problems(),
+                            "a missing bibtex log passed silently")
+
+    def test_the_check_is_actually_wired_into_the_build(self):
+        """The function existing is not the function running.
+
+        Deleting `problems.extend(bibliography_problems())` from `check()`
+        leaves every other test in this class passing -- they call the helper
+        directly -- and the build goes back to reporting success on an empty
+        bibliography. That is the defect this class was written for, reproduced
+        inside its own tests, so the wiring is asserted through the CLI rather
+        than through the module.
+        """
+        bp = self._builder()
+        log = bp.BUILD / "main.blg"
+        if not log.exists() or bp.NO_CITATIONS not in log.read_text(errors="replace"):
+            self.skipTest("this build's bibliography is not empty")
+        proc = subprocess.run([sys.executable, str(BUILDER), "--check"],
+                              capture_output=True, text=True)
+        self.assertIn("bibliography is EMPTY", proc.stdout + proc.stderr,
+                      "the empty bibliography is not reported by --check, so "
+                      "the helper is not wired into check()")
+        self.assertNotEqual(proc.returncode, 0,
+                            "--check exited 0 on an empty bibliography")
+
+    def test_the_message_names_the_entry_count(self):
+        """A reader must learn how many references were lost, not just that
+        some were: '0 of 18' is actionable, 'empty' is not."""
+        bp = self._builder()
+        problems = bp.bibliography_problems()
+        if not problems:
+            self.skipTest("bibliography is not empty in this build")
+        entries = len(re.findall(r"^@\w+\{", bp.BIB.read_text(), re.M))
+        self.assertIn(str(entries), problems[0])
 
 
 if __name__ == "__main__":
