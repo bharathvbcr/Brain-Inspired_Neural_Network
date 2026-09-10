@@ -602,13 +602,14 @@ the 2026-08-25 re-run recorded in
 [`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md),
 not from the four hashes retired with it.
 
-Attention-campaign cells are preserved in four corpora, all four of which the
+Attention-campaign cells are preserved in five corpora, all five of which the
 number sweep reads: `results/shd_attention_campaign_v1/cells` (waves 1–7 plus
 `r1cal`), `results/shd_attention_campaign_v2` (waves 8–25), the Azure d32/L4
-scope cells under `results/azure-d32l4-scope-v1/results`, and
-`results/shd_attention_campaign_v3` (waves 26–28). A corpus that exists but is
-not in that list is a corpus whose cells derive nothing, which is a failure this
-paper has had once and now tests against.
+scope cells under `results/azure-d32l4-scope-v1/results`,
+`results/shd_attention_campaign_v3` (waves 26–28), and
+`results/shd_attention_wave29_local` (wave 29, Apple libm not glibc). A corpus
+outside that list derives nothing — a failure this paper has had once and now
+tests against.
 
 ---
 
@@ -718,7 +719,7 @@ This is finding 4 of §3.5 in full. The main text states the shape of the collap
 
 ## Appendix F — What the advantage runs through
 
-This is the waves 26–28 block of §3.5 finding 2 in full: the three manipulations that ask what in the read-out consumes temporal order, rather than how much order the data carries. All are measured at a single operating point, and §3.5 states that limit where the result is used.
+This is the waves 26–29 block of §3.5 finding 2 in full: the three manipulations that ask what in the read-out consumes temporal order, rather than how much order the data carries. All are measured at a single operating point, and §3.5 states that limit where the result is used.
 
 **What the advantage runs through** (waves 26–29, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it. **Position:** a `no-position` arm keeps every parameter and every spike and deletes only the read-out's positional encoding, and its gain falls to **+0.0506** from **+0.1258** — a cost of **0.0752**, above the +0.03 bar in **12 of 12**. Registered beside it as a question and answered *no*: deleting the read-out's access leaves +0.0506 where destroying order in the data leaves **+0.0050**, a difference of **0.0456** outside a ±0.03 band, so something besides the positional code carries order here and this paper does not say what. **A timescale:** permuting bins inside a sliding window destroys order below it and preserves it above, and across windows of 2 to 256 bins the difference-in-differences climbs **+0.0066 to +0.1260** against the full shuffle's +0.1208, reaching half its effect at **130.33 bins — 261 ms**, about 36% of the 716 ms mean utterance. **Not spike counts:** random deletion at p30 costs the rate arm **0.0124** and clears the 0.03 bar in **0 of 12**, so a null measured under it means nothing; laddering the rate makes **p70** the smallest sensitive rung (**0.0388**, 11/12) and p90 costs **0.1080** at 12/12, with no cell voided and p90 cells still predicting all twenty classes at **0.5982** against chance 0.05. Against that instrument the advantage does not fall but **grows** — +0.1390 at p70 and **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. **That clause is recorded NOT MET and is reported as NOT MET**: a two-sided band was registered for a one-sided question and fires identically when the advantage strengthens. **The asymmetry then got its own registration** — wave 29, two one-sided clauses on a seed block the frozen analyser enforces by value, so the replacement bar could not be evaluated on the cells that motivated it. On 48 cells the advantage is not hurt by count destruction (**12 of 12**) and **grows** by more than the campaign's 0.03 bar (DiD **−0.0467**, **11 of 12**), with the rate arm's p90 cost at **+0.1112** showing the instrument still feels its own hand. Those cells are `aarch64-apple-darwin`, not the glibc fleet — registered in an amendment committed before the first cell — so every clause is a within-block paired contrast, the platform gate puts the anchor **0.0006** from the fleet's, and no wave-29 accuracy is tabulated beside a fleet accuracy. What stands is the comparison — destroying order costs the read-out **0.1208**, destroying counts costs it nothing. **All three properties are measured at one operating point** — h128, feed-forward, `published-2ms`, `d32/L4`, e400 — and none of them transfers to h1024 or to a recurrent substrate on this evidence; the difference-in-differences itself travels to twenty-one points, its decomposition does not. Read-out access is separable from input structure throughout: a `hidden-shuffled` operator permutes the time axis the read-out sees and leaves the substrate's input alone, and the rate arm pays **exactly 0.0000**, twelve of twelve cells byte-identical on every scientific field. ([`RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md); [`RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md); [`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md); [`RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md))
 

@@ -229,7 +229,7 @@ graph BT
 | **Matched RL** | **PASS** | `c1-rl-d35e13c758e522f8` | Accuracy **0.9950**, Gap LCB **0.9765** (REINFORCE × frozen $B_i$) |
 | **G3 (C2 Continual)** | **FAIL** | Local forgetting 0.8948 vs replay baseline 0.2725 | Plasticity alone does not prevent catastrophic forgetting without replay |
 | **G4 (R2 Scaling)** | **NO-GO** | Degrading curve (slope −0.1924 vs ln(#areas)) | Area composition does not compound accuracy without hierarchy |
-| **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–28, $n=12$ at the anchor, 0 voided | Headline **0.8320** (+0.1258 over rate readout; **0.8332**/+0.1275 at $n=32$). Mechanism is **temporal order** (+0.1337 shuffle drop at $n=12$, **+0.1347 in 32/32**), and it **runs through position** (−0.0752), **has a timescale** ($\tau_{1/2}$ = **261 ms**) and **does not run through spike counts** |
+| **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–29, $n=12$ at the anchor, 0 voided | Headline **0.8320** (+0.1258 over rate readout; **0.8332**/+0.1275 at $n=32$). Mechanism is **temporal order** (+0.1337 shuffle drop at $n=12$, **+0.1347 in 32/32**), and it **runs through position** (−0.0752), **has a timescale** ($\tau_{1/2}$ = **261 ms**) and **does not run through spike counts** — destroying 90% of spikes leaves the advantage intact and in fact **grows** it (DiD **−0.0467**, 11/12, wave 29 on Apple libm) |
 
 ---
 
