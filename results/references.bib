@@ -9,62 +9,62 @@
 % scripts/check_section0_citations.py fails if this file and that record
 % disagree about which sources exist.
 %
-% The entries above that line are the secondary program's and are still stubs.
+% The entries above that line are the secondary program's. They carry venue and
+% year only: no volume, pages or DOI has been added to them, because there is no
+% network in this repository and a field that cannot be verified must not be
+% filled in from recollection. They are stubs, and saying so is the point.
+%
+% 2026-09-10. Citations were wired up (`[@key]` in the draft, pandoc --natbib),
+% and rendering the bibliography for the first time exposed three things it had
+% been hiding:
+%   * `reinforce1992` carried raw `_` in a note and broke pdflatex outright.
+%   * Five notes were maintainer instructions about THIS repository -- "BINN
+%     Gate G2-style bars", protocol hashes -- and were being typeset into a
+%     double-blind submission. They are `%` comments above their entries now:
+%     still readable here, no longer printed there.
+%   * `shd2019` was the arXiv preprint of `cramer2022`, the same dataset paper
+%     under two keys, and `binn_results_freeze` pointed at two documents that
+%     `build_results_index.describe` reports retired. Both are removed; neither
+%     was cited, and neither is in the 2026-09-03 verification record.
 
+% repo note (not typeset): Matched dense-LIF SuperSpike BPTT ceiling on BINN Gate G2-style bars
 @article{superspike2018,
   title   = {SuperSpike: Supervised Learning in Multilayer Spiking Neural Networks},
   author  = {Zenke, Friedemann and Ganguli, Surya},
   journal = {Neural Computation},
-  year    = {2018},
-  note    = {Matched dense-LIF SuperSpike BPTT ceiling on BINN Gate G2-style bars}
+  year    = {2018}
 }
 
+% repo note (not typeset): Continuous / hybrid EventProp; BINN H2H is discrete spike-adjoint approximation only (c1-eventprop-5bb083d5e88d0ad2 FAIL)
 @article{eventprop2021,
   title   = {Event-based backpropagation can compute exact gradients for spiking neural networks},
   author  = {Wunderlich, Timo C. and Pehle, Christian},
   journal = {Scientific Reports},
-  year    = {2021},
-  note    = {Continuous / hybrid EventProp; BINN H2H is discrete spike-adjoint approximation only (c1-eventprop-5bb083d5e88d0ad2 FAIL)}
+  year    = {2021}
 }
 
+% repo note (not typeset): Textbook e-prop / eligibility; BINN true-σ′ family is methods footnote only
 @article{eprop2020,
   title   = {A solution to the learning dilemma for recurrent networks of spiking neurons},
   author  = {Bellec, Guillaume and others},
   journal = {Nature Communications},
-  year    = {2020},
-  note    = {Textbook e-prop / eligibility; BINN true-σ′ family is methods footnote only}
+  year    = {2020}
 }
 
-@article{dfa2016,
-  title   = {Direct Feedback Alignment Provides Learning in Deep Neural Networks},
-  author  = {N{\o}kland, Arild},
-  journal = {NeurIPS},
-  year    = {2016},
-  note    = {Matched DFA contrast arm (c1-dfa-c8c4fe0899908b84 PASS)}
+% repo note (not typeset): Matched DFA contrast arm (c1-dfa-c8c4fe0899908b84 PASS)
+@inproceedings{dfa2016,
+  title     = {Direct Feedback Alignment Provides Learning in Deep Neural Networks},
+  author    = {N{\o}kland, Arild},
+  booktitle = {Advances in Neural Information Processing Systems},
+  year      = {2016}
 }
 
+% repo note (not typeset): REINFORCE lineage for matched \texttt{rl\_reinforce\_fb} / frozen $B_i$
 @article{reinforce1992,
   title   = {Simple Statistical Gradient-Following Algorithms for Connectionist Reinforcement Learning},
   author  = {Williams, Ronald J.},
   journal = {Machine Learning},
-  year    = {1992},
-  note    = {REINFORCE lineage for matched rl_reinforce_fb / frozen B_i}
-}
-
-@misc{shd2019,
-  title        = {The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks},
-  author       = {Cramer, Benjamin and others},
-  year         = {2019},
-  howpublished = {arXiv},
-  note         = {SHD appendix only; do not mix p27 20-way cal with proto-135 5-class sweep}
-}
-
-@misc{binn_results_freeze,
-  title        = {BINN publishable claim freeze and results table},
-  author       = {{BINN campaign}},
-  year         = {2026},
-  howpublished = {On-disk: results/PUBLISHABLE\_CLAIMS.md, results/PAPER\_RESULTS\_TABLE.md},
-  note         = {Authority for camera-ready numbers; cite hashes not this stub alone}
+  year    = {1992}
 }
 
 

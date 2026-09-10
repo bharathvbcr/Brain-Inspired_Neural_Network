@@ -110,11 +110,11 @@ This paper's SHD result sits in a populated field and the boundary is stated
 here rather than left to a reader.
 
 **Not new: a time-axis attention mechanism in a spiking network on SHD.**
-TA-SNN (Yao et al., ICCV 2021) applies squeeze-and-excitation attention over the
-time axis and reports 91.08%; STSC-SNN (Yu et al., 2022) places temporal
+TA-SNN [@yao2021tasnn] applies squeeze-and-excitation attention over the
+time axis and reports 91.08%; STSC-SNN [@yu2022stsc] places temporal
 attention inside the synaptic connection and reports 92.36%. Attention as a
 *temporal read-out* is older still outside spiking networks — attentive
-statistics pooling (Okabe et al., Interspeech 2018) is the same idea on speaker
+statistics pooling [@okabe2018] is the same idea on speaker
 embeddings. The specific placement used here — attention **only** at the
 read-out, replacing the field's default unweighted Σₜ softmax(u[t]) — appears
 unoccupied, but a configuration gap is not a mechanism.
@@ -122,8 +122,8 @@ unoccupied, but a configuration gap is not a mechanism.
 **Not new: that SHD depends on temporal information.** The dataset's own authors
 constructed spike-count-only variants — patterns "without temporal information" —
 and report that no linear or nonlinear classifier on them could "surpass the 60 %
-accuracy mark for the SHD" (Cramer et al., IEEE TNNLS 33(7):2744–2757, 2022). The
-Neuromorphic Sequential Arena (IJCAI 2025) removes temporal propagation
+accuracy mark for the SHD" [@cramer2022]. The
+Neuromorphic Sequential Arena [@chen2025nsa] removes temporal propagation
 **model-side** rather than data-side and reports SHD falling 86.48 → 68.51 (its
 Table S4). Two destruction operators on two different sides of the model, one
 conclusion, both prior to this work. Neither separates *order* from the other
@@ -131,11 +131,11 @@ things a spike train carries, which is what §3.5 does and what makes synchrony
 visible there as a second term.
 
 **Not new, and worth conceding plainly: the accuracy.** The SHD frontier runs
-from **95.07 ± 0.24%** — learned delays (DCLS, ICLR 2024), the best published
+from **95.07 ± 0.24%** — learned delays [@hammouamri2024dcls], the best published
 result from a model of this general class — to **96.3%**, held by a state-space
-model (S7, arXiv:2410.03464) whose SHD entry uses data augmentation and
+model [@soydan2024s7] whose SHD entry uses data augmentation and
 continuously-valued rather than spiking output. Adaptation reaches **95.81 ±
-0.56%** in between (SE-adLIF, Nature Communications 2025). This instrument's
+0.56%** in between [@baronig2025]. This instrument's
 0.8332 is not in that band and is not offered as if it were. It is close to the
 best-effort no-delay recurrent baseline the dataset's authors themselves report
 (83.2 ± 1.3% at 1024 neurons with augmentation), which is where an architecture
@@ -143,7 +143,7 @@ carrying no temporal kernel should land, and is the external corroboration §3.8
 argues for from ablation alone.
 
 **Prior work that corroborates the reversal control, rather than the shuffle
-result.** Yu et al. (arXiv:2507.16043, 2025) reverse time on SHD with an operator
+result.** @yu2025timing reverse time on SHD with an operator
 that, in their words, "perturb[s] spatio-temporal spike patterns but leave[s]
 interspike intervals and coincidence information unchanged" — the same
 information-preserving property §3.5's `reversed` control was built to have. Their
@@ -171,7 +171,7 @@ order-dependent share and a remainder.
 **New, and unsupported in either direction: the width collapse.** No published
 work reports an attention read-out degrading with hidden width, and none reports
 gradient pathology in an attention read-out over spike trains. Width normally
-*helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner: RadLIF at
+*helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner [@bittar2022]: RadLIF at
 3×128 → 3×1024 improves 92.88 → 94.62). §3.5's inversion is therefore an anomaly
 against the baseline expectation with no citation to lean on, and the parsimonious
 alternative — overfitting on the **8,156** training samples every cell in this
@@ -253,7 +253,7 @@ the impossibility of local learning in principle.
 
 ### 2.1 Matched dense-LIF control
 
-Matched-arch protocols fix the SurrogateLifReference / dense-LIF forward and vary only the learner. Protocol v4 compares production-style **broadcast ±1 three-factor** updates to SuperSpike BPTT. Protocol v5 evaluates graded error with fixed-random DFA feedback. Protocol v12 evaluates directional REINFORCE × frozen per-neuron `B_i` as the primary arm. Protocol v130 (`track-b-rescue`) evaluated continuous RPE critic scalar broadcast vs online learned feedback alignment ($B_i \leftarrow B_i + \eta_B r (a_i - p_i) x_i$), but was withdrawn under v131 due to ceiling-inversion defects. Protocol v28 (`c1-eventprop-5bb083d5e88d0ad2`) is a discrete EventProp-style spike-adjoint H2H vs SuperSpike on the same matched forward. Gates reuse Gate G2 numeric thresholds (accuracy floor 0.65; gap LCB > 0.5) under fresh hash families that do not reopen `c1-118207fbc3eaba53`.
+Matched-arch protocols fix the SurrogateLifReference / dense-LIF forward and vary only the learner. Protocol v4 compares production-style **broadcast ±1 three-factor** updates to SuperSpike BPTT [@superspike2018]. Protocol v5 evaluates graded error with fixed-random DFA feedback [@dfa2016]. Protocol v12 evaluates directional REINFORCE [@reinforce1992] × frozen per-neuron `B_i` as the primary arm. Protocol v130 (`track-b-rescue`) evaluated continuous RPE critic scalar broadcast vs online learned feedback alignment ($B_i \leftarrow B_i + \eta_B r (a_i - p_i) x_i$), but was withdrawn under v131 due to ceiling-inversion defects. Protocol v28 (`c1-eventprop-5bb083d5e88d0ad2`) is a discrete EventProp-style spike-adjoint H2H vs SuperSpike on the same matched forward. Gates reuse Gate G2 numeric thresholds (accuracy floor 0.65; gap LCB > 0.5) under fresh hash families that do not reopen `c1-118207fbc3eaba53`.
 
 ### 2.2 Engine C1 / Gate G2
 
@@ -261,7 +261,7 @@ The C1 harness encodes coincidence sequences with a latency encoder, integrates 
 
 ### 2.3 SHD attention readout
 
-On the Spiking Heidelberg Digits dataset, we evaluate a time-axis self-attention read-out (`+attn`) over LIF hidden activations, comparing against a standard mean-rate read-out. The read-out is **additive**: at $W_a = 0$ the arm reduces exactly to its non-attention counterpart, so any difference between them is attributable to the read-out and not to a perturbed spiking forward.
+On the Spiking Heidelberg Digits dataset [@cramer2022], we evaluate a time-axis self-attention read-out (`+attn`) over LIF hidden activations, comparing against a standard mean-rate read-out. The read-out is **additive**: at $W_a = 0$ the arm reduces exactly to its non-attention counterpart, so any difference between them is attributable to the read-out and not to a perturbed spiking forward.
 
 Two properties of the block are stated explicitly because they bound what the result can mean. It is **not causal** — every timestep attends to every other, through a full $[T, T]$ row-softmax with no mask, so the arm consumes the whole utterance at inference. And it is **single-head**: one $q, k, v$ triple of shape $[d, d]$ per block, with depth supplied by stacking $L$ blocks rather than by splitting heads. Positional information is a fixed sinusoidal code over normalised position; without it, mean-pooled attention is permutation-invariant and the block would be blind to the order it exists to use. Every arm here is trained by the matched BPTT instrument, not by the local rule under test elsewhere in this paper; the read-out is a gradient reference, and no claim of locality is made for it.
 
@@ -497,7 +497,7 @@ Soft-WTA × structured B on live C1 uses disclosed temperature `T=1` (v21). That
 
 ### 4.3 Baselines and EventProp H2H
 
-The primary gradient ceiling on the matched gate is **SuperSpike BPTT** on the fixed dense-LIF forward. True σ′ e-prop (`c1x-eprop-true-*`, true-surrogate mean 0.7125) is a methods footnote only—not a H2H claim that e-prop rescues broadcast ±1 insufficiency. **The discrete EventProp-style spike-adjoint FAIL is withdrawn.** It was reported as mean 0.5000 against SuperSpike 0.9150, gap LCB 0.0000; on the repaired forward it reaches **0.9450** (feed-forward) and **0.8900** (recurrent) and **PASSes** on both. The archived number was a spike-adjoint method on a forward that emitted no spikes, and "discrete ≠ continuous Wunderlich–Pehle" was an explanation offered for a result with a different cause. This remains a **discrete** hard spike-gate adjoint and still is not continuous Wunderlich–Pehle (2021) hybrid EventProp; no comparison to that method is claimed in either direction. Hybrid exact-forward arms labeled “e-prop/DFA” remain eligibility × transported modulators unless the true-σ′ family is cited explicitly.
+The primary gradient ceiling on the matched gate is **SuperSpike BPTT** on the fixed dense-LIF forward. True σ′ e-prop [@eprop2020] (`c1x-eprop-true-*`, true-surrogate mean 0.7125) is a methods footnote only—not a H2H claim that e-prop rescues broadcast ±1 insufficiency. **The discrete EventProp-style [@eventprop2021] spike-adjoint FAIL is withdrawn.** It was reported as mean 0.5000 against SuperSpike 0.9150, gap LCB 0.0000; on the repaired forward it reaches **0.9450** (feed-forward) and **0.8900** (recurrent) and **PASSes** on both. The archived number was a spike-adjoint method on a forward that emitted no spikes, and "discrete ≠ continuous Wunderlich–Pehle" was an explanation offered for a result with a different cause. This remains a **discrete** hard spike-gate adjoint and still is not continuous Wunderlich–Pehle (2021) hybrid EventProp; no comparison to that method is claimed in either direction. Hybrid exact-forward arms labeled “e-prop/DFA” remain eligibility × transported modulators unless the true-σ′ family is cited explicitly.
 
 ### 4.4 Efficiency honesty (F1 / F2 / F5)
 
@@ -763,7 +763,7 @@ gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so th
 
 ## Appendix J — A converse result, and what it does not license
 
-Xu, Yuksekgonul and Zou (arXiv:2602.00986) report that a frozen, backprop-trained LLM already carries a sparse population encoding value and, downstream of it, a population signalling reward prediction error — a reward subsystem that is learned, layered and addressed rather than a global scalar. It is the closest published result to Gate G2 from the opposite direction, and the two are **converses rather than competitors**: theirs describes what a reward subsystem looks like *after* backprop has built one, while G2 finds that a broadcast ±1 scalar does not *build* one on a matched dense-LIF forward, where graded DFA (0.9387) and per-neuron RL (0.9200) both pass on the identical forward (§3.1, §4.1).
+@xu2026reward report that a frozen, backprop-trained LLM already carries a sparse population encoding value and, downstream of it, a population signalling reward prediction error — a reward subsystem that is learned, layered and addressed rather than a global scalar. It is the closest published result to Gate G2 from the opposite direction, and the two are **converses rather than competitors**: theirs describes what a reward subsystem looks like *after* backprop has built one, while G2 finds that a broadcast ±1 scalar does not *build* one on a matched dense-LIF forward, where graded DFA (0.9387) and per-neuron RL (0.9200) both pass on the identical forward (§3.1, §4.1).
 
 **It is cited for its result, with its own limits stated.** The evidence is correlational probing plus ablation on frozen models no larger than 14B; absolute value-neuron counts are not reported, only curves against pruning ratio; no IoU values are given for the transfer claim; and the causal ablation zeroes 1% of a single early residual layer, an intervention whose random-1% control is the weaker of the two it is compared against. The paper contains no spiking, no local learning rule, and no neuromodulation as a *training* signal, so nothing in it is evidence about BINN in either direction.
 

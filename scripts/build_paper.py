@@ -187,8 +187,15 @@ def to_latex(markdown: str) -> str:
         # the preamble. Without them the build dies at `\begin{Shaded}` with no
         # PDF. Untagged fences are unaffected, so this turns a whole class of
         # "someone wrote ```bash" build failures into plain verbatim.
+        # --natbib: emit `\citep{}`/`\citet{}` for `[@key]`/`@key` rather than
+        # escaping them into the text. The style file loads natbib already, and
+        # `\bibliography{references}` was being emitted with nothing citing it,
+        # so bibtex used 0 of 18 entries and the reference list did not exist.
+        # The draft contains no other `@`, so nothing pre-existing can be
+        # reinterpreted as a citation key by turning this on.
         ["pandoc", "-f", "markdown+pipe_tables", "-t", "latex",
-         "--top-level-division=section", "--wrap=preserve", "--no-highlight"],
+         "--top-level-division=section", "--wrap=preserve", "--no-highlight",
+         "--natbib"],
         input=markdown, capture_output=True, text=True)
     if proc.returncode != 0:
         fail(f"pandoc failed: {proc.stderr.strip()}")
@@ -410,7 +417,17 @@ def content_pages(pdf: pathlib.Path) -> tuple[int, int]:
                           capture_output=True, text=True).stdout
     pages = text.split("\f")
     for index, page in enumerate(pages):
-        if "Record references" in page:
+        # Content ends at whichever boundary comes first. Until the
+        # bibliography rendered at all there was only one -- the appendix's
+        # "Record references" -- and using it was equivalent. With citations
+        # emitted, `\bibliography` sits between the main text and `\appendix`,
+        # and counting to the appendix charged the manuscript for its own
+        # reference list: 9 content pages read as 13. NeurIPS excludes
+        # references from the limit, so the count stops at the earlier of the
+        # two rather than the later.
+        heading = any(line.strip() == "References"
+                      for line in page.split("\n"))
+        if heading or "Record references" in page:
             return index, total          # 0-based index == pages before it
     return total, total
 
