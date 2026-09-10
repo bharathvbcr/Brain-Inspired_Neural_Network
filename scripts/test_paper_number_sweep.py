@@ -524,5 +524,89 @@ class TheRunSaysWhichTierTest(unittest.TestCase):
         self.assertIn("PAPER_DRAFT.md", self.proc.stdout)
 
 
+class PlatformIsNotAnAxisArmsMayPairAcrossTest(unittest.TestCase):
+    """Wave 29 ran on Apple libm; every other wave ran on the glibc fleet.
+
+    `operating_point` drops the wave label on purpose, so that a wave can be
+    compared against a control an earlier wave recorded. Without a platform in
+    the key that same latitude lets a wave-29 arm pair with a fleet arm at the
+    same width, budget, contract and geometry -- and the difference it yields is
+    part gain and part libm. The sweep would then offer that as a value the
+    cells can produce, which is how a number gets credited to cells that did not
+    produce it.
+
+    `AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md` section 8
+    registered this hazard before the wave ran.
+    """
+
+    #: Real stems: the wave-29 rate arm and the fleet control it would pair
+    #: with. Identical on every axis `operating_point` keeps.
+    LOCAL = "w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5"
+    FLEET = "w26pos__ff-fixed__h128__e400__published-2ms__adjacent-sum-5"
+
+    def test_the_two_stems_agree_on_every_axis_but_the_platform(self):
+        """Otherwise the test below would pass for the wrong reason."""
+        local = CEN.operating_point(self.LOCAL)
+        fleet = CEN.operating_point(self.FLEET)
+        self.assertEqual(local[1:], fleet[1:],
+                         "the stems must differ ONLY in platform, or this "
+                         "class is asserting something weaker than it claims")
+
+    def test_a_local_arm_and_a_fleet_arm_are_not_comparable(self):
+        self.assertNotEqual(CEN.operating_point(self.LOCAL),
+                            CEN.operating_point(self.FLEET))
+
+    def test_two_fleet_arms_still_pair(self):
+        """The fix must not close the reuse design it is narrowing."""
+        other = "w28drp__ff-fixed__h128__e400__published-2ms__adjacent-sum-5"
+        self.assertEqual(CEN.operating_point(self.FLEET),
+                         CEN.operating_point(other))
+
+    def test_every_non_fleet_wave_on_disk_is_declared(self):
+        """A second off-fleet wave must not be able to land undeclared.
+
+        The map is keyed by wave label and the corpus directory is the ground
+        truth, so this walks the one directory that is known not to be fleet and
+        asserts every wave label in it is spelled in `WAVE_PLATFORM`.
+        """
+        local_corpus = CEN.ROOT / "results/shd_attention_wave29_local"
+        labels = {path.name.split("__")[0]
+                  for path in local_corpus.glob("*__s*.json")}
+        self.assertTrue(labels, "no cells found; this test would pass vacuously")
+        for label in labels:
+            self.assertIn(label, CEN.WAVE_PLATFORM,
+                          f"{label} is in a non-fleet corpus but is not in "
+                          f"WAVE_PLATFORM, so it pairs as though it were fleet")
+
+
+class TheWave29CorpusIsActuallyReadTest(unittest.TestCase):
+    """Its numbers must come from its own cells, not from cells like them.
+
+    Before `shd_attention_wave29_local` was added to `CORPORA`, five of the six
+    numbers in the wave-29 result matched anyway -- against fleet cells, with
+    zero wave-29 configurations loaded. A corpus that is not read does not
+    announce itself; it just quietly agrees with you.
+    """
+
+    def test_the_corpus_is_in_corpora(self):
+        self.assertIn(CEN.ROOT / "results/shd_attention_wave29_local",
+                      CEN.CORPORA)
+
+    def test_wave29_configurations_are_loaded(self):
+        groups = CEN.load()
+        w29 = {stem for stem in groups if stem.startswith("w29")}
+        self.assertEqual(len(w29), 4,
+                         f"expected the wave's four arms, loaded {sorted(w29)}")
+        for stem in w29:
+            self.assertEqual(len(groups[stem]), 12,
+                             f"{stem} should carry 12 seeds")
+
+    def test_the_attention_intact_mean_comes_from_wave29_cells(self):
+        """0.8261 is the one wave-29 number that did NOT collide with a fleet
+        value, which is the only reason the missing corpus was noticed."""
+        tiers = CEN.derivable(CEN.load())
+        self.assertIn(0.8261, tiers["arm"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

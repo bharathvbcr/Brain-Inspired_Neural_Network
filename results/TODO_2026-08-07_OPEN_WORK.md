@@ -164,8 +164,8 @@ with LCB −0.0048. Nobody has isolated why.
       prediction that the gap would narrow was **refuted**)
 - [x] H1 at converged budget (24 cells, 6 seeds, NOT SUPPORTED at both budgets;
       outcome 4 of 4 as named in advance)
-- [~] **The count-destruction asymmetry needs its own bar — registered
-      2026-09-07, not yet run.** H28-2 registered `|DiD| < 0.03`, a **two-sided**
+- [x] **The count-destruction asymmetry has its own bar — run 2026-09-09, both
+      clauses MET.** H28-2 registered `|DiD| < 0.03`, a **two-sided**
       band on a one-sided question, and reported NOT MET at p90 on a DiD of
       **−0.0382** — the read-out lost 0.0698 where the substrate lost 0.1080, so
       its advantage *grew*. The band cannot tell that from the advantage
@@ -194,6 +194,22 @@ with LCB −0.0048. Nobody has isolated why.
       runs `par_iter` over `PARALLEL_CHUNK` batches, so `wall_secs` is a
       duration, not a core count. Still a cloud campaign, but a much smaller one.
       The paper reports H28-2 as NOT MET meanwhile, which is correct and stays.
+
+      **Run, and not on the fleet.** It went to this Mac instead of a spot
+      campaign, registered in
+      [`AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md`](AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md)
+      eleven minutes before the first cell. 48/48 cells, 0 failures, 223
+      cell-hours over 46.6 h wall. The rate arm ran first and alone because both
+      gates read only it and it is 1/70th the cost — a platform failure would
+      have cost an hour, not two days.
+
+      **H29-1 MET** (12/12) and **H29-2 MET** (DiD **−0.0467**, 11/12 below the
+      −0.03 bar, against a registered floor of 9/12). The advantage does not
+      merely survive count destruction, it grows, and that now has a bar behind
+      it. The platform gate puts this anchor **0.0006** from the fleet's, fifty
+      times inside the 0.03 bar. H29-3 carries no verdict: no p70 cell on this
+      block, as registered.
+      ([`RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md))
 
 - [ ] **Contract axis at convergence.** Six timing contracts are closed only at
       e100. This is the last scope qualifier on the 0.7378 ceiling. Resolution

@@ -58,7 +58,33 @@ CORPORA = [
     # produce them were not being read. The floor below is what makes the same
     # omission fail loudly the next time a corpus is added.
     ROOT / "results/shd_attention_campaign_v3",
+    # Wave 29 landed in a FOURTH directory, and for the same reason as the note
+    # above it had to be added here or its numbers would be checked against
+    # cells that are not its own. That is not hypothetical: with this line
+    # absent, five of the six numbers in the wave-29 result matched anyway --
+    # 0.7068, 0.5956, 0.7615, 0.1112 and 0.0467 were all credited to FLEET
+    # cells, while zero wave-29 configurations were loaded. Only 0.8261 failed
+    # to collide, and it is the only reason the omission was noticed at all.
+    ROOT / "results/shd_attention_wave29_local",
 ]
+
+#: The platform each wave's cells were produced on; absent means the campaign's
+#: glibc fleet, which is every wave but one.
+#:
+#: `operating_point` below deliberately drops the wave label so that a wave can
+#: be compared against a control an earlier wave recorded -- the campaign's
+#: whole reuse design. That is correct until two waves are not the same
+#: computer. Wave 29 ran on Apple libm, where `exp`, `ln`, `tanh` and `powf`
+#: are not bit-identical to glibc's
+#: (`FINDING_2026-08-19_LIBM_PORTABILITY_OF_REPLAY.md`). Pairing a wave-29 arm
+#: against a fleet arm would manufacture a "gain" that is partly a libm
+#: difference, and this sweep would then offer it as a value the cells produce.
+#:
+#: `AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md` section 8 named
+#: this hazard -- "a future analyser that pools across waves would silently mix
+#: two platforms in one mean" -- before the wave ran. This is that analyser.
+FLEET = "aarch64-unknown-linux-gnu"
+WAVE_PLATFORM = {"w29asy": "aarch64-apple-darwin"}
 
 #: Cells the sweep must find before it may report on anything. A corpus path
 #: that stops matching -- renamed, moved, or a directory nobody added -- reads
@@ -67,11 +93,18 @@ CORPORA = [
 #: the difference between a wrong number and an unread corpus, and this script
 #: reported the second as the first for three waves.
 #:
-#: 3,886 cells load today. The floor is set so that losing ANY corpus trips it,
-#: including the smallest: azure is 95 cells, and 3,886 - 95 = 3,791 < 3,800.
-#: `len(groups) < 50` above cannot do this job -- v2 alone carries hundreds of
-#: configurations, so three of the four corpora can vanish beneath it.
-MIN_CELLS = 3800
+#: 3,934 cells load today across five corpora. The floor is set so that losing
+#: ANY corpus trips it, including the smallest: wave 29 is 48 cells, and
+#: 3,934 - 48 = 3,886 < 3,900. `len(groups) < 50` above cannot do this job --
+#: v2 alone carries hundreds of configurations, so four of the five corpora can
+#: vanish beneath it.
+#:
+#: Raised 3,800 -> 3,900 on 2026-09-09 when wave 29 landed and became the
+#: smallest corpus by a wide margin; at 3,800 it could have gone missing in
+#: silence. `test_the_cell_floor_fires_when_a_corpus_goes_missing` is what
+#: forces this number up every time a corpus is added, rather than leaving it
+#: to whoever remembers.
+MIN_CELLS = 3900
 
 #: The wave results. Each rests on the cell corpora above and nothing else.
 # Wave results, by wave number rather than by date. The pattern was
@@ -700,6 +733,28 @@ def load() -> dict[str, dict[int, tuple[float, bool]]]:
 TIERS = ("arm", "paired", "pooled")
 
 
+def operating_point(stem: str) -> tuple[str, ...]:
+    """Everything that must match for two arms to be comparable.
+
+    A gain is always between two arms at the SAME operating point, so the
+    key is the stem with its wave label, its arm, and its attention shape
+    removed — width, budget, contract, geometry, temporal condition and
+    surrogate scale all have to agree. Pairing on the wave label instead was
+    too tight: the campaign's whole reuse design is a wave comparing its own
+    treatment against a control recorded by an earlier one.
+    """
+    parts = stem.split("__")
+    # The platform is NOT dropped. Everything else here exists to let arms
+    # from different waves pair; this is the one axis on which they must
+    # not, because a cross-platform pair is a libm difference wearing a
+    # gain's clothes.
+    platform = WAVE_PLATFORM.get(parts[0], FLEET)
+    return (platform,) + tuple(
+        p for p in parts[1:]
+        if not p.startswith(("ff-", "rec-"))        # drop the arm
+        and not re.fullmatch(r"d\d+l\d+", p))       # drop the attention shape
+
+
 def derivable(groups) -> dict[str, set[float]]:
     """What the cells can produce, split by generator. Absolute, 4dp.
 
@@ -741,21 +796,6 @@ def derivable(groups) -> dict[str, set[float]]:
     # comparisons a wave document actually makes is what gives a clean pass its
     # meaning; `report_power` below states the residual rate rather than
     # asserting there is none.
-    def operating_point(stem: str) -> tuple[str, ...]:
-        """Everything that must match for two arms to be comparable.
-
-        A gain is always between two arms at the SAME operating point, so the
-        key is the stem with its wave label, its arm, and its attention shape
-        removed — width, budget, contract, geometry, temporal condition and
-        surrogate scale all have to agree. Pairing on the wave label instead was
-        too tight: the campaign's whole reuse design is a wave comparing its own
-        treatment against a control recorded by an earlier one.
-        """
-        parts = stem.split("__")[1:]                      # drop the wave label
-        return tuple(p for p in parts
-                     if not p.startswith(("ff-", "rec-"))  # drop the arm
-                     and not re.fullmatch(r"d\d+l\d+", p))  # drop the attention shape
-
     def comparable(a: str, b: str) -> bool:
         """Same operating point, or differing on exactly ONE axis of it.
 

@@ -2,12 +2,12 @@
 
 # Record index
 
-363 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+364 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
 | Preregistrations | 51 | 0 |
-| Results | 46 | 2 |
+| Results | 47 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 13 | 0 |
 | Amendments | 21 | 1 |
@@ -118,6 +118,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-09 | [RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md) | Wave 29 — the asymmetry has its own bar |
 | 2026-09-06 | [RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md) | Wave 28 — the read-out survives what the substrate cannot |
 | 2026-09-05 | [RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md) | Wave 27 — the read-out's order-dependence has a timescale, and it is 261 ms |
 | 2026-09-04 | [RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md) | Wave 26 — the saturation is real, and it is not specific to the collapse |

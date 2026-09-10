@@ -1726,6 +1726,25 @@ CORPUS_BASELINE = {
     #: See `RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`.
     "shd_attention_campaign_v3":
         (612, 612, "d0b83a8c6df0cf71"),
+    #: Landed 2026-09-09 with wave 29. 48 cells, 48 valid, 0 INVALID -- the
+    #: whole wave, 0 failures, and every one of the 48 planned ids present with
+    #: nothing unplanned beside it.
+    #:
+    #: A separate corpus rather than a v3 re-freeze, and that is the registered
+    #: design rather than a filing choice: these cells were produced on
+    #: `aarch64-apple-darwin`, not on the glibc fleet every other corpus here
+    #: came from, so pooling them into v3 would put two libm implementations in
+    #: one mean for any future analyser that reads the directory instead of
+    #: filtering by wave tag. See
+    #: `AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md` section 8.
+    #:
+    #: No archived verdict moved. v3 stays at (612, 612, "d0b83a8c6df0cf71")
+    #: with 612 cell files on disk, and `git status` reports 0 modified and 0
+    #: deleted under v1, v2, v3 and the pilot -- nothing was re-scored, because
+    #: nothing that was already judged was touched.
+    #: See `RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`.
+    "shd_attention_wave29_local":
+        (48, 48, "af9774622512eb80"),
     "azure-d32l4-scope-v1":
         (95, 89, "8ecbe278f54b127f"),
     "equivalence_2026-08-22":

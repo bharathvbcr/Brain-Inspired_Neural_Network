@@ -40,6 +40,11 @@ ROOT = Path(__file__).resolve().parent.parent
 CAMPAIGNS = [
     ROOT / "results/shd_attention_campaign_v2",
     ROOT / "results/shd_attention_campaign_v3",
+    #: Wave 29 landed in its own directory rather than in v3 because its cells
+    #: are `aarch64-apple-darwin` and every other corpus here is glibc fleet.
+    #: Resolution is by filename across all of these, so the isolation costs
+    #: this check nothing: `VERDICTS_W29.md` exists in exactly one of them.
+    ROOT / "results/shd_attention_wave29_local",
 ]
 
 
@@ -75,6 +80,8 @@ PAIRS = [
      "RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md"),
     ("VERDICTS_W28.md",
      "RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md"),
+    ("VERDICTS_W29.md",
+     "RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md"),
 ]
 
 #: Wave results this check CANNOT cross-check, each with the reason.
