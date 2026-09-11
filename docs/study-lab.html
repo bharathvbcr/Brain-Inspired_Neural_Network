@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>BINN · A visual study lab</title>
+<style>
+:root{color-scheme:light;--paper:#f5f4ed;--surface:#fffef9;--ink:#203c37;--muted:#566b62;--line:#d2d9ce;--soft:#e8ece2;--green:#28715d;--gold:#a26324;--tint:#f2e3cc;--grid:#e1e5db;--red:#b35045;--shadow:0 18px 60px #233c3710}
+:root[data-theme=dark]{color-scheme:dark;--paper:#12221f;--surface:#192d28;--ink:#e9efe4;--muted:#b0c2b5;--line:#41574b;--soft:#253c31;--green:#8bc5a8;--gold:#e6b678;--tint:#3e3426;--grid:#30483d;--red:#ef9d8e;--shadow:0 18px 60px #0002}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select{font:inherit}button,a,input,select{touch-action:manipulation}button,select{color:var(--ink)}button{cursor:pointer}a{color:inherit;text-underline-offset:4px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid var(--gold);outline-offset:4px}button:disabled{opacity:.5;cursor:default}[hidden]{display:none!important}.shell{max-width:1180px;margin:auto;padding:0 40px}.masthead{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:91px;border-bottom:1px solid var(--line)}.brand{font-weight:650;letter-spacing:.09em;font-size:13px;display:flex;align-items:center;gap:12px}.brand-mark{width:26px;height:26px;border:1px solid var(--green);border-radius:50%;display:grid;place-items:center}.brand-mark:after{content:"";width:10px;height:10px;border-radius:50%;background:var(--green)}.header-links{display:flex;align-items:center;gap:23px;font-size:13px}.header-links a{text-decoration:none}.quiet-button{background:none;border:1px solid var(--line);border-radius:100px;padding:7px 15px;font-size:13px}.hero{display:grid;grid-template-columns:1.4fr 1fr;gap:60px;align-items:end;padding:47px 0 37px}.eyebrow{font-size:10px;font-weight:650;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}h1,h2,h3,p{margin-top:0}h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;letter-spacing:-.04em}h1{font-size:clamp(40px,4.9vw,65px);line-height:1.03;margin-bottom:0}h1 em{font-weight:400;color:var(--green)}.hero p:last-child{font-size:15px;line-height:1.8;color:var(--muted);max-width:355px;margin:0 0 3px}.tabs{display:flex;gap:7px;border-bottom:1px solid var(--line);padding-bottom:15px;margin-bottom:27px}.tab{border:0;background:transparent;border-radius:8px;padding:10px 18px;display:flex;gap:12px;align-items:center;text-align:left;font-size:14px}.tab span{font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted)}.tab[aria-selected=true]{background:var(--ink);color:var(--paper)}.tab[aria-selected=true] span{color:var(--paper)}.lesson{display:grid;grid-template-columns:290px minmax(0,1fr);gap:42px}.lesson-copy{padding-top:12px}.lesson h2{font-size:36px;line-height:1.12;margin-bottom:20px}.lesson-copy p{font-size:14px;line-height:1.8;color:var(--muted)}.note{border-left:2px solid var(--gold);padding-left:17px;margin-top:25px}.note strong{display:block;color:var(--ink);font-size:13px;margin-bottom:7px}.note p{font-size:13px;margin:0}.status-tag{display:inline-flex;gap:7px;align-items:center;margin-bottom:19px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;font-weight:650;color:var(--muted)}.status-tag:before{content:"";width:6px;height:6px;border:1px solid currentColor;border-radius:50%}.status-tag.evidence:before{background:var(--green);border-color:var(--green)}.lab-bench{min-width:0;border:1px solid var(--line);border-radius:17px;background:var(--surface);box-shadow:var(--shadow)}.bench-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);font-size:12px}.bench-heading strong{font-weight:600}.bench-heading span{color:var(--muted);font-size:11px}.canvas-wrap{padding:0 12px;position:relative}canvas{width:100%;display:block;height:390px}.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px 22px;border-top:1px solid var(--line)}.button{background:var(--soft);border:1px solid transparent;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600}.button.primary{background:var(--ink);color:var(--paper)}.button:hover:not(:disabled){border-color:var(--muted)}.slider-field{flex:1;min-width:150px;margin-right:12px}.slider-field label{font-size:11px;display:flex;justify-content:space-between;gap:10px}.slider-field output{font-weight:600}input[type=range]{width:100%;height:18px;accent-color:var(--green);margin:8px 0 0}.bench-caption{padding:13px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}.bench-caption strong{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink)}.lesson-foot{display:flex;justify-content:space-between;gap:22px;align-items:center;margin:25px 0 35px;padding-top:21px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.lesson-foot p{margin:0;max-width:670px}.next{white-space:nowrap;font-size:13px;background:none;border:0;padding:7px 0;color:var(--green);font-weight:600}.select-label{font-size:12px;margin-right:auto}.select-label select{display:block;margin-top:6px;max-width:100%;padding:8px 30px 8px 12px;background:var(--surface);border:1px solid var(--line);border-radius:7px;font-size:12px}.record-caption{display:block;line-height:1.7}.record-caption strong{font-size:13px}.record-caption p{font-size:12px;margin:3px 0 0;max-width:620px}.result-bench{padding:23px 25px}.condition-buttons{display:flex;gap:6px;padding:4px;background:var(--soft);border-radius:9px;width:max-content;max-width:100%}.condition-buttons button{border:0;background:none;border-radius:6px;padding:8px 16px;font-size:12px}.condition-buttons button[aria-pressed=true]{background:var(--surface);box-shadow:0 2px 4px #0001}.chart-title{display:flex;justify-content:space-between;gap:10px;font-size:12px;margin:23px 0 19px}.chart-title span{color:var(--muted)}.bar-row{margin:0 0 22px}.bar-label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:7px}.bar-label strong{font-family:Georgia,serif;font-size:27px;font-weight:400;font-variant-numeric:tabular-nums}.bar-track{height:23px;border-radius:4px;background:var(--soft);position:relative}.bar-fill{height:100%;border-radius:4px;background:var(--green);width:0;transition:width .55s cubic-bezier(.2,.75,.2,1)}.bar-fill.attention{background:var(--gold)}.chart-axis{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:-13px}.axis-title{text-align:center;color:var(--muted);font-size:11px;margin:4px 0 18px}.gain-line{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 15px;border-radius:7px;background:var(--tint);font-size:12px}.gain-line strong{font-variant-numeric:tabular-nums;color:var(--ink);font-size:17px}.paired-caption{font-size:11px;color:var(--muted);margin:22px 0 9px}.replicates{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch}.replicate{background:transparent;border:1px solid var(--line);padding:7px 8px;border-radius:7px;min-width:31px;font-size:10px}.replicate[aria-pressed=true]{background:var(--soft);border-color:var(--ink)}.replicate .wells{display:grid;grid-template-columns:repeat(2,4px);gap:4px;justify-content:center;margin-bottom:6px}.well{height:4px;width:4px;border-radius:50%;background:var(--green)}.well:nth-child(n+3){background:var(--gold)}.replicate.all{padding:7px 11px;line-height:1.4}.result-detail{font-size:11px;color:var(--muted);line-height:1.7;margin:14px 0 0}.finding-value{font:52px/1.05 Georgia,serif;color:var(--green);letter-spacing:-.04em;margin:5px 0 12px}.finding-value small{font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0;margin-left:5px}.data-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;text-align:right;margin:12px 0}th,td{padding:9px 7px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{text-align:left}th{font-weight:500;color:var(--muted);font-size:11px}.table-wrap{overflow-x:auto}details{border-top:1px solid var(--line);padding:17px 0}summary{cursor:pointer;font-size:13px;font-weight:550}.scope{font-size:12px;color:var(--muted);line-height:1.8;margin:12px 0}.path-card{display:flex;gap:20px;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding:22px 0;margin-top:4px}.path-card h3{font:23px Georgia,serif;font-weight:400;margin:0 0 7px}.path-card p{font-size:12px;color:var(--muted);margin:0;max-width:700px}.path-card a{font-size:13px;white-space:nowrap}.footer{display:flex;justify-content:space-between;gap:16px;padding:24px 0;font-size:10px;color:var(--muted);letter-spacing:.035em}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}noscript{display:block;margin:20px;padding:20px;border:1px solid var(--line)}
+@media(max-width:900px){.shell{padding:0 25px}.hero{gap:30px;grid-template-columns:1.3fr 1fr}.lesson{grid-template-columns:240px minmax(0,1fr);gap:25px}.lesson h2{font-size:31px}.replicates{gap:4px}.replicate{min-width:29px;padding:6px}.result-bench{padding:20px}.header-links{gap:15px}}
+@media(max-width:680px){.shell{padding:0 19px}.masthead{min-height:73px}.brand{font-size:11px;gap:7px}.header-links{gap:13px;font-size:11px}.header-links .map-header{display:none}.quiet-button{padding:5px 10px;font-size:11px}.hero{display:block;padding:33px 0 24px}.hero p:last-child{margin:20px 0 0;max-width:100%;font-size:14px}.eyebrow{font-size:9px}h1{font-size:43px}.tabs{gap:3px;margin-bottom:20px}.tab{font-size:12px;padding:9px 10px;gap:7px;flex:1}.tab span{font-size:10px}.lesson{display:block}.lesson-copy{padding:0}.lesson h2{font-size:31px;max-width:350px;margin-bottom:14px}.lesson-copy p{font-size:14px;line-height:1.7}.status-tag{margin-bottom:13px}.note{margin:18px 0 22px}.lab-bench{border-radius:13px}.bench-heading{padding:14px 15px}.bench-heading span{font-size:10px}.controls{padding:14px 15px}.bench-caption{padding:12px 15px}.canvas-wrap{padding:0 5px}canvas{height:355px}.lesson-foot{align-items:flex-start}.lesson-foot p{font-size:11px}.result-bench{padding:19px 17px}.finding-value{font-size:41px}.replicates{gap:5px}.replicate{min-width:30px}.path-card{display:block}.path-card p{margin-bottom:13px}.footer{display:block;line-height:1.8}.footer span{display:block}.condition-buttons button{padding:8px 13px}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+@media print{.shell{max-width:none}.hero{padding:20px 0}.tabs,.controls,.header-links,.lesson-foot,.replicates,.condition-buttons{display:none}.lesson[hidden],section[hidden]{display:block!important}.lesson{display:block;break-inside:avoid;margin-top:20px}.lab-bench{box-shadow:none}.footer{display:none}body{background:white;color:black}.lesson-copy p{color:inherit}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="masthead">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>BINN / FIELD NOTES</div>
+  <nav class="header-links" aria-label="Companion documents"><a href="STUDY_NOTES.md">Read the notes ↗</a><a class="map-header" href="diagrams/experiment-path.html">Experiment map ↗</a><button class="quiet-button" id="theme" type="button" aria-label="Switch to dark theme">Dark</button></nav>
+</header>
+<div class="hero">
+  <div><p class="eyebrow">A visual study companion · through Wave 29</p><h1>Learning to read<br>a <em>neural conversation.</em></h1></div>
+  <p>A little biology, a little experimentation.<br>Follow a signal from a single neuron to a recording—and see what your latest experiment actually tells us.</p>
+</div>
+<div class="tabs" role="tablist" aria-label="Study lessons">
+  <button class="tab" id="tab-neuron" role="tab" aria-selected="true" aria-controls="panel-neuron" tabindex="0"><span>01</span>The neuron</button>
+  <button class="tab" id="tab-recording" role="tab" aria-selected="false" aria-controls="panel-recording" tabindex="-1"><span>02</span>The recording</button>
+  <button class="tab" id="tab-evidence" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1"><span>03</span>The evidence</button>
+</div>
+<main>
+<section id="panel-neuron" role="tabpanel" aria-labelledby="tab-neuron">
+  <div class="lesson">
+    <div class="lesson-copy"><div class="status-tag">Teaching model</div><h2>A neuron keeps<br>a short memory.</h2><p>Think of an excitable cell receiving little pushes. If several arrive close together, they can add up enough to trigger a spike.</p><p>Wait too long, and their effect fades. That is the intuition behind <strong>leaky integrate-and-fire</strong>.</p><div class="note"><strong>Try changing the spacing.</strong><p>The number and strength of inputs stay the same. Only their timing changes. Watch whether the membrane-like state reaches the firing threshold.</p></div></div>
+    <div class="lab-bench">
+      <div class="bench-heading"><strong>Accumulate → fire → reset</strong><span>Illustrative · no physical time units</span></div>
+      <div class="canvas-wrap"><canvas id="neuron-canvas" role="img" aria-label="Illustrative neuron and state trace. Clustered inputs can cross a threshold; spaced inputs decay before summing enough.">An illustrative cell receives six inputs. Close inputs can add to a spike; widely separated inputs fade before reaching threshold.</canvas></div>
+      <div class="controls"><div class="slider-field"><label for="spacing">Input spacing <output id="spacing-value" for="spacing">Close together</output></label><input id="spacing" type="range" min="1" max="3" step="1" value="1" aria-valuetext="Close together"></div><button class="button primary" id="play" type="button">Play sequence</button><button class="button" id="step" type="button">Step input</button></div>
+      <div class="bench-caption" aria-live="polite"><span id="neuron-summary">6 incoming events</span><strong id="neuron-count">1 emitted spike</strong></div>
+    </div>
+  </div>
+  <div class="lesson-foot"><p>This is a simplified teaching model, not a replay of a BINN neuron. The sketch suggests cell anatomy; the experiment uses a simplified membrane state.</p><button class="next" data-next="recording">Meet the population →</button></div>
+</section>
+<section id="panel-recording" role="tabpanel" aria-labelledby="tab-recording" hidden>
+  <div class="lesson">
+    <div class="lesson-copy"><div class="status-tag">Synthetic recording</div><h2>The same totals.<br>A different story.</h2><p>Imagine a population recording: each row is a channel, and each mark is a spike. Read left to right through time.</p><p>A <strong>rate readout</strong> averages each hidden neuron's activity. An <strong>attention branch</strong> also compares moments in the sequence, using position information.</p><div class="note"><strong>A time-lapse versus average activity.</strong><p>Rearrange entire frames. The count bars stay the same, even though the temporal pattern changes.</p></div></div>
+    <div class="lab-bench">
+      <div class="bench-heading"><strong>What survives the manipulation?</strong><span>8 teaching channels · arbitrary bins</span></div>
+      <div class="canvas-wrap"><canvas id="raster-canvas" role="img" aria-describedby="record-description">Two synthetic eight-channel spike recordings, with counts shown beside each row.</canvas></div>
+      <div class="controls"><label class="select-label" for="condition">Manipulate the input recording<select id="condition"><option value="intact">Intact · keep the original</option><option value="bins" selected>Bin shuffle · move whole frames</option><option value="channels">Channel shuffle · move rows independently</option><option value="reverse">Reverse · play the sequence backward</option><option value="dropout">Spike deletion · 90% probability</option></select></label><strong id="retained" style="font-size:13px;font-variant-numeric:tabular-nums"></strong></div>
+      <div class="bench-caption record-caption"><strong id="record-title"></strong><p id="record-description" aria-live="polite"></p></div>
+    </div>
+  </div>
+  <div class="lesson-foot"><p>In the experiment, input manipulations affect training and test data. Counts here describe the input; the real rate readout averages the <em>hidden</em> spikes after the membrane dynamics.</p><button class="next" data-next="evidence">Read the real result →</button></div>
+</section>
+<section id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden>
+  <div class="lesson">
+    <div class="lesson-copy"><div class="status-tag evidence">Measured · Wave 29</div><h2>Less information.<br>A larger advantage.</h2><p>After removing about 90% of input spikes, both models lose accuracy. But the attention model loses less.</p><div class="finding-value" id="finding">+4.67<small>points</small></div><p id="finding-label">Growth in the attention advantage, averaged over twelve paired training seeds.</p><div class="note"><strong>More resilient does not mean unharmed.</strong><p id="loss-note">Attention loses 6.46 points; rate-only loses 11.12. The experiment measures a relative advantage, not an improvement in absolute accuracy.</p></div></div>
+    <div class="lab-bench result-bench">
+      <div class="condition-buttons" role="group" aria-label="Input condition"><button id="intact-button" data-result="intact" aria-pressed="true">Intact input</button><button id="dropout-button" data-result="dropout" aria-pressed="false">90% deleted</button></div>
+      <div class="chart-title"><strong id="selected-replicate">Mean of 12 training seeds</strong><span>Final test accuracy</span></div>
+      <div role="img" id="result-chart" aria-label="Wave 29 mean intact test accuracies: rate-only 70.68 percent; rate plus attention 82.61 percent.">
+        <div class="bar-row"><div class="bar-label"><span>Rate only</span><strong id="rate-value">70.68%</strong></div><div class="bar-track"><div id="rate-bar" class="bar-fill" style="width:70.6787397%"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Rate + attention</span><strong id="attention-value">82.61%</strong></div><div class="bar-track"><div id="attention-bar" class="bar-fill attention" style="width:82.6082155%"></div></div></div>
+        <div class="chart-axis" aria-hidden="true"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div><p class="axis-title">Test accuracy (%)</p>
+      </div>
+      <div class="gain-line" aria-live="polite"><span>Attention advantage</span><strong id="gain-value">+11.93 points</strong></div>
+      <p class="paired-caption">Inspect the pairing · each column contains all four conditions</p>
+      <div class="replicates" id="replicates" role="group" aria-label="Choose all runs or one paired training seed"></div>
+      <p class="result-detail" id="result-detail">48 valid runs · 12 training seeds × 2 models × 2 input conditions</p>
+    </div>
+  </div>
+  <div class="lesson-foot"><p>h128 · 2 ms bins · 140 grouped input channels · attention d32/L4 · 400 epochs<br>All plotted values are from the same Apple Silicon/macOS seed block.</p><a class="next" href="../results/RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md">Read the report ↗</a></div>
+  <details><summary>What this result does—and does not—establish</summary><div class="scope"><p><strong>Measured:</strong> the rate model loses more than three accuracy points in all 12 pairs. The attention advantage grows in all 12 comparisons, and by more than three points in 11/12. Both primary registered clauses are MET.</p><p><strong>Design:</strong> deletion is fixed per example before training and used in both training and test sets. The twelve training seeds share one manipulation seed; these are not twelve independently sampled deletion-mask sets.</p><p><strong>Open:</strong> why the advantage grows, whether it extends to other architectures, and whether an intact-trained model would survive sudden deletion at test time. There is no p70 condition here, so this page does not interpolate a dropout curve.</p><p><strong>Learning:</strong> these models use backpropagation through time. This result does not establish that the original BINN local-learning rule succeeds.</p></div></details>
+  <details><summary>All twelve paired measurements</summary><div class="table-wrap"><table class="data-table"><caption class="sr-only">Wave 29 final test accuracy by training seed and condition, in percent.</caption><thead><tr><th scope="col">Training seed</th><th scope="col">Rate<br>intact</th><th scope="col">Rate<br>deleted</th><th scope="col">Attention<br>intact</th><th scope="col">Attention<br>deleted</th><th scope="col">Advantage<br>growth (points)</th></tr></thead><tbody id="data-rows"></tbody></table></div><p class="scope">Computed from the <a href="../results/shd_attention_wave29_local/">48 saved cells</a>. Averages and differences use the stored precision before rounding. “Attention” means the rate model with the additional attention branch.</p></details>
+</section>
+<div class="path-card"><div><p class="eyebrow">Connect the pieces</p><h3>See the actual experiment path.</h3><p>Follow input preparation, the hidden spike recording, both readout branches, and the final decision in an explorable diagram.</p></div><a href="diagrams/experiment-path.html">Explore the map ↗</a></div>
+</main>
+<footer class="footer"><span>BINN · personal study lab · September 2026</span><span>Lessons 01–02: illustrations · Lesson 03: saved evidence · Works offline</span></footer>
+</div>
+<noscript>The interactive lessons need JavaScript. The <a href="STUDY_NOTES.md">written study notes</a> contain the explanations and complete result tables.</noscript>
+<script id="study-evidence" type="application/json">{"date":"2026-09-10","wave":29,"platform":"aarch64-apple-darwin","sourceDirectory":"../results/shd_attention_wave29_local/","runs":[{"seed":5290001,"attentionIntact":0.856448763,"attentionDeleted":0.777385159,"rateIntact":0.708922261,"rateDeleted":0.586572438},{"seed":5290002,"attentionIntact":0.84319788,"attentionDeleted":0.756625442,"rateIntact":0.704946996,"rateDeleted":0.60114841},{"seed":5290003,"attentionIntact":0.816254417,"attentionDeleted":0.76369258,"rateIntact":0.697879859,"rateDeleted":0.594081272},{"seed":5290004,"attentionIntact":0.824646643,"attentionDeleted":0.761484099,"rateIntact":0.704946996,"rateDeleted":0.602031802},{"seed":5290005,"attentionIntact":0.809628975,"attentionDeleted":0.745583039,"rateIntact":0.712897527,"rateDeleted":0.594964664},{"seed":5290006,"attentionIntact":0.831713781,"attentionDeleted":0.766784452,"rateIntact":0.700971731,"rateDeleted":0.593639576},{"seed":5290007,"attentionIntact":0.846731449,"attentionDeleted":0.750883392,"rateIntact":0.727031802,"rateDeleted":0.596289753},{"seed":5290008,"attentionIntact":0.82729682,"attentionDeleted":0.778710247,"rateIntact":0.701413428,"rateDeleted":0.597614841},{"seed":5290009,"attentionIntact":0.810954064,"attentionDeleted":0.756625442,"rateIntact":0.696996466,"rateDeleted":0.596731449},{"seed":5290010,"attentionIntact":0.80565371,"attentionDeleted":0.767226148,"rateIntact":0.712014134,"rateDeleted":0.594081272},{"seed":5290011,"attentionIntact":0.81360424,"attentionDeleted":0.753091873,"rateIntact":0.719522968,"rateDeleted":0.595848057},{"seed":5290012,"attentionIntact":0.826855124,"attentionDeleted":0.760159011,"rateIntact":0.693904594,"rateDeleted":0.593639576}],"sources":[{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290001.json","sha256":"5c85c515231e45bc4badf16bb1e37821f34afb2cf992f53ec31ca3dce8dba2d2"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290002.json","sha256":"5697a033b1e6535e314baf8072eef63f78ef91294678053b38222e2e1287aa21"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290003.json","sha256":"2eae88e090d90247abe92c0e0f9609bcb1e3a31244e36ed8ebb8b80f919409f2"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290004.json","sha256":"63e3872fe279eb0cce73bef3ff4d62a4aad18d0ba51102eedb03747a0658ae37"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290005.json","sha256":"e72ed6695f833a1970659bfe1e17efe0fb078664b0dcb43ac9eabc0b37b2bba7"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290006.json","sha256":"45498cf786f11b2b49b1c986d03986d6bf25062d57bc33329db6783685c4e1ae"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290007.json","sha256":"fb200d126645724cc7eadbd3fea670f9de916e48562b6438f66a3dbfe81f5d07"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290008.json","sha256":"b04fe02f6e25a16287c793301657a6bf2e71f48fb45709a27cef28cfc88b4d4b"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290009.json","sha256":"45bd54cbc3503a658306600e298308dfee04b51a8f899fccb060e7a797519a3e"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290010.json","sha256":"1a67133ccf707e194d5340fb1bf315d24e0f7f80e3ae82742a1131d5cbdcc7fa"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290011.json","sha256":"59e174e6236db90428e3e0baefd754603064d583110b1346ee0faab8f21fa442"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__s5290012.json","sha256":"f73fb2c18b33ffb64545c355c2073d8fd5e525e1340aa18add7c4ffade02116a"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290001.json","sha256":"c3b043234bdf86afe46e8640f4631b9729cc80d696f822cc351b3c5a4bc6b896"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290002.json","sha256":"2c00a01aff4f2a2bddd40c0c9853e0796d743aeca259831df9eb8b8f0e1f5545"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290003.json","sha256":"c4d215ae3ae6c445de466f1029fa5f97191447c383df7e07725d2449de63e1a1"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290004.json","sha256":"006d3b29609ce700c2ba687082b7431b2f3a1f4a26a49c9bdbdc26862808497d"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290005.json","sha256":"a95280013c284a9b3223937bda87976c9bed2b9a756fd03b0cfa87d78f99df41"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290006.json","sha256":"89b8da27b02506489013ae671cdf27af86601b5dc37c117b7ef6598da9384b2b"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290007.json","sha256":"ea427b02a92503e0c2de7bd8b7c09a647c40b7bfba8a1622048ba845fd802cd8"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290008.json","sha256":"abf1f6ef70e58615da21b87d4c9dfc42fb374c97fe437f4edfebbb376e966d08"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290009.json","sha256":"7e385816d9db4654940ec0950dfe0bd9df75ce14d4aa3aaccaaaab1a1c7dd88b"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290010.json","sha256":"2dfbe259a7387c4d1c7202d71ce3b18f859e5c84e0e503f83077918c5b556c3e"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290011.json","sha256":"5aa36ec38910f8566534254cead72b36371ad2564ae8b91983717d3580ee3d88"},{"file":"w29asy__ff-fixed-attn__h128__e400__published-2ms__adjacent-sum-5__d32l4__spike-dropout-p90__s5290012.json","sha256":"539e981e43646999dcd66dee092a432521416b6590cff25a7ae0ddb3d129e833"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290001.json","sha256":"d944752c9905a088ace618a65a771d8b249af4012b84b34926b2baa04f310692"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290002.json","sha256":"404041ef6fe4cf2ee7925220e9a8ee70278d3b0ae488010e0bc86cca7c45105f"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290003.json","sha256":"08a1cb47ce07f5840d84904f76eac9f0ad49a359960da565d00980650ccf43f0"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290004.json","sha256":"0961df6116a50e2f2292aeb1fced0273552269ce03cb3e2d24628ded0e5ad8e8"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290005.json","sha256":"62a215227b259f1c6ad64b303852a2bbe11efea26033af142b5d990c59f3ac5f"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290006.json","sha256":"8548e76838813da73fde23d333003cf189116075904096ba43395b7547c2378b"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290007.json","sha256":"f30bc2cae160e99062bede996fac47f6ced1987463d2cbbe69a15ae3c5f6ea42"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290008.json","sha256":"cc6c18d4d20c7c50d2d6ca8e97893ebef75197aeaf7d485756300091989cffa4"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290009.json","sha256":"7af2196f452b354b24a3a95ef6c00c30264d66fa1102b2954a6a353c5818b9d0"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290010.json","sha256":"3d5429d06d934cd4d74980aead9c91fa9bb0bb5aea5d9a77f30b6dbaa14965a8"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290011.json","sha256":"cf2c3ad7e0ebc392aa350110b0fc1196b9b43f6f1cc67e6e0ca0b32eb4d9718f"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__s5290012.json","sha256":"2783b42a5dffa27a772bd552bc55cbba18b2ae31926fbfbd092243624c6d159b"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290001.json","sha256":"57c8bd25e09f9b24fad5845965cded237ddc8bc55bc56fcd1061a9953fe631c2"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290002.json","sha256":"a147f97191df868e31940e9d89187810ea62dd5c9bfc4621e06a767004269b99"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290003.json","sha256":"65003c10a860fde14f17dfb0551a1800df0a3980e0d292fe0441ab76fb76839d"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290004.json","sha256":"131cce473d549e5074f42563d9332d03653fc667a363b5eae52ee4b766d75dc4"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290005.json","sha256":"d87b3b43438b7d59ee811010409a34043dd76dc88bee5ce3deafaf13948fa54c"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290006.json","sha256":"41337cea9bff3d53b9398fb6045c9dd661bad345b42df19c80ab4e35986c7c0c"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290007.json","sha256":"5c55c64c573c6f9936d214165dbf6af5f3596180304bea78b29c465d82d4a65f"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290008.json","sha256":"39a0403c4c8d6ea032f3f23aa92cae58a3d35f54c04afffebb6ad039d7889d1d"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290009.json","sha256":"b4a41f16fa5ecc46c2e3f967650f4e943fc177b86f47375d555e9fa9ad4cd1f9"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290010.json","sha256":"4ba3a7e8bad48495995e54c896f01985fb187159eebd038f842903eaefbd3d05"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290011.json","sha256":"c80ba4e2747aac3e9ea423fec8e6bb5c7bd5187cf8647416baac98860d79d680"},{"file":"w29asy__ff-fixed__h128__e400__published-2ms__adjacent-sum-5__spike-dropout-p90__s5290012.json","sha256":"0c6df9bd66b4b1bd1345bf512706b0e19d91ba735735ac680c3ec0af1d2b44fc"}]}</script>
+<script>
+"use strict";
+(() => {
+  const $ = id => document.getElementById(id);
+  const setText = (id, value) => { if ($(id).textContent !== value) $(id).textContent = value; };
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  const evidence = JSON.parse($('study-evidence').textContent);
+  let lesson = 'neuron', theme = scheme.matches ? 'dark' : 'light';
+  let animation = 0, rasterAnimation = 0, playing = false, progress = 1, inputStep = 0;
+  const spacingNames = ['Close together','Spaced apart','Widely separated'];
+  const tabs = Array.from(document.querySelectorAll('[role=tab]'));
+  const colors = () => {
+    const style = getComputedStyle(document.documentElement);
+    return Object.fromEntries(['paper','surface','ink','muted','line','soft','green','gold','grid','red'].map(key => [key, style.getPropertyValue('--'+key).trim()]));
+  };
+  function setupCanvas(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return null;
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(rect.width * ratio); canvas.height = Math.round(rect.height * ratio);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.scale(ratio, ratio);
+    return {ctx, w:rect.width, h:rect.height, c:colors()};
+  }
+  function text(ctx,value,x,y,color,size=11,align='left') {
+    ctx.fillStyle=color;ctx.font=`${size}px -apple-system, BlinkMacSystemFont, sans-serif`;ctx.textAlign=align;ctx.fillText(value,x,y);
+  }
+  function line(ctx,x1,y1,x2,y2,color,width=1) {ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();}
+  function circle(ctx,x,y,r,color,fill=true) {ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);if(fill){ctx.fillStyle=color;ctx.fill();}else{ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.stroke();}}
+  function neuronData() {
+    const gap=[4,12,23][Number($('spacing').value)-1];
+    const inputs=Array.from({length:6},(_,i)=>18+i*gap), trace=[], spikes=[];
+    let state=0;
+    for(let t=0;t<168;t++) {
+      state*=.90;
+      if(inputs.includes(t)) state+=.46;
+      const fired=state>=1;
+      trace.push({t,state,fired});
+      if(fired){spikes.push(t);state=0;}
+    }
+    return {inputs,trace,spikes};
+  }
+  function drawNeuron() {
+    const env=setupCanvas($('neuron-canvas')); if(!env)return;
+    const {ctx,w,h,c}=env, d=neuronData(), tick=Math.floor(progress*167), current=d.trace[tick];
+    const cx=w*.44,cy=h*.28,r=Math.min(41,w*.1), phase=current.fired?1:Math.min(current.state,1);
+    ctx.clearRect(0,0,w,h);
+    const tips=[[w*.09,cy-48],[w*.06,cy],[w*.10,cy+46]];
+    tips.forEach(([x,y],i)=>{
+      ctx.beginPath();ctx.moveTo(x,y);ctx.bezierCurveTo(w*.22,y,w*.26,cy+(i-1)*22,cx-r+2,cy+(i-1)*14);ctx.strokeStyle=c.green;ctx.lineWidth=1.8;ctx.stroke();
+      line(ctx,x+17,y,x+5,y-14,c.green,1.2);
+    });
+    circle(ctx,cx,cy,r+7,c.line,false);
+    ctx.globalAlpha=.13+phase*.36;circle(ctx,cx,cy,r,c.green);ctx.globalAlpha=1;
+    circle(ctx,cx,cy,r,c.green,false);circle(ctx,cx,cy,10,c.green,false);
+    line(ctx,cx+r,cy,w*.87,cy,c.green,2);
+    line(ctx,w*.87,cy,w*.93,cy-19,c.green,1.5);line(ctx,w*.87,cy,w*.94,cy+16,c.green,1.5);
+    const recent=d.inputs.find(t=>t>=tick && t-tick<9);
+    if(recent!==undefined && progress<1){const u=1-(recent-tick)/9;circle(ctx,w*.08+(cx-r-w*.08)*u,cy,4.5,c.gold);}
+    if(d.spikes.some(t=>Math.abs(t-tick)<5)&&progress<1){circle(ctx,cx+r+9+(tick-d.spikes.find(t=>Math.abs(t-tick)<5)+5)*(w*.025),cy,5,c.gold);}
+    text(ctx,'Inputs',w*.08,cy+79,c.muted,11);text(ctx,'Membrane-like state',cx,cy+r+35,c.muted,11,'center');text(ctx,'Spike out',w*.84,cy+79,c.muted,11,'center');
+    const left=34,right=w-23,top=h*.59,bottom=h-40,plotH=bottom-top;
+    for(let i=0;i<=2;i++){const y=bottom-i*.5*plotH;line(ctx,left,y,right,y,c.grid);}
+    ctx.setLineDash([4,5]);line(ctx,left,bottom-plotH*.86,right,bottom-plotH*.86,c.gold);ctx.setLineDash([]);
+    text(ctx,'Firing threshold',right,top-10,c.gold,10,'right');text(ctx,'State',left,top-10,c.muted,10);
+    ctx.beginPath();
+    d.trace.slice(0,tick+1).forEach((p,i)=>{const x=left+p.t/167*(right-left),y=bottom-Math.min(p.state,1.15)/1.16*plotH;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);if(p.fired)ctx.lineTo(x,bottom);});
+    ctx.strokeStyle=c.green;ctx.lineWidth=2;ctx.stroke();
+    d.inputs.forEach(t=>{const x=left+t/167*(right-left);line(ctx,x,bottom+7,x,bottom+13,t<=tick?c.gold:c.line,2.5);});
+    d.spikes.filter(t=>t<=tick).forEach(t=>{const x=left+t/167*(right-left);circle(ctx,x,bottom-plotH*.98,4,c.gold);});
+    text(ctx,'Earlier',left,h-10,c.muted,10);text(ctx,'Later →',right,h-10,c.muted,10,'right');
+    const n=d.spikes.filter(t=>t<=tick).length, incoming=d.inputs.filter(t=>t<=tick).length;
+    setText('neuron-count',`${n} emitted spike${n===1?'':'s'}`);setText('neuron-summary',`${incoming} of 6 inputs delivered`);
+    $('neuron-canvas').setAttribute('aria-label',`${spacingNames[Number($('spacing').value)-1]}: ${incoming} inputs delivered, ${n} spikes emitted. Simplified teaching model.`);
+  }
+  function stopNeuron(){cancelAnimationFrame(animation);animation=0;playing=false;$('play').textContent=reduced.matches?'Step sequence':progress>=1?'Replay sequence':'Play sequence';}
+  function playNeuron(){
+    if(playing){stopNeuron();return;}
+    if(reduced.matches){stepNeuron();return;}
+    if(progress>=1)progress=0;
+    playing=true;$('play').textContent='Pause';const started=performance.now()-progress*5800;
+    function frame(now){progress=Math.min((now-started)/5800,1);drawNeuron();if(progress<1&&playing)animation=requestAnimationFrame(frame);else stopNeuron();}
+    animation=requestAnimationFrame(frame);
+  }
+  function stepNeuron(){stopNeuron();const d=neuronData();if(progress>=1)inputStep=0;else inputStep=d.inputs.filter(t=>t<=Math.floor(progress*167)).length;progress=(d.inputs[Math.min(inputStep,5)]+1)/167;if(inputStep>=6)progress=1;drawNeuron();$('play').textContent=reduced.matches?'Step sequence':'Play sequence';}
+  $('play').addEventListener('click',playNeuron);$('step').addEventListener('click',stepNeuron);
+  $('spacing').addEventListener('input',()=>{stopNeuron();progress=1;const label=spacingNames[Number($('spacing').value)-1];$('spacing-value').textContent=label;$('spacing').setAttribute('aria-valuetext',label);drawNeuron();});
+  function rng(seed){let state=seed>>>0;return()=>{state=(Math.imul(1664525,state)+1013904223)>>>0;return state/4294967296;};}
+  function shuffled(seed){const random=rng(seed), a=Array.from({length:36},(_,i)=>i);for(let i=a.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+  const original=[];
+  for(let row=0;row<8;row++) for(const t of [3+row%3,8,9,14+(row%4),20,21,26+row%3,30,32])original.push({id:original.length,row,t,visible:1});
+  const conditions={
+    intact:['The full recording is available.','Counts, ordering and within-bin coincidences remain. These are synthetic teaching spikes, not SHD measurements.'],
+    bins:['Same counts. Scrambled temporal order.','Every channel shares one rearrangement of time bins. Marks that were together stay together; the sequence of those groups changes.'],
+    channels:['Same counts. Coincidences also disrupted.','Each channel gets its own time rearrangement. The total in each row stays fixed, while both order and cross-channel synchrony are disrupted.'],
+    reverse:['A changed direction, with information retained.','The whole sequence plays backward. Reverse it again and the original returns. Unlike random shuffling, this is an invertible control.'],
+    dropout:['Fewer spikes. Surviving marks stay put.','Each mark has a 90% deletion probability under one fixed mask. Losing one member of a coincident pair can remove that coincidence.']
+  };
+  function transformed(mode){const shared=shuffled(851),drop=rng(7262);return original.map(p=>({...p,t:mode==='bins'?shared[p.t]:mode==='channels'?shuffled(1700+p.row)[p.t]:mode==='reverse'?35-p.t:p.t,visible:mode==='dropout'?(drop()>=.90?1:0):1}));}
+  let rasterState=transformed('bins');
+  function drawRaster(){
+    const env=setupCanvas($('raster-canvas'));if(!env)return;const {ctx,w,h,c}=env;ctx.clearRect(0,0,w,h);
+    const left=30,right=w-87,top1=54,top2=h*.58,rowH=Math.min(14,(h*.32)/8),countX=w-66,countW=39;
+    function raster(events,top,title){
+      text(ctx,title,left,top-22,c.ink,12);text(ctx,'Count',countX,top-22,c.muted,10);
+      for(let j=0;j<8;j++){
+        const y=top+j*rowH;line(ctx,left,y,right,y,c.grid);text(ctx,String.fromCharCode(65+j),left-13,y+3,c.muted,9);
+        const count=events.filter(p=>p.row===j).reduce((sum,p)=>sum+p.visible,0);
+        ctx.fillStyle=c.soft;ctx.fillRect(countX,y-3,countW,5);ctx.fillStyle=c.green;ctx.fillRect(countX,y-3,count/9*countW,5);
+        text(ctx,Math.round(count).toString(),w-9,y+3,c.muted,9,'right');
+      }
+      for(const p of events){if(p.visible<.01)continue;ctx.globalAlpha=p.visible;const x=left+p.t/35*(right-left);line(ctx,x,top+p.row*rowH-4,x,top+p.row*rowH+4,c.green,2.3);ctx.globalAlpha=1;}
+      text(ctx,'Earlier',left,top+8*rowH+8,c.muted,9);text(ctx,'Later →',right,top+8*rowH+8,c.muted,9,'right');
+    }
+    raster(original,top1,'Original recording');raster(rasterState,top2,'After manipulation');
+  }
+  function setCondition(animate=true){
+    cancelAnimationFrame(rasterAnimation);const mode=$('condition').value,target=transformed(mode),start=rasterState.map(p=>({...p}));
+    const kept=target.filter(p=>p.visible).length;$('retained').textContent=`${kept} / ${original.length} retained`;
+    $('record-title').textContent=conditions[mode][0];$('record-description').textContent=conditions[mode][1];
+    $('raster-canvas').setAttribute('aria-label',`${conditions[mode][0]} ${kept} of ${original.length} synthetic input spikes retained.`);
+    if(!animate||reduced.matches){rasterState=target;drawRaster();return;}
+    const began=performance.now();function frame(now){const u=Math.min((now-began)/650,1),p=1-Math.pow(1-u,3);rasterState=target.map((end,i)=>({...end,t:start[i].t+(end.t-start[i].t)*p,visible:start[i].visible+(end.visible-start[i].visible)*p}));drawRaster();if(u<1)rasterAnimation=requestAnimationFrame(frame);}
+    rasterAnimation=requestAnimationFrame(frame);
+  }
+  $('condition').addEventListener('change',()=>setCondition());
+  const percent = n => (n*100).toFixed(2)+'%', points=n=>(n>=0?'+':'−')+Math.abs(n*100).toFixed(2);
+  let selectedSeed='all',resultCondition='intact';
+  function selectedValues(){const rows=selectedSeed==='all'?evidence.runs:evidence.runs.filter(r=>String(r.seed)===selectedSeed);if(!rows.length)throw new Error('No evidence for selected seed');return Object.fromEntries(['rateIntact','rateDeleted','attentionIntact','attentionDeleted'].map(k=>[k,rows.reduce((sum,r)=>sum+r[k],0)/rows.length]));}
+  function renderResult(){
+    const v=selectedValues(), rate=resultCondition==='intact'?v.rateIntact:v.rateDeleted,attn=resultCondition==='intact'?v.attentionIntact:v.attentionDeleted;
+    const rateLoss=v.rateIntact-v.rateDeleted,attnLoss=v.attentionIntact-v.attentionDeleted,growth=rateLoss-attnLoss;
+    $('rate-value').textContent=percent(rate);$('attention-value').textContent=percent(attn);$('rate-bar').style.width=(rate*100)+'%';$('attention-bar').style.width=(attn*100)+'%';$('gain-value').textContent=points(attn-rate)+' points';
+    $('selected-replicate').textContent=selectedSeed==='all'?'Mean of 12 training seeds':`Training seed ${selectedSeed}`;
+    $('finding').replaceChildren(document.createTextNode(points(growth)),Object.assign(document.createElement('small'),{textContent:'points'}));
+    $('finding-label').textContent=selectedSeed==='all'?'Growth in the attention advantage, averaged over twelve paired training seeds.':`Growth in the attention advantage for training seed ${selectedSeed}.`;
+    $('loss-note').textContent=`Attention loses ${(attnLoss*100).toFixed(2)} points; rate-only loses ${(rateLoss*100).toFixed(2)}. ${selectedSeed==='all'?'The experiment measures a relative advantage, not an improvement in absolute accuracy.':growth>.03?'This pair clears the registered three-point growth threshold.':'This pair grows, but does not clear the registered three-point growth threshold.'}`;
+    $('result-detail').textContent=selectedSeed==='all'?'48 valid runs · 12 training seeds × 2 models × 2 input conditions':'Four measured runs with the same training seed; the trained models can have different learned weights.';
+    document.querySelectorAll('[data-result]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.result===resultCondition)));
+    document.querySelectorAll('[data-seed]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.seed===selectedSeed)));
+    $('result-chart').setAttribute('aria-label',`${$('selected-replicate').textContent}, ${resultCondition==='intact'?'intact input':'90 percent spike deletion'}. Rate only: ${percent(rate)}. Rate plus attention: ${percent(attn)}.`);
+  }
+  function makeEvidence(){
+    if(evidence.runs.length!==12)throw new Error('Expected the complete twelve-seed Wave 29 evidence block');
+    const all=document.createElement('button');all.type='button';all.className='replicate all';all.dataset.seed='all';all.textContent='All 12';all.setAttribute('aria-pressed','true');$('replicates').append(all);
+    for(const row of evidence.runs){
+      const b=document.createElement('button');b.type='button';b.className='replicate';b.dataset.seed=String(row.seed);b.setAttribute('aria-label',`Inspect all four conditions for training seed ${row.seed}`);b.setAttribute('aria-pressed','false');
+      const wells=document.createElement('span');wells.className='wells';wells.setAttribute('aria-hidden','true');for(let i=0;i<4;i++){const dot=document.createElement('span');dot.className='well';wells.append(dot);}b.append(wells,document.createTextNode(String(row.seed).slice(-2)));$('replicates').append(b);
+      const tr=document.createElement('tr'),growth=(row.attentionDeleted-row.rateDeleted)-(row.attentionIntact-row.rateIntact);
+      const values=[String(row.seed),...['rateIntact','rateDeleted','attentionIntact','attentionDeleted'].map(k=>percent(row[k])),points(growth)];
+      values.forEach((value,i)=>{const td=document.createElement(i===0?'th':'td');if(i===0)td.scope='row';td.textContent=value;tr.append(td);});$('data-rows').append(tr);
+    }
+    $('replicates').addEventListener('click',event=>{const b=event.target.closest('[data-seed]');if(!b)return;selectedSeed=b.dataset.seed;renderResult();});
+    document.querySelectorAll('[data-result]').forEach(b=>b.addEventListener('click',()=>{resultCondition=b.dataset.result;renderResult();}));
+    renderResult();
+  }
+  function selectLesson(id,focus=false){
+    stopNeuron();cancelAnimationFrame(rasterAnimation);lesson=id;
+    for(const tab of tabs){const active=tab.id==='tab-'+id;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;$(tab.getAttribute('aria-controls')).hidden=!active;}
+    if(focus)$('tab-'+id).focus();
+    if(id==='neuron')drawNeuron();if(id==='recording')setCondition(false);
+  }
+  tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>selectLesson(tab.id.slice(4)));tab.addEventListener('keydown',event=>{let target;if(event.key==='ArrowRight')target=(i+1)%tabs.length;else if(event.key==='ArrowLeft')target=(i+tabs.length-1)%tabs.length;else if(event.key==='Home')target=0;else if(event.key==='End')target=tabs.length-1;else return;event.preventDefault();selectLesson(tabs[target].id.slice(4),true);});});
+  document.querySelectorAll('[data-next]').forEach(b=>b.addEventListener('click',()=>{selectLesson(b.dataset.next,true);$('tab-'+b.dataset.next).scrollIntoView({block:'nearest',behavior:reduced.matches?'instant':'smooth'});}));
+  function setTheme(next){theme=next;document.documentElement.dataset.theme=theme;$('theme').textContent=theme==='dark'?'Light':'Dark';$('theme').setAttribute('aria-label',`Switch to ${theme==='dark'?'light':'dark'} theme`);drawNeuron();drawRaster();}
+  $('theme').addEventListener('click',()=>setTheme(theme==='dark'?'light':'dark'));
+  const observer=new ResizeObserver(()=>{if(lesson==='neuron')drawNeuron();if(lesson==='recording')drawRaster();});observer.observe($('neuron-canvas'));observer.observe($('raster-canvas'));
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){stopNeuron();cancelAnimationFrame(rasterAnimation);rasterState=transformed($('condition').value);}});
+  reduced.addEventListener('change',()=>{stopNeuron();$('play').textContent=reduced.matches?'Step sequence':'Play sequence';setCondition(false);});
+  makeEvidence();setTheme(theme);setCondition(false);if(reduced.matches)$('play').textContent='Step sequence';
+})();
+</script>
+</body>
+</html>

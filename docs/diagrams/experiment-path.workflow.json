@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "From a spike recording to a spoken-digit decision",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "legend": { "mode": "hidden" }
+  },
+  "lanes": [
+    { "id": "shared", "label": "Rate model and attention model" },
+    { "id": "extra", "label": "Attention model only" }
+  ],
+  "mainPath": ["prepare", "neurons", "recording", "rate", "sum", "decision"],
+  "nodes": [
+    { "id": "prepare", "lane": "shared", "col": 0, "type": "external", "label": "Prepare input", "sublabel": "intact or manipulated", "width": 166 },
+    { "id": "neurons", "lane": "shared", "col": 1, "type": "backend", "label": "LIF neurons", "sublabel": "128 hidden units", "width": 154 },
+    { "id": "recording", "lane": "shared", "col": 2, "type": "database", "label": "Hidden spikes", "sublabel": "completed recording", "width": 168 },
+    { "id": "rate", "lane": "shared", "col": 3, "type": "backend", "label": "Rate readout", "sublabel": "average over time", "width": 156 },
+    { "id": "sum", "lane": "shared", "col": 4, "type": "backend", "label": "Add class scores", "sublabel": "one or both branches", "width": 178 },
+    { "id": "decision", "lane": "shared", "col": 5, "type": "backend", "label": "Digit decision", "sublabel": "one of 20 classes", "width": 156 },
+    { "id": "attention", "lane": "extra", "col": 3, "type": "backend", "label": "Attention", "sublabel": "sequence + positions", "tag": "32 features / 4 blocks", "width": 180, "yOffset": 20 }
+  ],
+  "edges": [
+    { "from": "prepare", "to": "neurons" },
+    { "from": "neurons", "to": "recording" },
+    { "from": "recording", "to": "rate" },
+    { "from": "rate", "to": "sum" },
+    { "from": "sum", "to": "decision" },
+    { "from": "recording", "to": "attention", "role": "branch", "variant": "emphasis" },
+    { "from": "attention", "to": "sum", "role": "branch", "variant": "emphasis" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "What is matched", "items": ["Both models use the same spiking architecture.", "They train separately, so learned weights may differ."] },
+    { "dot": "violet", "title": "What attention adds", "items": ["A full-sequence branch alongside the rate readout.", "Both models are trained with backpropagation through time."] }
+  ]
+}

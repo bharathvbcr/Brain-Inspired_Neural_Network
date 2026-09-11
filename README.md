@@ -16,6 +16,10 @@
 
 BINN is not a product or neuromorphic deployment framework. It is an exact, deterministic software instrument built with preregistered kill-gates to isolate the computational capabilities and limits of biological learning primitives.
 
+**New to the experiments?** Start with the [study notes](docs/STUDY_NOTES.md): a biology-first explanation of spikes, learning, readouts, controls, and the latest Wave 29 results, without heavy mathematics.
+
+Prefer to explore visually? Open the [interactive study lab](docs/study-lab.html) or the [experiment map](docs/diagrams/experiment-path.html). The lab includes animated teaching examples and the actual Wave 29 results, and works offline.
+
 ---
 
 ## 1. System Architecture
@@ -181,8 +185,8 @@ The central thesis was that compartmental LIF cells, sparse $k$-WTA assemblies, 
 2. **Live $k$-WTA Transfer Barrier:**
    - Transferring successful continuous credit rules to event-driven $k$-WTA architectures encounters severe performance drops due to hard competition boundaries and muted thresholds (v13–v24).
 3. **Temporal Attention Readout on LIF (SHD Breakthrough):**
-   - Adding a causal self-attention readout layer over feedforward LIF spiking features achieves **0.8320** accuracy on Spiking Heidelberg Digits (**12/12 seeds $\ge 0.80$**, gain **+0.1258** over rate readout).
-   - **Wave 9 proved temporal order is the mechanism**: bin-shuffling causes a **+0.1337 accuracy collapse** (96% of the attention advantage is lost without temporal spike order).
+   - Adding a full-sequence self-attention branch alongside the rate readout over feedforward LIF spiking features achieves **0.8320** accuracy on Spiking Heidelberg Digits (**12/12 seeds $\ge 0.80$**, gain **+0.1258** over rate readout, on the glibc fleet). This instrument uses backpropagation through time.
+   - **Wave 9 measured order dependence at this configuration**: bin-shuffling reduces attention-arm accuracy by **0.1337**, leaving an advantage of **0.0050** over the rate arm (about 96% of the intact advantage is lost).
 
 ---
 
@@ -327,7 +331,9 @@ All code adheres to strict global constraints verified by `.github/workflows/ci.
 ## 10. Documentation Index
 
 Root holds five documents; everything else lives under `results/`,
-`hybrid-results/`, or `docs/archive/`.
+`hybrid-results/`, or `docs/`.
+
+**Study guide** — [Understanding BINN experiments from scratch](docs/STUDY_NOTES.md): biological comparisons, an example walkthrough, the Wave 29 result, and self-check questions.
 
 **Root**
 
