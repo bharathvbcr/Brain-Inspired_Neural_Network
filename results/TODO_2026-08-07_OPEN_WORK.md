@@ -376,13 +376,47 @@ with LCB −0.0048. Nobody has isolated why.
 
 - [x] Recurrent training cell 193.0 s → 30.6 s (6.3×), out of the
       forward/backward correctness fix
-- [ ] **Profile before acting on `PERF_AUDIT_2026-08-02.md`.** The audit ran with
-      no Rust toolchain; nothing in it was compiled, benchmarked or profiled, and
-      its own opening says the ranking is a hypothesis and the first action
-      should be to profile rather than to start at item #1.
-- [ ] **Largest named candidate:** the plasticity step deep-copying its entire
-      CSR *and* CSC on every update, ~30 MB of memcpy per step at nnz ≈ 2.5e6,
-      purely to dodge a borrow conflict.
+- [x] **Profile before acting on `PERF_AUDIT_2026-08-02.md`.** *(2026-09-12.)*
+      Done, on an idle box — the reason this waited was that profiling a machine
+      running five training cells measures the contention, and wave 29 finished
+      on 2026-09-09. Six criterion benchmarks and an `xctrace` Time Profiler run
+      of 18,808 samples.
+
+      **The ranking was wrong in a specific and useful way.** Item #1,
+      `TimingWheel::scan_earliest`, does not appear in the profile at all,
+      because the bitmasks that replace it were applied in the audit's own pass.
+      Item #3, the three `expf` per cell-update, is **24.2% of engine time** and
+      the largest actionable cost. Of that, **9.0% is `DYLD-STUB$$expf`** — call
+      trampolines, not arithmetic — and it is not a missing build flag:
+      `lto = "fat"` is already set and `expf` is across a dynamic boundary LTO
+      cannot cross. Removing it means not calling system libm, which changes the
+      bits.
+
+      The profile also had to separate the engine from criterion's own
+      rayon-parallel bootstrap (18.7% of the process). The f64 `exp` visible at
+      6.9% is criterion's, not BINN's — there is no f64 `.exp()` in
+      `binn-engine` or `binn-core`, and crediting it would have inflated the
+      finding by a third.
+      ([`MEASUREMENT_2026-09-12_THE_HOT_PATH_IS_MEASURED.md`](MEASUREMENT_2026-09-12_THE_HOT_PATH_IS_MEASURED.md))
+- [x] **Largest named candidate — already fixed, and this item was stale.**
+      *(Verified 2026-09-12.)* The plasticity step no longer deep-copies CSR and
+      CSC: `binn-learn/src/three_factor.rs:206-220` takes `&engine.conn` and
+      `&engine.conn_rev` as disjoint shared borrows, with a comment opening
+      "This **previously** read `engine.conn.clone()`". The audit's own "Applied
+      in this pass" table records it at `three_factor.rs:134`. No per-step
+      `conn.clone()` survives anywhere in the workspace; the sixteen remaining
+      calls are one-time `set_connectivity` setup in runners, benches and tests.
+      The ~30 MB/step figure was real when written and had already been paid off
+      when this line was carried forward.
+
+- [ ] **The `dt` histogram, which is now the only thing gating the 24.2%.** The
+      sole bit-identical route into the exponential cost is a `dt`-keyed memo,
+      and the audit names its prerequisite: "under lazy integration `dt` is the
+      gap since a cell was last touched, and I have no evidence about its
+      distribution. Measure before building the memo." The 2026-09-12 profile
+      **cannot** supply it — `engine_step/1024_external_events` injects every
+      cell and steps one tick, so its `dt` distribution is degenerate by
+      construction. This needs a production workload, not a microbenchmark.
 - [ ] **`ff+fixed` 4.5% regression.** Documented rather than hidden; removing it
       needs monomorphisation, a structural change with its own verification
       burden.
