@@ -10,11 +10,15 @@ description = "BINN L2 numeric core: buffers, RNG, SIMD, sparse, scan"
 
 [features]
 default = []
-gpu = ["dep:metal", "dep:objc"]
+# Metal SpMV/LIF via sparsl. Without this feature `Backend::MetalGpu` stays
+# unconstructible; with it, availability still requires a live Metal device.
+gpu = ["sparsl/metal"]
+# Cross-crate SharedEvent/MTLBuffer handoff against published tessl.
+tessl-interop = ["gpu", "dep:tessl"]
 
 [dependencies]
-metal = { workspace = true, optional = true }
-objc = { workspace = true, optional = true }
+sparsl = { path = "../../MLSystemsLab/Rust_MLKit/crates/sparsl" }
+tessl = { path = "../../tessl", optional = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }

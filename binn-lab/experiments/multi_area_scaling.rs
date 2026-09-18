@@ -420,9 +420,9 @@ fn main() {
         report_lines.push("## Multi-area throughput\n\n".to_string());
         if arms.len() < 2 {
             report_lines.push(format!(
-                "> Only one backend is available (**{}**). Metal GPU dispatch is unimplemented \
-                 (`binn_core::metal_backend::METAL_GPU_DISPATCH_IMPLEMENTED == false`), so no \
-                 GPU column is emitted.\n\n",
+                "> Only one backend is available (**{}**). Metal GPU is unavailable on this \
+                 build/host (`Backend::MetalGpu.is_available() == false`), so no GPU column is \
+                 emitted.\n\n",
                 arms[0].label()
             ));
         }

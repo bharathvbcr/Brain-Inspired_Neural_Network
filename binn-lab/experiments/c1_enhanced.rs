@@ -262,9 +262,9 @@ fn main() {
         if arms.len() < 2 {
             report_lines.push(format!(
                 "> Only one backend is available (**{}**), so no cross-substrate speedup is \
-                 reported. Metal GPU dispatch is unimplemented \
-                 (`binn_core::metal_backend::METAL_GPU_DISPATCH_IMPLEMENTED == false`); the \
-                 harness refuses to emit a GPU column produced by CPU code.\n\n",
+                 reported. Metal GPU is unavailable on this build/host \
+                 (`Backend::MetalGpu.is_available() == false`); the harness refuses to emit a \
+                 GPU column produced by CPU code.\n\n",
                 arms[0].label()
             ));
         }

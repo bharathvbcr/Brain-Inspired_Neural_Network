@@ -1,101 +1,7 @@
-//! SIMD cell math (U02).
-//!
-//! Elementwise leak/integrate over SoA columns. The hot path is structured as
-//! fixed-width lanes (`LANES = 8`) so LLVM can autovectorize; a scalar tail
-//! handles the remainder. No `unsafe`, no extra ML deps.
+//! SIMD cell math — delegated to [`sparsl`] so BINN and sparsl cannot diverge
+//! on `tau == 0` refusal, Tick→f32 exactness, or lane width.
 
-use crate::time::Tick;
-
-/// Lane width for the SIMD-structured leak/integrate kernel.
-///
-/// `8 × f32` is **not** a 256-bit vector on the host of record (Apple M5 Pro,
-/// aarch64). NEON registers are 128-bit, so each `LANES` chunk lowers to two
-/// `f32x4` vector ops rather than one. That is still the right width — the pair
-/// gives LLVM a 2× unrolled body that hides `fdiv`/`fmla` latency — but the
-/// "256-bit" reading of this constant is an x86/AVX assumption and does not
-/// describe the generated code here.
-///
-/// Before changing this value, re-run `cargo bench -p binn-core
-/// --bench simd_leak_integrate`; the correct width is an empirical question,
-/// not a derivation from the register file.
-pub const LANES: usize = 8;
-
-/// One Euler step of the linear sub-threshold LIF dynamics
-/// `τ dv/dt = −v + input`, i.e.
-///
-/// ```text
-/// v ← v + (input − v) · (dt / τ)
-/// ```
-///
-/// All slices must have the same length. `tau` entries must be finite and
-/// non-zero. `dt` is the integer tick step, converted to `f32` for the update.
-///
-/// The implementation processes `LANES`-wide chunks (SIMD-shaped) and a
-/// scalar remainder; results match [`scalar_leak_integrate`] within `1e-6`
-/// on normal inputs.
-pub fn simd_leak_integrate(v: &mut [f32], input: &[f32], tau: &[f32], dt: Tick) {
-    let n = v.len();
-    assert_eq!(input.len(), n, "input length must match v");
-    assert_eq!(tau.len(), n, "tau length must match v");
-
-    let dt = dt as f32;
-    let mut i = 0;
-
-    // SIMD-structured body: fixed lane groups for autovectorization.
-    while i + LANES <= n {
-        leak_integrate_lanes(
-            (&mut v[i..i + LANES]).try_into().unwrap(),
-            (&input[i..i + LANES]).try_into().unwrap(),
-            (&tau[i..i + LANES]).try_into().unwrap(),
-            dt,
-        );
-        i += LANES;
-    }
-
-    // Scalar tail.
-    while i < n {
-        leak_integrate_one(&mut v[i], input[i], tau[i], dt);
-        i += 1;
-    }
-}
-
-/// Scalar reference implementation of the same update as [`simd_leak_integrate`].
-///
-/// Provided for parity testing and as a readable specification of the dynamics.
-#[inline]
-pub fn scalar_leak_integrate(v: &mut [f32], input: &[f32], tau: &[f32], dt: Tick) {
-    let n = v.len();
-    assert_eq!(input.len(), n, "input length must match v");
-    assert_eq!(tau.len(), n, "tau length must match v");
-    let dt = dt as f32;
-    for i in 0..n {
-        leak_integrate_one(&mut v[i], input[i], tau[i], dt);
-    }
-}
-
-#[inline(always)]
-fn leak_integrate_one(v: &mut f32, input: f32, tau: f32, dt: f32) {
-    let alpha = dt / tau;
-    *v += (input - *v) * alpha;
-}
-
-/// One `LANES`-wide step. Written as an explicit lane loop so the intent is
-/// SIMD-shaped even on targets where autovectorization is inactive.
-#[inline(always)]
-fn leak_integrate_lanes(v: &mut [f32; LANES], input: &[f32; LANES], tau: &[f32; LANES], dt: f32) {
-    // Lane-parallel body (autovectorization target).
-    let mut alpha = [0.0f32; LANES];
-    let mut i = 0;
-    while i < LANES {
-        alpha[i] = dt / tau[i];
-        i += 1;
-    }
-    i = 0;
-    while i < LANES {
-        v[i] += (input[i] - v[i]) * alpha[i];
-        i += 1;
-    }
-}
+pub use sparsl::{scalar_leak_integrate, simd_leak_integrate, LANES};
 
 #[cfg(test)]
 mod tests {
@@ -120,7 +26,6 @@ mod tests {
         let mut rng = Rng::new(seed);
         let v: Vec<f32> = (0..n).map(|_| rng.next_f32() * 2.0 - 1.0).collect();
         let input: Vec<f32> = (0..n).map(|_| rng.next_f32() * 2.0 - 1.0).collect();
-        // tau in (0.5, 4.5] — safely away from zero.
         let tau: Vec<f32> = (0..n).map(|_| 0.5 + rng.next_f32() * 4.0).collect();
         let dt = (1 + rng.gen_index(4)) as Tick;
         (v, input, tau, dt)
@@ -161,5 +66,19 @@ mod tests {
     fn rejects_input_len_mismatch() {
         let mut v = [0.0f32; 4];
         simd_leak_integrate(&mut v, &[0.0; 3], &[1.0; 4], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "tau[0] must be finite and non-zero")]
+    fn simd_refuses_tau_zero() {
+        let mut v = [0.0f32; 1];
+        simd_leak_integrate(&mut v, &[1.0], &[0.0], 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "exceeds 2^24")]
+    fn simd_refuses_tick_past_exact_f32() {
+        let mut v = [0.0f32; 1];
+        simd_leak_integrate(&mut v, &[1.0], &[1.0], (1 << 24) + 1);
     }
 }

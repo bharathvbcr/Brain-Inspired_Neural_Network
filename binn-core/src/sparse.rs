@@ -1,84 +1,82 @@
 //! Sparse CSR connectivity storage (U01).
+//!
+//! Public names stay `binn_core::{Csr, Csc, CsrError}`. Validation, sorting,
+//! and stored column width come from [`sparsl`]; BINN call sites keep the
+//! historical `from_parts(row_ptr, col)` signature and public `row_ptr` /
+//! `col` fields.
 
-/// Error returned when CSR parts fail structural validation.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CsrError {
-    /// `row_ptr` must contain at least one entry (`[0]` for an empty graph).
-    EmptyRowPtr,
-    /// `row_ptr[0]` must be `0`.
-    NonZeroStart { start: u32 },
-    /// `row_ptr` must be monotonically non-decreasing.
-    NotMonotonic { index: usize },
-    /// `row_ptr[last]` must equal `col.len()`.
-    NnzMismatch { row_ptr_end: u32, col_len: usize },
-}
-
-impl core::fmt::Display for CsrError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::EmptyRowPtr => write!(f, "CSR row_ptr must be non-empty"),
-            Self::NonZeroStart { start } => {
-                write!(f, "CSR row_ptr must start at 0, got {start}")
-            }
-            Self::NotMonotonic { index } => {
-                write!(f, "CSR row_ptr not monotonic at index {index}")
-            }
-            Self::NnzMismatch {
-                row_ptr_end,
-                col_len,
-            } => write!(
-                f,
-                "CSR row_ptr end ({row_ptr_end}) != col.len() ({col_len})"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for CsrError {}
+/// Re-exported sparsl CSR validation errors (includes `RowUnsorted`,
+/// `ColumnOutOfRange`, and CSC offset overflow).
+pub use sparsl::CsrError;
 
 /// Compressed-sparse-row connectivity graph.
 ///
 /// `row_ptr` has length `nrows + 1`. Neighbors of row `r` are the column
 /// indices `col[row_ptr[r] as usize .. row_ptr[r + 1] as usize]`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+///
+/// `ncols` is the declared operator width (`max(nrows, max_col + 1)` when
+/// inferred by [`Csr::from_parts`] / [`Csr::from_adjacency`]), so square
+/// graphs of `N` adjacency lists keep width ≥ `N`.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Csr {
     pub row_ptr: Vec<u32>,
     pub col: Vec<u32>,
+    ncols: usize,
+}
+
+impl Default for Csr {
+    /// Structurally valid zero-row CSR (`row_ptr == [0]`, `ncols == 0`).
+    #[inline]
+    fn default() -> Self {
+        Self::empty(0)
+    }
 }
 
 impl Csr {
     /// Build from explicit arrays after validating CSR invariants.
+    ///
+    /// Infers `ncols = max(nrows, max_col + 1)` (or `nrows` when there are no
+    /// edges) so existing BINN call sites that omit an explicit width still
+    /// compile and keep square cell graphs wide enough for every row index.
     pub fn from_parts(row_ptr: Vec<u32>, col: Vec<u32>) -> Result<Self, CsrError> {
-        validate(&row_ptr, &col)?;
-        Ok(Self { row_ptr, col })
+        let ncols = infer_ncols(&row_ptr, &col);
+        Self::from_parts_with_ncols(row_ptr, col, ncols)
+    }
+
+    /// Build with an explicit column count (trailing empty columns allowed).
+    pub fn from_parts_with_ncols(
+        row_ptr: Vec<u32>,
+        col: Vec<u32>,
+        ncols: usize,
+    ) -> Result<Self, CsrError> {
+        let inner = sparsl::Csr::from_parts(row_ptr, col, ncols)?;
+        Ok(Self::from_sparsl(inner))
     }
 
     /// Build from explicit arrays without validation (caller guarantees shape).
+    ///
+    /// Infers `ncols` the same way as [`Csr::from_parts`]. An unchecked CSR
+    /// still cannot reach a Metal kernel: sparsl `Device::prepare` re-validates.
     #[inline]
     pub fn from_parts_unchecked(row_ptr: Vec<u32>, col: Vec<u32>) -> Self {
-        Self { row_ptr, col }
+        let ncols = infer_ncols(&row_ptr, &col);
+        Self {
+            row_ptr,
+            col,
+            ncols,
+        }
     }
 
     /// Build from per-row adjacency lists.
+    ///
+    /// Each row is stable-sorted (sparsl contract); duplicates are preserved.
     pub fn from_adjacency(rows: &[Vec<u32>]) -> Self {
-        let nrows = rows.len();
-        let mut row_ptr = Vec::with_capacity(nrows + 1);
-        let nnz: usize = rows.iter().map(Vec::len).sum();
-        let mut col = Vec::with_capacity(nnz);
-        row_ptr.push(0);
-        for row in rows {
-            col.extend_from_slice(row);
-            row_ptr.push(col.len() as u32);
-        }
-        Self { row_ptr, col }
+        Self::from_sparsl(sparsl::Csr::from_adjacency(rows))
     }
 
-    /// Empty graph with `nrows` rows and no edges.
+    /// Empty graph with `nrows` rows and no edges (square: `ncols = nrows`).
     pub fn empty(nrows: usize) -> Self {
-        Self {
-            row_ptr: vec![0; nrows + 1],
-            col: Vec::new(),
-        }
+        Self::from_sparsl(sparsl::Csr::empty(nrows, nrows))
     }
 
     /// Number of rows.
@@ -93,24 +91,10 @@ impl Csr {
         self.col.len()
     }
 
-    /// Inferred number of columns (max column index + 1, or 0 if empty).
-    ///
-    /// # Cost
-    ///
-    /// **This is O(nnz), not O(1).** It scans every stored column index; the
-    /// `#[inline]` below refers to call overhead and does not make it cheap.
-    /// Unlike [`Csc::ncols`], which is a genuine O(1) `col_ptr.len() - 1`, this
-    /// value is not cached because `Csr` does not store a column count.
-    ///
-    /// Never call it in a loop condition. `for c in 0..csr.ncols()` is O(nnz²).
-    /// Hoist it into a `let` before the loop.
+    /// Declared number of columns (operator width). O(1).
     #[inline]
     pub fn ncols(&self) -> usize {
-        self.col
-            .iter()
-            .copied()
-            .max()
-            .map_or(0, |m| (m + 1) as usize)
+        self.ncols
     }
 
     /// Column indices of neighbors for `row`.
@@ -139,86 +123,60 @@ impl Csr {
         })
     }
 
-    /// Build a CSC reverse index over this CSR (square cell graph: `ncols = nrows`).
+    /// Build a CSC reverse index over this CSR (uses stored [`Csr::ncols`]).
     #[inline]
     pub fn to_csc(&self) -> Csc {
         Csc::from_csr(self)
+    }
+
+    /// Convert to a sparsl CSR for device prepare / SpMV.
+    pub(crate) fn to_sparsl(&self) -> sparsl::Csr {
+        sparsl::Csr::from_parts_unchecked(self.row_ptr.clone(), self.col.clone(), self.ncols)
+    }
+
+    fn from_sparsl(inner: sparsl::Csr) -> Self {
+        Self {
+            row_ptr: inner.row_ptr().to_vec(),
+            col: inner.col().to_vec(),
+            ncols: inner.ncols(),
+        }
     }
 }
 
 /// Compressed-sparse-column reverse index over CSR edge storage.
 ///
-/// Columns are postsynaptic cells. Each CSC entry stores the presynaptic row and
-/// the CSR edge index so synapse / weight tables stay CSR-ordered while
-/// postsynaptic fan-in is `O(degree_in)` instead of `O(nnz)`.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// Built through sparsl so `u32` degree / pointer / edge-id paths stay
+/// fail-closed. Public field layout matches the historical BINN `Csc`.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Csc {
-    /// Column pointers; length `ncols + 1`.
     pub col_ptr: Vec<u32>,
-    /// Presynaptic (CSR row) index for each CSC entry.
     pub row: Vec<u32>,
-    /// CSR edge index (synapse / weight table index) for each CSC entry.
     pub edge_idx: Vec<u32>,
+}
+
+impl Default for Csc {
+    fn default() -> Self {
+        Self::empty(0)
+    }
 }
 
 impl Csc {
     /// Empty reverse index with `ncols` columns and no edges.
     pub fn empty(ncols: usize) -> Self {
-        Self {
-            col_ptr: vec![0; ncols + 1],
-            row: Vec::new(),
-            edge_idx: Vec::new(),
-        }
+        Self::from_sparsl(sparsl::Csc::empty(ncols))
     }
 
-    /// Build CSC fan-in from a CSR graph.
-    ///
-    /// Uses `ncols = csr.nrows()` (directed cell graph). Column indices in
-    /// `csr.col` must be `< ncols`.
+    /// Build CSC fan-in from a CSR graph (uses [`Csr::ncols`]).
     pub fn from_csr(csr: &Csr) -> Self {
-        let ncols = csr.nrows();
-        if ncols == 0 {
-            return Self::empty(0);
-        }
-        let nnz = csr.nnz();
-        let mut degrees = vec![0u32; ncols];
-        for &c in &csr.col {
-            let col = c as usize;
-            assert!(
-                col < ncols,
-                "CSC build: column {c} out of range (ncols={ncols})"
-            );
-            degrees[col] += 1;
-        }
+        Self::from_sparsl(sparsl::Csc::from_csr(&csr.to_sparsl()))
+    }
 
-        let mut col_ptr = Vec::with_capacity(ncols + 1);
-        col_ptr.push(0);
-        let mut acc = 0u32;
-        for &d in &degrees {
-            acc += d;
-            col_ptr.push(acc);
-        }
-
-        let mut row = vec![0u32; nnz];
-        let mut edge_idx = vec![0u32; nnz];
-        let mut next = col_ptr[..ncols].to_vec();
-        for r in 0..csr.nrows() {
-            let start = csr.row_ptr[r] as usize;
-            let end = csr.row_ptr[r + 1] as usize;
-            for e in start..end {
-                let c = csr.col[e] as usize;
-                let slot = next[c] as usize;
-                row[slot] = r as u32;
-                edge_idx[slot] = e as u32;
-                next[c] += 1;
-            }
-        }
-
-        Self {
-            col_ptr,
-            row,
-            edge_idx,
-        }
+    /// Build CSC fan-in with an explicit column count.
+    pub fn from_csr_rect(csr: &Csr, ncols: usize) -> Result<Self, CsrError> {
+        Ok(Self::from_sparsl(sparsl::Csc::from_csr_rect(
+            &csr.to_sparsl(),
+            ncols,
+        )?))
     }
 
     /// Number of columns (postsynaptic cells).
@@ -252,28 +210,22 @@ impl Csc {
         let end = self.col_ptr[col + 1] as usize;
         (start..end).map(move |i| (self.row[i], self.edge_idx[i]))
     }
-}
 
-fn validate(row_ptr: &[u32], col: &[u32]) -> Result<(), CsrError> {
-    if row_ptr.is_empty() {
-        return Err(CsrError::EmptyRowPtr);
-    }
-    if row_ptr[0] != 0 {
-        return Err(CsrError::NonZeroStart { start: row_ptr[0] });
-    }
-    for i in 1..row_ptr.len() {
-        if row_ptr[i] < row_ptr[i - 1] {
-            return Err(CsrError::NotMonotonic { index: i });
+    fn from_sparsl(inner: sparsl::Csc) -> Self {
+        Self {
+            col_ptr: inner.col_ptr,
+            row: inner.row,
+            edge_idx: inner.edge_idx,
         }
     }
-    let end = *row_ptr.last().expect("row_ptr non-empty");
-    if end as usize != col.len() {
-        return Err(CsrError::NnzMismatch {
-            row_ptr_end: end,
-            col_len: col.len(),
-        });
+}
+
+fn infer_ncols(row_ptr: &[u32], col: &[u32]) -> usize {
+    let nrows = row_ptr.len().saturating_sub(1);
+    match col.iter().copied().max() {
+        Some(m) => nrows.max(m as usize + 1),
+        None => nrows,
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -285,6 +237,7 @@ mod tests {
     fn csr_from_adjacency_neighbors() {
         let csr = Csr::from_adjacency(&[vec![1, 2], vec![0], vec![]]);
         assert_eq!(csr.nrows(), 3);
+        assert_eq!(csr.ncols(), 3);
         assert_eq!(csr.nnz(), 3);
         assert_eq!(csr.row_cols(0), &[1, 2]);
         assert_eq!(csr.neighbors(1).collect::<Vec<_>>(), vec![0]);
@@ -312,10 +265,27 @@ mod tests {
     }
 
     #[test]
-    fn csr_edges_row_major() {
+    fn csr_from_parts_rejects_unsorted_row() {
+        assert_eq!(
+            Csr::from_parts(vec![0, 2], vec![2, 0]),
+            Err(CsrError::RowUnsorted { row: 0, edge: 1 })
+        );
+    }
+
+    #[test]
+    fn csr_from_parts_infers_square_width() {
+        // Four rows, columns only touch index 2 → width must stay ≥ 4.
+        let csr = Csr::from_parts(vec![0, 1, 2, 2, 3], vec![2, 2, 2]).expect("csr");
+        assert_eq!(csr.nrows(), 4);
+        assert_eq!(csr.ncols(), 4);
+    }
+
+    #[test]
+    fn csr_edges_row_major_sorted() {
+        // from_adjacency stable-sorts each row.
         let csr = Csr::from_adjacency(&[vec![2, 0], vec![1]]);
         let edges: Vec<_> = csr.edges().collect();
-        assert_eq!(edges, vec![(0, 2), (0, 0), (1, 1)]);
+        assert_eq!(edges, vec![(0, 0), (0, 2), (1, 1)]);
     }
 
     #[test]
@@ -352,7 +322,7 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]
 
-        /// Neighbor iteration must recover each adjacency list exactly.
+        /// Neighbor iteration recovers each adjacency list after stable-sort.
         #[test]
         fn csr_neighbor_iteration_matches_adjacency(
             rows in proptest::collection::vec(
@@ -368,17 +338,24 @@ mod tests {
             );
 
             for (r, expected) in rows.iter().enumerate() {
+                let mut sorted = expected.clone();
+                sorted.sort();
                 let via_iter: Vec<u32> = csr.neighbors(r).collect();
-                prop_assert_eq!(&via_iter, expected);
-                prop_assert_eq!(csr.row_cols(r), expected.as_slice());
+                prop_assert_eq!(&via_iter, &sorted);
+                prop_assert_eq!(csr.row_cols(r), sorted.as_slice());
 
                 let start = csr.row_ptr[r] as usize;
                 let end = csr.row_ptr[r + 1] as usize;
-                prop_assert_eq!(&csr.col[start..end], expected.as_slice());
+                prop_assert_eq!(&csr.col[start..end], sorted.as_slice());
             }
 
-            let flat_expected: Vec<u32> = rows.iter().flatten().copied().collect();
             let flat_got: Vec<u32> = csr.edges().map(|(_, c)| c).collect();
+            let mut flat_expected: Vec<u32> = Vec::new();
+            for row in &rows {
+                let mut sorted = row.clone();
+                sorted.sort();
+                flat_expected.extend(sorted);
+            }
             prop_assert_eq!(flat_got, flat_expected);
         }
 
@@ -394,8 +371,10 @@ mod tests {
             let csr = Csr::from_parts(built.row_ptr.clone(), built.col.clone())
                 .expect("adjacency CSR must be valid");
             for (r, expected) in rows.iter().enumerate() {
+                let mut sorted = expected.clone();
+                sorted.sort();
                 let got: Vec<u32> = csr.neighbors(r).collect();
-                prop_assert_eq!(&got, expected);
+                prop_assert_eq!(&got, &sorted);
             }
         }
     }

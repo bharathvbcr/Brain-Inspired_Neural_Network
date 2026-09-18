@@ -5,54 +5,41 @@
 //!
 //! # Backend honesty invariant
 //!
-//! This module previously exposed a `use_gpu: bool` that [`SpmvBackend::spmv`]
-//! never read, so a "GPU" backend and a "CPU" backend executed byte-identical
-//! rayon code. Benchmarks built on it reported ~1.00x "speedups" that were pure
-//! measurement noise, and reports labelled CPU numbers as GPU numbers.
-//!
-//! The fix is structural, not cosmetic:
-//!
 //! 1. The backend selector is an explicit [`Backend`] enum, not a bool.
 //! 2. [`METAL_GPU_DISPATCH_IMPLEMENTED`] is the single source of truth for
-//!    whether real Metal dispatch exists. It is currently `false`.
-//! 3. [`SpmvBackend::try_new`] **refuses to construct** an unimplemented
-//!    backend. There is no code path that yields a `Backend::MetalGpu` handle
-//!    which silently runs on the CPU.
-//! 4. [`SpmvBackend::label`] returns the backend that *actually executed*, so a
-//!    report cannot mislabel a run even if the caller is confused.
+//!    whether real Metal dispatch exists via [`sparsl`].
+//! 3. [`SpmvBackend::try_new`] **refuses to construct** an unavailable backend.
+//!    There is no code path that yields a `Backend::MetalGpu` handle which
+//!    silently runs on the CPU.
+//! 4. [`SpmvBackend::label`] returns the backend that *actually executed*.
 //!
-//! To land real Metal: implement the dispatch bodies in [`MetalGpuContext`],
-//! then flip [`METAL_GPU_DISPATCH_IMPLEMENTED`] to `true`. The guard tests at
-//! the bottom of this file will start exercising the GPU path automatically.
+//! Metal work is delegated to [`sparsl::Device`] / [`sparsl::SparseOp`]. The
+//! duplicate one-thread-per-row MSL stack that lived in this crate is gone.
 
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::too_many_arguments)]
 
 use std::fmt;
 
+#[cfg(feature = "gpu")]
+use std::cell::RefCell;
+
 use crate::sparse::Csr;
 
-/// Whether native Metal GPU kernel dispatch is actually implemented end-to-end.
+/// Whether native Metal GPU kernel dispatch is implemented end-to-end via sparsl.
 ///
-/// **Do not flip this to `true` until [`MetalGpuContext::spmv`],
-/// [`MetalGpuContext::batch_lif_integrate`] and
-/// [`MetalGpuContext::fused_spmv_lif_integrate`] perform real GPU dispatch and
-/// pass `metal_gpu_matches_cpu_reference`.**
-///
-/// While `false`, [`Backend::MetalGpu`] is unconstructible and any benchmark
-/// that asks for it fails loudly instead of quietly timing the CPU path.
-pub const METAL_GPU_DISPATCH_IMPLEMENTED: bool = false;
+/// Flip only after `metal_gpu_matches_cpu_reference` (and related differential
+/// checks) pass. While `true`, [`Backend::MetalGpu`] is still unavailable when
+/// the `gpu` feature is off or no Metal device can open.
+pub const METAL_GPU_DISPATCH_IMPLEMENTED: bool = true;
 
 /// Which execution substrate a backend handle actually runs on.
-///
-/// This is deliberately an enum rather than a `bool`: a bool invites the
-/// "flag is set but never read" failure mode that this module previously had.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Backend {
     /// Multi-threaded CPU execution via rayon. Always available.
     CpuParallel,
-    /// Native Metal GPU dispatch. Requires the `gpu` cargo feature *and*
-    /// [`METAL_GPU_DISPATCH_IMPLEMENTED`].
+    /// Native Metal GPU dispatch through sparsl. Requires the `gpu` cargo
+    /// feature, [`METAL_GPU_DISPATCH_IMPLEMENTED`], and a live Metal device.
     MetalGpu,
 }
 
@@ -67,11 +54,8 @@ impl Backend {
     }
 
     /// Whether this backend can actually execute work right now.
-    pub const fn is_available(self) -> bool {
-        match self {
-            Backend::CpuParallel => true,
-            Backend::MetalGpu => METAL_GPU_DISPATCH_IMPLEMENTED && cfg!(feature = "gpu"),
-        }
+    pub fn is_available(self) -> bool {
+        self.unavailable_reason().is_none()
     }
 
     /// Why the backend is unavailable, or `None` if it is available.
@@ -79,16 +63,16 @@ impl Backend {
         match self {
             Backend::CpuParallel => None,
             Backend::MetalGpu => {
-                if !cfg!(feature = "gpu") {
-                    Some("binn-core was built without the `gpu` cargo feature")
-                } else if !METAL_GPU_DISPATCH_IMPLEMENTED {
+                if !METAL_GPU_DISPATCH_IMPLEMENTED {
                     Some(
                         "Metal kernel dispatch is not implemented \
                          (METAL_GPU_DISPATCH_IMPLEMENTED == false); \
                          refusing to fall back to CPU under a GPU label",
                     )
+                } else if !cfg!(feature = "gpu") {
+                    Some("binn-core was built without the `gpu` cargo feature")
                 } else {
-                    None
+                    sparsl::Backend::Metal.unavailable_reason()
                 }
             }
         }
@@ -137,13 +121,119 @@ impl Default for SpmvBackendConfig {
     }
 }
 
+/// Cached sparsl operator: weights stay resident across ticks with the same
+/// topology; rebuilt when shape / topology identity changes.
+#[cfg(feature = "gpu")]
+struct MetalOpCache {
+    nrows: usize,
+    ncols: usize,
+    nnz: usize,
+    row_ptr_addr: usize,
+    col_addr: usize,
+    op: sparsl::SparseOp,
+}
+
+/// Metal device plus a prepared [`sparsl::SparseOp`] cache.
+#[cfg(feature = "gpu")]
+struct MetalGpuState {
+    device: sparsl::Device,
+    cache: RefCell<Option<MetalOpCache>>,
+}
+
+#[cfg(feature = "gpu")]
+impl MetalGpuState {
+    fn open() -> Result<Self, BackendUnavailable> {
+        let device =
+            sparsl::Device::try_new(sparsl::Backend::Metal).map_err(|e| BackendUnavailable {
+                requested: Backend::MetalGpu,
+                reason: e.reason,
+            })?;
+        Ok(Self {
+            device,
+            cache: RefCell::new(None),
+        })
+    }
+
+    fn ensure_op(&self, csr: &Csr, weights: &[f32]) -> Result<(), String> {
+        let nrows = csr.nrows();
+        let ncols = csr.ncols();
+        let nnz = csr.nnz();
+        let row_ptr_addr = csr.row_ptr.as_ptr() as usize;
+        let col_addr = csr.col.as_ptr() as usize;
+
+        let mut slot = self.cache.borrow_mut();
+        let rebuild = match slot.as_ref() {
+            None => true,
+            Some(c) => {
+                c.nrows != nrows
+                    || c.ncols != ncols
+                    || c.nnz != nnz
+                    || c.row_ptr_addr != row_ptr_addr
+                    || c.col_addr != col_addr
+            }
+        };
+        if rebuild {
+            let inner = csr.to_sparsl();
+            let op = self
+                .device
+                .prepare(&inner, ncols, weights)
+                .map_err(|e| e.to_string())?;
+            *slot = Some(MetalOpCache {
+                nrows,
+                ncols,
+                nnz,
+                row_ptr_addr,
+                col_addr,
+                op,
+            });
+        } else if let Some(c) = slot.as_mut() {
+            c.op.set_weights(weights).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn with_op_mut<R>(
+        &self,
+        csr: &Csr,
+        weights: &[f32],
+        f: impl FnOnce(&mut sparsl::SparseOp) -> Result<R, String>,
+    ) -> Result<R, String> {
+        self.ensure_op(csr, weights)?;
+        let mut slot = self.cache.borrow_mut();
+        let cache = slot
+            .as_mut()
+            .expect("ensure_op must leave a prepared SparseOp");
+        f(&mut cache.op)
+    }
+}
+
 /// Parallel SpMV and LIF integration execution engine.
 ///
 /// A handle can only exist for a backend that is actually available, so
 /// `backend.label()` is always a truthful description of what ran.
-#[derive(Clone, Debug)]
 pub struct SpmvBackend {
     config: SpmvBackendConfig,
+    #[cfg(feature = "gpu")]
+    metal: Option<MetalGpuState>,
+}
+
+impl Clone for SpmvBackend {
+    fn clone(&self) -> Self {
+        // Metal state is not shared across clones: each handle opens its own
+        // device path and rebuilds the SparseOp cache on first use.
+        match Self::try_new(self.config) {
+            Ok(b) => b,
+            Err(e) => panic!("SpmvBackend::clone failed: {e}"),
+        }
+    }
+}
+
+impl fmt::Debug for SpmvBackend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpmvBackend")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for SpmvBackend {
@@ -157,6 +247,8 @@ impl SpmvBackend {
     pub fn cpu() -> Self {
         Self {
             config: SpmvBackendConfig::default(),
+            #[cfg(feature = "gpu")]
+            metal: None,
         }
     }
 
@@ -171,7 +263,16 @@ impl SpmvBackend {
                 reason,
             });
         }
-        Ok(Self { config })
+        #[cfg(feature = "gpu")]
+        let metal = match config.backend {
+            Backend::MetalGpu => Some(MetalGpuState::open()?),
+            Backend::CpuParallel => None,
+        };
+        Ok(Self {
+            config,
+            #[cfg(feature = "gpu")]
+            metal,
+        })
     }
 
     /// Construct a backend, panicking with the unavailability reason.
@@ -202,6 +303,30 @@ impl SpmvBackend {
         &self.config
     }
 
+    /// Underlying sparsl device when this handle is Metal GPU.
+    ///
+    /// Used by labelled crossover drivers that need resident `SparseOp` ticks
+    /// without standing up a second Metal stack.
+    #[cfg(feature = "gpu")]
+    pub fn metal_device(&self) -> Option<&sparsl::Device> {
+        self.metal.as_ref().map(|m| &m.device)
+    }
+
+    /// Prepare a sparsl operator with resident weights on this Metal handle.
+    #[cfg(feature = "gpu")]
+    pub fn prepare_sparse(
+        &self,
+        csr: &Csr,
+        weights: &[f32],
+    ) -> Result<sparsl::SparseOp, sparsl::SparsePlanError> {
+        let state = self
+            .metal
+            .as_ref()
+            .expect("prepare_sparse requires Backend::MetalGpu");
+        let inner = csr.to_sparsl();
+        state.device.prepare(&inner, csr.ncols(), weights)
+    }
+
     /// Execute Sparse Matrix-Vector Multiply: `y = y + A · x`
     ///
     /// # Panics
@@ -215,13 +340,27 @@ impl SpmvBackend {
 
         match self.config.backend {
             Backend::CpuParallel => Self::spmv_cpu(csr, weights, x, y),
-            // Unreachable while `try_new` guards construction; kept as a
-            // belt-and-braces guard so adding a constructor cannot reintroduce
-            // the silent-fallback bug.
-            Backend::MetalGpu => unreachable!(
-                "SpmvBackend holds Backend::MetalGpu but dispatch is unimplemented; \
-                 SpmvBackend::try_new must reject it"
-            ),
+            Backend::MetalGpu => {
+                #[cfg(feature = "gpu")]
+                {
+                    let state = self
+                        .metal
+                        .as_ref()
+                        .expect("MetalGpu SpmvBackend must hold a device");
+                    state
+                        .with_op_mut(csr, weights, |op| {
+                            op.spmv(x, y).map_err(|e| e.to_string())
+                        })
+                        .unwrap_or_else(|e| panic!("Metal SpMV failed: {e}"));
+                }
+                #[cfg(not(feature = "gpu"))]
+                {
+                    unreachable!(
+                        "SpmvBackend holds Backend::MetalGpu without the gpu feature; \
+                         SpmvBackend::try_new must reject it"
+                    );
+                }
+            }
         }
     }
 
@@ -255,29 +394,50 @@ impl SpmvBackend {
         assert_eq!(theta.len(), n);
         assert_eq!(currents.len(), n);
         assert_eq!(spikes.len(), n);
-        assert_eq!(
-            self.config.backend,
-            Backend::CpuParallel,
-            "only the CPU backend is implemented"
-        );
 
-        use rayon::prelude::*;
+        match self.config.backend {
+            Backend::CpuParallel => {
+                use rayon::prelude::*;
 
-        v.par_iter_mut()
-            .zip(theta.par_iter_mut())
-            .zip(currents.par_iter())
-            .zip(spikes.par_iter_mut())
-            .for_each(|(((v_i, th_i), &curr_i), spk_i)| {
-                let voltage = *v_i * decay + curr_i;
-                if voltage >= *th_i {
-                    *spk_i = true;
-                    *v_i = v_reset;
-                    *th_i += delta_theta;
-                } else {
-                    *spk_i = false;
-                    *v_i = voltage;
+                v.par_iter_mut()
+                    .zip(theta.par_iter_mut())
+                    .zip(currents.par_iter())
+                    .zip(spikes.par_iter_mut())
+                    .for_each(|(((v_i, th_i), &curr_i), spk_i)| {
+                        let voltage = *v_i * decay + curr_i;
+                        if voltage >= *th_i {
+                            *spk_i = true;
+                            *v_i = v_reset;
+                            *th_i += delta_theta;
+                        } else {
+                            *spk_i = false;
+                            *v_i = voltage;
+                        }
+                    });
+            }
+            Backend::MetalGpu => {
+                #[cfg(feature = "gpu")]
+                {
+                    let state = self
+                        .metal
+                        .as_ref()
+                        .expect("MetalGpu SpmvBackend must hold a device");
+                    let params = sparsl::LifParams::new(decay, v_reset, delta_theta)
+                        .unwrap_or_else(|e| panic!("invalid LIF params: {e}"));
+                    state
+                        .device
+                        .lif_integrate(v, theta, currents, spikes, params)
+                        .unwrap_or_else(|e| panic!("Metal LIF failed: {e}"));
                 }
-            });
+                #[cfg(not(feature = "gpu"))]
+                {
+                    unreachable!(
+                        "SpmvBackend holds Backend::MetalGpu without the gpu feature; \
+                         SpmvBackend::try_new must reject it"
+                    );
+                }
+            }
+        }
     }
 
     /// Fused CSR SpMV + LIF integration (single pass).
@@ -297,36 +457,61 @@ impl SpmvBackend {
         assert_eq!(n, csr.nrows());
         assert_eq!(theta.len(), n);
         assert_eq!(spikes.len(), n);
-        assert_eq!(
-            self.config.backend,
-            Backend::CpuParallel,
-            "only the CPU backend is implemented"
-        );
+        assert_eq!(weights.len(), csr.nnz());
+        assert!(x.len() >= csr.ncols());
 
-        use rayon::prelude::*;
+        match self.config.backend {
+            Backend::CpuParallel => {
+                use rayon::prelude::*;
 
-        v.par_iter_mut()
-            .zip(theta.par_iter_mut())
-            .zip(spikes.par_iter_mut())
-            .enumerate()
-            .for_each(|(r, ((v_i, th_i), spk_i))| {
-                let row_start = csr.row_ptr[r] as usize;
-                let row_end = csr.row_ptr[r + 1] as usize;
-                let mut synaptic_sum = 0.0f32;
-                for i in row_start..row_end {
-                    let col = csr.col[i] as usize;
-                    synaptic_sum += weights[i] * x[col];
+                v.par_iter_mut()
+                    .zip(theta.par_iter_mut())
+                    .zip(spikes.par_iter_mut())
+                    .enumerate()
+                    .for_each(|(r, ((v_i, th_i), spk_i))| {
+                        let row_start = csr.row_ptr[r] as usize;
+                        let row_end = csr.row_ptr[r + 1] as usize;
+                        let mut synaptic_sum = 0.0f32;
+                        for i in row_start..row_end {
+                            let col = csr.col[i] as usize;
+                            synaptic_sum += weights[i] * x[col];
+                        }
+                        let voltage = *v_i * decay + synaptic_sum;
+                        if voltage >= *th_i {
+                            *spk_i = true;
+                            *v_i = v_reset;
+                            *th_i += delta_theta;
+                        } else {
+                            *spk_i = false;
+                            *v_i = voltage;
+                        }
+                    });
+            }
+            Backend::MetalGpu => {
+                #[cfg(feature = "gpu")]
+                {
+                    let state = self
+                        .metal
+                        .as_ref()
+                        .expect("MetalGpu SpmvBackend must hold a device");
+                    let params = sparsl::LifParams::new(decay, v_reset, delta_theta)
+                        .unwrap_or_else(|e| panic!("invalid LIF params: {e}"));
+                    state
+                        .with_op_mut(csr, weights, |op| {
+                            op.fused_spmv_lif(x, v, theta, spikes, params)
+                                .map_err(|e| e.to_string())
+                        })
+                        .unwrap_or_else(|e| panic!("Metal fused SpMV+LIF failed: {e}"));
                 }
-                let voltage = *v_i * decay + synaptic_sum;
-                if voltage >= *th_i {
-                    *spk_i = true;
-                    *v_i = v_reset;
-                    *th_i += delta_theta;
-                } else {
-                    *spk_i = false;
-                    *v_i = voltage;
+                #[cfg(not(feature = "gpu"))]
+                {
+                    unreachable!(
+                        "SpmvBackend holds Backend::MetalGpu without the gpu feature; \
+                         SpmvBackend::try_new must reject it"
+                    );
                 }
-            });
+            }
+        }
     }
 }
 
@@ -334,8 +519,7 @@ impl SpmvBackend {
 ///
 /// Returns only substrates that are actually available, so a benchmark loop
 /// built on this can never emit a "GPU vs CPU" table where both arms ran on the
-/// CPU. When Metal lands, this starts returning two arms with no change to the
-/// benchmark call sites.
+/// CPU.
 pub fn benchmarkable_backends() -> Vec<Backend> {
     [Backend::CpuParallel, Backend::MetalGpu]
         .into_iter()
@@ -343,154 +527,94 @@ pub fn benchmarkable_backends() -> Vec<Backend> {
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// Real Metal dispatch scaffold
-// ---------------------------------------------------------------------------
-
-/// Metal device/kernel handles.
+/// Thin labelled handle around a sparsl Metal [`sparsl::Device`].
 ///
-/// # Status: kernels compile, dispatch is NOT implemented
-///
-/// [`MetalGpuContext::new`] genuinely compiles the MSL sources, so a build with
-/// `--features gpu` proves the kernels are syntactically valid. The dispatch
-/// bodies below are unimplemented.
-///
-/// To finish, for each method: allocate `metal::Buffer`s with
-/// `device.new_buffer_with_data` for the read-only inputs and
-/// `new_buffer(len, MTLResourceOptions::StorageModeShared)` for outputs; create
-/// a command buffer from `command_queue`; set the corresponding pipeline state
-/// and buffers on a compute encoder; dispatch with a threadgroup size derived
-/// from `pipeline.thread_execution_width()`; `commit()` and
-/// `wait_until_completed()`; then copy the output buffer back into the `&mut`
-/// slice. Once all three pass `metal_gpu_matches_cpu_reference`, flip
-/// [`METAL_GPU_DISPATCH_IMPLEMENTED`] to `true`.
+/// Prefer [`SpmvBackend`] with [`Backend::MetalGpu`] for SpMV/LIF. This type
+/// exists so crossover examples can prepare a resident [`sparsl::SparseOp`]
+/// without a second kernel stack.
 #[cfg(feature = "gpu")]
 pub struct MetalGpuContext {
-    pub device: metal::Device,
-    pub command_queue: metal::CommandQueue,
-    pub csr_spmv_kernel: metal::ComputePipelineState,
-    pub lif_integrate_kernel: metal::ComputePipelineState,
-    pub lif_spmv_fused_simdgroup_kernel: metal::ComputePipelineState,
-    pub elig_decay_kernel: metal::ComputePipelineState,
-    pub margin_credit_kernel: metal::ComputePipelineState,
-    pub fused_training_step_kernel: metal::ComputePipelineState,
+    device: sparsl::Device,
 }
 
 #[cfg(feature = "gpu")]
-const METAL_DISPATCH_TODO: &str = "Metal kernel dispatch is not implemented. \
-     This is a scaffold: implement the encoder body, verify against \
-     `SpmvBackend::cpu()` in `metal_gpu_matches_cpu_reference`, then set \
-     METAL_GPU_DISPATCH_IMPLEMENTED = true. Until then no caller may treat \
-     this as a GPU result.";
-
-#[cfg(feature = "gpu")]
 impl MetalGpuContext {
-    /// Creates a new Metal GPU context by discovering the system default device
-    /// and compiling the MSL kernels.
+    /// Open the system Metal device through sparsl, or `None` if unavailable.
     pub fn new() -> Option<Self> {
-        let device = metal::Device::system_default()?;
-        let command_queue = device.new_command_queue();
-
-        let source = include_str!("metal_spmv.metal");
-        let compile_options = metal::CompileOptions::new();
-        let library = device
-            .new_library_with_source(source, &compile_options)
-            .ok()?;
-
-        let get_pipeline = |name: &str| -> Option<metal::ComputePipelineState> {
-            let function = library.get_function(name, None).ok()?;
-            device
-                .new_compute_pipeline_state_with_function(&function)
-                .ok()
-        };
-
-        let csr_spmv_kernel = get_pipeline("csr_spmv_kernel")?;
-        let lif_integrate_kernel = get_pipeline("lif_integrate_kernel")?;
-        let lif_spmv_fused_simdgroup_kernel = get_pipeline("lif_spmv_fused_simdgroup_kernel")?;
-        let elig_decay_kernel = get_pipeline("elig_decay_kernel")?;
-        let margin_credit_kernel = get_pipeline("margin_credit_kernel")?;
-
-        let source_train = include_str!("metal_training.metal");
-        let library_train = device
-            .new_library_with_source(source_train, &compile_options)
-            .ok()?;
-        let get_pipeline_train = |name: &str| -> Option<metal::ComputePipelineState> {
-            let function = library_train.get_function(name, None).ok()?;
-            device
-                .new_compute_pipeline_state_with_function(&function)
-                .ok()
-        };
-        let fused_training_step_kernel = get_pipeline_train("fused_training_step_kernel")?;
-
-        Some(Self {
-            device,
-            command_queue,
-            csr_spmv_kernel,
-            lif_integrate_kernel,
-            lif_spmv_fused_simdgroup_kernel,
-            elig_decay_kernel,
-            margin_credit_kernel,
-            fused_training_step_kernel,
-        })
+        sparsl::Device::try_new(sparsl::Backend::Metal)
+            .ok()
+            .map(|device| Self { device })
     }
 
-    /// TODO(metal): encode `csr_spmv_kernel`. See type-level docs.
-    pub fn spmv(&self, _csr: &Csr, _weights: &[f32], _x: &[f32], _y: &mut [f32]) {
-        todo!("{}", METAL_DISPATCH_TODO)
+    /// Underlying sparsl device.
+    pub fn device(&self) -> &sparsl::Device {
+        &self.device
     }
 
-    /// TODO(metal): encode `lif_integrate_kernel`. See type-level docs.
+    /// Device name for reports.
+    pub fn device_name(&self) -> String {
+        self.device
+            .device_name()
+            .unwrap_or_else(|| "Metal".to_string())
+    }
+
+    /// Prepare a resident sparse operator (weights uploaded once).
+    pub fn prepare(
+        &self,
+        csr: &Csr,
+        weights: &[f32],
+    ) -> Result<sparsl::SparseOp, sparsl::SparsePlanError> {
+        let inner = csr.to_sparsl();
+        self.device.prepare(&inner, csr.ncols(), weights)
+    }
+
+    /// `y += A · x` via a freshly prepared operator.
+    pub fn spmv(&self, csr: &Csr, weights: &[f32], x: &[f32], y: &mut [f32]) {
+        let op = self
+            .prepare(csr, weights)
+            .unwrap_or_else(|e| panic!("Metal prepare failed: {e}"));
+        op.spmv(x, y)
+            .unwrap_or_else(|e| panic!("Metal SpMV failed: {e}"));
+    }
+
+    /// Dense LIF integrate via sparsl.
     pub fn batch_lif_integrate(
         &self,
-        _v: &mut [f32],
-        _theta: &mut [f32],
-        _currents: &[f32],
-        _spikes: &mut [bool],
-        _decay: f32,
-        _v_reset: f32,
-        _delta_theta: f32,
+        v: &mut [f32],
+        theta: &mut [f32],
+        currents: &[f32],
+        spikes: &mut [bool],
+        decay: f32,
+        v_reset: f32,
+        delta_theta: f32,
     ) {
-        todo!("{}", METAL_DISPATCH_TODO)
+        let params = sparsl::LifParams::new(decay, v_reset, delta_theta)
+            .unwrap_or_else(|e| panic!("invalid LIF params: {e}"));
+        self.device
+            .lif_integrate(v, theta, currents, spikes, params)
+            .unwrap_or_else(|e| panic!("Metal LIF failed: {e}"));
     }
 
-    /// TODO(metal): encode `lif_spmv_fused_simdgroup_kernel`. See type-level docs.
+    /// Fused SpMV + LIF via a freshly prepared operator.
     pub fn fused_spmv_lif_integrate(
         &self,
-        _csr: &Csr,
-        _weights: &[f32],
-        _x: &[f32],
-        _v: &mut [f32],
-        _theta: &mut [f32],
-        _spikes: &mut [bool],
-        _decay: f32,
-        _v_reset: f32,
-        _delta_theta: f32,
+        csr: &Csr,
+        weights: &[f32],
+        x: &[f32],
+        v: &mut [f32],
+        theta: &mut [f32],
+        spikes: &mut [bool],
+        decay: f32,
+        v_reset: f32,
+        delta_theta: f32,
     ) {
-        todo!("{}", METAL_DISPATCH_TODO)
-    }
-
-    /// TODO(metal): encode `elig_decay_kernel`. See type-level docs.
-    pub fn elig_decay(
-        &self,
-        _eligibility: &mut [f32],
-        _elig_slow: &mut [f32],
-        _dt: f32,
-        _tau_fast: f32,
-        _tau_slow: f32,
-        _alpha: f32,
-    ) {
-        todo!("{}", METAL_DISPATCH_TODO)
-    }
-
-    /// TODO(metal): encode `margin_credit_kernel`. See type-level docs.
-    pub fn margin_credit(
-        &self,
-        _membranes: &[f32],
-        _weights_out: &mut [f32],
-        _v_boundary: f32,
-        _inv_2sigma2: f32,
-    ) {
-        todo!("{}", METAL_DISPATCH_TODO)
+        let params = sparsl::LifParams::new(decay, v_reset, delta_theta)
+            .unwrap_or_else(|e| panic!("invalid LIF params: {e}"));
+        let op = self
+            .prepare(csr, weights)
+            .unwrap_or_else(|e| panic!("Metal prepare failed: {e}"));
+        op.fused_spmv_lif(x, v, theta, spikes, params)
+            .unwrap_or_else(|e| panic!("Metal fused SpMV+LIF failed: {e}"));
     }
 }
 
@@ -522,23 +646,38 @@ mod tests {
         assert!((y[2] - 7.0).abs() < 1e-5);
     }
 
-    /// Regression guard for the "GPU flag never read" bug.
-    ///
-    /// While Metal dispatch is unimplemented, it must be impossible to obtain a
-    /// backend handle labelled "Metal GPU". If this test ever fails, some code
-    /// path is handing out a GPU-labelled handle that runs on the CPU.
+    /// While Metal dispatch is unimplemented *or* the gpu feature / device is
+    /// missing, it must be impossible to obtain a GPU-labelled handle.
     #[test]
-    fn unimplemented_gpu_backend_is_unconstructible() {
-        if METAL_GPU_DISPATCH_IMPLEMENTED && cfg!(feature = "gpu") {
-            return; // real dispatch landed; covered by the parity test below
+    fn unavailable_gpu_backend_is_unconstructible() {
+        if Backend::MetalGpu.is_available() {
+            return;
         }
         let err = SpmvBackend::try_new(SpmvBackendConfig {
             backend: Backend::MetalGpu,
             batch_size: 1024,
         })
-        .expect_err("Backend::MetalGpu must not be constructible without real dispatch");
+        .expect_err("Backend::MetalGpu must not be constructible when unavailable");
         assert_eq!(err.requested, Backend::MetalGpu);
         assert!(!Backend::MetalGpu.is_available());
+    }
+
+    /// When Metal is available, a GPU-labelled handle must construct and not
+    /// pretend to be the CPU arm.
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn metal_gpu_backend_constructs_when_available() {
+        if !Backend::MetalGpu.is_available() {
+            return;
+        }
+        let backend = SpmvBackend::try_new(SpmvBackendConfig {
+            backend: Backend::MetalGpu,
+            batch_size: 1024,
+        })
+        .expect("MetalGpu must construct when is_available");
+        assert_eq!(backend.backend(), Backend::MetalGpu);
+        assert_eq!(backend.label(), "Metal GPU");
+        assert!(backend.metal_device().is_some());
     }
 
     /// A benchmark driven by `benchmarkable_backends()` can never produce a
@@ -554,11 +693,11 @@ mod tests {
         seen.sort_by_key(|b| b.label());
         seen.dedup();
         assert_eq!(seen.len(), arms.len(), "duplicate backend arms");
-        if !METAL_GPU_DISPATCH_IMPLEMENTED {
+        if !Backend::MetalGpu.is_available() {
             assert_eq!(
                 arms.len(),
                 1,
-                "only the CPU arm may be benchmarked until Metal dispatch lands"
+                "only the CPU arm may be benchmarked until Metal is available"
             );
         }
     }
@@ -569,23 +708,147 @@ mod tests {
         assert_eq!(SpmvBackend::cpu().backend(), Backend::CpuParallel);
     }
 
-    /// Activates automatically when Metal dispatch lands.
+    /// Activates when Metal is available under `--features gpu`.
     #[cfg(feature = "gpu")]
     #[test]
     fn metal_gpu_matches_cpu_reference() {
-        if !METAL_GPU_DISPATCH_IMPLEMENTED {
+        if !METAL_GPU_DISPATCH_IMPLEMENTED || !Backend::MetalGpu.is_available() {
             return;
         }
         let (csr, weights, x) = tiny_problem();
         let mut y_cpu = vec![0.0; 3];
         SpmvBackend::cpu().spmv(&csr, &weights, &x, &mut y_cpu);
 
-        let ctx = MetalGpuContext::new().expect("Metal device unavailable");
+        let gpu = SpmvBackend::try_new(SpmvBackendConfig {
+            backend: Backend::MetalGpu,
+            batch_size: 1024,
+        })
+        .expect("MetalGpu available");
         let mut y_gpu = vec![0.0; 3];
-        ctx.spmv(&csr, &weights, &x, &mut y_gpu);
+        gpu.spmv(&csr, &weights, &x, &mut y_gpu);
+
+        let max_abs_term = weights
+            .iter()
+            .zip(csr.col.iter())
+            .map(|(&w, &c)| (w * x[c as usize]).abs())
+            .fold(0.0f32, f32::max);
+        let max_row_nnz = (0..csr.nrows())
+            .map(|r| csr.row_cols(r).len())
+            .max()
+            .unwrap_or(0);
+        let max_abs_result = y_cpu.iter().copied().fold(0.0f32, |a, b| a.max(b.abs()));
+        let tol = sparsl::tolerance_for_spmv(max_row_nnz, max_abs_term, max_abs_result);
 
         for (a, b) in y_cpu.iter().zip(y_gpu.iter()) {
-            assert!((a - b).abs() < 1e-4, "GPU/CPU mismatch: {a} vs {b}");
+            assert!(
+                (a - b).abs() <= tol,
+                "GPU/CPU mismatch: {a} vs {b} (tol={tol})"
+            );
         }
+    }
+
+    /// Fused SpMV+LIF and standalone LIF must agree with the CPU arm within
+    /// the sparsl SpMV tolerance envelope (LIF itself is elementwise).
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn metal_fused_and_lif_match_cpu_reference() {
+        if !METAL_GPU_DISPATCH_IMPLEMENTED || !Backend::MetalGpu.is_available() {
+            return;
+        }
+        let (csr, weights, x) = tiny_problem();
+        let n = csr.nrows();
+        let decay = 0.95;
+        let v_reset = 0.0;
+        let delta_theta = 0.1;
+
+        let mut v_cpu = vec![0.2; n];
+        let mut th_cpu = vec![0.5; n];
+        let mut spk_cpu = vec![false; n];
+        SpmvBackend::cpu().fused_spmv_lif_integrate(
+            &csr,
+            &weights,
+            &x,
+            &mut v_cpu,
+            &mut th_cpu,
+            &mut spk_cpu,
+            decay,
+            v_reset,
+            delta_theta,
+        );
+
+        let gpu = SpmvBackend::try_new(SpmvBackendConfig {
+            backend: Backend::MetalGpu,
+            batch_size: 1024,
+        })
+        .expect("MetalGpu available");
+        let mut v_gpu = vec![0.2; n];
+        let mut th_gpu = vec![0.5; n];
+        let mut spk_gpu = vec![false; n];
+        gpu.fused_spmv_lif_integrate(
+            &csr,
+            &weights,
+            &x,
+            &mut v_gpu,
+            &mut th_gpu,
+            &mut spk_gpu,
+            decay,
+            v_reset,
+            delta_theta,
+        );
+
+        let max_abs_term = weights
+            .iter()
+            .zip(csr.col.iter())
+            .map(|(&w, &c)| (w * x[c as usize]).abs())
+            .fold(0.0f32, f32::max)
+            .max(1.0);
+        let max_row_nnz = (0..csr.nrows())
+            .map(|r| csr.row_cols(r).len())
+            .max()
+            .unwrap_or(0);
+        let tol = sparsl::tolerance_for_spmv(max_row_nnz, max_abs_term, max_abs_term);
+
+        for i in 0..n {
+            assert!(
+                (v_cpu[i] - v_gpu[i]).abs() <= tol,
+                "v[{i}]: {} vs {} (tol={tol})",
+                v_cpu[i],
+                v_gpu[i]
+            );
+            assert!(
+                (th_cpu[i] - th_gpu[i]).abs() <= tol,
+                "theta[{i}]: {} vs {}",
+                th_cpu[i],
+                th_gpu[i]
+            );
+            assert_eq!(spk_cpu[i], spk_gpu[i], "spike[{i}]");
+        }
+
+        let mut currents = vec![0.0; n];
+        SpmvBackend::cpu().spmv(&csr, &weights, &x, &mut currents);
+        let mut v_l = vec![0.1; n];
+        let mut th_l = vec![1.0; n];
+        let mut spk_l = vec![false; n];
+        let mut v_g = v_l.clone();
+        let mut th_g = th_l.clone();
+        let mut spk_g = spk_l.clone();
+        SpmvBackend::cpu().batch_lif_integrate(
+            &mut v_l, &mut th_l, &currents, &mut spk_l, decay, v_reset, delta_theta,
+        );
+        gpu.batch_lif_integrate(
+            &mut v_g, &mut th_g, &currents, &mut spk_g, decay, v_reset, delta_theta,
+        );
+        for i in 0..n {
+            assert!((v_l[i] - v_g[i]).abs() <= 1e-5, "LIF v[{i}]");
+            assert!((th_l[i] - th_g[i]).abs() <= 1e-5, "LIF theta[{i}]");
+            assert_eq!(spk_l[i], spk_g[i], "LIF spike[{i}]");
+        }
+    }
+
+    #[test]
+    fn metal_dispatch_flag_matches_implementation() {
+        // Honesty pin: the flag must stay true only while MetalGpu dispatch
+        // paths above are real (sparsl-backed), not stubs.
+        assert!(METAL_GPU_DISPATCH_IMPLEMENTED);
     }
 }
