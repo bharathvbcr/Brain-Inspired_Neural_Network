@@ -161,9 +161,9 @@ flowchart TD
         L7["... Level 7: Full u64 Time Horizon"]
     end
 
-    Bitmask["Occupancy Bitmask (32 x u64 words)"] -->|trailing_zeros acceleration| L0
-    Insert["Schedule Event at Tick t"] -->|O(1) Hash Insert| TimingWheelStructure
-    Pop["Pop Earliest Event Batch"] <---|O(1) Cascade| L0
+    Bitmask["Occupancy Bitmask (32 x u64 words)"] -->|"trailing_zeros acceleration"| L0
+    Insert["Schedule Event at Tick t"] -->|"O(1) Hash Insert"| TimingWheelStructure
+    L0 -->|"O(1) Cascade"| Pop["Pop Earliest Event Batch"]
     Pop --> BatchExecute["Execute Spikes at Current Tick"]
 ```
 
@@ -355,4 +355,9 @@ Root holds five documents; everything else lives under `results/`,
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0.
+Dual-licensed under either of:
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option.
