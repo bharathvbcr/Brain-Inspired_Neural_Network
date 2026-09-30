@@ -189,6 +189,17 @@ class Bootstrap(unittest.TestCase):
         values = list(range(10_000))
         self.assertEqual(DCI.percentile_interval(values), (250, 9749))
 
+    def test_corrected_percentile_indices(self):
+        # alpha = 0.05 / 42: each tail is floor(0.000595 * 100,000) = 59 draws.
+        values = list(range(100_000))
+        self.assertEqual(DCI.percentile_interval(values, 0.05 / 42), (59, 99_940))
+
+    def test_a_tail_of_no_draws_is_refused(self):
+        """At 1,000 resamples a 0.05/42 tail holds 0.6 of a draw, and indexing
+        element 0 would report the sample minimum as a bound."""
+        with self.assertRaises(ValueError):
+            DCI.percentile_interval(list(range(1_000)), 0.05 / 42)
+
     def test_no_gain_flag(self):
         flagged = {(r.hidden, r.depth, r.budget) for r in ROWS
                    if r.stats["gain_intact_ci"][0] < DCI.NO_GAIN_BAR}
@@ -224,6 +235,61 @@ class ShareOfTheGain(unittest.TestCase):
         self.assertAlmostEqual(point, 0.1205 / 0.1275, delta=2e-3)
         self.assertLess(lo, point)
         self.assertLess(point, hi)
+
+
+class FamilyWise(unittest.TestCase):
+    """Bonferroni over the paper's contrasts. Until 2026-09-29 the paper said
+    only that a corrected interval "would likely cross" the bar."""
+
+    def test_the_family_is_the_paired_bin_shuffled_rows(self):
+        paired = DCI.Row(128, "published-2ms", "adjacent-sum-5", "d32l4", 400, "t",
+                         quads={s: (0.1 + 0.01 * s, 0.0, 0.1) for s in range(12)})
+        other = DCI.Row(128, "published-2ms", "adjacent-sum-5", "d32l4", 400, "t",
+                        condition="hidden-shuffled", quads=paired.quads)
+        unpaired = DCI.Row(256, "published-2ms", "adjacent-sum-5", "d32l4", 400, "t",
+                           reason="no cells")
+        rows = DCI.compute([paired, other, unpaired], resamples=50)
+        alpha, corrected = DCI.familywise(rows, resamples=2_000)
+        self.assertEqual([r for r, _ in corrected], [paired])
+        self.assertAlmostEqual(alpha, 0.05)
+
+    def test_an_empty_family_is_refused(self):
+        with self.assertRaises(ValueError):
+            DCI.familywise([])
+
+    def test_the_manuscript_prints_these_counts(self):
+        alpha, corrected = DCI.familywise(ROWS)
+        s = DCI.familywise_summary(corrected)
+        self.assertEqual(s["family"], 42)
+        draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
+        para = draft.split("**Statistics.**", 1)[1].split("\n\n", 1)[0]
+        para = " ".join(para.split())
+        g = s["gain_points"]
+        for phrase in (
+                f"Bonferroni over the {s['family']} point-and-budget contrasts",
+                f"$\\alpha = 0.05/{s['family']}$, {DCI.FAMILYWISE_RESAMPLES:,} resamples",
+                f"stays above zero at all {s['did_above_zero']}",
+                f"above the +0.03 bar at {s['did_above_bar']} of {s['family']}",
+                f"At the {g} points with a gain to lose it stays above zero at all "
+                f"{s['gain_points_did_above_zero']}",
+                f"above the bar at {s['gain_points_did_above_bar']} of {g}",
+                f"above the bar at {s['gain_points_gain_above_bar']} of those {g} "
+                f"points and above zero at {s['gain_points_gain_above_zero']}"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, para)
+        # "At all N" is only true when N is the whole set.
+        self.assertEqual(s["did_above_zero"], s["family"])
+        self.assertEqual(s["gain_points_did_above_zero"], g)
+
+    def test_the_named_exceptions_are_the_only_ones(self):
+        _, corrected = DCI.familywise(ROWS)
+        gain = [(r, s) for r, s in corrected if s["gain_intact"] >= DCI.NO_GAIN_BAR]
+        below_bar = [(r.hidden, r.depth, r.budget, round(s["did_ci"][0], 3))
+                     for r, s in gain if s["did_ci"][0] <= DCI.NO_GAIN_BAR]
+        self.assertEqual(below_bar, [(1024, "d32l2", 100, 0.022)])
+        no_gain = [(r.hidden, r.depth, r.budget) for r, s in gain
+                   if s["gain_intact_ci"][0] <= 0]
+        self.assertEqual(no_gain, [(768, "d32l4", 400)])
 
 
 class TheManuscriptCarriesThisTable(unittest.TestCase):

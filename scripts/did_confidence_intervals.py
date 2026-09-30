@@ -139,14 +139,20 @@ def quadruples(ai, ax, ri, rx):
     return out
 
 
-def percentile_interval(values):
-    """The (lower, upper) 95% percentile interval, per the module docstring."""
+def percentile_interval(values, alpha=0.05):
+    """The (lower, upper) 1 - alpha percentile interval, per the module
+    docstring: elements floor(alpha/2 B) and B - 1 - floor(alpha/2 B), which is
+    ceil((1 - alpha/2) B) - 1 written without a second rounding."""
     ordered = sorted(values)
     b = len(ordered)
-    return ordered[math.floor(0.025 * b)], ordered[math.ceil(0.975 * b) - 1]
+    k = math.floor(alpha / 2 * b)
+    if k == 0:
+        raise ValueError(f"{b} resamples cannot resolve a {1 - alpha:.4%} "
+                         "interval: its tails hold less than one draw")
+    return ordered[k], ordered[b - 1 - k]
 
 
-def bootstrap(quads, rng, resamples=RESAMPLES):
+def bootstrap(quads, rng, resamples=RESAMPLES, alpha=0.05):
     """Point estimates, positive count and paired percentile CIs for one row."""
     rows = [quads[s] for s in sorted(quads)]
     n = len(rows)
@@ -163,8 +169,45 @@ def bootstrap(quads, rng, resamples=RESAMPLES):
     out = {"n": n, "positive": sum(1 for r in rows if r[2] > 0)}
     for k, name in enumerate(names):
         out[name] = means[k]
-        out[name + "_ci"] = percentile_interval(draws[k])
+        out[name + "_ci"] = percentile_interval(draws[k], alpha)
     return out
+
+
+#: Resamples for the family-wise intervals. At alpha = 0.05 / 42 each tail is
+#: 0.06% of the draws: 59 draws at this count, 5 at the 10,000 the 95%
+#: intervals use, which is too few to place a bound.
+FAMILYWISE_RESAMPLES = 100_000
+
+
+def familywise(rows, resamples=FAMILYWISE_RESAMPLES):
+    """Bonferroni-corrected intervals over the family the paper tests: every
+    paired bin-shuffled point at both budgets. Returns (alpha, [(row, stats)]),
+    stats as `bootstrap` returns them, from a generator of its own so the 95%
+    intervals printed elsewhere are unchanged by it."""
+    family = [r for r in rows if r.stats and r.condition == SHUF]
+    if not family:
+        raise ValueError("no paired bin-shuffled rows; the family is empty")
+    alpha = 0.05 / len(family)
+    rng = random.Random(RNG_SEED)
+    return alpha, [(r, bootstrap(r.quads, rng, resamples, alpha)) for r in family]
+
+
+def familywise_summary(corrected):
+    """The counts the paper prints: DiD lower bounds above zero and above the
+    bar, over the family and over the points with a gain to lose (point
+    estimate at or above the bar, the paper's † criterion), and how many of the
+    latter keep a corrected intact-gain lower bound above the bar and above 0."""
+    gain = [s for _, s in corrected if s["gain_intact"] >= NO_GAIN_BAR]
+    return {
+        "family": len(corrected),
+        "did_above_zero": sum(s["did_ci"][0] > 0 for _, s in corrected),
+        "did_above_bar": sum(s["did_ci"][0] > NO_GAIN_BAR for _, s in corrected),
+        "gain_points": len(gain),
+        "gain_points_did_above_zero": sum(s["did_ci"][0] > 0 for s in gain),
+        "gain_points_did_above_bar": sum(s["did_ci"][0] > NO_GAIN_BAR for s in gain),
+        "gain_points_gain_above_bar": sum(s["gain_intact_ci"][0] > NO_GAIN_BAR for s in gain),
+        "gain_points_gain_above_zero": sum(s["gain_intact_ci"][0] > 0 for s in gain),
+    }
 
 
 def share_of_gain(quads, rng, resamples=RESAMPLES):
@@ -459,8 +502,22 @@ def main(argv=None) -> int:
     parser.add_argument("--share", action="store_true",
                         help="print the anchor's share of the gain that "
                              "destroying order removes, with its interval")
+    parser.add_argument("--familywise", action="store_true",
+                        help="print Bonferroni-corrected intervals over the "
+                             "paper's bin-shuffled contrasts, and their counts")
     args = parser.parse_args(argv)
     rows = compute(build_rows())
+    if args.familywise:
+        alpha, corrected = familywise(rows)
+        print(f"Bonferroni over {len(corrected)} contrasts: alpha {alpha:.6f}, "
+              f"{FAMILYWISE_RESAMPLES:,} resamples, RNG seed {RNG_SEED}")
+        for row, s in corrected:
+            print(f"h{row.hidden} {row.contract} {row.geometry} {row.depth} "
+                  f"e{row.budget}: gain intact {_ci(s, 'gain_intact')}, "
+                  f"DiD {_ci(s, 'did')}")
+        for key, value in familywise_summary(corrected).items():
+            print(f"{key}: {value}")
+        return 0
     if args.paper:
         print(paper_table(rows))
         return 0

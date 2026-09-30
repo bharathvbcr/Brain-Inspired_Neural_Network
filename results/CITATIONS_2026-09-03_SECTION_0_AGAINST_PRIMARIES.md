@@ -32,7 +32,7 @@ claims were wrong.** They are corrected in §0 and recorded here.
 | `nowotny2025lossshaping` | Nowotny, Turner, Knight, Neuromorphic Comput. Eng. **5(1):014001**, 2025 — added 2026-09-29, cited for method only, no number quoted | arXiv:2212.01232v3 | `38d6e295ff1514fa` |
 | `zeng2023ltsf` | Zeng, Chen, Zhang, Xu, AAAI **37**, pp. 11121–11128, 2023 — added 2026-09-29, cited for its shuffle finding, no number quoted | arXiv:2205.13504v3 | `97abddd1821cc729` |
 
-> **2026-09-29.** `yu2025timing` now cites the published version (Yu, Sun, Goodman, *Neuromorphic Computing and Engineering* 6:014016, 2026; fields from Crossref for 10.1088/2634-4386/ae46d5). The quoted sentences were checked against arXiv v3 above; the journal text has not been re-read against them.
+> **2026-09-29.** `yu2025timing` now cites the published version (Yu, Sun, Goodman, *Neuromorphic Computing and Engineering* 6:014016, 2026; fields from Crossref for 10.1088/2634-4386/ae46d5). The quoted sentences were checked against arXiv v3 above, and the same day against the journal's HTML: both occur there verbatim.
 
 Bittar & Garner was read as the publisher's HTML record rather than a PDF, so it
 carries no hash here. Its two numbers are quoted from Table 5 of that record and

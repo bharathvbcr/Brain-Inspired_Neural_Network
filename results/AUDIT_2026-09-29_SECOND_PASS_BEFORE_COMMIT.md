@@ -135,9 +135,32 @@ PDF itself, ArialMT at 20.97 pt gives 19.7-high boxes (ratio 0.94), so the
 
 **Still open, deliberately:**
 - the order-sensitive comparator experiment (the standing critique);
-- no multiplicity correction is applied, and the paper now says so;
-- the ETLP sentence's reading of that paper, and the Yu journal text against
-  the quotes checked on arXiv v3, were not re-read;
-- Perez-Nieves et al. (2021) is in the bibliography but not cited;
-- the LLM-use footnote's "the author reviewed the text" awaits the author's
-  confirmation, and its singular "author" discloses a single author.
+- the LLM-use footnote's statement that the text was reviewed awaits the
+  author's confirmation.
+
+**Closed later the same day** (the list above said five things were open):
+- *Multiplicity.* The paper had guessed a corrected interval "would likely
+  cross" the bar. Computed instead (`did_confidence_intervals.py
+  --familywise`, Bonferroni over the 42 contrasts, 100,000 resamples): every
+  DiD lower bound stays above zero, 40 of 42 above +0.03, and all 37 points
+  with a gain to lose stay above zero (36 above the bar; h1024 d32l2 e100
+  falls to +0.022). The intact gain's corrected bound stays above the bar at
+  32 of the 37 and above zero at 36 (not h768 d32l4 e400, already ‡). The
+  paper prints these counts and a test asserts them against the script.
+- *ETLP.* Read against the arXiv abstract (2301.08281): its finding is
+  qualified, "when using local plasticity, threshold adaptation … and a
+  recurrent topology are necessary". The paper had dropped the qualifier
+  while applying it to BPTT-trained networks; it now carries it, and so does
+  the figure spec.
+- *Yu et al.* The published text (NCE 6:014016) was read: both quoted
+  sentences occur verbatim, and so do the per-spike and per-neuron jitter
+  conditions the paper attributes to it.
+- *Perez-Nieves et al.* Read (PMC8490404): heterogeneity in time constants
+  improved performance on SHD and SSC. Now cited in the methods table, which
+  says this instrument uses one shared, untrained τ (`shd_attention.rs`).
+- *"The author".* The footnote says "we", as the rest of the paper does, and
+  the submission check fails on any phrase that counts the authors.
+- The two tests the gate cannot run under the system Python
+  (`test_provenance_discharge.py`, `test_shd_calibration.py`) were run in
+  `.venv-shd-cal`, the environment their requirements file names: 13 and 8
+  tests, all passing. The gate still reports them as unrunnable, as designed.

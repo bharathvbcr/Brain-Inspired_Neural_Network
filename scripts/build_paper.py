@@ -110,6 +110,12 @@ REPO_IDENTIFIERS = re.compile(
     r"\b(?:result|finding|amendment|defect|audit|citations|prereg\w*)_\d{4}-\d{2}-\d{2}"
     r"|\bresults/|\bc1-[0-9a-f]{8,}", re.I)
 
+#: Wording that says how many authors there are. The paper writes "we", which
+#: does not; "the author" on page 1 of a double-blind submission says one, and
+#: an unaffiliated solo author is a small search. SUBMISSION only, like the
+#: identifiers above. Added 2026-09-29, when the LLM footnote said it.
+AUTHOR_COUNT = re.compile(r"\b(?:the|sole|single|lone)\s+author\b", re.I)
+
 #: `PAPER_FIGURE_SPEC.md` is the owner of what every figure may and may not
 #: claim, and it already carries a `**Caption (required wording):**` block for
 #: each one. So the captions are READ FROM IT rather than written here: a
@@ -304,6 +310,16 @@ def repo_identifier_problems(text: str) -> list[str]:
     return [f"the rendered PDF carries {len(found)} string(s) that exist verbatim "
             f"in the public repository ({shown}{', ...' if len(found) > 10 else ''}); "
             "a code search on any resolves to the author."]
+
+
+def author_count_problems(text: str) -> list[str]:
+    """One problem per distinct phrase in `text` that counts the authors."""
+    found = sorted({" ".join(m.group(0).lower().split())
+                    for m in AUTHOR_COUNT.finditer(text)})
+    if not found:
+        return []
+    return [f"the rendered PDF says {', '.join(repr(f) for f in found)}, which "
+            "tells a reviewer how many authors there are; write \"we\"."]
 
 
 def record_section(variant: str, register: dict[str, int], record_rows: str) -> str:
@@ -958,6 +974,7 @@ def check(variant: str = "submission") -> int:
             problems.append(f"the rendered PDF contains {leak.group(0).decode()!r}, "
                             "a name that leads to the public repository.")
         problems.extend(repo_identifier_problems(body))
+        problems.extend(author_count_problems(body))
         meta = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout
         for line in meta.splitlines():
             field, _, value = line.partition(":")

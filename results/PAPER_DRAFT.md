@@ -343,7 +343,7 @@ every epoch from the model seed.
 
 | component | setting |
 |---|---|
-| neuron | LIF, $u_t = \alpha\, u_{t-1}(1 - s_{t-1}) + W_{\text{in}} x_t$, threshold 1, hard reset (not differentiated); $\alpha = e^{-\Delta t/\tau}$, $\tau = 10.05$ ms (retention 0.82 per 2 ms step) |
+| neuron | LIF, $u_t = \alpha\, u_{t-1}(1 - s_{t-1}) + W_{\text{in}} x_t$, threshold 1, hard reset (not differentiated); $\alpha = e^{-\Delta t/\tau}$, $\tau = 10.05$ ms (retention 0.82 per 2 ms step), one $\tau$ for every neuron, untrained (trained, heterogeneous ones help on SHD [@pereznieves2021]) |
 | surrogate | arctan derivative, $\sigma'(x) = (\beta/2)/(1 + (\pi\beta x/2)^2)$, $\beta = 5$ |
 | input | integer event counts per bin and channel, unscaled |
 | loss | softmax cross-entropy, batch mean, full BPTT |
@@ -361,13 +361,15 @@ Table: Training and model settings, shared by both arms at every operating point
 one: every accuracy reported is **test-set accuracy after the final epoch**.
 The consequences for the headline are stated in §0.
 
-**Statistics.** Every interval is a paired percentile bootstrap over seeds
-(10,000 resamples), which runs somewhat narrow at twelve seeds. The intervals
-are conditional on one draw of the destruction permutations and on the one SHD
-test set. No correction is made across the 42 point-and-budget contrasts: the
-anchor's contrast is positive in 32 of 32 seeds and survives any correction,
-while the smallest lower bounds elsewhere (+0.033 and +0.037) sit close enough
-to the +0.03 bar that a corrected interval would likely cross it.
+**Statistics.** Intervals are paired percentile bootstraps over seeds (10,000
+resamples), somewhat narrow at twelve seeds, conditional on one draw of the
+destruction permutations and the one SHD test set, and printed uncorrected. Under Bonferroni over the 42 point-and-budget contrasts
+($\alpha = 0.05/42$, 100,000 resamples) the DiD's lower bound stays above zero
+at all 42 and above the +0.03 bar at 40 of 42. At the 37 points with a gain to
+lose it stays above zero at all 37, so the presence claim survives, and above
+the bar at 36 of 37 (not h1024 with two blocks after 100 epochs: +0.022). The
+intact gain's corrected lower bound stays above the bar at 32 of those 37 points
+and above zero at 36 (not h768 with four blocks after 400 epochs, marked ‡).
 
 **Compute.** The instrument is written in Rust and runs on CPU only. The
 paper's evidence comprises 3,934 runs totalling 12,916 hours of per-run wall
@@ -617,7 +619,7 @@ order of magnitude larger than that drift.)*
 
 ### 3.7 The read-out does not substitute for temporal state in the substrate
 
-The +0.1258 of §3.5 has two readings the campaign could not separate, because every one of its 720 cells sat on a single substrate, `ff+fixed`: the read-out **adds** temporal structure no substrate of this kind represents, or it **substitutes** for the threshold adaptation and recurrence that `ff+fixed` happens not to have. ETLP's conclusion [@quintana2024etlp], that adaptation and a recurrent topology are what a spiking network needs for rich temporal structure, makes the second reading the live one. Three waves settle it (Figure S), and the limits below travel on the figure rather than in its caption alone.
+The +0.1258 of §3.5 has two readings the campaign could not separate, because every one of its 720 cells sat on a single substrate, `ff+fixed`: the read-out **adds** temporal structure no substrate of this kind represents, or it **substitutes** for the threshold adaptation and recurrence that `ff+fixed` happens not to have. ETLP's finding [@quintana2024etlp], that under local plasticity threshold adaptation and a recurrent topology are necessary to learn patterns with a rich temporal structure, makes the second reading worth testing, although it was shown for a local learning rule and these networks are trained by BPTT. Three waves settle it (Figure S), and the limits below travel on the figure rather than in its caption alone.
 
 **Adaptation makes no difference to the gain, or to anything else.** At the anchor (h128, `published-2ms`, `adjacent-sum-5`, e400, d32/L4, n=12), attention's gain is **+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif`. The difference is **+0.0027** against a two-sided bar of 0.03, and is positive in **6 of 12** seeds, a coin flip. Adaptation alone does not help either: `ff+alif` reaches **0.7018** against `ff+fixed`'s 0.7062, better in **3 of 12** seeds, with **0 of 12** over the 0.80 gate. At this operating point threshold adaptation is inert. ([`RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md`](RESULT_2026-08-23_W12_ATTENTION_DOES_NOT_SUBSTITUTE_FOR_ADAPTATION.md))
 
@@ -799,16 +801,14 @@ four-decimal number in the manuscript to the runs or to a named record, and
 each was run inside the anonymised copy before submission, together with a
 compile of the whole workspace. The two external crates the workspace depends on
 are included at the versions its lock file pins. Appendix H lists the commands.
-
-Runs are preserved in five corpora, all read by the number checks: waves 1–7,
-waves 8–25, the x86-64 scope runs, waves 26–28, and wave 29, run on Apple
-silicon with Apple's libm rather than glibc. The supplement's `RECORDS.md` gives
-the path of each corpus and maps every provenance marker in the text to its
-record.
+The number checks read five corpora (waves 1–7, waves 8–25, the x86-64 scope
+runs, waves 26–28, and wave 29, run on Apple silicon with Apple's libm rather
+than glibc); `RECORDS.md` gives each corpus's path and maps every provenance
+marker in the text to its record.
 
 ## LLM-use disclosure
 
-A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits of the results; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived runs by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
+A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits of the results; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived runs by scripts in the accompanying record rather than taken from model output, and we reviewed the text and take full responsibility for its content.
 
 ---
 

@@ -602,7 +602,9 @@ to make the gain trend look cleaner.
 separate, because all 720 of its cells sat on one substrate: the read-out
 **adds** temporal structure no such substrate represents, or it **substitutes**
 for the adaptation and recurrence `ff+fixed` happens not to have. ETLP's
-conclusion makes the second reading the live one. **Substitution is refuted on
+finding, which is for local plasticity ("when using local plasticity, threshold
+adaptation … and a recurrent topology are necessary"), makes the second reading
+worth testing under BPTT. **Substitution is refuted on
 both axes** — the advantage is *indifferent* to adaptation and *larger* where
 the substrate is recurrent. That is a claim about what the read-out **consumes**,
 not about a deficiency of one substrate.

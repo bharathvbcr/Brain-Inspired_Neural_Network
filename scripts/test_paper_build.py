@@ -11,7 +11,9 @@ wrong.
 """
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import pathlib
 import re
 from unittest import mock
@@ -226,6 +228,34 @@ class PureGuardTest(unittest.TestCase):
                       "Figure 1 and r12"):
             with self.subTest(text=clean):
                 self.assertEqual(bp.repo_identifier_problems(clean), [])
+
+    def test_a_count_of_authors_is_named_when_present(self):
+        """The paper writes "we" throughout, which says nothing about how many
+        wrote it. Until 2026-09-29 the LLM footnote said "the author reviewed
+        the text", which says one, on page 1 of a double-blind submission."""
+        for text in ("and the author reviewed the text",
+                     "and the\nauthor's review",
+                     "as its sole author", "a single author wrote it"):
+            with self.subTest(text=text):
+                self.assertEqual(len(bp.author_count_problems(text)), 1)
+        for clean in ("the authors reviewed it", "we reviewed the text",
+                      "authorship of the code", "Cramer et al. author"):
+            with self.subTest(text=clean):
+                self.assertEqual(bp.author_count_problems(clean), [])
+
+    def test_the_text_guards_are_wired_into_the_check(self):
+        """The draft is clean, so a real build never reaches either guard's
+        failure path, and deleting its call from `check()` left every test
+        passing. Each helper is made to report, and `check()` must fail."""
+        if not (bp.BUILD / "main.pdf").exists():
+            self.fail("build the submission first; a missing build must not "
+                      "read as a pass")
+        for guard in ("repo_identifier_problems", "author_count_problems"):
+            with self.subTest(guard=guard), \
+                    mock.patch.object(bp, guard, return_value=[f"{guard} fired"]), \
+                    contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(bp.check("submission"), 1)
+                self.assertIn(f"{guard} fired", out.getvalue())
 
     def test_the_submission_lists_markers_not_filenames(self):
         register = {"RESULT_2026-08-20_X.md": 1, "FINDING_2026-08-29_Y.md": 2}
@@ -504,30 +534,50 @@ class BibliographyIsNotSilentlyEmptyTest(unittest.TestCase):
         leaves every other test in this class passing -- they call the helper
         directly -- and the build goes back to reporting success on an empty
         bibliography. That is the defect this class was written for, reproduced
-        inside its own tests, so the wiring is asserted through the CLI rather
-        than through the module.
+        inside its own tests, so the wiring is asserted through `check()`
+        rather than through the helper.
+
+        Until 2026-09-29 this ran only when the real build's bibliography was
+        empty, so on every good build it skipped and asserted nothing. It now
+        runs `check()` against the real build with only its bibtex log swapped
+        for one that found no citations.
         """
         bp = self._builder()
-        log = bp.BUILD / "main.blg"
-        if not log.exists() or bp.NO_CITATIONS not in log.read_text(errors="replace"):
-            self.skipTest("this build's bibliography is not empty")
-        proc = subprocess.run([sys.executable, str(BUILDER), "--check"],
-                              capture_output=True, text=True)
-        self.assertIn("bibliography is EMPTY", proc.stdout + proc.stderr,
-                      "the empty bibliography is not reported by --check, so "
-                      "the helper is not wired into check()")
-        self.assertNotEqual(proc.returncode, 0,
-                            "--check exited 0 on an empty bibliography")
+        build = self._build_with_an_empty_bibliography(bp)
+        out = io.StringIO()
+        with mock.patch.dict(bp.VARIANTS["submission"], {"build": build}), \
+                contextlib.redirect_stdout(out):
+            code = bp.check("submission")
+        self.assertIn("bibliography is EMPTY", out.getvalue(),
+                      "the empty bibliography is not reported by check(), so "
+                      "the helper is not wired into it")
+        self.assertNotEqual(code, 0, "check() passed an empty bibliography")
 
     def test_the_message_names_the_entry_count(self):
         """A reader must learn how many references were lost, not just that
-        some were: '0 of 18' is actionable, 'empty' is not."""
+        some were: '0 of 18' is actionable, 'empty' is not. Like the test
+        above, this used to skip on every good build."""
         bp = self._builder()
-        problems = bp.bibliography_problems()
-        if not problems:
-            self.skipTest("bibliography is not empty in this build")
+        problems = bp.bibliography_problems(self._build_with_an_empty_bibliography(bp))
+        self.assertEqual(len(problems), 1)
         entries = len(re.findall(r"^@\w+\{", bp.BIB.read_text(), re.M))
-        self.assertIn(str(entries), problems[0])
+        self.assertIn(f"0 of the {entries} entries", problems[0])
+
+    def _build_with_an_empty_bibliography(self, bp) -> pathlib.Path:
+        """The real build, linked entry by entry (it is hundreds of MB), with
+        a bibtex log that found no citations in place of the real one."""
+        if not (bp.BUILD / "main.pdf").exists():
+            self.fail(f"{bp.BUILD / 'main.pdf'} does not exist; build the paper "
+                      "first. A missing build must not read as a pass.")
+        tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        for entry in bp.BUILD.iterdir():
+            if entry.name != "main.blg":
+                (tmp / entry.name).symlink_to(entry)
+        (tmp / "main.blg").write_text(
+            f"This is BibTeX\nThe top-level auxiliary file: main.aux\n"
+            f"{bp.NO_CITATIONS}---while reading file main.aux\n")
+        return tmp
 
 
 if __name__ == "__main__":
