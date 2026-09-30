@@ -198,6 +198,31 @@ class Bootstrap(unittest.TestCase):
         self.assertIn("no gain to lose", table[-1])
 
 
+class ShareOfTheGain(unittest.TestCase):
+    """The anchor's share (DiD / intact gain), which the paper prints with its
+    interval as a one-point measurement since 2026-09-29."""
+
+    def test_fabricated_quadruples_give_the_known_ratio(self):
+        quads = {s: (0.10, 0.02, 0.08) for s in range(6)}
+        point, (lo, hi) = DCI.share_of_gain(quads, random.Random(1), resamples=200)
+        self.assertAlmostEqual(point, 0.8)
+        self.assertAlmostEqual(lo, 0.8)
+        self.assertAlmostEqual(hi, 0.8)
+
+    def test_no_positive_gain_is_refused_not_reported(self):
+        quads = {0: (-0.02, -0.10, 0.08), 1: (0.01, -0.05, 0.06)}
+        with self.assertRaises(ValueError):
+            DCI.share_of_gain(quads, random.Random(1), resamples=50)
+
+    def test_the_anchor_share_is_the_published_ratio(self):
+        row = DCI.anchor_row(ROWS)
+        self.assertEqual(len(row.quads), 32)
+        point, (lo, hi) = DCI.share_of_gain(row.quads, random.Random(1), resamples=500)
+        self.assertAlmostEqual(point, 0.1205 / 0.1275, delta=2e-3)
+        self.assertLess(lo, point)
+        self.assertLess(point, hi)
+
+
 class TheManuscriptCarriesThisTable(unittest.TestCase):
     """Appendix K of the manuscript is this script's `--paper` output.
 

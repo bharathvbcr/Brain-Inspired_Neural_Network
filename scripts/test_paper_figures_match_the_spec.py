@@ -297,7 +297,7 @@ class LeadFigure1PanelDTest(unittest.TestCase):
                             "points are reverse-sorted by DiD")
 
     def test_ban_2_no_connector_is_drawn_between_the_points(self):
-        """rho = -0.1430 against +0.829. A line asserts a NOT MET result.
+        """rho = -0.1429 against +0.829. A line asserts a NOT MET result.
 
         The panel draws gridlines and the registered bar with PathElement, so
         the check is that no path is built from the ladder itself.
@@ -489,8 +489,11 @@ class LeadFigure3Test(unittest.TestCase):
         correlate. "Gradient pathology" would claim what H15-1 refuted."""
         self.assertIn("LOCATED BUT UNEXPLAINED", self.fig)
         self.assertIn("correlate, not a cause", self.fig)
-        self.assertIn("overfitting on 8,156 training samples is not excluded",
-                      self.fig)
+        # Until 2026-09-29 this asserted "overfitting ... is not excluded".
+        # FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md excludes it,
+        # so the figure now says what the finding licenses.
+        self.assertIn("a lost fit, not overfitting", self.fig)
+        self.assertNotIn("is not excluded", self.fig)
         for banned in ("gradient pathology", "gradient explosion", "scaling law"):
             self.assertNotIn(banned, self.fig.lower())
 
@@ -877,7 +880,7 @@ class LeadGraphicalAbstractTest(unittest.TestCase):
         self.assertNotIn("0.1577", drawable(self.fig))
 
     def test_ban_4_the_did_is_not_presented_as_the_gain(self):
-        """rho = -0.1430 against +0.829. The abstract must not imply the gain
+        """rho = -0.1429 against +0.829. The abstract must not imply the gain
         decomposes into an order-dependent share and a remainder."""
         self.assertIn("THE EFFECT'S SIZE IS NOT THE GAIN", self.fig)
         self.assertIn("nums::DID_RHO", self.fig)

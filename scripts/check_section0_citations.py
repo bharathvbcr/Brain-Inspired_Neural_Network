@@ -80,6 +80,10 @@ NOT_A_CITATION = {
     "145.2": "time reversal's mean displacement in bins, same audit",
     "16.043": "part of the arXiv identifier 2507.16043",
     "10.03464": "part of the arXiv identifier 2410.03464",
+    "94.5": "this paper's anchor share of the gain, DiD/gain in percent; "
+            "recomputed by `did_confidence_intervals.py --share` and tested",
+    "90.9": "the lower bound of that share's paired bootstrap interval",
+    "97.9": "the upper bound of that share's paired bootstrap interval",
 }
 
 #: Uncertainties quoted alongside a mean. Each is covered by the record beside

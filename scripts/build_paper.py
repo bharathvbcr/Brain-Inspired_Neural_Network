@@ -101,6 +101,15 @@ IDENTIFYING = [
     ("/Users/", "an absolute home path leaking a username"),
 ]
 
+#: Strings that exist verbatim in the author's public repository, so a code
+#: search on any one resolves to the author: dated record filenames, paths
+#: under `results/`, and configuration hashes. Matched case-insensitively
+#: against the extracted text of the SUBMISSION only; the preprint names the
+#: author and may carry them. Added 2026-09-29, after an audit found thirty.
+REPO_IDENTIFIERS = re.compile(
+    r"\b(?:result|finding|amendment|defect|audit|citations|prereg\w*)_\d{4}-\d{2}-\d{2}"
+    r"|\bresults/|\bc1-[0-9a-f]{8,}", re.I)
+
 #: `PAPER_FIGURE_SPEC.md` is the owner of what every figure may and may not
 #: claim, and it already carries a `**Caption (required wording):**` block for
 #: each one. So the captions are READ FROM IT rather than written here: a
@@ -117,6 +126,11 @@ ARTWORK = re.compile(r"\*\*Artwork target:\*\* `[^`]*figures/([A-Za-z0-9_]+)\.")
 #: carry the main text; the matched programme's two follow its sections into
 #: the appendix. A figure the spec captions but this does not place is an
 #: error, the same way an unplaced section is.
+#: Sections whose tables are set a size smaller than the rest: Appendix K's
+#: ten columns carry three bracketed intervals each, which wrap mid-bracket
+#: at the \small every other table uses.
+FOOTNOTESIZE_TABLES = {"Appendix K — Every operating point, with intervals"}
+
 FIGURE_PLACEMENT = {
     "leadfig1_the_conditional": "main",
     "leadfig2_headline_accuracy": "main",
@@ -225,6 +239,92 @@ def rewrite_record_links(body: str, register: dict[str, int]) -> str:
             register[target] = len(register) + 1
         return rf"\rec{{{register[target]}}}"
     return RECORD_LINK.sub(sub, body)
+
+
+def record_register(manifest: dict, sections: list[tuple[str, str]]) -> dict[str, int]:
+    """{record filename: marker number}, in the order the build meets them.
+
+    The build numbers records as it renders (main text, appendix, then the
+    abstract and the disclosure); this walks the same order without
+    rendering, so the supplement's marker map and the paper's markers cannot
+    disagree. `build` fails if rendering registers anything this did not."""
+    bodies = dict(sections)
+    register: dict[str, int] = {}
+    for heading in list(manifest["main"]["sections"]) + list(manifest["appendix"]["sections"]):
+        rewrite_record_links(bodies[heading], register)
+    for body in front_matter(sections, manifest):
+        rewrite_record_links(body, register)
+    return register
+
+
+def record_map() -> str:
+    """`RECORDS.md` for the anonymous supplement: marker to record path.
+
+    The submission prints markers only, because every record filename exists
+    verbatim in the author's public repository and a code search on one
+    resolves to the author. The map travels in the supplement instead."""
+    manifest = tomllib.loads(MANIFEST.read_text())
+    register = record_register(manifest, split_sections(DRAFT.read_text()))
+    rows = []
+    for name, n in sorted(register.items(), key=lambda kv: kv[1]):
+        if not (ROOT / "results" / name).exists():
+            fail(f"record marker r{n} points at results/{name}, which does not exist.")
+        rows.append(f"| r{n} | `results/{name}` |")
+    corpora = []
+    for label, path in CORPORA:
+        if not (ROOT / path).exists():
+            fail(f"the corpus {label!r} is listed at {path}, which does not exist.")
+        corpora.append(f"| {label} | `{path}` |")
+    return ("# Record markers\n\n"
+            "The paper cites its machine-written records by marker (r1, r2, ...).\n"
+            "This table maps each marker to its file in this archive.\n\n"
+            "| marker | record |\n|---|---|\n" + "\n".join(rows) + "\n\n"
+            "## Run corpora\n\n"
+            "The paper's reproducibility section names five corpora by content; their paths:\n\n"
+            "| corpus | path |\n|---|---|\n" + "\n".join(corpora) + "\n")
+
+
+#: The five run corpora the paper's reproducibility section names by content.
+CORPORA = [
+    ("waves 1-7", "results/shd_attention_campaign_v1/cells"),
+    ("waves 8-25", "results/shd_attention_campaign_v2"),
+    ("x86-64 scope runs", "results/azure-d32l4-scope-v1/results"),
+    ("waves 26-28", "results/shd_attention_campaign_v3"),
+    ("wave 29 (Apple silicon)", "results/shd_attention_wave29_local"),
+]
+
+
+def repo_identifier_problems(text: str) -> list[str]:
+    """One problem per distinct repository identifier in `text` (capped at
+    ten named, with the total), so a leak is named rather than counted."""
+    found = sorted({m.group(0).lower() for m in REPO_IDENTIFIERS.finditer(text)})
+    if not found:
+        return []
+    shown = ", ".join(repr(f) for f in found[:10])
+    return [f"the rendered PDF carries {len(found)} string(s) that exist verbatim "
+            f"in the public repository ({shown}{', ...' if len(found) > 10 else ''}); "
+            "a code search on any resolves to the author."]
+
+
+def record_section(variant: str, register: dict[str, int], record_rows: str) -> str:
+    """The record-reference appendix. The preprint lists every filename; the
+    submission lists none, because each exists verbatim in the author's public
+    repository, and points at the supplement's RECORDS.md instead."""
+    if variant == "submission":
+        return "\n".join([
+            r"\section*{Record references}",
+            rf"Provenance markers r1--r{len(register)} in the text point to "
+            r"machine-written records in the anonymised supplement, whose "
+            r"\texttt{RECORDS.md} maps each marker to its file.",
+        ])
+    return "\n".join([
+        r"\section*{Record references}",
+        r"Every provenance pointer in the text resolves to a machine-written "
+        r"record in the accompanying repository, listed here rather than inline.",
+        r"\begin{longtable}{@{}ll@{}}\toprule",
+        record_rows,
+        r"\bottomrule\end{longtable}",
+    ])
 
 
 def to_latex(markdown: str) -> str:
@@ -462,7 +562,16 @@ PREAMBLE = r"""\usepackage[utf8]{inputenc}
 %% filename, which is correct for a repository and unreadable in a paper.
 \newcommand{\rec}[1]{\textsuperscript{\textsc{r}#1}}
 \graphicspath{{figures/}}
-\hypersetup{pdfauthor={},pdftitle={},pdfsubject={},pdfcreator={},pdfproducer={},pdfkeywords={}}
+\hypersetup{hidelinks,pdfauthor={},pdftitle={},pdfsubject={},pdfcreator={},pdfproducer={},pdfkeywords={}}
+% A float may not drift past the section that cites it: appendix figures
+% once landed pages after their appendix, behind unrelated ones.
+\usepackage[section]{placeins}
+% Appendix K's ten columns ran 9 pt past the text block at the default 6 pt
+% and normal size; the resolution table ran over too.
+\setlength{\tabcolsep}{4pt}
+\usepackage{etoolbox}
+\newcommand{\tablesize}{\small}
+\AtBeginEnvironment{longtable}{\tablesize}
 """
 
 
@@ -604,7 +713,10 @@ def build(variant: str = "submission") -> None:
     captions = spec_captions()
     caption_of = dict(captions)
 
-    register: dict[str, int] = {}
+    # Seeded from the same walk the supplement's RECORDS.md uses, so the two
+    # number every record identically; rendering must add nothing new.
+    register = record_register(manifest, sections)
+    expected_records = len(register)
     def render(wanted: list[str], half: str) -> str:
         """Each figure is set right after the section that first cites it.
         Emitted at the end of the half, [t] floats could only land after all
@@ -632,17 +744,34 @@ def build(variant: str = "submission") -> None:
             # A trailing `---` is the draft's divider between parts; in the
             # paper it typeset as a stray rule before the next heading.
             body = re.sub(r"\n\s*-{3,}\s*$", "\n", body.rstrip()) + "\n"
+            # Each figure goes right after the PARAGRAPH that first cites it,
+            # in citation order. After the whole section, a long section left
+            # its figures pages away, and spec order numbered Figure 2 (cited
+            # first) as Figure 1; LaTeX numbers floats in emission order.
+            paragraphs = body.split("\n\n")
+            placed_body = []
+            for paragraph in paragraphs:
+                placed_body.append(paragraph)
+                cited = sorted((paragraph.index(rf"\ref{{fig:{stem}}}"), stem)
+                               for stem in pending if rf"\ref{{fig:{stem}}}" in paragraph)
+                for _, stem in cited:
+                    placed_body.append(raw(stem).strip("\n"))
+                    pending.remove(stem)
+            body = "\n\n".join(placed_body)
+            if heading in FOOTNOTESIZE_TABLES:
+                body = ("```{=latex}\n\\renewcommand{\\tablesize}{\\footnotesize}\n```\n\n"
+                        + body
+                        + "\n\n```{=latex}\n\\renewcommand{\\tablesize}{\\small}\n```\n")
             chunks.append(f"{level} {number} {prepare(title, heading)} {{-}}\n{body}")
-            cited = [stem for stem in pending if rf"\ref{{fig:{stem}}}" in body]
-            for stem in cited:
-                chunks.append(raw(stem))
-                pending.remove(stem)
         chunks += [raw(stem) for stem in pending]
         return to_latex("\n".join(chunks))
 
     main_tex = render(want_main, "main")
     appendix_tex = render(want_appendix, "appendix")
 
+    if len(register) != expected_records:
+        fail("rendering registered records that record_register() did not; the "
+             "supplement's RECORDS.md would number them differently.")
     record_rows = "\n".join(
         rf"\textsc{{r}}{n} & \texttt{{\small {name.replace('_', r'\_')}}} \\"
         for name, n in sorted(register.items(), key=lambda kv: kv[1]))
@@ -684,14 +813,7 @@ def build(variant: str = "submission") -> None:
         r"\bibliographystyle{tmlr}",
         r"\bibliography{references}",
         r"\appendix",
-        r"\section*{Record references}",
-        r"Every provenance pointer in the text resolves to a machine-written "
-        r"record in the accompanying repository, listed here rather than "
-        r"inline. Each is the frozen analyser's own output for one "
-        r"preregistered wave.",
-        r"\begin{longtable}{@{}ll@{}}\toprule",
-        record_rows,
-        r"\bottomrule\end{longtable}",
+        record_section(variant, register, record_rows),
         appendix_tex,
         r"\end{document}", ""])
     (BUILD / "main.tex").write_text(doc)
@@ -835,6 +957,7 @@ def check(variant: str = "submission") -> int:
         if leak:
             problems.append(f"the rendered PDF contains {leak.group(0).decode()!r}, "
                             "a name that leads to the public repository.")
+        problems.extend(repo_identifier_problems(body))
         meta = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout
         for line in meta.splitlines():
             field, _, value = line.partition(":")

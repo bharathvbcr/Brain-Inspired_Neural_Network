@@ -14,7 +14,7 @@
 % network in this repository and a field that cannot be verified must not be
 % filled in from recollection. They are stubs, and saying so is the point.
 %
-% 2026-09-10. Citations were wired up (`[@key]` in the draft, pandoc --natbib),
+% 2026-09-10. Citations were wired up (`[key]` citations in the draft, pandoc --natbib),
 % and rendering the bibliography for the first time exposed three things it had
 % been hiding:
 %   * `reinforce1992` carried raw `_` in a note and broke pdflatex outright.
@@ -104,6 +104,7 @@
   author  = {Yu, Chengting and Gu, Zheming and Li, Da and Wang, Gaoang and Wang, Aili and Li, Erping},
   journal = {Frontiers in Neuroscience},
   volume  = {16},
+  pages   = {1079357},
   year    = {2022},
   doi     = {10.3389/fnins.2022.1079357},
 }
@@ -141,14 +142,19 @@
 }
 
 % repo note (not typeset): Time reversal preserving ISIs and coincidences; delay-free networks are robust to it
-@misc{yu2025timing,
-  title         = {Beyond Rate Coding: Surrogate Gradients Enable Spike Timing Learning in Spiking Neural Networks},
-  author        = {Yu, Ziqiao and Sun, Pengfei and Akarca, Danyal and Goodman, Dan F. M.},
-  year          = {2025},
-  eprint        = {2507.16043},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.NE},
-  doi = {10.1088/2634-4386/ae46d5}
+% repo note: the published version, fields from Crossref for
+% 10.1088/2634-4386/ae46d5 on 2026-09-29. It has three authors; arXiv v3, the
+% text the quoted sentences were checked against on 2026-09-03, has four.
+@article{yu2025timing,
+  title   = {Beyond rate coding: surrogate gradients enable spike timing learning in spiking neural networks},
+  author  = {Yu, Ziqiao and Sun, Pengfei and Goodman, Dan F. M.},
+  journal = {Neuromorphic Computing and Engineering},
+  volume  = {6},
+  number  = {1},
+  pages   = {014016},
+  year    = {2026},
+  doi     = {10.1088/2634-4386/ae46d5},
+  note    = {arXiv:2507.16043}
 }
 
 % repo note (not typeset): Table S4: removing temporal propagation model-side drops SHD 86.48 to 68.51
@@ -169,6 +175,7 @@
   eprint        = {2410.03464},
   archivePrefix = {arXiv},
   primaryClass  = {cs.LG},
+  note          = {arXiv:2410.03464},
 }
 
 % repo note (not typeset): RadLIF. Table 5: 3 layers of 128 units 92.88\%, 3 layers of 1024 units 94.62\%
@@ -196,6 +203,18 @@
   eprint        = {2602.00986},
   archivePrefix = {arXiv},
   primaryClass  = {cs.CL},
+}
+
+% repo note: fields from Crossref for 10.1088/2634-4386/ad6733 on 2026-09-29.
+@article{quintana2024etlp,
+  title   = {{ETLP}: event-based three-factor local plasticity for online learning with neuromorphic hardware},
+  author  = {Quintana, Fernando M. and Perez-Pe{\~n}a, Fernando and Galindo, Pedro L. and Neftci, Emre O. and Chicca, Elisabetta and Khacef, Lyes},
+  journal = {Neuromorphic Computing and Engineering},
+  volume  = {4},
+  number  = {3},
+  pages   = {034006},
+  year    = {2024},
+  doi     = {10.1088/2634-4386/ad6733}
 }
 
 @article{nowotny2025lossshaping,
@@ -234,7 +253,7 @@
 }
 
 @article{iyer2021nmnist,
-  title   = {Is Neuromorphic {MNIST} Neuromorphic? Analyzing the Discriminative Power of Neuromorphic Datasets in the Time Domain},
+  title   = {Is Neuromorphic {MNIST} Neuromorphic? {A}nalyzing the Discriminative Power of Neuromorphic Datasets in the Time Domain},
   author  = {Iyer, Laxmi R. and Chua, Yansong and Li, Haizhou},
   journal = {Frontiers in Neuroscience},
   volume  = {15},

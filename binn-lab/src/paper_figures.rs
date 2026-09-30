@@ -138,14 +138,22 @@ mod nums {
     /// The same result read as the collapse of the advantage, n = 32.
     pub const ADVANTAGE_INTACT_32: f64 = 0.1275;
     pub const ADVANTAGE_SHUFFLED_32: f64 = 0.0070;
+    /// The share of the gain destroying order removes, DiD / gain, at this
+    /// one point, with its paired bootstrap interval
+    /// (`did_confidence_intervals.py --share`). A one-point measurement: the
+    /// registered prediction that the DiD tracks the gain across widths
+    /// failed, so it is not a share of the gain anywhere else.
     pub const CONTINGENT_PCT_32: f64 = 94.5;
+    pub const CONTINGENT_CI_32: (f64, f64) = (90.9, 97.9);
+    /// Operating points with an intact gain above +0.03 after 400 epochs;
+    /// all of them have one after 100 (Appendix K).
+    pub const GAIN_POINTS_E400: u32 = 16;
 
     /// n = 12, the registration this confirms. Drawn beside n = 32 because the
     /// near-identity is the message: twenty further seeds move the gain by
     /// +0.0017 and the cost by +0.0010. Nothing was rescued by the larger run.
     pub const ADVANTAGE_INTACT_12: f64 = 0.1258;
     pub const ADVANTAGE_SHUFFLED_12: f64 = 0.0050;
-    pub const CONTINGENT_PCT_12: f64 = 96.0;
 
     /// n = 12 absolute accuracy — the only sample size at which the intact and
     /// shuffled means both exist. Drawn small and labelled, because an
@@ -171,7 +179,9 @@ mod nums {
     pub const HEAD_RATE_12: f64 = 0.7062;
     pub const HEAD_ATTN_12: f64 = 0.8320;
     pub const HEAD_GAIN_12: f64 = 0.1258;
-    /// Budget stability: |e400 − e200|.
+    /// Budget stability: |e400 − e200| at n = 12, the registration's own e200
+    /// cells. There are no n = 32 cells at e200, so it is drawn on the n = 12
+    /// line (it sat on the n = 32 line until 2026-09-29).
     pub const HEAD_BUDGET_DELTA: f64 = 0.0002;
 
     /// The published field, from `PAPER_DRAFT.md` §0. **Not machine-checked**
@@ -258,7 +268,7 @@ mod nums {
     /// H21-3: Spearman rho between the six per-width gains and their DiDs,
     /// against the n=6 one-tailed critical value at alpha=0.05. NOT MET, and
     /// Panel D ban 2 and Figure 3 ban 6 both exist because of it.
-    pub const DID_RHO: f64 = -0.1430;
+    pub const DID_RHO: f64 = -0.1429; // exactly -1/7; printed -0.1430 until 2026-09-29
     pub const DID_RHO_BAR: f64 = 0.829;
     /// Coverage as MEASURED. Wave 22 closed the remaining twelve points, so
     /// this is 21 of 21 as of 2026-09-01 (H22-2, `analyse_wave22.py` and
@@ -1020,7 +1030,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         RGBColor(238, 238, 242),
         RGBColor(170, 170, 178),
         &[(
-            "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established: Cramer et al. 2022 (≤60% on spike-count-only SHD), the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
+            "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established: Cramer et al. 2022 (≤60% on spike-count-only SHD), the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2026 (randomised spike times, reversed time).",
             ty::NOTE,
             RGBColor(60, 60, 60),
         )],
@@ -1131,16 +1141,19 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             "n = 32",
             nums::ADVANTAGE_INTACT_32,
             nums::ADVANTAGE_SHUFFLED_32,
-            nums::CONTINGENT_PCT_32,
+            Some((nums::CONTINGENT_PCT_32, nums::CONTINGENT_CI_32)),
         ),
+        // n = 12 carries no share of its own: one number with an interval is
+        // the claim, and a second, unbracketed one beside it invites a reader
+        // to average them.
         (
             "n = 12",
             nums::ADVANTAGE_INTACT_12,
             nums::ADVANTAGE_SHUFFLED_12,
-            nums::CONTINGENT_PCT_12,
+            None,
         ),
     ];
-    for (name, intact, shuffled, pct) in rows {
+    for (name, intact, shuffled, share) in rows {
         y += 8;
         label(root, (c_x0, y), name, ty::BODY, BLACK)?;
         label(
@@ -1165,23 +1178,18 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             rate,
         )?;
         y += ty::line_step(ty::VALUE);
-        y = para(
-            root,
-            (c_x0 + 100, y),
-            width_c - 100,
-            // Table SHD-2 prints 96%, not 96.0%. A figure that adds a decimal
-            // the sheet does not carry is quoting a number nobody computed.
-            &format!(
-                "{}% of the advantage is contingent on temporal order",
-                if (pct - pct.round()).abs() < 1e-9 {
-                    format!("{pct:.0}")
-                } else {
-                    format!("{pct:.1}")
-                }
-            ),
-            ty::NOTE,
-            BLACK,
-        )?;
+        if let Some((pct, (lo, hi))) = share {
+            y = para(
+                root,
+                (c_x0 + 100, y),
+                width_c - 100,
+                &format!(
+                    "destroying order removes {pct:.1}% of the gain (95% CI {lo:.1}–{hi:.1}%), at this point only"
+                ),
+                ty::NOTE,
+                BLACK,
+            )?;
+        }
     }
     y = para(
         root,
@@ -1259,7 +1267,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     //   1. ladder order, never sorted by DiD -- sorting manufactures the trend
     //      H21-3 refuted;
     //   2. no gain on this axis and no connector between points -- rho is
-    //      -0.1430 against a bar of +0.829, so a line asserts a NOT MET result;
+    //      -0.1429 against a bar of +0.829, so a line asserts a NOT MET result;
     //   3. h1024 marked as the arm whose gain is negative;
     //   4. coverage stated as a MEASURED count, never "every width".
     let d_head = y.max(panel_a_end) + 24;
@@ -1350,8 +1358,8 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y),
         RIGHT - LEFT,
         &format!(
-            "The mechanism travels: every point clears the registered bar at BOTH budgets, and coverage is {} of {} operating points, NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
-            nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
+            "The DiD clears the registered bar at all {} of {} operating points and BOTH budgets, but the read-out has a gain to lose at only {} of them after 400 epochs (all after 100), and only there is the DiD order-dependence. NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
+            nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL, nums::GAIN_POINTS_E400
         ),
         ty::NOTE,
         RGBColor(60, 60, 60),
@@ -1414,8 +1422,8 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y + 4),
         RIGHT - LEFT,
         &format!(
-            "n = 32 (confirmation):  {:.4} → {:.4},  gain +{:.4},  positive 32/32,  ≥ 0.80 in 32/32,  |e400 − e200| = {:.4}",
-            nums::HEAD_RATE_32, nums::HEAD_ATTN_32, nums::HEAD_GAIN_32, nums::HEAD_BUDGET_DELTA
+            "n = 32 (confirmation):  {:.4} → {:.4},  gain +{:.4},  positive 32/32,  ≥ 0.80 in 32/32",
+            nums::HEAD_RATE_32, nums::HEAD_ATTN_32, nums::HEAD_GAIN_32
         ),
         ty::BODY,
         BLACK,
@@ -1425,8 +1433,8 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y),
         RIGHT - LEFT,
         &format!(
-            "n = 12 (registered):  {:.4} → {:.4},  gain +{:.4},  positive 12/12,  ≥ 0.80 in 12/12.  Neither supersedes the other.",
-            nums::HEAD_RATE_12, nums::HEAD_ATTN_12, nums::HEAD_GAIN_12
+            "n = 12 (registered):  {:.4} → {:.4},  gain +{:.4},  positive 12/12,  ≥ 0.80 in 12/12,  |e400 − e200| = {:.4}.  Neither supersedes the other.",
+            nums::HEAD_RATE_12, nums::HEAD_ATTN_12, nums::HEAD_GAIN_12, nums::HEAD_BUDGET_DELTA
         ),
         ty::BODY,
         RGBColor(80, 80, 80),
@@ -1723,9 +1731,9 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
 ///    the four-rung reading is superseded and h768 is still +0.0560.
 /// 4. No mechanism is offered. All three registered levers failed, and the
 ///    known correlate — gradient norms leaving O(1) — is a correlate. The
-///    figure's own words are "located but unexplained", and the parsimonious
-///    alternative (overfitting on 8,156 training samples) is not excluded by
-///    anything in this paper, so it must not be excluded by the drawing.
+///    figure's own words are "located but unexplained". Overfitting is
+///    excluded (training loss ends 56x above its own minimum), and the drawing
+///    says so rather than leaving it open, which the lost-fit finding retired.
 /// 5. The h1024 `d32/L2` result is absent entirely: +0.0392 rests on three
 ///    points with L3 missing and is registered as its own wave.
 ///
@@ -1944,7 +1952,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, y + 4),
         RIGHT - LEFT,
-        "LOCATED BUT UNEXPLAINED. Gradient norms leaving O(1) are a correlate, not a cause, and overfitting on 8,156 training samples is not excluded by anything in this paper.",
+        "LOCATED BUT UNEXPLAINED. Gradient norms leaving O(1) are a correlate, not a cause. It is a lost fit, not overfitting: the training loss ends 56x above its own minimum.",
         ty::NOTE,
         RGBColor(60, 60, 60),
     )?;
@@ -2915,11 +2923,11 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
 /// (the shuffle is done to the DATA, in both splits), and never +0.1577.
 ///
 /// The fourth is this figure's own and is the reason the headline accuracy is
-/// **not** the largest number on it. rho = -0.1430 against a bar of +0.829: the
+/// **not** the largest number on it. rho = -0.1429 against a bar of +0.829: the
 /// difference-in-differences is not the gain and not a share of it, so there is
-/// no 0.8332-to-shuffled arrow and no percentage-of-gain framing. The one
-/// percentage drawn is the 94.5% collapse of the *advantage*, which is a
-/// different quantity and is labelled as one.
+/// no 0.8332-to-shuffled arrow and no percentage-of-gain framing ACROSS
+/// points. The one percentage drawn is the anchor's own share, with its
+/// interval, labelled as holding at that point only.
 ///
 /// Two disclosures the spec requires because an abstract travels alone: 0.8332
 /// is **not competitive** against a 95.07-96.3% frontier, and the gain **inverts
@@ -2956,7 +2964,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
     label(
         root,
         (48, 118),
-        "the Neuromorphic Sequential Arena removes temporal processing model-side and reports 86.48 → 68.51; Yu et al. 2025 randomise spike times at fixed counts.",
+        "the Neuromorphic Sequential Arena removes temporal processing model-side and reports 86.48 → 68.51; Yu et al. 2026 randomise spike times at fixed counts.",
         13,
         RGBColor(90, 90, 90),
     )?;
@@ -3051,8 +3059,9 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         root,
         (625, base + 94),
         &format!(
-            "The read-out's advantage over the rate arm falls +{:.4} → +{:.4}: {:.1}% of it is contingent on temporal order.",
-            nums::ADVANTAGE_INTACT_32, nums::ADVANTAGE_SHUFFLED_32, nums::CONTINGENT_PCT_32
+            "The read-out's gain over the rate arm falls +{:.4} → +{:.4}: destroying order removes {:.1}% of it (95% CI {:.1}–{:.1}%), at this point only.",
+            nums::ADVANTAGE_INTACT_32, nums::ADVANTAGE_SHUFFLED_32, nums::CONTINGENT_PCT_32,
+            nums::CONTINGENT_CI_32.0, nums::CONTINGENT_CI_32.1
         ),
         13,
         RGBColor(70, 70, 70),

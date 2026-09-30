@@ -291,6 +291,17 @@ def relock() -> None:
              + "\n  removed " + "\n  removed ".join(map(str, sorted(before - after))))
 
 
+def paper_builder():
+    """`build_paper.py`, loaded by path: it owns the record markers, so the
+    supplement's RECORDS.md numbers them exactly as the PDF does."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "build_paper", ROOT / "scripts/build_paper.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def stage() -> tuple[int, int, int]:
     if STAGE.exists():
         shutil.rmtree(STAGE)
@@ -302,6 +313,8 @@ def stage() -> tuple[int, int, int]:
         members = vendored_files(name)
         print(f"vendoring {name} {locked_version(name)} from its checksum-verified .crate")
         plan += [(data, f"vendor/{name}/{inner}") for inner, data in members]
+    # The anonymous PDF prints record markers only; this is where they resolve.
+    plan.append((paper_builder().record_map().encode(), "RECORDS.md"))
     changed = rewrites = 0
     renamed_paths: dict[str, str] = {}
     for src, rel in plan:

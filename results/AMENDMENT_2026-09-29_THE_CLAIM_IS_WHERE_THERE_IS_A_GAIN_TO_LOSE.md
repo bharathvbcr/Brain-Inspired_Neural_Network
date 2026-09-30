@@ -47,3 +47,26 @@ what the verdicts are read as licensing.
   and −0.0159.
 - Appendix K prints every point with its intervals. A test fails if the
   appendix and the script's output differ.
+
+## Second change, the same day: a proportion at one point
+
+**What changed.** The manuscript said "presence, not proportion" and, in the
+same breath, printed "94.5% of the advantage is contingent on temporal order"
+in Figure 1, its caption and §3.8. The second-pass audit
+([`AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md`](AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md))
+found the contradiction. The author chose to keep the number and narrow the
+non-claim: the claim is now **presence everywhere and a proportion at one
+point**.
+
+**The number.** At the anchor (n = 32), destroying order removes **94.5%** of
+the gain, DiD / gain(intact) as a ratio of seed means, with a paired bootstrap
+interval of **90.9–97.9%** over the same seed quadruples as every other
+interval (`scripts/did_confidence_intervals.py --share`, tested). The 96%
+once quoted at n = 12 is no longer printed: one number with an interval.
+
+**What it does not license.** The registered prediction that the DiD tracks the
+gain across widths failed (Spearman ρ = −0.1429, which the paper had printed as
+−0.1430). So the share is a measurement at the anchor, not a decomposition of
+the gain that carries to other points, and the manuscript says so wherever it
+prints it. The share and its interval were computed after the fact and are
+marked as not preregistered.

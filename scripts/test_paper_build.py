@@ -211,6 +211,40 @@ class PureGuardTest(unittest.TestCase):
         self.assertIn("/Users/", needles)
         self.assertTrue(any("gmail" in n for n in needles))
 
+    def test_repository_identifiers_are_named_when_present(self):
+        """Record filenames, results/ paths and config hashes exist verbatim in
+        the author's public repository. Until 2026-09-29 the submission printed
+        thirty of them in its record table and nothing checked."""
+        leaks = ("see RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md here",
+                 "corpus at results/shd_attention_campaign_v2 there",
+                 "replay --config-hash c1-118207fbc3eaba53",
+                 "finding_2026-08-29_the_h1024 in lower case")
+        for text in leaks:
+            with self.subTest(text=text):
+                self.assertEqual(len(bp.repo_identifier_problems(text)), 1)
+        for clean in ("the results of binning", "a result dated 2026-08-20",
+                      "Figure 1 and r12"):
+            with self.subTest(text=clean):
+                self.assertEqual(bp.repo_identifier_problems(clean), [])
+
+    def test_the_submission_lists_markers_not_filenames(self):
+        register = {"RESULT_2026-08-20_X.md": 1, "FINDING_2026-08-29_Y.md": 2}
+        sub = bp.record_section("submission", register, "rows")
+        self.assertEqual(bp.repo_identifier_problems(sub), [])
+        self.assertIn("r1--r2", sub)
+        self.assertIn("RECORDS.md", sub)
+        self.assertIn("rows", bp.record_section("preprint", register, "rows"))
+
+    def test_the_supplement_map_numbers_records_as_the_paper_does(self):
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        register = bp.record_register(
+            manifest, bp.split_sections((ROOT / "results/PAPER_DRAFT.md").read_text()))
+        mapping = bp.record_map()
+        for name, n in register.items():
+            self.assertIn(f"| r{n} | `results/{name}` |", mapping)
+        self.assertEqual(len(re.findall(r"^\| r\d+ \|", mapping, re.M)), len(register))
+
     def test_the_preamble_blanks_the_pdf_metadata(self):
         for field in ("pdfauthor", "pdftitle", "pdfcreator"):
             self.assertIn(f"{field}={{}}", bp.PREAMBLE)

@@ -167,6 +167,45 @@ def bootstrap(quads, rng, resamples=RESAMPLES):
     return out
 
 
+def share_of_gain(quads, rng, resamples=RESAMPLES):
+    """(point, (lower, upper)): the share of the intact gain that destroying
+    order removes, DiD / gain(intact), as a ratio of seed means.
+
+    Resampled by seed quadruple exactly as `bootstrap` resamples, so the ratio
+    and its interval come from the same pairing as every other number here.
+    It is a property of ONE point: the registered prediction that the DiD
+    tracks the gain across widths failed, so a share at the anchor does not
+    transfer. Undefined without a positive gain, and refused rather than
+    reported as a large or negative ratio."""
+    rows = [quads[s] for s in sorted(quads)]
+    n = len(rows)
+    gain = [r[0] for r in rows]
+    did = [r[2] for r in rows]
+    if n == 0 or statistics.fmean(gain) <= 0:
+        raise ValueError("a share of the gain needs a positive mean intact gain")
+    point = statistics.fmean(did) / statistics.fmean(gain)
+    draws = []
+    population = range(n)
+    for _ in range(resamples):
+        idx = rng.choices(population, k=n)
+        g = sum(gain[i] for i in idx)
+        if g <= 0:
+            raise ValueError("a resample has no positive gain; the ratio's "
+                             "interval is undefined at this point")
+        draws.append(sum(did[i] for i in idx) / g)
+    return point, percentile_interval(draws)
+
+
+def anchor_row(rows):
+    """The anchor at 400 epochs under bin-shuffling: the n = 32 point."""
+    hits = [r for r in rows if (r.hidden, r.contract, r.geometry, r.depth,
+                                r.budget, r.condition)
+            == (128, *ANCHOR, "d32l4", 400, SHUF)]
+    if len(hits) != 1:
+        raise ValueError(f"{len(hits)} anchor rows; expected exactly one")
+    return hits[0]
+
+
 @contextlib.contextmanager
 def _quiet():
     """Analysers print diagnostics while indexing; keep stdout a clean table."""
@@ -368,12 +407,16 @@ def paper_table(rows) -> str:
     is above it but whose interval is not."""
     # Short labels, keyed in the appendix text: the full names in code font
     # overran their columns and printed on top of each other. Pandoc sizes a
-    # table wider than its line from the separator row's dash counts, so those
-    # are proportioned to what each column actually holds.
-    out = ["| width | bins | chan. | $d$/$L$ | ep. | $n$ "
-           "| gain, intact | gain, shuffled | DiD | $>0$ |",
-           "|----:|-----|------|-----|---:|--:"
-           "|---------------------------|---------------------------|---------------------------|----:|"]
+    # table wider than its line from the separator row's dash counts, so each
+    # column's dashes are the longest thing it prints (header as read, not as
+    # typed). Hand-set counts until 2026-09-29 gave the intervals too little
+    # and wrapped every one of them mid-bracket.
+    header = ["width", "bins", "chan.", "$d$/$L$", "ep.", "$n$",
+              "gain, intact", "gain, shuffled", "DiD", "$>0$"]
+    shown = ["width", "bins", "chan.", "d/L", "ep.", "n",
+             "gain, intact", "gain, shuffled", "DiD", ">0"]
+    right = {0, 4, 5, 9}
+    cells = []
     for row in rows:
         if row.condition != SHUF:
             continue
@@ -392,10 +435,16 @@ def paper_table(rows) -> str:
                 .replace("fixed-", ""))
         chan = {"adjacent-sum-5": "a5", "channels-700": "700"}[row.geometry]
         d, L = row.depth[1:].split("l")
-        out.append(f"| {row.hidden} | {bins} | {chan} "
-                   f"| {d}/{L} | {row.budget} | {s['n']} "
-                   f"| {cell('gain_intact')}{mark} | {cell('gain_shuffled')} "
-                   f"| {cell('did')} | {s['positive']}/{s['n']} |")
+        cells.append([str(row.hidden), bins, chan, f"{d}/{L}", str(row.budget),
+                      str(s["n"]), f"{cell('gain_intact')}{mark}",
+                      cell("gain_shuffled"), cell("did"),
+                      f"{s['positive']}/{s['n']}"])
+    widths = [max([len(shown[k])] + [len(c[k]) for c in cells])
+              for k in range(len(header))]
+    separator = "|" + "|".join(("-" * (w - 1) + ":") if k in right else "-" * w
+                               for k, w in enumerate(widths)) + "|"
+    out = ["| " + " | ".join(header) + " |", separator]
+    out += ["| " + " | ".join(c) + " |" for c in cells]
     return "\n".join(out)
 
 
@@ -404,10 +453,19 @@ def main(argv=None) -> int:
     parser.add_argument("--markdown", help="also write the table document to this path")
     parser.add_argument("--paper", action="store_true",
                         help="print only the manuscript's Appendix K table")
+    parser.add_argument("--share", action="store_true",
+                        help="print the anchor's share of the gain that "
+                             "destroying order removes, with its interval")
     args = parser.parse_args(argv)
     rows = compute(build_rows())
     if args.paper:
         print(paper_table(rows))
+        return 0
+    if args.share:
+        row = anchor_row(rows)
+        point, (lo, hi) = share_of_gain(row.quads, random.Random(RNG_SEED))
+        print(f"anchor share, n = {len(row.quads)}: {point:.3f} "
+              f"(95% CI [{lo:.3f}, {hi:.3f}])")
         return 0
     table, footnotes = render(rows)
     print("\n".join(table))

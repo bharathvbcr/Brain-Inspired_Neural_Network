@@ -207,6 +207,12 @@ KNOWN_COINCIDENCE = {
               "OF paired differences, which this sweep generates no "
               "second-order quantity for; recomputed by name in "
               "verify_published_numbers.py.",
+    "0.1881": "W21's seed-paired DiD at h768/d32L4: the same class as 0.1205, "
+              "back in the draft on 2026-09-29 where §3.5 names h768 as the "
+              "point carrying the failed Spearman prediction.",
+    "0.1429": "H21-3's Spearman rho, exactly -1/7: a rank statistic over six "
+              "widths, which no cell generator produces; the `paired` "
+              "generator reaches the digits by accident.",
     "0.9972": "the mean `temporal_audit.relocated_fraction` over wave 24's 48 "
               "`bin-shuffled` cells. This sweep generates quantities from "
               "`accuracy` alone, so no generator computes a relocated fraction "
@@ -599,12 +605,14 @@ ELSEWHERE = [
     ("0.0759", "W22, the range of the twelve DiDs (+0.1369 max - +0.0610 min). "
                "A difference OF second-order quantities, so further out than "
                "the DiDs themselves"),
-    ("0.1430", "H21-3, the Spearman rank correlation between the six per-width "
+    ("0.1429", "H21-3, the Spearman rank correlation between the six per-width "
                "gains and their DiDs. A rank statistic over a ladder is not a "
                "cell quantity and this sweep generates no such thing; it is "
                "recomputed from the cells by name in "
-               "verify_published_numbers.py, which reads -0.1429 against the "
-               "published -0.1430"),
+               "verify_published_numbers.py, which reads -0.1429 (exactly -1/7). "
+               "The paper printed -0.1430 until 2026-09-29"),
+    ("0.1430", "the same H21-3 rho as 0.1429, as the frozen W22 record prints "
+               "it (rounded from -0.143); records are not edited after the fact"),
     ("0.0039", "W5-3, the movement of a contrast between two budgets: second order"),
     ("0.1058", "the published-2ms gain quoted in W3 and W8 between arms whose "
                "seed sets overlap on fewer than three seeds"),

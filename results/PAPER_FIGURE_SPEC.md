@@ -126,8 +126,9 @@ and in the Abstract.
 | attention advantage over rate, n = 32 | **+0.1275** | **+0.0070** |
 | attention advantage over rate, n = 12 | **+0.1258** | **+0.0050** |
 
-**94.5%** of the read-out’s advantage is contingent on temporal order at n = 32
-(**96%** at n = 12). Source: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md)
+Destroying order removes **94.5%** of the read-out’s gain at n = 32 (95% CI
+90.9–97.9%, `scripts/did_confidence_intervals.py --share`), at this point only;
+the 96% once quoted at n = 12 is no longer drawn (2026-09-29). Source: [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md)
 **Table SHD-2**, derived-quantity block · [`PAPER_DRAFT.md`](PAPER_DRAFT.md)
 §3.5 item 2, §3.7, §3.8. The shuffled advantage **+0.0050** is recomputed from
 cells and is **not** the difference of the two rounded means above it (that
@@ -190,9 +191,10 @@ the training and test splits**, so the task must be solved without temporal orde
 time-axis attention read-out **+0.1347** accuracy (positive in **32/32**
 seed-paired runs) and costs the rate read-out **+0.0142**, a **9.5×** ratio. The
 read-out’s advantage over the rate arm falls from **+0.1275** to **+0.0070**:
-**94.5% of it is contingent on temporal order.** That SHD depends on temporal
+**destroying order removes 94.5% of it (95% CI 90.9–97.9%)**, a share measured
+at this point that does not transfer across widths. That SHD depends on temporal
 order is **not** what this figure shows; that is established (Cramer et al.
-2022, ≤60% on spike-count-only SHD; two 2025 studies with model-side and
+2022, ≤60% on spike-count-only SHD; two later studies with model-side and
 spike-time operators). What is measured here is **which component’s
 contribution is the order-dependent one**, a difference-in-differences on the
 *gain* rather than on accuracy. `h128`, `published-2ms`, `d32/L4`, `e400`,
@@ -251,7 +253,7 @@ leaving it to whoever draws it.**
    then the two alternative binnings). Sorting by effect size manufactures a
    trend the wave explicitly refuted.
 2. **Do not draw the gain on the same axis, and do not connect the points.**
-   Spearman ρ between the per-width gains and these DiDs is **−0.1430** against
+   Spearman ρ between the per-width gains and these DiDs is **−0.1429** against
    a registered bar of **+0.829**. Any shared axis or connecting line asserts a
    relationship that is **NOT MET**.
 3. **h1024 must be marked as the arm whose gain is negative.** It carries a DiD
@@ -342,7 +344,7 @@ not.
 **Caption (required wording):**
 “Headline accuracy. The time-axis attention read-out reaches **0.8332** against
 the rate read-out’s **0.7057** (gain **+0.1275**, positive in **32/32** seeds,
-**32/32 at or above 0.80**, |e400 − e200| = 0.0002). **This is not
+**32/32 at or above 0.80**; at the registered n = 12, |e400 − e200| = 0.0002). **This is not
 competitive.** The SHD frontier sits at **95.07–96.3%**, reached by learned delays,
 adaptation and a state-space model; this instrument carries **no temporal
 kernel of any kind** and lands beside the dataset authors’ own best-effort
@@ -405,7 +407,7 @@ the registered 3× bar (**0.0947**). Source:
 `LeadFigure3AnnotationTest`). This ladder plots the
 **gain**, and a reader who has seen Figure 1 will assume the order-dependence
 rises and falls with it. **It does not.** Spearman ρ between these six rungs and
-their difference-in-differences is **−0.1430** against a registered bar of
+their difference-in-differences is **−0.1429** against a registered bar of
 **+0.829** — h768 carries the *smallest* positive gain here and the *largest*
 DiD in the campaign (**+0.1881**). The figure must carry one line saying the
 mechanism does not track this curve, and must not imply otherwise by shared
@@ -457,10 +459,12 @@ Surrogate scale is separately amended as the wrong lever for a feed-forward arm
    the known correlate — gradient norms leaving O(1), max norm **1.13e8** at
    h1024/L4 — is a correlate, not a cause. The figure’s own words are
    **“located but unexplained.”** An annotation reading “gradient pathology”
-   would claim what H15-1 refuted. The parsimonious alternative — overfitting on
-   8,156 training samples — is **not excluded by anything in this paper**
-   ([`PAPER_DRAFT.md`](PAPER_DRAFT.md) §0) and must not be excluded by the
-   drawing either.
+   would claim what H15-1 refuted. The parsimonious alternative, overfitting,
+   **is excluded**, and the drawing says so: the collapsing arm's training loss
+   ends **56×** above its own minimum, where an arm that overfits keeps it low
+   ([`FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md`](FINDING_2026-08-29_THE_H1024_COLLAPSE_IS_A_LOST_FIT.md)).
+   Until 2026-09-29 this ban read "not excluded by anything in this paper",
+   which the finding had already made false.
 5. **It must not plot the h1024 depth ladder, and it must now say it is an
    L4 ladder.** This ban was written while `d32/L2` at h1024 reaching **+0.0392**
    (12/12) rested on three points with L3 missing and two archived. **That wave
@@ -561,9 +565,10 @@ only the number of frames, the attention read-out helps at every rung:
 **shrinks with finer resolution**: gain(t500) − gain(t100) = **−0.0453** against
 a two-sided bar of 0.03, the opposite of the direction the withdrawn S-5
 hypothesis predicted, now asked on an axis that isolates resolution from
-sequence length. The rate baseline drifts **+0.0397** across the same ladder,
-inside the 0.05 confound bar, so this is a property of the read-out and not of
-the substrate beneath it. n = 12 per rung.”
+sequence length. The rate baseline rises **+0.0397** across the same ladder,
+inside the 0.05 confound bar, while the attention arm moves only −0.0056, so the
+shrinking gain is mostly the rate read-out improving at finer bins rather than
+the attention read-out losing accuracy. n = 12 per rung.”
 
 **Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig4_resolution_ladder.{png,pdf}`
 — **drawn 2026-08-27**, a new file. Both series are drawn, the fixed 1400 ms
@@ -728,7 +733,7 @@ a licence to say something the figure may not.
 
 1. **It must not read as "SHD is temporal."** Prior art, and named on the image:
    Cramer et al. 2022 (≤60% spike-count-only), the Neuromorphic Sequential
-   Arena (86.48 → 68.51, model-side), Yu et al. 2025 (spike-time). Three
+   Arena (86.48 → 68.51, model-side), Yu et al. 2026 (spike-time). Three
    independent destruction operators, one conclusion, all of it prior. The rate
    arm is half the measurement and must be drawn at the attention arm's weight.
 2. **It must not be drawn as an ablation.** The shuffle is applied to the data,
@@ -736,12 +741,12 @@ a licence to say something the figure may not.
 3. **It must not quote +0.1577** — the wave-17 merged-depth value, 17% high.
 4. **It must not imply the difference-in-differences IS the gain, or a share of
    it.** Spearman ρ between the six per-width gains and their DiDs is
-   **−0.1430** against a bar of **+0.829**: the claim is that the read-out's
+   **−0.1429** against a bar of **+0.829**: the claim is that the read-out's
    contribution *is* order-dependent, not that the gain decomposes. So the
    abstract carries **no headline accuracy as its largest number**, no arrow
    from 0.8332 to a shuffled value, and no percentage-of-gain framing beyond the
-   published **94.5%** collapse of the *advantage*, which is a different
-   quantity and is labelled as one.
+   anchor's own **94.5%** share, printed with its interval and labelled as
+   holding at that point only.
 
 **Also required on the image, because an abstract travels alone:** that
 **0.8332 is not competitive** — the SHD frontier is 95.07–96.3% — and that the
