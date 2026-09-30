@@ -1,35 +1,39 @@
-# Where `neurips_2026.sty` came from, and why this copy
+# Where the TMLR style files came from
 
-**sha256:** `0c1ad36961fcd9198dcc2558cf2793e1df39973bde8264fd701f5e7970672757`
-**Self-identification:** `\ProvidesPackage{neurips_2026}[2026-01-29 NeurIPS 2026 submission/camera-ready style file]`
-**Lines:** 437.
+**Venue:** Transactions on Machine Learning Research (retargeted 2026-09-29,
+after the NeurIPS 2026 deadline had passed).
 
-NeurIPS's author instructions say to use the official style file and that
-"tweaking the style files may be grounds for desk rejection." The official
-download was not reachable from here — `media.neurips.cc/Conferences/NeurIPS2026/`
-returns 404 for both `Styles.zip` and the bare `.sty`, and the style-files page
-under `neurips.cc/Conferences/2026/` does too. So the file was obtained instead
-from sources that had to have used the real one, and **verified by agreement**:
+**Source:** the archive TMLR's own author guide links —
+`https://jmlr.org/tmlr/author-guide.html` → `https://github.com/JmlrOrg/tmlr-style-file/archive/refs/heads/main.zip`.
+That link was read off the guide page on 2026-09-29, not found by search.
+Repository `JmlrOrg/tmlr-style-file`, branch `main`, commit
+`7bf90efe3a0debbba703c05c43f3ff7e4d4a2992` (2023-06-30, the last push).
 
-| Source | sha256 | Verdict |
-|---|---|---|
-| `arxiv.org/e-print/2605.19641` source bundle | `0c1ad369…0dadb52`… *(see below)* | **used** |
-| `arxiv.org/e-print/2605.27734` source bundle | identical to the above | **agrees** |
-| `github.com/lizhemin15/NeurIPS-2026-Latex-Unified` | `11660adf…` | **rejected** |
+| File | sha256 |
+|---|---|
+| `tmlr.sty` | `816214ff5919aa457b6b443bee52b15d9561421417b7f8a50cc84651519f0002` |
+| `tmlr.bst` | `306fd454cf40771bee01293eeb98d2c1cd5f4e11ed0cd7296b335f354fc45206` |
+| `fancyhdr.sty` | `3d2922548e0e5f1a6c5676eda6ebb6dc20d7d305b4d8c2be5f1c833fb1084e6d` |
 
-Two unrelated arXiv submissions, by different authors, ship a **byte-identical**
-`neurips_2026.sty`. That is the copy here.
+All three ship with the paper, `fancyhdr.sty` included, so the build does not
+depend on whichever copy the local TeX installation carries.
+`scripts/build_paper.py` refuses to build if any hash changes, in `paper/` or
+in the build directory it copies them to.
 
-**The GitHub mirror was rejected, and this is the reason to record it.** It is
-27 lines longer than the arXiv copy. The additions are bilingual explanatory
-comments and an extra `\AtBeginDocument` block that warns when `\workshoptitle`
-is empty. Harmless in intent and a modification in fact — exactly the kind of
-file NeurIPS says may be grounds for desk rejection. It was the first hit for
-the obvious search, it is presented as a convenience "unified" template, and
-nothing about downloading it would have told anyone it had been edited. Two
-independent copies is what told us.
+**How it is used.** Anonymous submission: `\usepackage{tmlr}`, which prints
+"Anonymous authors / Paper under double-blind review" and the header "Under
+review as submission to TMLR". Named arXiv preprint: `\usepackage[preprint]{tmlr}`,
+which the template documents as the way "to de-anonymize and remove mentions
+to TMLR (for example for posting to preprint servers)". Camera-ready, if
+accepted: `[accepted]`, plus `\month`, `\year` and `\openreview`.
 
-**If you re-obtain this file**, get it from neurips.cc when that is reachable
-and check the hash above before replacing this copy.
-`scripts/build_paper.py` refuses to build if the hash changes, so a swapped
-style file cannot pass silently.
+## The file this replaced
+
+Until 2026-09-29 the paper targeted NeurIPS 2026 with `neurips_2026.sty`
+(sha256 `0c1ad36961fcd9198dcc2558cf2793e1df39973bde8264fd701f5e7970672757`).
+The official download was unreachable then, so that copy was verified by
+agreement: two unrelated arXiv source bundles (2605.19641, 2605.27734) shipped
+it byte-identical, and the first search hit — a "unified" GitHub template — was
+**rejected** because it was 27 lines longer, i.e. edited. That is the lesson
+kept here: take the template from the link the venue itself publishes, and pin
+it. The NeurIPS file is removed; it is in the git history.

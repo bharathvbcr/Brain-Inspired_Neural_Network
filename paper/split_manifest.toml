@@ -1,9 +1,21 @@
 # Where the page limit falls.
 #
-# NeurIPS 2026 allows nine content pages. Acknowledgments, references, the
-# checklist and technical appendices do not count against that, so the split
-# below is a decision about what a reviewer must read to judge the lead claim,
-# not about what is worth keeping.
+# The split below was drawn for NeurIPS 2026's nine content pages. The venue
+# is now TMLR (2026-09-29), which has no hard limit but stops promising its
+# review timeline above twelve pages of main content; `build_paper.py` holds
+# the main text to twelve. References and appendices do not count, so the
+# split is a decision about what a reviewer must read to judge the lead claim,
+# not about what is worth keeping. The "nine pages" reasons in the comments
+# below are the history of each move, not a constraint that still binds.
+#
+# [front] names the two sections TMLR typesets outside the body: the abstract
+# (one paragraph, in the style's abstract environment) and the LLM-use
+# disclosure (the footnote TMLR requires on the first page). A section named
+# here must not also be in [main] or [appendix]; the build refuses both.
+
+[front]
+abstract = "Abstract"
+disclosure = "LLM-use disclosure"
 #
 # The principle: the MAIN TEXT is the SHD read-out programme end to end --
 # what the difference-in-differences is, every control on it, every scope
@@ -17,7 +29,6 @@
 
 [main]
 sections = [
-  "Abstract",
   "0. What is new here, and what is not",
   "1. Introduction",
   "2. Methods",

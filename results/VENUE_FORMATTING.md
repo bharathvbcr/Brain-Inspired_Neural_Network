@@ -1,19 +1,53 @@
 # Venue formatting notes
 
-Status: **venue chosen, template applied, anonymous PDF building and gated**
-(2026-09-03). The submission is **NeurIPS 2026, main track, double-blind**, and
-it builds from the manuscript rather than from a parallel `.tex`:
+Status: **TMLR, double-blind — template applied, anonymous submission, named
+preprint and anonymised supplement all building and gated (2026-09-29).**
+Chosen because the NeurIPS 2026 deadline had passed. It builds from the
+manuscript rather than from a parallel `.tex`:
 
 ```
-python3 scripts/build_paper.py        # generate, compile, and check
-python3 scripts/build_paper.py --check   # check a build already on disk
+python3 scripts/build_paper.py                      # anonymous submission -> paper/build/main.pdf
+python3 scripts/build_paper.py --variant preprint   # named arXiv version  -> paper/build-preprint/main.pdf
+python3 scripts/build_supplement.py --verify        # anonymised ZIP       -> paper/build/supplement.zip
 ```
 
-`scripts/build_paper.py --check` runs inside `record_checks.sh` and fails on
-any of: a modified style file, a section in neither half of the split, a paper
-over nine content pages, or an identity leaking into the body text or the PDF
-metadata. Each of those failures otherwise looks exactly like a finished
-paper.
+`scripts/build_paper.py --check` runs inside `record_checks.sh` and fails on any
+of: a modified TMLR style file (all three pinned, see
+[`../paper/STYLE_PROVENANCE.md`](../paper/STYLE_PROVENANCE.md)); a section in no
+part of the split; a main text over twelve pages (TMLR's review-timeline
+threshold); an abstract of more than one paragraph (TMLR's template); no LLM-use
+footnote on page 1 (TMLR's FAQ); or an identity in the body text or PDF metadata.
+`build_supplement.py` redacts the record's identities (home paths in run
+manifests, the licences, the project website, the repository URL), refuses if
+any survives in any byte, caps the archive at TMLR's 100 MB, and with
+`--verify` re-runs the published-number, number-derivation and record-link
+checks **inside the redacted copy**. On 2026-09-29: 6,542 files, 1,128
+redactions in 380 files, 51.0 MB, all three checks passing inside it.
+
+## Venue search, 2026-09-29 (primary pages)
+
+| Venue | Status on 2026-09-29 | Verdict |
+|---|---|---|
+| ICLR 2027 | full papers closed 2026-09-25 | missed |
+| AISTATS 2027 | abstract due 2026-09-29; needs an active OpenReview profile and a nominated reviewer with a publication record | not reachable |
+| NeurIPS 2026 workshops | decisions due 2026-09-29; none on SNNs or reproducibility | closed |
+| NICE 2027 | regular papers due 2026-11-11 AoE; 4–8 pp IEEE; no supplement | possible short version |
+| IJCNN 2027 | due 2027-01-31; 6 pp IEEE two-column | poor fit |
+| **TMLR** | rolling; no fees; double-blind; aims at a decision in ~9 weeks; arXiv allowed; LLM use in a first-page footnote | **chosen** |
+| IEEE TNNLS | double-anonymous; no compulsory page charge up to 10 two-column pages; arXiv allowed with IEEE credited | **fallback** |
+| JMLR | no fees; not blind; up to 35 pp | later, if the scope broadens |
+| Neuromorphic Computing and Engineering | APC US$3,100, no hardship waiver found (the "IOP pays" claim was launch-era) | blocked by cost |
+| Neural Networks / Frontiers / PLOS ONE | APC US$2.5k–3.4k for open access | cost, or waiver-dependent |
+| DMLR / ReScience C | datasets / replications of others' work only | out of scope |
+
+**Access for an unaffiliated author.** OpenReview moderates a profile made from
+a personal address for up to two weeks, and rejects one whose history lists
+only "Independent Researcher": add at least one real past institution or
+education record. arXiv has required a personal endorsement from an
+established author in the category since 2026-01-21. The public repository and
+the published LinkedIn articles about this record are a de-anonymisation route
+the supplement's redaction does not touch; TMLR permits identified preprints,
+but the submission must not link to them.
 
 Companion: [`references.bib`](references.bib) · [`PAPER_DRAFT.md`](PAPER_DRAFT.md) · [`PAPER_SKELETON.md`](PAPER_SKELETON.md) · [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md)
 
@@ -55,7 +89,7 @@ Two programs, in this order:
 | Negative-results track | Fits the **secondary** program alone, and would bury the lead | Only if the lead is withdrawn |
 | "Brain-like AI" venues | **Avoid** unless claims rewritten down | Would overclaim Assembly Calculus / cortex |
 
-**Chosen 2026-09-03: NeurIPS 2026 main track, double-blind.** The lead is a
+**Chosen 2026-09-03: NeurIPS 2026 main track, double-blind** *(superseded 2026-09-29 by TMLR, above; kept as the record of why)*. The lead is a
 positive, preregistered contrast with a destroyed-structure control; a
 negative-results venue is the wrong home for it and was the right home for the
 paper this file used to describe. Nine content pages, with references, the
@@ -117,7 +151,7 @@ and the whole secondary programme — and rewrote two: the abstract had grown to
       24 July. Both are now owned by `binn-lab/src/paper_figures.rs`, and
       `scripts/test_paper_figures_match_the_spec.py` checks each against the
       Table it cites and asserts every ban its spec section names
-- [x] **Venue template applied** 2026-09-03 — NeurIPS 2026, `neurips_2026.sty`
+- [x] **Venue template applied** 2026-09-03 — NeurIPS 2026, `neurips_2026.sty` *(replaced 2026-09-29 by the pinned TMLR style)*
       pinned at `0c1ad369…`, verified by two independent copies agreeing
 - [x] **Anonymous PDF build** 2026-09-03 — `scripts/build_paper.py`, checked
       for identity in the rendered text *and* in the PDF metadata, which fail
@@ -128,7 +162,7 @@ and the whole secondary programme — and rewrote two: the abstract had grown to
       for **all seven**. So the build now READS them from
       [`PAPER_FIGURE_SPEC.md`](PAPER_FIGURE_SPEC.md) instead of holding a
       second copy, and a figure the spec does not caption is not typeset
-- [x] **Page budget / appendix split** 2026-09-03 — nine content pages of nine,
+- [x] **Page budget / appendix split** 2026-09-03 *(TMLR: 10 of 12 main pages on 2026-09-29)* — nine content pages of nine,
       split written down in `paper/split_manifest.toml`
 - [x] **Terminology check** 2026-09-03 — `scripts/check_terminology.py`. The
       requirement was recorded in four documents and checked in none, and one

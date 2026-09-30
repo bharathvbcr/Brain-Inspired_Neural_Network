@@ -32,18 +32,62 @@ spec.loader.exec_module(bp)
 class PureGuardTest(unittest.TestCase):
     """Guards that need no LaTeX run."""
 
-    def test_the_style_hash_matches_the_file_on_disk(self):
-        """If this fails, either the style file was replaced or the pin is
+    def test_every_style_hash_matches_the_file_on_disk(self):
+        """If this fails, either a style file was replaced or the pin is
         stale. Both are things a human decides, and neither may be papered
         over by the build recomputing the hash it is checking."""
         import hashlib
-        got = hashlib.sha256((ROOT / "paper/neurips_2026.sty").read_bytes()).hexdigest()
-        self.assertEqual(got, bp.STY_SHA256)
+        self.assertEqual(set(bp.STYLE_FILES), {"tmlr.sty", "tmlr.bst", "fancyhdr.sty"})
+        for name, want in bp.STYLE_FILES.items():
+            got = hashlib.sha256((ROOT / "paper" / name).read_bytes()).hexdigest()
+            self.assertEqual(got, want, name)
 
-    def test_the_pinned_hash_is_the_one_the_provenance_note_records(self):
+    def test_every_pinned_hash_is_one_the_provenance_note_records(self):
         note = (ROOT / "paper/STYLE_PROVENANCE.md").read_text()
-        self.assertIn(bp.STY_SHA256, note,
-                      "the pin and the note that justifies it have drifted")
+        for name, want in bp.STYLE_FILES.items():
+            self.assertIn(want, note,
+                          f"the pin for {name} and the note that justifies it have drifted")
+
+    def test_a_tampered_style_file_stops_the_build(self):
+        tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        for name in bp.STYLE_FILES:
+            shutil.copy(ROOT / "paper" / name, tmp / name)
+        bp.verify_style(tmp)
+        (tmp / "tmlr.sty").write_text((tmp / "tmlr.sty").read_text() + "% tweak\n")
+        with self.assertRaises(SystemExit):
+            bp.verify_style(tmp)
+
+    def test_a_multi_paragraph_abstract_is_refused(self):
+        """TMLR's template: 'The abstract must be limited to one paragraph.'
+        The draft's abstract was four paragraphs under NeurIPS."""
+        self.assertTrue(bp.abstract_problems("One claim.\n\nAnother claim.\n"))
+        self.assertTrue(bp.abstract_problems("   \n"))
+        self.assertEqual(bp.abstract_problems("One claim,\nwrapped over lines.\n"), [])
+
+    def test_the_draft_abstract_is_one_paragraph(self):
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        abstract, disclosure = bp.front_matter(
+            bp.split_sections((ROOT / "results/PAPER_DRAFT.md").read_text()), manifest)
+        self.assertEqual(bp.abstract_problems(abstract), [])
+        self.assertIn(bp.DISCLOSURE_MARKER, disclosure.lower(),
+                      "the disclosure must say what the first-page check looks for")
+        self.assertNotIn("\n\n", disclosure, "a footnote is one paragraph")
+
+    def test_a_missing_front_section_stops_the_build(self):
+        sections = [("Abstract", "One paragraph.\n")]
+        with self.assertRaises(SystemExit):
+            bp.front_matter(sections, {"front": {"abstract": "Abstract",
+                                                 "disclosure": "LLM-use disclosure"}})
+        with self.assertRaises(SystemExit):
+            bp.front_matter(sections, {"front": {"abstract": "Abstract"}})
+
+    def test_the_divider_after_a_front_section_is_not_part_of_it(self):
+        abstract, disclosure = bp.front_matter(
+            [("A", "Body.\n\n---\n\n"), ("D", "Used a language model.\n\n---\n")],
+            {"front": {"abstract": "A", "disclosure": "D"}})
+        self.assertEqual((abstract, disclosure), ("Body.", "Used a language model."))
 
     def test_an_undeclared_character_is_named_not_left_to_pdflatex(self):
         with self.assertRaises(SystemExit):
@@ -86,13 +130,27 @@ class PureGuardTest(unittest.TestCase):
         section that has been quietly missing for a while."""
         import tomllib
         manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
-        placed = set(manifest["main"]["sections"]) | set(manifest["appendix"]["sections"])
+        body = set(manifest["main"]["sections"]) | set(manifest["appendix"]["sections"])
+        front = set(manifest["front"].values())
+        self.assertEqual(front & body, set(), "a front section would print twice")
+        placed = body | front
         have = {h for h, _ in bp.split_sections((ROOT / "results/PAPER_DRAFT.md").read_text())}
         self.assertEqual(have - placed, set())
         self.assertEqual(placed - have, set())
 
     def test_the_page_limit_is_the_venue_s(self):
-        self.assertEqual(bp.PAGE_LIMIT, 9, "NeurIPS 2026 allows nine content pages")
+        self.assertEqual(bp.PAGE_LIMIT, 12,
+                         "TMLR drops its review timeline above twelve main pages")
+
+    def test_the_variants_differ_only_in_option_author_and_directory(self):
+        sub, pre = bp.VARIANTS["submission"], bp.VARIANTS["preprint"]
+        self.assertEqual((sub["option"], sub["author"]), ("", ""))
+        self.assertEqual(pre["option"], "[preprint]")
+        self.assertNotEqual(sub["build"], pre["build"],
+                            "a shared build directory could leave the named "
+                            "PDF where the anonymous one is expected")
+        self.assertIn(r"\usepackage{tmlr}", bp.document_head("submission"))
+        self.assertIn(r"\usepackage[preprint]{tmlr}", bp.document_head("preprint"))
 
     def test_every_typeset_caption_is_the_spec_s_required_wording(self):
         """The spec owns caption text. A caption written in the builder would
@@ -158,11 +216,28 @@ class BuiltPaperTest(unittest.TestCase):
         self.assertGreater(total, content,
                            "the appendix should follow the content pages")
 
-    def test_it_says_anonymous_author(self):
+    def test_it_says_anonymous_on_page_one(self):
         first = subprocess.run(
             ["pdftotext", "-f", "1", "-l", "1", str(self.pdf), "-"],
             capture_output=True, text=True).stdout
-        self.assertIn("Anonymous Author", first)
+        self.assertIn(bp.ANONYMOUS_BANNER, " ".join(first.split()))
+
+    def test_page_one_carries_the_llm_disclosure(self):
+        first = subprocess.run(
+            ["pdftotext", "-f", "1", "-l", "1", str(self.pdf), "-"],
+            capture_output=True, text=True).stdout.lower()
+        self.assertIn(bp.DISCLOSURE_MARKER, " ".join(first.split()))
+
+    def test_no_heading_is_numbered_twice(self):
+        """The manuscript numbers its headings and the prose cross-references
+        those numbers, so LaTeX must not number them again. Under the NeurIPS
+        build it did: the PDF read "0.2 1. Introduction"."""
+        tex = (bp.BUILD / "main.tex").read_text()
+        numbered = re.findall(r"\\(?:sub)*section\{", tex)
+        self.assertEqual(numbered, [], "a heading is LaTeX-numbered")
+        body = subprocess.run(["pdftotext", "-layout", str(self.pdf), "-"],
+                              capture_output=True, text=True).stdout
+        self.assertIsNone(re.search(r"^\s*0\.\d+\s+\d+\. ", body, re.M))
 
     def test_it_carries_no_identity_in_body_or_metadata(self):
         body = subprocess.run(["pdftotext", str(self.pdf), "-"],
@@ -198,6 +273,43 @@ class BuiltPaperTest(unittest.TestCase):
         for stem, _ in bp.spec_captions():
             self.assertTrue((bp.BUILD / "figures" / f"{stem}.pdf").exists(),
                             f"{stem} was not copied into the build")
+
+
+class PreprintTest(unittest.TestCase):
+    """The named arXiv build. It must never be mistaken for the submission."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.pdf = bp.PREPRINT_BUILD / "main.pdf"
+        if not cls.pdf.exists():
+            raise unittest.SkipTest(
+                "no preprint on disk; run scripts/build_paper.py --variant preprint")
+
+    def test_the_preprint_passes_its_own_check(self):
+        proc = subprocess.run([sys.executable, str(BUILDER), "--check",
+                               "--variant", "preprint"],
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_it_names_the_author_and_not_the_venue(self):
+        first = subprocess.run(["pdftotext", "-f", "1", "-l", "1", str(self.pdf), "-"],
+                               capture_output=True, text=True).stdout
+        self.assertIn("Independent Researcher", first)
+        self.assertNotIn("TMLR", first)
+        self.assertNotIn(bp.ANONYMOUS_BANNER, " ".join(first.split()))
+
+    def test_the_submission_check_rejects_the_preprint(self):
+        """If the named PDF were ever copied into the submission directory,
+        the submission check must fail on it."""
+        tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        for name in list(bp.STYLE_FILES) + ["main.blg"]:
+            shutil.copy(bp.PREPRINT_BUILD / name, tmp / name)
+        shutil.copy(self.pdf, tmp / "main.pdf")
+        variants = dict(bp.VARIANTS)
+        variants["submission"] = dict(variants["submission"], build=tmp)
+        with mock.patch.object(bp, "VARIANTS", variants):
+            self.assertEqual(bp.check("submission"), 1)
 
 
 class BibliographyIsNotSilentlyEmptyTest(unittest.TestCase):

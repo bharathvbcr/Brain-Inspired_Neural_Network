@@ -197,6 +197,14 @@ KNOWN_COINCIDENCE = {
               "differences, second order, judged as every DiD before it.",
     "0.0959": "W21's seed-paired DiD at h128 / `published-10ms`. Same class, "
               "same judgement.",
+    # Surfaced on 2026-09-29, when the abstract began quoting the anchor DiD
+    # itself instead of misreporting the attention arm's own shuffle cost
+    # (0.1347) as the collapse of the advantage. The statistic is recomputed
+    # from the four-arm seed intersection by `w21_point` in
+    # verify_published_numbers.py; the `paired` generator only reaches it by
+    # arithmetic accident.
+    "0.1205": "W21's seed-paired DiD at the h128 anchor, n=32. Same class, "
+              "same judgement as 0.0893 and 0.0959.",
     "0.9972": "the mean `temporal_audit.relocated_fraction` over wave 24's 48 "
               "`bin-shuffled` cells. This sweep generates quantities from "
               "`accuracy` alone, so no generator computes a relocated fraction "

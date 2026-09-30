@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the anonymous NeurIPS 2026 submission from `results/PAPER_DRAFT.md`.
+"""Build the anonymous TMLR submission, and its named preprint, from `results/PAPER_DRAFT.md`.
 
 The manuscript's single source of truth is the markdown. Hand-maintaining a
 parallel `.tex` would put two documents in the repository that are supposed to
@@ -10,22 +10,31 @@ a figure drawing a superseded value block at camera-ready quality. So the
 
 What this refuses to do, and why each refusal exists:
 
-  * Build with a MODIFIED style file. NeurIPS says tweaking the style may be
-    grounds for desk rejection, and the first template that comes up in search
-    IS tweaked (see `paper/STYLE_PROVENANCE.md`). The hash is pinned.
+  * Build with a MODIFIED style file. Every file of the official TMLR style
+    is pinned by hash (see `paper/STYLE_PROVENANCE.md`): the NeurIPS episode
+    showed that the most findable copy of a template can be an edited one.
   * Build with a section in NEITHER half of the split manifest. A section that
     silently vanishes from a nine-page paper is invisible in the output; the
     build stops instead.
-  * Report success on a paper that is OVER the page limit. NeurIPS does not
-    review those, so "it compiled" is not the property worth reporting.
+  * Report success on a paper whose main text runs past TMLR's twelve pages.
+    TMLR has no hard limit, but above twelve it stops promising its review
+    timeline, so a thirteenth page is a cost nobody chose.
+  * Report success on a submission missing either of TMLR's first-page
+    requirements: a ONE-paragraph abstract, and a footnote on the first page
+    disclosing LLM use.
   * Report success on a PDF that DE-ANONYMISES the submission. Checked against
     the rendered text and the PDF metadata both, because the two fail
     separately -- a clean manuscript can still ship an author name in
     /Author, and pdflatex writes that from the environment without being asked.
 
 Usage:
-    python3 scripts/build_paper.py            # build and check
-    python3 scripts/build_paper.py --check    # check a build already on disk
+    python3 scripts/build_paper.py                      # build and check the submission
+    python3 scripts/build_paper.py --check              # check a build already on disk
+    python3 scripts/build_paper.py --variant preprint   # the named arXiv version
+
+The preprint is the same source under TMLR's own `[preprint]` option, which
+names the author and removes every mention of TMLR. It builds into its own
+directory, so the anonymous build on disk can never be the named one.
 """
 from __future__ import annotations
 
@@ -44,18 +53,43 @@ PAPER = ROOT / "paper"
 DRAFT = ROOT / "results/PAPER_DRAFT.md"
 BIB = ROOT / "results/references.bib"
 MANIFEST = PAPER / "split_manifest.toml"
-STY = PAPER / "neurips_2026.sty"
 BUILD = PAPER / "build"
+PREPRINT_BUILD = PAPER / "build-preprint"
 FIGDIR = ROOT / "results/runs/2026-07-23-paper-hard-both/figures"
 
-#: The unmodified NeurIPS 2026 style file, agreed on byte-for-byte by two
-#: unrelated arXiv submissions. `paper/STYLE_PROVENANCE.md` records how.
-STY_SHA256 = "0c1ad36961fcd9198dcc2558cf2793e1df39973bde8264fd701f5e7970672757"
+#: The official TMLR style, byte for byte, from the archive TMLR's author guide
+#: links (github.com/JmlrOrg/tmlr-style-file, commit 7bf90efe). All three files
+#: ship, `fancyhdr.sty` included, so the build does not depend on whichever
+#: copy the local TeX installation carries. `paper/STYLE_PROVENANCE.md` records
+#: how each hash was obtained.
+STYLE_FILES = {
+    "tmlr.sty": "816214ff5919aa457b6b443bee52b15d9561421417b7f8a50cc84651519f0002",
+    "tmlr.bst": "306fd454cf40771bee01293eeb98d2c1cd5f4e11ed0cd7296b335f354fc45206",
+    "fancyhdr.sty": "3d2922548e0e5f1a6c5676eda6ebb6dc20d7d305b4d8c2be5f1c833fb1084e6d",
+}
 
-#: Nine content pages, per the NeurIPS 2026 call. References, the checklist and
-#: technical appendices are excess to it, which is what the `\appendix` marker
-#: in the generated source separates.
-PAGE_LIMIT = 9
+#: TMLR has no page limit. Its author guide says a submission with more than
+#: twelve pages of main content loses the normal review timeline, so twelve is
+#: what this build holds the main text to. References and appendices do not
+#: count, which is what the `\appendix` marker in the generated source
+#: separates.
+PAGE_LIMIT = 12
+
+#: `submission` is anonymous and goes to OpenReview; `preprint` names the author
+#: and goes to arXiv. The style option and the author block are the only
+#: differences, so no manuscript text changes between them.
+VARIANTS = {
+    "submission": {"build": BUILD, "option": "", "author": ""},
+    "preprint": {
+        "build": PREPRINT_BUILD,
+        "option": "[preprint]",
+        "author": (r"\name Bharath Chandra Vaddaram \email bharath.vbcr@gmail.com \\"
+                   "\n" r"\addr Independent Researcher"),
+    },
+}
+
+#: What TMLR's style prints on page 1 in anonymous mode, and only then.
+ANONYMOUS_BANNER = "Paper under double-blind review"
 
 #: Anything that would identify the authors in a double-blind submission. Each
 #: is checked against the EXTRACTED PDF TEXT, not the source, because that is
@@ -134,19 +168,22 @@ def fail(message: str) -> None:
     raise SystemExit(1)
 
 
-def verify_style() -> None:
-    if not STY.exists():
-        fail(f"{STY} is missing. See paper/STYLE_PROVENANCE.md for how to "
-             "obtain it; do not substitute a template found by search.")
-    got = hashlib.sha256(STY.read_bytes()).hexdigest()
-    if got != STY_SHA256:
-        fail(f"{STY.name} is not the verified file.\n"
-             f"  expected {STY_SHA256}\n  got      {got}\n"
-             "NeurIPS says tweaking the style file may be grounds for desk "
-             "rejection, and the most findable third-party 'unified' template "
-             "IS tweaked. If you deliberately updated the style file, verify "
-             "the new one the way paper/STYLE_PROVENANCE.md describes -- two "
-             "independent copies agreeing -- and update STY_SHA256 here.")
+def verify_style(where: pathlib.Path = PAPER) -> None:
+    """Every style file in `where` is the pinned one. Run on `paper/` before a
+    build and on the build directory after, because the copy pdflatex reads
+    is the one that matters."""
+    for name, want in STYLE_FILES.items():
+        path = where / name
+        if not path.exists():
+            fail(f"{path} is missing. See paper/STYLE_PROVENANCE.md for how to "
+                 "obtain it; do not substitute a template found by search.")
+        got = hashlib.sha256(path.read_bytes()).hexdigest()
+        if got != want:
+            fail(f"{path} is not the verified file.\n"
+                 f"  expected {want}\n  got      {got}\n"
+                 "If the style was deliberately updated, fetch it from the "
+                 "archive TMLR's author guide links, record where it came from "
+                 "in paper/STYLE_PROVENANCE.md, and update STYLE_FILES here.")
 
 
 def split_sections(text: str) -> list[tuple[str, str]]:
@@ -224,9 +261,14 @@ def to_latex_inline(markdown: str) -> str:
     return to_latex(markdown).strip()
 
 
-PREAMBLE = r"""\documentclass{article}
-\usepackage{neurips_2026}
-\usepackage[utf8]{inputenc}
+#: The class and style lines, which are all that differ between variants.
+#: `10pt` is what TMLR's own template passes.
+def document_head(variant: str) -> str:
+    return "\n".join([r"\documentclass[10pt]{article}",
+                      rf"\usepackage{VARIANTS[variant]['option']}{{tmlr}}"])
+
+
+PREAMBLE = r"""\usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{hyperref}
 \usepackage{url}
@@ -266,13 +308,13 @@ PREAMBLE = r"""\documentclass{article}
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 %% pandoc emits `\def\LTcaptype{none}` for a longtable with no caption, which
 %% wants a counter of that name. Defining it is cheaper and less invasive than
-%% pulling in `caption`, which fights the NeurIPS style over float spacing.
+%% pulling in `caption`, which fights the venue style over float spacing.
 \newcounter{none}
 \setlength{\LTpre}{4pt}
 \setlength{\LTpost}{4pt}
 %% A pointer into the on-disk record. Rendered as a bracketed number in the
 %% text and expanded once, in the appendix. The markdown cites these inline by
-%% filename, which is correct for a repository and impossible in nine pages.
+%% filename, which is correct for a repository and unreadable in a paper.
 \newcommand{\rec}[1]{\textsuperscript{\textsc{r}#1}}
 \graphicspath{{figures/}}
 \hypersetup{pdfauthor={},pdftitle={},pdfsubject={},pdfcreator={},pdfproducer={},pdfkeywords={}}
@@ -302,21 +344,67 @@ def check_unicode(text: str) -> None:
              "the draft.")
 
 
-def build() -> None:
+def abstract_problems(body: str) -> list[str]:
+    """TMLR: "The abstract must be limited to one paragraph." A blank line in
+    the markdown is a paragraph break in the PDF, so that is what is counted."""
+    paragraphs = [p for p in re.split(r"\n\s*\n", body.strip()) if p.strip()]
+    if len(paragraphs) != 1:
+        return [f"the abstract is {len(paragraphs)} paragraphs; TMLR's template "
+                "requires exactly one."]
+    return []
+
+
+def front_matter(sections: list[tuple[str, str]], manifest: dict) -> tuple[str, str]:
+    """(abstract, LLM-use disclosure) bodies, named by the manifest's [front].
+
+    Both are typeset specially -- the abstract in TMLR's abstract environment,
+    the disclosure as the first-page footnote TMLR requires -- so neither may
+    also appear as an ordinary section. A missing one stops the build rather
+    than producing a submission TMLR would return."""
+    front = manifest.get("front", {})
+    bodies = dict(sections)
+    out = []
+    for key in ("abstract", "disclosure"):
+        heading = front.get(key)
+        if heading is None:
+            fail(f"paper/split_manifest.toml has no [front] {key} = \"...\". "
+                 "TMLR requires both an abstract and a first-page LLM-use "
+                 "footnote; the build will not guess which section is which.")
+        if heading not in bodies:
+            fail(f"[front] {key} names {heading!r}, which the manuscript does "
+                 "not have.")
+        # A trailing `---` is the draft's divider before the next part, not
+        # part of this section; in a footnote it would typeset as a rule.
+        out.append(re.sub(r"\n\s*-{3,}\s*$", "", bodies[heading].strip()).strip())
+    return out[0], out[1]
+
+
+def build(variant: str = "submission") -> None:
     verify_style()
     if not shutil.which("pandoc"):
         fail("pandoc is not installed; the build cannot convert the manuscript.")
+    build_dir = VARIANTS[variant]["build"]
     manifest = tomllib.loads(MANIFEST.read_text())
     want_main = list(manifest["main"]["sections"])
     want_appendix = list(manifest["appendix"]["sections"])
+    front = manifest.get("front", {})
+    want_front = [front[k] for k in ("abstract", "disclosure") if k in front]
 
     text = DRAFT.read_text()
     check_unicode(text)
     title = text.split("\n", 1)[0].lstrip("# ").strip()
     sections = split_sections(text)
     have = {h for h, _ in sections}
+    abstract, disclosure = front_matter(sections, manifest)
+    doubled = sorted(set(want_front) & (set(want_main) | set(want_appendix)))
+    if doubled:
+        fail("these front-matter sections are also listed as body sections, so "
+             "they would print twice:\n" + "\n".join(f"  - {h}" for h in doubled))
+    problems = abstract_problems(abstract)
+    if problems:
+        fail(problems[0] + " Condense the `## Abstract` section of the draft.")
 
-    unplaced = sorted(have - set(want_main) - set(want_appendix))
+    unplaced = sorted(have - set(want_main) - set(want_appendix) - set(want_front))
     if unplaced:
         fail("these sections are in neither half of paper/split_manifest.toml:\n"
              + "\n".join(f"  - {h}" for h in unplaced)
@@ -324,7 +412,7 @@ def build() -> None:
                "be dropped from the paper without appearing anywhere in the "
                "output, which is the one failure this build refuses to make "
                "quietly.")
-    missing = sorted((set(want_main) | set(want_appendix)) - have)
+    missing = sorted((set(want_main) | set(want_appendix) | set(want_front)) - have)
     if missing:
         fail("paper/split_manifest.toml names sections the manuscript no "
              "longer has:\n" + "\n".join(f"  - {h}" for h in missing)
@@ -337,8 +425,13 @@ def build() -> None:
         for heading, body in sections:
             if heading not in wanted:
                 continue
-            level = "##" if re.match(r"^(Abstract|\d+\.\s|Appendix )", heading) else "###"
-            chunks.append(f"{level} {heading}\n{rewrite_record_links(body, register)}")
+            # The manuscript numbers its own headings ("3.5 ...", "Appendix C
+            # ..."), and the prose cross-references those numbers. So every
+            # heading is emitted unnumbered (`{-}`): letting LaTeX number them
+            # too printed "0.2 1. Introduction" -- `##` became a numbered
+            # \subsection under a section counter that never left zero.
+            level = "#" if re.match(r"^(Abstract|\d+\.\s|Appendix )", heading) else "##"
+            chunks.append(f"{level} {heading} {{-}}\n{rewrite_record_links(body, register)}")
         return to_latex("\n".join(chunks))
 
     main_tex = render(want_main)
@@ -348,23 +441,38 @@ def build() -> None:
         rf"\textsc{{r}}{n} & \texttt{{\small {name.replace('_', r'\_')}}} \\"
         for name, n in sorted(register.items(), key=lambda kv: kv[1]))
 
+    abstract_tex = to_latex_inline(rewrite_record_links(abstract, register))
+    disclosure_tex = to_latex_inline(rewrite_record_links(disclosure, register))
+    if "\n\n" in disclosure_tex:
+        fail("the LLM-use disclosure is more than one paragraph; it is typeset "
+             "as a footnote and must be one.")
+
+    BUILD = build_dir
     BUILD.mkdir(exist_ok=True)
     (BUILD / "figures").mkdir(exist_ok=True)
     captions = spec_captions()
     for stem, _ in captions:
         shutil.copy(FIGDIR / f"{stem}.pdf", BUILD / "figures" / f"{stem}.pdf")
-    shutil.copy(STY, BUILD / "neurips_2026.sty")
+    for name in STYLE_FILES:
+        shutil.copy(PAPER / name, BUILD / name)
+    verify_style(BUILD)
     shutil.copy(BIB, BUILD / "references.bib")
 
     doc = "\n".join([
+        document_head(variant),
         PREAMBLE,
         rf"\title{{{title}}}",
-        r"\author{}",
+        rf"\author{{{VARIANTS[variant]['author']}}}",
         r"\begin{document}",
         r"\maketitle",
+        r"\begin{abstract}",
+        # TMLR: LLM use is disclosed "as a footnote on the first page". The
+        # abstract is always on the first page, so the footnote hangs off it.
+        abstract_tex + rf"\footnote{{{disclosure_tex}}}",
+        r"\end{abstract}",
         main_tex,
         figure_block(captions, "main"),
-        r"\bibliographystyle{plainnat}",
+        r"\bibliographystyle{tmlr}",
         r"\bibliography{references}",
         r"\appendix",
         r"\section*{Record references}",
@@ -422,7 +530,7 @@ def content_pages(pdf: pathlib.Path) -> tuple[int, int]:
         # "Record references" -- and using it was equivalent. With citations
         # emitted, `\bibliography` sits between the main text and `\appendix`,
         # and counting to the appendix charged the manuscript for its own
-        # reference list: 9 content pages read as 13. NeurIPS excludes
+        # reference list: 9 content pages read as 13. Venues exclude
         # references from the limit, so the count stops at the earlier of the
         # two rather than the later.
         heading = any(line.strip() == "References"
@@ -438,7 +546,7 @@ def content_pages(pdf: pathlib.Path) -> tuple[int, int]:
 NO_CITATIONS = r"I found no \citation commands"
 
 
-def bibliography_problems() -> list[str]:
+def bibliography_problems(build_dir: pathlib.Path | None = None) -> list[str]:
     r"""Whether the bibliography the build runs actually produced anything.
 
     The paper ships `references.bib` and emits `\bibliography{references}`, so a
@@ -451,7 +559,7 @@ def bibliography_problems() -> list[str]:
     This is the same shape as every other gate here: a check that could not run
     must not report what a check that ran and passed reports.
     """
-    log = BUILD / "main.blg"
+    log = (build_dir or BUILD) / "main.blg"
     if not log.exists():
         return ["bibtex left no log, so whether the bibliography built is "
                 "unknown. An unknown bibliography and a good one must not "
@@ -468,54 +576,80 @@ def bibliography_problems() -> list[str]:
     return []
 
 
-def check() -> int:
-    pdf = BUILD / "main.pdf"
+#: Text the first page must carry for the LLM-use footnote to count as present.
+#: The disclosure section is required to say it; the check reads the PDF.
+DISCLOSURE_MARKER = "language model"
+
+
+def check(variant: str = "submission") -> int:
+    build_dir = VARIANTS[variant]["build"]
+    pdf = build_dir / "main.pdf"
     if not pdf.exists():
-        fail(f"{pdf} does not exist. Run `python3 scripts/build_paper.py` first. "
-             "A missing build and a passing check must not look alike.")
+        fail(f"{pdf} does not exist. Run `python3 scripts/build_paper.py"
+             f"{'' if variant == 'submission' else ' --variant ' + variant}` "
+             "first. A missing build and a passing check must not look alike.")
     verify_style()
+    verify_style(build_dir)
     problems: list[str] = []
+
+    # The draft is re-read so that a multi-paragraph abstract written after the
+    # last build is caught by `--check`, which is what record_checks.sh runs.
+    manifest = tomllib.loads(MANIFEST.read_text())
+    abstract, _ = front_matter(split_sections(DRAFT.read_text()), manifest)
+    problems.extend(abstract_problems(abstract))
 
     content, total = content_pages(pdf)
     if content > PAGE_LIMIT:
         problems.append(
             f"the main text is {content} pages against a {PAGE_LIMIT}-page "
-            "limit. NeurIPS does not review papers over the limit. Move a "
-            "section to [appendix] in paper/split_manifest.toml.")
+            "limit. TMLR does not promise its review timeline above twelve. "
+            "Move a section to [appendix] in paper/split_manifest.toml.")
 
-    body = subprocess.run(["pdftotext", str(pdf), "-"],
-                          capture_output=True, text=True).stdout.lower()
-    for needle, what in IDENTIFYING:
-        if needle.lower() in body:
-            problems.append(f"the rendered PDF contains {needle!r} — {what}. "
-                            "This is a double-blind submission.")
-    meta = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout
-    for line in meta.splitlines():
-        field, _, value = line.partition(":")
-        if field.strip() in {"Author", "Creator", "Producer", "Keywords", "Subject"}:
-            for needle, what in IDENTIFYING:
-                if needle.lower() in value.lower():
-                    problems.append(
-                        f"PDF metadata {field.strip()} carries {needle!r} — "
-                        f"{what}. pdflatex writes these from the environment.")
-    problems.extend(bibliography_problems())
-
-    if "Anonymous Author" not in subprocess.run(
-            ["pdftotext", "-f", "1", "-l", "1", str(pdf), "-"],
-            capture_output=True, text=True).stdout:
+    first = subprocess.run(["pdftotext", "-f", "1", "-l", "1", str(pdf), "-"],
+                           capture_output=True, text=True).stdout
+    if DISCLOSURE_MARKER not in " ".join(first.lower().split()):
         problems.append(
-            "page 1 does not say 'Anonymous Author(s)'. The style file prints "
-            "that only in anonymous mode, so either [final] or [preprint] is "
-            "set, or \\maketitle is missing.")
+            f"page 1 does not mention {DISCLOSURE_MARKER!r}. TMLR requires LLM "
+            "use to be disclosed in a footnote on the first page.")
+    problems.extend(bibliography_problems(build_dir))
+
+    if variant == "submission":
+        body = subprocess.run(["pdftotext", str(pdf), "-"],
+                              capture_output=True, text=True).stdout.lower()
+        for needle, what in IDENTIFYING:
+            if needle.lower() in body:
+                problems.append(f"the rendered PDF contains {needle!r} — {what}. "
+                                "This is a double-blind submission.")
+        meta = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout
+        for line in meta.splitlines():
+            field, _, value = line.partition(":")
+            if field.strip() in {"Author", "Creator", "Producer", "Keywords", "Subject"}:
+                for needle, what in IDENTIFYING:
+                    if needle.lower() in value.lower():
+                        problems.append(
+                            f"PDF metadata {field.strip()} carries {needle!r} — "
+                            f"{what}. pdflatex writes these from the environment.")
+        if ANONYMOUS_BANNER not in " ".join(first.split()):
+            problems.append(
+                f"page 1 does not say {ANONYMOUS_BANNER!r}. TMLR's style prints "
+                "that only in anonymous mode, so [accepted] or [preprint] is "
+                "set, or \\maketitle is missing.")
+    else:
+        if ANONYMOUS_BANNER in " ".join(first.split()) or "TMLR" in first:
+            problems.append(
+                "the preprint's first page is still the anonymous TMLR "
+                "submission. It must name the author and not mention TMLR.")
 
     for line in problems:
         print(f"  FAIL: {line}")
     if problems:
         print(f"\n{len(problems)} problem(s).")
         return 1
-    print(f"paper: {content} content page(s) of {PAGE_LIMIT} allowed, "
-          f"{total} total; anonymous in body and metadata; style file "
-          "unmodified.")
+    who = ("anonymous in body and metadata" if variant == "submission"
+           else "named, with no mention of TMLR")
+    print(f"paper ({variant}): {content} content page(s) of {PAGE_LIMIT}, "
+          f"{total} total; one-paragraph abstract; LLM use disclosed on page 1; "
+          f"{who}; style files unmodified.")
     return 0
 
 
@@ -523,7 +657,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true",
                     help="check an existing build instead of rebuilding")
+    ap.add_argument("--variant", choices=sorted(VARIANTS), default="submission",
+                    help="submission (anonymous, OpenReview) or preprint (named, arXiv)")
     args = ap.parse_args()
     if not args.check:
-        build()
-    sys.exit(check())
+        build(args.variant)
+    sys.exit(check(args.variant))

@@ -65,8 +65,10 @@ class GateTest(unittest.TestCase):
     def test_an_uncited_percentage_in_the_abstract_is_refused(self):
         """The abstract was carrying a frontier band §0 had already had
         corrected. A gate scoped to §0 alone reported a pass over it."""
-        self.edit(DRAFT, "That much\nis unsurprising.",
-                  "The field reaches 97.42%. That much\nis unsurprising.")
+        # Anchored on a sentence that occurs once, inside the abstract. The
+        # previous anchor went when the abstract became TMLR's one paragraph.
+        self.edit(DRAFT, "That SHD depends on temporal information",
+                  "The field reaches 97.42%. That SHD depends on temporal information")
         proc = self.run_gate()
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("97.42", proc.stdout)

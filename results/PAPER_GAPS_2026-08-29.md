@@ -67,7 +67,7 @@ Nothing below is code-closeable today. Each says what it is blocked on.
 
 ### 2.1 Blocked on a venue decision — DECIDED AND CLOSED 2026-09-03
 
-The venue is **NeurIPS 2026, main track, double-blind**, and all four things
+*(Reopened and re-decided 2026-09-29: the NeurIPS 2026 deadline had passed, and the venue is now **TMLR** — see [`VENUE_FORMATTING.md`](VENUE_FORMATTING.md).)* The venue was **NeurIPS 2026, main track, double-blind**, and all four things
 that hung off the decision are done. `python3 scripts/build_paper.py` generates
 the `.tex` from `PAPER_DRAFT.md`, compiles it, and checks it; the check runs
 inside `record_checks.sh`.

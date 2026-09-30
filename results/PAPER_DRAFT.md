@@ -41,40 +41,30 @@
 
 ## Abstract
 
-Adding a time-axis attention read-out to a spiking network raises SHD accuracy
-from 0.7057 to **0.8332** (gain **+0.1275**, positive in 32/32 seeds). That much
-is unsurprising. The result this paper is built on is the **conditional**: when
-the temporal order of the input is destroyed by permuting time bins —
-independently per sample, in **both the training and test splits**, so the task
-itself becomes rate-solvable — the read-out's *advantage over a rate read-out*
-collapses by **+0.1347**, while the rate read-out loses only **+0.0142** of its
-own. That SHD depends on temporal information is established; what has not been
-measured is which *component's* contribution is the order-dependent one. This is
-a difference-in-differences on the **gain**, not on accuracy.
-
-Preregistered waves carried the control to **all twenty-one operating points**
-of this instrument, at **two training budgets**, and every one clears its +0.03
-bar. Two further controls decide what "order" means. Time reversal displaces
-spikes *further* than shuffling while destroying no information, and its
-difference-in-differences is flat — so the cost is not brittleness to
-displacement. Destroying cross-channel synchrony *as well as* order costs
-**+0.1308**, **+0.1038** and **+0.0575** more at three binning contracts and
-nothing at two others, so **the read-out reads synchrony as well as order, and
-how much depends on the contract**.
-
-The paper's own registered prediction failed: the size of the effect does not
-track the gain (Spearman **ρ = −0.1430** against a bar of +0.829). We claim
-presence, not proportion, and report four scope limits — width, read-out depth,
-geometry, and a substrate on which the question could not be asked.
-
-Two things make those numbers citable, and we report both as results. Every
-claim carries a numeric bar fixed before the run, on a frozen configuration
-hash, behind a kill-gate that is permanent once failed (§2.4). And **seven
-results have been withdrawn from this package, three of them PASSes** —
-including a 1.0000 — across two repair episodes, one of which found an entire
-matched-architecture suite running on a forward pass that emitted **zero spikes
-at any seed**. Every one of those defects produced plausible numbers, and none
-was caught by an arm's own accuracy (§4.7).
+Adding a time-axis attention read-out to a spiking network raises accuracy on
+the Spiking Heidelberg Digits (SHD) from 0.7057 to **0.8332** (gain
+**+0.1275**, positive in 32/32 seeds). That SHD depends on temporal information
+is established; what has not been measured is which *component's* contribution
+is the order-dependent one. We measure it with a seed-paired
+**difference-in-differences on the gain**, not on accuracy: when temporal order
+is destroyed by permuting time bins independently per sample, in **both the
+training and test splits**, so that the task itself becomes rate-solvable, the
+attention arm loses **+0.1347** while the rate read-out loses only **+0.0142**,
+so the read-out's advantage over a rate read-out collapses by **+0.1205**. Preregistered waves carry the
+control to **all twenty-one operating points** of the instrument at **two
+training budgets**, and every one clears its +0.03 bar. Time reversal, which
+displaces spikes *further* than shuffling but destroys no information, leaves
+the difference-in-differences flat, so the cost is not brittleness to
+displacement; destroying cross-channel synchrony *as well as* order costs
+**+0.1308**, **+0.1038** and **+0.0575** more at three input-binning settings
+and nothing at two others, so the read-out reads synchrony as well as order.
+Our own registered prediction failed: the size of the effect does not track the
+gain (Spearman **ρ = −0.1430** against a bar of +0.829), so we claim presence,
+not proportion, and report scope limits in width, read-out depth and geometry.
+Every claim carries a numeric bar fixed before its run, on a frozen
+configuration hash (§2.4), and we report **seven results withdrawn from this
+package, three of them passes**, each a defect that produced plausible numbers
+and none caught by an arm's own accuracy (§4.7).
 
 ## Abstract — matched-architecture kill gate (secondary program)
 
@@ -116,8 +106,11 @@ attention inside the synaptic connection and reports 92.36%. Attention as a
 *temporal read-out* is older still outside spiking networks — attentive
 statistics pooling [@okabe2018] is the same idea on speaker
 embeddings. The specific placement used here — attention **only** at the
-read-out, replacing the field's default unweighted Σₜ softmax(u[t]) — appears
-unoccupied, but a configuration gap is not a mechanism.
+read-out, added alongside a mean spike-rate read-out — appears unoccupied, but a
+configuration gap is not a mechanism. Note what the comparator is: the rate
+read-out is exactly invariant to permuting time, by construction, and it is
+**not** the field's default unweighted Σₜ softmax(u[t]), which reads the
+membrane and is order-sensitive. This paper does not run that default.
 
 **Not new: that SHD depends on temporal information.** The dataset's own authors
 constructed spike-count-only variants — patterns "without temporal information" —
@@ -234,7 +227,7 @@ prediction that the shuffle cost would *track* the gain across width is refuted
 which the gain is smallest carries the largest difference-in-differences. So the
 claim this paper defends is that the read-out's contribution **is**
 order-dependent, and explicitly not that the gain decomposes into an
-order-dependent share and a remainder. Section 4.1 states the four scope limits
+order-dependent share and a remainder. Section 4.6 states the four scope limits
 that travel with it.
 
 **A secondary programme is reported in the appendix.** A preregistered
@@ -265,7 +258,7 @@ On the Spiking Heidelberg Digits dataset [@cramer2022], we evaluate a time-axis 
 
 Two properties of the block are stated explicitly because they bound what the result can mean. It is **not causal** — every timestep attends to every other, through a full $[T, T]$ row-softmax with no mask, so the arm consumes the whole utterance at inference. And it is **single-head**: one $q, k, v$ triple of shape $[d, d]$ per block, with depth supplied by stacking $L$ blocks rather than by splitting heads. Positional information is a fixed sinusoidal code over normalised position; without it, mean-pooled attention is permutation-invariant and the block would be blind to the order it exists to use. Every arm here is trained by the matched BPTT instrument, not by the local rule under test elsewhere in this paper; the read-out is a gradient reference, and no claim of locality is made for it.
 
-The benchmark tests temporal structure preservation across depth ($L \in \{1, 2, 4\}$), width ($h \in \{128, 256, 384, 512, 768, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), temporal resolution at fixed window (`fixed-t100/t250/t500`), temporal shuffling controls (`bin-shuffled`, `channel-shuffled`), and — for the substitution question of §3.7 — the **spiking substrate itself**: $\{$feed-forward, recurrent$\} \times \{$fixed threshold, adaptive threshold$\}$, written `ff+fixed`, `ff+alif`, `rec+fixed`, `rec+alif`.
+The benchmark tests temporal structure preservation across read-out depth ($L \in \{1, 2, 3, 4\}$ blocks, at attention width $d \in \{32, 64\}$), width ($h \in \{128, 256, 384, 512, 768, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), temporal resolution at fixed window (`fixed-t100/t250/t500`), temporal shuffling controls (`bin-shuffled`, `channel-shuffled`), and — for the substitution question of §3.7 — the **spiking substrate itself**: $\{$feed-forward, recurrent$\} \times \{$fixed threshold, adaptive threshold$\}$, written `ff+fixed`, `ff+alif`, `rec+fixed`, `rec+alif`.
 
 ### 2.4 Preregistration, frozen hashes, and kill-gates
 
@@ -586,7 +579,7 @@ eventually score an artefact.
 We state these as open rather than as future work, because each is a thing this
 paper's own evidence cannot currently settle.
 
-**The gain/DiD dissociation** is the leading one. The order-dependence is present at all twenty-one operating points, but its *size* is uncorrelated with the size of the gain it is supposed to explain (Spearman $\rho$ = −0.1430 over the six widths), and two waves of narrowing widened the puzzle rather than closing it. Nothing here explains why a read-out whose contribution depends everywhere on temporal order should contribute an amount unrelated to how much order it consumes. **The h1024 threshold** is located between h768 and h1024, unexplained, with three rescue levers negative and order-dependence persisting through the collapse (Appendix E). **Calibration** is unmet: criterion 5, a Python mirror of the attention axis, does not exist and is not attempted here, so no number in this paper is comparable to an externally recorded one. **The kernel attribution** — the 0.087 calibration residual assigned to a 25-tap learned temporal kernel — is by elimination, not by an ablation that added one (§3.8). And **whether any local rule crosses the k-WTA transfer barrier** is open, given that a structured feedback matrix moves accuracy but not the gap (§4.2).
+**The gain/DiD dissociation** is the leading one. The order-dependence is present at all twenty-one operating points, but its *size* is uncorrelated with the size of the gain it is supposed to explain (Spearman $\rho$ = −0.1430 over the six widths), and two waves of narrowing widened the puzzle rather than closing it. Nothing here explains why a read-out whose contribution depends everywhere on temporal order should contribute an amount unrelated to how much order it consumes. **The h1024 threshold** is located between h768 and h1024, unexplained, with three rescue levers negative and order-dependence persisting through the collapse (Appendix E). **Calibration** is unmet: criterion 5, a Python mirror of the attention axis, does not exist and is not attempted here, so no number in this paper is comparable to an externally recorded one. **The reference residual** — the 0.087 calibration gap once assigned to a 25-tap learned temporal kernel — is now known to be the net of offsetting terms rather than the kernel's value: ablating the kernel costs the reference +0.3111, restoring the instrument's membrane recovers +0.1666, and **0.0378** remains unidentified (§3.8). And **whether any local rule crosses the k-WTA transfer barrier** is open, given that a structured feedback matrix moves accuracy but not the gap (§4.2).
 
 ---
 
@@ -610,6 +603,10 @@ scope cells under `results/azure-d32l4-scope-v1/results`,
 `results/shd_attention_wave29_local` (wave 29, Apple libm not glibc). A corpus
 outside that list derives nothing — a failure this paper has had once and now
 tests against.
+
+## LLM-use disclosure
+
+A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits that led to the withdrawals in §4.7; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived cells by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
 
 ---
 
@@ -763,7 +760,7 @@ gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so th
 
 ## Appendix J — A converse result, and what it does not license
 
-@xu2026reward report that a frozen, backprop-trained LLM already carries a sparse population encoding value and, downstream of it, a population signalling reward prediction error — a reward subsystem that is learned, layered and addressed rather than a global scalar. It is the closest published result to Gate G2 from the opposite direction, and the two are **converses rather than competitors**: theirs describes what a reward subsystem looks like *after* backprop has built one, while G2 finds that a broadcast ±1 scalar does not *build* one on a matched dense-LIF forward, where graded DFA (0.9387) and per-neuron RL (0.9200) both pass on the identical forward (§3.1, §4.1).
+@xu2026reward report that a frozen, backprop-trained LLM already carries a sparse population encoding value and, downstream of it, a population signalling reward prediction error — a reward subsystem that is learned, layered and addressed rather than a global scalar. It is the closest published result to Gate G2 from the opposite direction, and the two are **converses rather than competitors**: theirs describes what a reward subsystem looks like *after* backprop has built one, while G2 finds that a broadcast ±1 scalar does not *build* one on a matched dense-LIF forward, where graded DFA (0.9925) and per-neuron RL (0.9950) both pass on the identical forward (§3.1, §4.1).
 
 **It is cited for its result, with its own limits stated.** The evidence is correlational probing plus ablation on frozen models no larger than 14B; absolute value-neuron counts are not reported, only curves against pruning ratio; no IoU values are given for the transfer claim; and the causal ablation zeroes 1% of a single early residual layer, an intervention whose random-1% control is the weaker of the two it is compared against. The paper contains no spiking, no local learning rule, and no neuromodulation as a *training* signal, so nothing in it is evidence about BINN in either direction.
 
