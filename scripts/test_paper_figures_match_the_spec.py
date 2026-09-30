@@ -1184,10 +1184,18 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
             "build_paper", ROOT / "scripts/build_paper.py")
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
-        cls.text = cls.DRAFT.read_text()
+        import tomllib
+        # Only the TYPESET text: sections the manifest leaves out ([omitted])
+        # still cite the figures that left with them, and point at nothing.
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        placed = (manifest["main"]["sections"] + manifest["appendix"]["sections"]
+                  + list(manifest["front"].values()))
+        bodies = dict(builder.split_sections(cls.DRAFT.read_text()))
+        cls.text = "\n".join(bodies[h] for h in placed)
         #: The numbered figures the paper typesets, from the builder's own map.
         cls.TYPESET = tuple(sorted(
             int(k) for k in builder.SPEC_FIGURE_ID if k.isdigit()))
+        cls.LETTERED = set(k for k in builder.SPEC_FIGURE_ID if not k.isdigit())
 
     def test_every_typeset_figure_is_cited(self):
         self.assertTrue(self.TYPESET, "the builder typesets no numbered figure")
@@ -1204,8 +1212,13 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
             with self.subTest(figure=n):
                 self.assertNotRegex(self.text, rf"\bFigure {n}\b")
 
-    def test_figure_m_is_cited(self):
-        self.assertIn("Figure M", self.text)
+    def test_lettered_figures_are_cited_exactly_when_typeset(self):
+        """Figure M was asserted cited until 2026-09-29, when it left the paper
+        with the matched programme; now a citation of it would dangle."""
+        for tag in ("S", "M", "D"):
+            with self.subTest(figure=tag):
+                cited = f"Figure {tag}" in self.text
+                self.assertEqual(cited, tag in self.LETTERED)
 
     def test_no_figure_is_cited_more_than_its_home(self):
         """Each is placed once, at the claim a reader meets it on. Repeating a

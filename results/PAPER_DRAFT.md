@@ -257,18 +257,12 @@ prediction that the shuffle cost would *track* the gain across width is refuted
 which the gain is smallest carries the largest difference-in-differences. So the
 claim this paper defends is that the read-out's contribution **is**
 order-dependent, and explicitly not that the gain decomposes into an
-order-dependent share and a remainder. Section 4.6 states the four scope limits
+order-dependent share and a remainder. Section 4.6 states the scope limits
 that travel with it.
 
-**A secondary programme is reported in the appendix.** A preregistered
-matched-architecture kill gate holds a dense-LIF forward, width, frames,
-read-out, splits and seeds fixed and changes only the update rule, and finds
-that a broadcast ±1 three-factor rule fails a task every other rule tested
-saturates, while live muted-θ / k-WTA transfer fails outright. It is the
-programme this manuscript was originally built around; it is supporting material
-now, and it is bounded by a reference that saturates the task (Appendix,
-§3.6). Throughout, we refuse claims about biology, neuromorphic hardware, and
-the impossibility of local learning in principle.
+**What this paper does not claim.** Nothing here is a claim about biology,
+about neuromorphic hardware, or about accuracy against the SHD frontier, which
+this model does not approach (§0).
 
 ---
 
@@ -744,8 +738,7 @@ the natural second test.
 learned temporal kernel, is the net of offsetting terms rather than the
 kernel's value: ablating the kernel costs the reference +0.3111, restoring the
 instrument's membrane recovers +0.1666, and **0.0378** remains unidentified
-(§3.8). **Whether any local rule crosses the k-WTA transfer barrier** is open in
-the secondary programme (§4.2).
+(§3.8).
 
 ---
 
@@ -770,7 +763,7 @@ Apple silicon with Apple's libm rather than glibc).
 
 ## LLM-use disclosure
 
-A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits that led to the withdrawals in §4.7; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived runs by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
+A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits of the results; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived runs by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
 
 ---
 
@@ -864,7 +857,7 @@ And no recurrent-substrate win is claimed anywhere (§3.7).
 
 ## Appendix E — The width collapse at h1024
 
-This is finding 4 of §3.5 in full. The main text states the shape of the collapse and the open problem it leaves; the arithmetic is here.
+The width collapse in full. §3.5 states its shape; the arithmetic is here.
 
 **Scope limits** (Figure 3): gain inverts at width h1024, and on a six-rung ladder that inversion is a **threshold rather than a continuing slope**: +0.1258 (h128), +0.0966 (h256), +0.0760 (h384), +0.0876 (h512), +0.0560 (h768), −0.1618 (h1024). The drop into h1024 is **0.2178**, **6.9×** the largest gap below it (0.0316) and more than twice the registered 3× bar, so the collapse sits between **h768 and h1024** and the rungs below it remain positive. **Every rung of this ladder is measured at `d32/L4`, and the inversion is a property of that read-out depth rather than of the width.** At h1024 and the same budget, `d32/L2` gains **+0.0405** in **20/20** seeds and `d32/L3` gains **+0.0371** in 18/20, against L4's −0.1318 in 3/20; the optimum in depth at that width is interior, and it is not established which of L2 or L3 holds it; they differ by 0.0034. So this row bounds *deep* read-outs at h1024 and does not bound h1024. What makes an arm collapse is still unexplained: L3 sits above the registered gradient-norm sickness threshold at 1.347 and gains anyway, which is why the numerical account was refused ([`RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md`](RESULT_2026-08-28_W18_19_THE_DEPTH_OPTIMUM_IS_INTERIOR.md)). The decay above the collapse is **not strictly ordered**: h384 and h512 are not distinguishable at twelve seeds (paired difference −0.0116, sd 0.0253, negative in 7 of 12), so no monotonicity is claimed. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`). ([`RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md`](RESULT_2026-08-21_W8_HEADLINE_SCOPE_IS_MEASURED.md); [`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
 
@@ -880,13 +873,13 @@ This is finding 4 of §3.5 in full. The main text states the shape of the collap
 
 ## Appendix F — What the advantage runs through
 
-This is the waves 26–29 block of §3.5 finding 2 in full: the three manipulations that ask what in the read-out consumes temporal order, rather than how much order the data carries. All are measured at a single operating point, and §3.5 states that limit where the result is used.
+This is §3.5's account of what the read-out consumes, in full: the three manipulations that ask what in the read-out consumes temporal order, rather than how much order the data carries. All are measured at a single operating point, and §3.5 states that limit where the result is used.
 
 **What the advantage runs through** (waves 26–29, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it. **Position:** a `no-position` arm keeps every parameter and every spike and deletes only the read-out's positional encoding, and its gain falls to **+0.0506** from **+0.1258**, a cost of **0.0752**, above the +0.03 bar in **12 of 12**. Registered beside it as a question and answered *no*: deleting the read-out's access leaves +0.0506 where destroying order in the data leaves **+0.0050**, a difference of **0.0456** outside a ±0.03 band, so something besides the positional code carries order here and this paper does not say what. **A timescale:** permuting bins inside a sliding window destroys order below it and preserves it above, and across windows of 2 to 256 bins the difference-in-differences climbs **+0.0066 to +0.1260** against the full shuffle's +0.1208, reaching half its effect at **130.33 bins (261 ms)**, about 36% of the 716 ms mean utterance. **Not spike counts:** random deletion at p30 costs the rate arm **0.0124** and clears the 0.03 bar in **0 of 12**, so a null measured under it means nothing; laddering the rate makes **p70** the smallest sensitive rung (**0.0388**, 11/12) and p90 costs **0.1080** at 12/12, with no cell voided and p90 cells still predicting all twenty classes at **0.5982** against chance 0.05. Against that instrument the advantage does not fall but **grows**: +0.1390 at p70 and **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. **That clause is recorded NOT MET and is reported as NOT MET**: a two-sided band was registered for a one-sided question and fires identically when the advantage strengthens. **The asymmetry then got its own registration**: wave 29, two one-sided clauses on a seed block the frozen analyser enforces by value, so the replacement bar could not be evaluated on the cells that motivated it. On 48 cells the advantage is not hurt by count destruction (**12 of 12**) and **grows** by more than the campaign's 0.03 bar (DiD **−0.0467**, **11 of 12**), with the rate arm's p90 cost at **+0.1112** showing the instrument still feels its own hand. Those cells are `aarch64-apple-darwin`, not the glibc fleet (registered in an amendment committed before the first cell), so every clause is a within-block paired contrast, the platform gate puts the anchor **0.0006** from the fleet's, and no wave-29 accuracy is tabulated beside a fleet accuracy. What stands is the comparison: destroying order costs the read-out **0.1208**, destroying counts costs it nothing. **All three properties are measured at one operating point** (h128, feed-forward, `published-2ms`, `d32/L4`, e400), and none of them transfers to h1024 or to a recurrent substrate on this evidence; the difference-in-differences itself travels to twenty-one points, its decomposition does not. Read-out access is separable from input structure throughout: a `hidden-shuffled` operator permutes the time axis the read-out sees and leaves the substrate's input alone, and the rate arm pays **exactly 0.0000**, twelve of twelve cells byte-identical on every scientific field. ([`RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md`](RESULT_2026-09-04_W26_SATURATION_IS_REAL_AND_NOT_SPECIFIC.md); [`RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md); [`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md); [`RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md))
 
 ## Appendix G — The calibration criteria and the 0.80 floor
 
-Two paragraphs lifted from §4.6 on 2026-09-07. Both are about the third-party reference artifact this instrument is calibrated against, not about the attention read-out, and §4.6 states each conclusion where it is used.
+Both paragraphs are about the third-party reference this model is calibrated against, not about the attention read-out; §4.6 states each conclusion where it is used.
 
 Criteria 3 and 4 (`clean_reference` and `historical_reference`) were false for a **provenance** reason rather than an accuracy one: the six third-party PyTorch reference artifacts recorded a `source_fingerprint` frozen on 2026-07-27 that every later kernel edit had moved, while their recorded accuracies already met the requirement. Those six cells were re-run on 2026-08-23 and **every one reproduced its archived value to every recorded digit**: a 150-epoch stochastic PyTorch training run, on CPU, a month later, in a rebuilt environment. Both gates now read `true` and `matrix_authorized` is `true` ([`RESULT_2026-08-23_REFERENCE_RERUN.md`](RESULT_2026-08-23_REFERENCE_RERUN.md)). What still blocks calibration is criterion 5, the Python mirror of the attention axis, which does not exist; and `SHD_INSTRUMENT_STATE` remains a compile-time `Uncalibrated`, a second gate in series with the first.
 
@@ -894,23 +887,22 @@ Criteria 3 and 4 (`clean_reference` and `historical_reference`) were false for a
 
 ## Appendix H — Reproduction commands
 
-Every claim in this paper is reachable from a clean checkout with:
+Every claim in this paper is reachable from a clean checkout of the
+supplement with:
 
 ```
 cargo test --locked --workspace
-cargo clippy --locked --workspace --all-targets -- -D warnings
-./scripts/gc_checks.sh          # GC1-GC7, the enforced global constraints
-./scripts/record_checks.sh      # twelve gates, 125 SHD-campaign assertions
-python3 scripts/build_paper.py  # this manuscript, page-limit enforced
-cargo run --locked --release -p binn-lab --bin c1 -- \
-  --config-hash c1-118207fbc3eaba53 --out results/c1_g2_replay.md   # Gate G2
+./scripts/record_checks.sh      # recomputes every published number
+python3 scripts/did_confidence_intervals.py --paper   # Appendix K
+python3 scripts/build_paper.py  # this manuscript, page limit enforced
 ```
 
-Post-G2 gates require explicit opt-in (`--enable-c2`, `--enable-c3`, `--enable-r1`, `--enable-r2`); see §2.4.
+The first builds and tests the simulator; the second re-derives every number
+the paper prints from the archived runs and fails on any mismatch.
 
 ## Appendix I — The resolution ladder
 
-Finding 5 of §3.5 in full, with the per-rung table. §3.5 states the direction and the withdrawn S-5 test where the result is used.
+The resolution ladder in full, with the per-rung table. §3.5 states the direction and the withdrawn S-5 test where the result is used.
 
 **Temporal resolution is an axis, and the gain falls as bins get finer** (Figure 4). The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the number of frames, the read-out helps at **every** rung and the gain is monotone in resolution:
 

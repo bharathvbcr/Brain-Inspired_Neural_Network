@@ -128,8 +128,11 @@ FIGURE_PLACEMENT = {
     # Followed §3.7 into the appendix on 2026-09-29, when the main text was
     # rewritten around the SHD claim and the substrate question became support.
     "figS_substrate": "appendix",
-    "figM_mechanism_richness_addressability": "appendix",
-    "fig2_matched_means": "appendix",
+    # The matched programme's two figures left with its sections on 2026-09-29
+    # ([omitted] in the manifest). "omitted" is a placement, not an absence:
+    # they are still captioned by the spec, and still drawn, just not typeset.
+    "figM_mechanism_richness_addressability": "omitted",
+    "fig2_matched_means": "omitted",
 }
 
 
@@ -157,7 +160,12 @@ def spec_captions() -> list[tuple[str, str]]:
     if unplaced:
         fail("the figure spec requires captions for figures this build does "
              "not place:\n" + "\n".join(f"  - {s}" for s in unplaced)
-             + "\nAdd each to FIGURE_PLACEMENT as 'main' or 'appendix'.")
+             + "\nAdd each to FIGURE_PLACEMENT as 'main', 'appendix' or 'omitted'.")
+    odd = sorted(s for s, half in FIGURE_PLACEMENT.items()
+                 if half not in ("main", "appendix", "omitted"))
+    if odd:
+        fail("FIGURE_PLACEMENT has a placement that is not main, appendix or "
+             "omitted:\n" + "\n".join(f"  - {s}" for s in odd))
     missing = sorted(set(FIGURE_PLACEMENT) - {stem for stem, _ in out})
     if missing:
         fail("FIGURE_PLACEMENT names figures the spec no longer captions:\n"
@@ -252,8 +260,6 @@ SPEC_FIGURE_ID = {
     "3": "leadfig3_width_ladder",
     "4": "leadfig4_resolution_ladder",
     "S": "figS_substrate",
-    "M": "figM_mechanism_richness_addressability",
-    "6": "fig2_matched_means",
 }
 
 TOP_LEVEL = re.compile(r"^(\d+)\.\s")
@@ -518,6 +524,21 @@ def front_matter(sections: list[tuple[str, str]], manifest: dict) -> tuple[str, 
     return out[0], out[1]
 
 
+def omitted_sections(manifest: dict) -> set[str]:
+    """[omitted]: sections of the draft this paper deliberately leaves out.
+
+    Leaving a section out is a decision, so it is written down with its reason
+    rather than implied by absence; a section in no list still stops the build.
+    References INTO an omitted section need no separate guard: it gets no paper
+    number, so `rewrite_xrefs` refuses any typeset text that cites it."""
+    omitted = manifest.get("omitted", {})
+    sections = set(omitted.get("sections", []))
+    if sections and not str(omitted.get("reason", "")).strip():
+        fail("paper/split_manifest.toml [omitted] lists sections but gives no "
+             "reason; say why they are out of this paper.")
+    return sections
+
+
 def build(variant: str = "submission") -> None:
     verify_style()
     if not shutil.which("pandoc"):
@@ -543,15 +564,22 @@ def build(variant: str = "submission") -> None:
     if problems:
         fail(problems[0] + " Condense the `## Abstract` section of the draft.")
 
-    unplaced = sorted(have - set(want_main) - set(want_appendix) - set(want_front))
+    want_omitted = omitted_sections(manifest)
+    both = sorted(want_omitted & (set(want_main) | set(want_appendix) | set(want_front)))
+    if both:
+        fail("these sections are both [omitted] and placed:\n"
+             + "\n".join(f"  - {h}" for h in both))
+    unplaced = sorted(have - set(want_main) - set(want_appendix) - set(want_front)
+                      - want_omitted)
     if unplaced:
         fail("these sections are in neither half of paper/split_manifest.toml:\n"
              + "\n".join(f"  - {h}" for h in unplaced)
-             + "\nAdd each to [main] or [appendix]. A section in neither would "
-               "be dropped from the paper without appearing anywhere in the "
-               "output, which is the one failure this build refuses to make "
+             + "\nAdd each to [main], [appendix] or [omitted]. A section in none "
+               "would be dropped from the paper without appearing anywhere in "
+               "the output, which is the one failure this build refuses to make "
                "quietly.")
-    missing = sorted((set(want_main) | set(want_appendix) | set(want_front)) - have)
+    missing = sorted((set(want_main) | set(want_appendix) | set(want_front)
+                      | want_omitted) - have)
     if missing:
         fail("paper/split_manifest.toml names sections the manuscript no "
              "longer has:\n" + "\n".join(f"  - {h}" for h in missing)
@@ -630,7 +658,8 @@ def build(variant: str = "submission") -> None:
     BUILD.mkdir(exist_ok=True)
     (BUILD / "figures").mkdir(exist_ok=True)
     for stem, _ in captions:
-        shutil.copy(FIGDIR / f"{stem}.pdf", BUILD / "figures" / f"{stem}.pdf")
+        if FIGURE_PLACEMENT[stem] != "omitted":
+            shutil.copy(FIGDIR / f"{stem}.pdf", BUILD / "figures" / f"{stem}.pdf")
     for name in STYLE_FILES:
         shutil.copy(PAPER / name, BUILD / name)
     verify_style(BUILD)

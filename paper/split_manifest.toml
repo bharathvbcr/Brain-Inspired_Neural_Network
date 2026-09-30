@@ -19,11 +19,11 @@ disclosure = "LLM-use disclosure"
 #
 # The principle: the MAIN TEXT is the SHD read-out programme end to end --
 # what the difference-in-differences is, every control on it, every scope
-# limit, and the reproducibility statement. The APPENDIX is the secondary
-# matched-architecture programme, which the manuscript itself describes as
-# "supporting material", plus the integrity appendices.
+# limit, and the reproducibility statement. The APPENDIX is the same
+# programme's supporting detail. The secondary matched-architecture programme
+# was the appendix until 2026-09-29; it is now [omitted] (below).
 #
-# A section listed in neither list is an ERROR, not a default. `build_paper.py`
+# A section listed in no list is an ERROR, not a default. `build_paper.py`
 # refuses to build rather than silently dropping prose out of the paper, which
 # is the failure this file exists to make impossible.
 
@@ -42,7 +42,6 @@ sections = [
   "3.5 SHD attention read-out and mechanism",
   "4. Discussion and limitations",
   "4.6 Neuromorphic benchmark scope and non-claims",
-  "4.7 The withdrawal ledger",
   "4.8 Open problems",
   "5. Reproducibility",
 ]
@@ -50,9 +49,7 @@ sections = [
 [appendix]
 # Lettered in this order. An entry starting "Appendix X" or "Abstract", or
 # listed in [numbering] promote, opens a new appendix; any other entry is a
-# subsection of the appendix before it. The lead programme's appendices come
-# first; the secondary matched-architecture programme is ONE appendix with its
-# sections under it, followed by its integrity notes.
+# subsection of the appendix before it.
 #
 # History of the moves, kept because each was a decision: 3.8 left the main
 # text 2026-09-03 (the kernel +0.3111 / membrane +0.1666 / 0.0378 arithmetic);
@@ -62,7 +59,8 @@ sections = [
 # verbatim block and a seven-column table stopped displacing the figures; J is
 # framing the nine-page budget could not afford. 4.1 moved here 2026-09-29: it
 # is about the matched programme, and in the main text its title ("Lead
-# claim") told a reviewer the appendix was the lead.
+# claim") told a reviewer the appendix was the lead. Later the same day the
+# whole matched programme, 4.7 and Appendix C went to [omitted].
 sections = [
   "Appendix K — Every operating point, with intervals",
   "Appendix E — The width collapse at h1024",
@@ -71,8 +69,20 @@ sections = [
   "3.7 The read-out does not substitute for temporal state in the substrate",
   "3.8 Where 0.8320 sits against the literature, and why the gap is a class difference",
   "Appendix G — The calibration criteria and the 0.80 floor",
-  "Appendix C — The withdrawal ledger in full",
   "Appendix H — Reproduction commands",
+]
+
+[omitted]
+# Left out of THIS paper on purpose, 2026-09-29, on the author's decision after
+# the second-pass audit: the secondary matched-architecture programme, and the
+# withdrawal ledger, every entry of which belongs to that programme. They stay
+# in the draft because other records cite them, and are the material for a
+# separate note. The build typesets none of them, and a reference to one from a
+# typeset section stops the build, so nothing points a reader at them.
+reason = "the secondary matched-architecture programme; a separate note"
+sections = [
+  "4.7 The withdrawal ledger",
+  "Appendix C — The withdrawal ledger in full",
   "Abstract — matched-architecture kill gate (secondary program)",
   "2.1 Matched dense-LIF control",
   "2.2 Engine C1 / Gate G2",
@@ -104,10 +114,4 @@ promote = [
 "0. What is new here, and what is not" = "Related work: what is new here, and what is not"
 "2.4 Preregistration, frozen hashes, and kill-gates" = "Preregistration and frozen configurations"
 "4.6 Neuromorphic benchmark scope and non-claims" = "Scope and non-claims"
-"4.7 The withdrawal ledger" = "Withdrawn results"
-"Appendix C — The withdrawal ledger in full" = "Withdrawn results in full"
 "3.8 Where 0.8320 sits against the literature, and why the gap is a class difference" = "Where the instrument sits against the literature"
-"Abstract — matched-architecture kill gate (secondary program)" = "Secondary programme: a matched-architecture kill gate"
-"4.1 Lead claim and mechanism" = "The matched-architecture claim"
-"4.5 Appendix-only: G3 / G4 / H0 (do not reopen G2)" = "G3, G4 and H0"
-"Appendix B — Post-G2 harvest (banner)" = "Post-G2 results"

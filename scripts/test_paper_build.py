@@ -132,8 +132,10 @@ class PureGuardTest(unittest.TestCase):
         manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
         body = set(manifest["main"]["sections"]) | set(manifest["appendix"]["sections"])
         front = set(manifest["front"].values())
+        omitted = bp.omitted_sections(manifest)
         self.assertEqual(front & body, set(), "a front section would print twice")
-        placed = body | front
+        self.assertEqual(omitted & (body | front), set(), "omitted AND placed")
+        placed = body | front | omitted
         have = {h for h, _ in bp.split_sections((ROOT / "results/PAPER_DRAFT.md").read_text())}
         self.assertEqual(have - placed, set())
         self.assertEqual(placed - have, set())
@@ -166,8 +168,26 @@ class PureGuardTest(unittest.TestCase):
 
     def test_every_captioned_figure_is_placed_in_exactly_one_half(self):
         halves = {bp.FIGURE_PLACEMENT[s] for s, _ in bp.spec_captions()}
-        self.assertEqual(halves, {"main", "appendix"})
+        self.assertEqual(halves, {"main", "appendix", "omitted"})
         self.assertEqual(len(bp.FIGURE_PLACEMENT), len(bp.spec_captions()))
+
+    def test_an_omitted_list_without_a_reason_is_refused(self):
+        with self.assertRaises(SystemExit):
+            bp.omitted_sections({"omitted": {"sections": ["2.1 X"], "reason": " "}})
+        self.assertEqual(bp.omitted_sections({}), set())
+
+    def test_a_reference_into_an_omitted_section_stops_the_build(self):
+        """Omitted sections get no paper number, so the resolver refuses a
+        typeset reference to one: the paper cannot point at what it left out."""
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        _, ids = bp.plan_numbering(
+            manifest["main"]["sections"], manifest["appendix"]["sections"],
+            set(manifest["numbering"]["promote"]), dict(manifest["titles"]))
+        omitted = bp.omitted_sections(manifest)
+        self.assertIn("3.6 The reference is undertrained, and the task saturates", omitted)
+        with self.assertRaises(SystemExit):
+            bp.rewrite_xrefs("bounded by a saturating reference (§3.6)", ids, "test")
 
     def test_an_unattributed_caption_stops_the_build(self):
         """A caption block with no artwork target would be dropped, and the
@@ -280,12 +300,13 @@ class BuiltPaperTest(unittest.TestCase):
         body = subprocess.run(["pdftotext", str(self.pdf), "-"],
                               capture_output=True, text=True).stdout
         self.assertEqual(body.count("Figure 1:"), 1)
-        for n in range(1, len(bp.spec_captions()) + 1):
+        typeset = [s for s, _ in bp.spec_captions() if bp.FIGURE_PLACEMENT[s] != "omitted"]
+        for n in range(1, len(typeset) + 1):
             self.assertIn(f"Figure {n}:", body,
                           f"figure {n} has no caption in the built PDF")
-        self.assertNotIn(f"Figure {len(bp.spec_captions()) + 1}:", body,
-                         "the paper typesets more figures than the spec captions")
-        for stem, _ in bp.spec_captions():
+        self.assertNotIn(f"Figure {len(typeset) + 1}:", body,
+                         "the paper typesets more figures than it places")
+        for stem in typeset:
             self.assertTrue((bp.BUILD / "figures" / f"{stem}.pdf").exists(),
                             f"{stem} was not copied into the build")
 
@@ -318,11 +339,21 @@ class NumberingAndCrossReferenceTest(unittest.TestCase):
         self.assertEqual(ids["0"], "2", "related work (the draft's §0) is section 2")
 
     def test_every_draft_reference_resolves(self):
-        """Rewrites the whole draft; an unresolvable reference is SystemExit."""
+        """Rewrites every typeset section and caption; an unresolvable
+        reference is SystemExit. Sections in [omitted] are not typeset and
+        still cite what left with them, so they are not read here -- until
+        2026-09-29 this test rewrote the whole draft."""
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
         _, ids = self.plan()
-        draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
-        out = bp.rewrite_xrefs(draft, ids, "draft")
-        self.assertNotRegex(out, r"Figure [0-9SM]\b")
+        bodies = dict(bp.split_sections((ROOT / "results/PAPER_DRAFT.md").read_text()))
+        placed = (manifest["main"]["sections"] + manifest["appendix"]["sections"]
+                  + list(manifest["front"].values()))
+        texts = [bodies[h] for h in placed] + [
+            c for s, c in bp.spec_captions() if bp.FIGURE_PLACEMENT[s] != "omitted"]
+        for text in texts:
+            out = bp.rewrite_xrefs(text, ids, "draft")
+            self.assertNotRegex(out, r"Figure [0-9SM]\b")
 
     def test_a_reference_to_a_missing_section_stops_the_build(self):
         with self.assertRaises(SystemExit):
@@ -347,7 +378,8 @@ class NumberingAndCrossReferenceTest(unittest.TestCase):
                          "Appendix E — The width")
 
     def test_spec_figure_ids_cover_exactly_the_typeset_figures(self):
-        self.assertEqual(set(bp.SPEC_FIGURE_ID.values()), set(bp.FIGURE_PLACEMENT))
+        self.assertEqual(set(bp.SPEC_FIGURE_ID.values()),
+                         {s for s, half in bp.FIGURE_PLACEMENT.items() if half != "omitted"})
 
 
 class PreprintTest(unittest.TestCase):
