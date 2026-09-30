@@ -24,6 +24,26 @@ any survives in any byte, caps the archive at TMLR's 100 MB, and with
 checks **inside the redacted copy**. On 2026-09-29: 6,542 files, 1,128
 redactions in 380 files, 51.0 MB, all three checks passing inside it.
 
+**Readiness pass, 2026-09-29 (second round).** Done after an independent
+review found the paper not yet submittable:
+- The claim is restated
+  ([`AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md`](AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md)),
+  with bootstrap intervals at every point (Appendix K, pinned by a test).
+- Hyperparameter and compute tables are in, and every number is now stated as
+  test-set accuracy.
+- §0 has the Yu reframing and nine added citations, and the bibliography has
+  no typeset notes.
+- Section numbering and every cross-reference are generated. Figures sit
+  beside their first citation and never inside the references.
+- The project and crate names are renamed consistently in both the anonymous
+  PDF and the supplement.
+- The supplement vendors the two external crates at their locked versions and
+  compiles.
+
+**Not done, by decision.** The order-sensitive-comparator experiment
+(~300–400 cell-hours) is planned for the review period, not before
+submission.
+
 ## Venue search, 2026-09-29 (primary pages)
 
 | Venue | Status on 2026-09-29 | Verdict |

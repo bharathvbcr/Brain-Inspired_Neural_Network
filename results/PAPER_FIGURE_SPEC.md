@@ -169,7 +169,7 @@ accuracy it must be **labelled n = 12**; an n = 32 absolute-accuracy version is
    *a specific component’s marginal contribution* on any neuromorphic benchmark.
 2. **It must not be drawn as an ablation of the mechanism.** Bin-shuffling is
    applied **independently per sample, in both the training and the test
-   split**, so the task itself becomes rate-solvable; nothing is removed from
+   split**, so the task itself must be solved without temporal order; nothing is removed from
    the model. A panel that labels the shuffled condition “attention off” or
    places it on a model-component axis inverts what was done.
 3. **It must not quote +0.1577.** The wave-17 analyser merged a `d32l1`
@@ -186,7 +186,7 @@ accuracy it must be **labelled n = 12**; an n = 32 absolute-accuracy version is
 
 **Caption (required wording):**
 “The conditional. Bin-shuffling the input — independently per sample, in **both
-the training and test splits**, so the task becomes rate-solvable — costs the
+the training and test splits**, so the task must be solved without temporal order — costs the
 time-axis attention read-out **+0.1347** accuracy (positive in **32/32**
 seed-paired runs) and costs the rate read-out **+0.0142**, a **9.5×** ratio. The
 read-out’s advantage over the rate arm falls from **+0.1275** to **+0.0070**:
@@ -332,11 +332,12 @@ not.
    comparison table rather than a primary source and are **deliberately excluded**
    from the paper’s claims ([`PAPER_DRAFT.md`](PAPER_DRAFT.md) §0). They must not
    appear on this axis. The frontier band is the only published-field marker.
-4. **It must not present the strip as verified.** Every citation in Panel B was
-   assembled by a 2026-08-27 search pass, is **not** machine-checked against
-   cells on disk unlike every SHD number in this paper, and
-   `scripts/check_every_number.py` does not sweep §0. Each must be checked
-   against its primary source before submission.
+4. **It must not present the strip as machine-checked.** Every citation in
+   Panel B was assembled by a 2026-08-27 search pass and checked by hand against
+   its primary source on 2026-09-03
+   ([`CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md)).
+   It is still **not** machine-checked against cells on disk, unlike every SHD
+   number in this paper, and `scripts/check_every_number.py` does not sweep §0.
 
 **Caption (required wording):**
 “Headline accuracy. The time-axis attention read-out reaches **0.8332** against
@@ -349,8 +350,9 @@ kernel of any kind** and lands beside the dataset authors’ own best-effort
 which is where an architecture of this class should land. The 0.80 clearance is
 geometry-specific: `channels-700` reaches 0.7864. SHD ships no validation set
 and differences below ~1.5 points between published numbers are not reliably
-meaningful. Literature values are from a search pass and are not machine-checked
-against cells.”
+meaningful. Literature values are published figures, checked against their
+primary sources; unlike every SHD number of this instrument, they are not
+recomputed from runs on disk.”
 
 **Artwork target:** `runs/2026-07-23-paper-hard-both/figures/leadfig2_headline_accuracy.{png,pdf}`
 — **drawn 2026-08-27**, a new file. There is exactly **one** accuracy axis in it,
@@ -360,7 +362,8 @@ where the frontier is. The no-delay recurrent baseline is drawn as a **band** an
 the instrument's own marker falls inside it. The ~1.5-point unresolvable
 difference is drawn to scale on that same axis. The four excluded comparison
 numbers have **no constant in the generator**, so they cannot be plotted by
-accident, and the literature strip carries "NOT MACHINE-CHECKED" on its face.
+accident, and the literature strip carries "NOT MACHINE-CHECKED against cells"
+on its face beside the date its values were checked against their primaries.
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) Abstract / §0 / §3.5 item 1 / §3.8.
 
 **Avoid:** truncated y-axes, “state of the art”, “competitive with”, leaderboard
@@ -710,7 +713,7 @@ exists at one scale only.
 
 1. **The operation, drawn on the data.** A box labelled *input*, not *model*:
    bin-shuffle applied independently per sample **in both the training and test
-   splits**, so the task itself becomes rate-solvable. Nothing is removed from
+   splits**, so the task itself must be solved without temporal order. Nothing is removed from
    the network, and no arrow may point at a model component.
 2. **The pair of costs, at equal weight — the centre of the image.** Attention
    `d32/L4` **+0.1347** beside rate `ff+fixed` **+0.0142**, `n = 32`, `h128`,

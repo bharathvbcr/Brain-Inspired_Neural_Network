@@ -2,7 +2,7 @@
 
 # Record index
 
-366 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+369 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -10,7 +10,7 @@
 | Results | 47 | 2 |
 | Findings | 14 | 0 |
 | Measurements | 14 | 0 |
-| Amendments | 21 | 1 |
+| Amendments | 22 | 1 |
 | Defects | 9 | 0 |
 | Hardening | 9 | 0 |
 | Audits | 7 | 0 |
@@ -30,7 +30,7 @@
 | Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
-| Other | 28 | 0 |
+| Other | 30 | 0 |
 
 ## Retired documents
 
@@ -216,6 +216,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-29 | [AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md](AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md) | Amendment 2026-09-29 — the claim holds where there is a gain to lose |
 | 2026-09-07 | [AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md](AMENDMENT_2026-09-07_WAVE_29_RUNS_ON_THE_LOCAL_PLATFORM.md) | Amendment — wave 29 is produced on `aarch64-apple-darwin`, not on the fleet |
 | 2026-09-07 | [AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md](AMENDMENT_2026-09-07_THE_ENGINE_IS_ON_THE_G2_PATH.md) | Amendment — `binn-engine` is on the Gate G2 path, and the register says it is not |
 | 2026-09-06 | [AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md](AMENDMENT_2026-09-06_THE_BASELINE_WAS_THE_NULL_ARM.md) | Amendment — the wave-28 analyser measured against the null arm |
@@ -325,7 +326,7 @@ Read these only through the document that retired them.
 | — | [PAPER_RESULTS_TABLE.md](PAPER_RESULTS_TABLE.md) **[retired]** | BINN — camera-ready results table |
 | — | [PAPER_METRICS_FULL.md](PAPER_METRICS_FULL.md) **[retired]** | PAPER_METRICS_FULL — hardened harvest |
 | — | [PAPER_FIGURE_SPEC.md](PAPER_FIGURE_SPEC.md) | BINN — figure / table specs (camera-ready) |
-| — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | What a time-axis read-out buys is temporal order: a difference-in-differences on SHD |
+| — | [PAPER_DRAFT.md](PAPER_DRAFT.md) | What a time-axis read-out consumes: temporal order on SHD, by difference-in-differences |
 
 ## Campaign control
 
@@ -566,6 +567,8 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-09-29 | [METHODS_TABLES_2026-09-29.md](METHODS_TABLES_2026-09-29.md) | Methods tables: SHD attention read-out (2026-09-29) |
+| 2026-09-29 | [DID_INTERVALS_2026-09-29.md](DID_INTERVALS_2026-09-29.md) | Bootstrap intervals on the gain and the difference-in-differences |
 | 2026-09-05 | [DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md](DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md) | The counterfactual arm — instrument built, no wave registered |
 | 2026-09-03 | [CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md) | §0's citations, read against their primary sources |
 | 2026-08-02 | [PERF_AUDIT_2026-08-02.md](PERF_AUDIT_2026-08-02.md) | Performance audit — hot path, 2026-08-02 |

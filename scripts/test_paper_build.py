@@ -228,6 +228,21 @@ class BuiltPaperTest(unittest.TestCase):
             capture_output=True, text=True).stdout.lower()
         self.assertIn(bp.DISCLOSURE_MARKER, " ".join(first.split()))
 
+    def test_every_main_section_heading_survives_conversion(self):
+        """A section whose body is empty was dropped whole: pandoc with
+        --natbib emits nothing for a document that is only a heading, and the
+        build once converted one section at a time."""
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        placed, _ = bp.plan_numbering(
+            manifest["main"]["sections"], manifest["appendix"]["sections"],
+            set(manifest.get("numbering", {}).get("promote", [])),
+            dict(manifest.get("titles", {})))
+        tex = (bp.BUILD / "main.tex").read_text()
+        for heading, number, _ in placed:
+            self.assertRegex(tex, rf"section\*\{{{re.escape(number)} ",
+                             f"{heading!r} (numbered {number}) is missing")
+
     def test_no_heading_is_numbered_twice(self):
         """The manuscript numbers its headings and the prose cross-references
         those numbers, so LaTeX must not number them again. Under the NeurIPS
@@ -273,6 +288,66 @@ class BuiltPaperTest(unittest.TestCase):
         for stem, _ in bp.spec_captions():
             self.assertTrue((bp.BUILD / "figures" / f"{stem}.pdf").exists(),
                             f"{stem} was not copied into the build")
+
+
+class NumberingAndCrossReferenceTest(unittest.TestCase):
+    """The paper numbers its sections in manifest order and rewrites the
+    draft's references to match. Each failure here printed a PDF whose
+    references pointed at the wrong section, or at nothing."""
+
+    def plan(self):
+        import tomllib
+        manifest = tomllib.loads((ROOT / "paper/split_manifest.toml").read_text())
+        return bp.plan_numbering(
+            manifest["main"]["sections"], manifest["appendix"]["sections"],
+            set(manifest.get("numbering", {}).get("promote", [])),
+            dict(manifest.get("titles", {})))
+
+    def test_main_text_is_numbered_without_gaps(self):
+        placed, _ = self.plan()
+        main = [n for _, n, _ in placed if n[0].isdigit()]
+        tops = [n for n in main if "." not in n]
+        self.assertEqual(tops, [str(i) for i in range(1, len(tops) + 1)])
+        for top in tops:
+            subs = [int(n.split(".")[1]) for n in main if n.startswith(top + ".")]
+            self.assertEqual(subs, list(range(1, len(subs) + 1)), top)
+
+    def test_the_introduction_comes_first(self):
+        placed, ids = self.plan()
+        self.assertEqual(placed[0][:2], ("1. Introduction", "1"))
+        self.assertEqual(ids["0"], "2", "related work (the draft's §0) is section 2")
+
+    def test_every_draft_reference_resolves(self):
+        """Rewrites the whole draft; an unresolvable reference is SystemExit."""
+        _, ids = self.plan()
+        draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
+        out = bp.rewrite_xrefs(draft, ids, "draft")
+        self.assertNotRegex(out, r"Figure [0-9SM]\b")
+
+    def test_a_reference_to_a_missing_section_stops_the_build(self):
+        with self.assertRaises(SystemExit):
+            bp.rewrite_xrefs("see §9.9", {"1": "1"}, "test")
+        with self.assertRaises(SystemExit):
+            bp.rewrite_xrefs("see Appendix Z", {}, "test")
+
+    def test_a_reference_to_an_untypeset_figure_stops_the_build(self):
+        with self.assertRaises(SystemExit):
+            bp.rewrite_xrefs("as drawn (Figure 7)", {}, "test")
+
+    def test_section_and_appendix_forms_are_rewritten(self):
+        ids = {"3.5": "4.1", "3.1": "H.3", "Appendix E": "B"}
+        out = bp.rewrite_xrefs(
+            "§3.5, Section 3.5, Section 3.1, §3.1, Appendix E and Figure 1",
+            ids, "test")
+        self.assertEqual(out, "§4.1, Section 4.1, Appendix H.3, Appendix H.3, Appendix B and "
+                              r"Figure \ref{fig:leadfig1_the_conditional}")
+
+    def test_an_appendix_heading_is_not_a_reference(self):
+        self.assertEqual(bp.rewrite_xrefs("Appendix E — The width", {}, "t"),
+                         "Appendix E — The width")
+
+    def test_spec_figure_ids_cover_exactly_the_typeset_figures(self):
+        self.assertEqual(set(bp.SPEC_FIGURE_ID.values()), set(bp.FIGURE_PLACEMENT))
 
 
 class PreprintTest(unittest.TestCase):

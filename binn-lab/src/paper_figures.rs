@@ -474,93 +474,218 @@ fn both(v: nums::Both) -> String {
 
 const W: u32 = 1400;
 const H: u32 = 900;
-/// Figure 1 carries a fourth panel -- wave 21's eight-point DiD ladder -- and
-/// Panels A-C already reach y=872 of the standard 900. Rather than compress
-/// three finished panels to fit a fourth, this figure alone is taller.
+
+/// Type sizes for the seven figures the manuscript typesets.
+///
+/// # Why these exist
+///
+/// The manuscript includes every figure at `\linewidth` — 6.5 in, 468 pt — so
+/// a `W`-wide canvas is scaled by 468/1400 = 0.334 on the page. plotters' SVG
+/// backend also writes `font-size` as the requested size / 1.24 (measured on
+/// the PDFs this module writes: a request of 26 is set at 20.97 pt). A request
+/// of `s` therefore prints at `s / 1.24 × 468 / 1400` pt.
+///
+/// Until 2026-09-29 those figures were drawn as posters: every annotation was
+/// a request of 9–16, which is 2.4–4.3 pt in print, and a reviewer reading
+/// the typeset PDF could not read them. These tiers are the replacement, and
+/// `tests::paper_figures_print_at_seven_points_or_more` renders each of the
+/// seven figures and fails on any `font-size` below `NOTE`.
+///
+/// The remaining figures (5, 7, 8 and both graphical abstracts) are not in
+/// the manuscript and keep their poster sizes.
+mod ty {
+    /// 7.0 pt on the page. The floor: nothing in a paper figure is smaller.
+    pub const NOTE: i32 = 26;
+    /// 7.5 pt: annotation a reader is meant to read with the plot.
+    pub const BODY: i32 = 28;
+    /// 8.1 pt: plotted values and category labels.
+    pub const VALUE: i32 = 30;
+    /// 8.6 pt: panel headings.
+    pub const HEAD: i32 = 32;
+
+    /// The printed size, in points, of a request of `size` at `\linewidth`.
+    #[cfg(test)]
+    pub fn printed_pt(size: i32) -> f64 {
+        size as f64 / 1.24 * 468.0 / super::W as f64
+    }
+
+    /// Distance between baselines of consecutive wrapped lines.
+    pub fn line_step(size: i32) -> i32 {
+        (size as f64 * 1.12).round() as i32
+    }
+}
+
+/// Left and right margins of the paper figures.
+const LEFT: i32 = 36;
+const RIGHT: i32 = W as i32 - 36;
+
+/// How wide `text` will be drawn at `size`, in canvas units.
+///
+/// Uses plotters' own font metrics. If no system face resolves, it falls back
+/// to an average advance of 0.46 × size, deliberately generous for sans-serif
+/// so a wrap errs toward an extra line rather than a clipped one.
+fn text_width(root: &DrawingArea<SVGBackend<'_>, Shift>, text: &str, size: i32) -> i32 {
+    let style = TextStyle::from(("sans-serif", size).into_font());
+    match root.estimate_text_size(text, &style) {
+        Ok((w, _)) => w as i32,
+        Err(_) => (text.chars().count() as f64 * size as f64 * 0.46).round() as i32,
+    }
+}
+
+/// `text` broken into lines no wider than `max_w`, breaking only at spaces.
+fn wrap(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+    text: &str,
+    size: i32,
+    max_w: i32,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split(' ') {
+        let candidate = if line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{line} {word}")
+        };
+        if !line.is_empty() && text_width(root, &candidate, size) > max_w {
+            lines.push(std::mem::replace(&mut line, word.to_string()));
+        } else {
+            line = candidate;
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+/// A wrapped paragraph with its top-left at `(x, y)`. Returns the y just
+/// below its last line, so the next element is placed from where this one
+/// ended rather than from a literal that a longer sentence would overrun.
+fn para(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+    (x, y): (i32, i32),
+    max_w: i32,
+    text: &str,
+    size: i32,
+    color: RGBColor,
+) -> Result<i32, DrawErr> {
+    let mut y = y;
+    for line in wrap(root, text, size, max_w) {
+        label(root, (x, y), &line, size, color)?;
+        y += ty::line_step(size);
+    }
+    Ok(y)
+}
+
+/// One run of text inside a `boxed` block: `(text, size, color)`.
+type Run<'a> = (&'a str, i32, RGBColor);
+
+/// Paragraphs on a filled, bordered block spanning `x0..x1` from `y0`.
+/// Returns the y just below the block.
+fn boxed(
+    root: &DrawingArea<SVGBackend<'_>, Shift>,
+    (x0, y0, x1): (i32, i32, i32),
+    fill: RGBColor,
+    border: RGBColor,
+    runs: &[Run<'_>],
+) -> Result<i32, DrawErr> {
+    let pad = 12;
+    let inner = x1 - x0 - 2 * pad;
+    let height: i32 = runs
+        .iter()
+        .map(|(text, size, _)| wrap(root, text, *size, inner).len() as i32 * ty::line_step(*size))
+        .sum::<i32>()
+        + 2 * pad
+        - 6;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, y0), (x1, y0 + height)],
+        fill.filled(),
+    )))?;
+    map_draw(root.draw(&Rectangle::new(
+        [(x0, y0), (x1, y0 + height)],
+        border.stroke_width(2),
+    )))?;
+    let mut y = y0 + pad;
+    for (text, size, color) in runs {
+        y = para(root, (x0 + pad, y), inner, text, *size, *color)?;
+    }
+    Ok(y0 + height)
+}
+
+/// Canvas heights of the seven manuscript figures, at `ty` sizes.
+///
+/// Each is where that figure's content ends plus a margin; the content itself
+/// is placed from computed y positions (`para`, `boxed`), so a longer sentence
+/// pushes what follows down instead of drawing over it. The manuscript sets
+/// every figure at `\linewidth` with a caption of six to nine lines, so a
+/// figure taller than about 1600 would not fit a 9 in text block with its
+/// caption: `tests::paper_figures_fit_a_page_with_their_caption` holds that.
 const H_LEAD1: u32 = 1380;
-/// Figure 3 gained wave 21's two-line "the mechanism does not track this curve"
-/// annotation, which pushed Panel B and its computed base down by 60px. At the
-/// standard 900 the last line was drawn at y=900 and was invisible.
-const H_LEAD3: u32 = 980;
-/// Figure 6 groups eight arms by verdict and then draws the gap-LCB half of the
-/// gate beneath them. Grouping is the requirement -- the spec bans any encoding
-/// that orders the passing arms -- and eight cards plus four group headings plus
-/// a second panel do not fit 900.
-const H_FIG6: u32 = 1390;
-/// Figure S stacks three panels: four substrate rows on a shared accuracy axis,
-/// three registered contrasts against their bar, and the usability table that
-/// had to be measured before any of Panel A could be. Panel C is a ban, not a
-/// footnote, so it is not the panel that gets compressed to fit 900.
-const H_FIG_S: u32 = 1000;
+const H_LEAD2: u32 = 960;
+const H_LEAD3: u32 = 1070;
+const H_LEAD4: u32 = 870;
+const H_FIG_S: u32 = 1440;
+const H_FIG_M: u32 = 1060;
+const H_FIG6: u32 = 1375;
 /// Figure 8 carries twelve live-engine rows under a substrate break that must
 /// not be compressed away: the break is the figure's first ban, and a divider
 /// squeezed to fit reads as a section heading rather than as a change of system.
 const H_FIG8: u32 = 1020;
 
+/// A figure body: draws onto a `W`-wide canvas.
+type Draw = fn(&DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr>;
+
+/// The seven figures the manuscript typesets, with their canvas heights.
+///
+/// These are drawn at `ty` sizes; every other figure here is poster artwork
+/// the manuscript does not include. The table is the one list both
+/// `generate_all` and the legibility tests read, so a figure cannot be added
+/// to the paper without being held to seven points.
+///
+/// Figure S is lettered, beside Figure M: it belongs to the LEAD program and
+/// a fifth lead figure would renumber the secondary program 5-9 -> 6-10 one
+/// day after the 2026-08-27 renumber, for one figure. `fig2_matched_means` is
+/// Figure 6: the file existed on disk from 24 July with NO generator and
+/// plotted the superseded value block until it was authored here on
+/// 2026-08-29; the `fig2_` stem is historical and deliberately not renamed.
+const PAPER_FIGURES: [(&str, Draw, u32); 7] = [
+    ("leadfig1_the_conditional", draw_lead_fig1, H_LEAD1),
+    ("leadfig2_headline_accuracy", draw_lead_fig2, H_LEAD2),
+    ("leadfig3_width_ladder", draw_lead_fig3, H_LEAD3),
+    ("leadfig4_resolution_ladder", draw_lead_fig4, H_LEAD4),
+    ("figS_substrate", draw_fig_s_substrate, H_FIG_S),
+    (
+        "figM_mechanism_richness_addressability",
+        draw_fig_m,
+        H_FIG_M,
+    ),
+    ("fig2_matched_means", draw_fig6_matched_means, H_FIG6),
+];
+
 /// Generate required camera-ready figures into `out_dir`.
 pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
     fs::create_dir_all(out_dir)?;
     let mut written = Vec::new();
-    // Lead program first: it is what the manuscript leads with, and until
-    // 2026-08-27 nothing had been drawn for any of its four figures.
-    written.extend(write_pair_sized(
-        out_dir,
-        "leadfig1_the_conditional",
-        draw_lead_fig1,
-        H_LEAD1,
-    )?);
-    written.extend(write_pair(
-        out_dir,
-        "leadfig2_headline_accuracy",
-        draw_lead_fig2,
-    )?);
-    written.extend(write_pair_sized(
-        out_dir,
-        "leadfig3_width_ladder",
-        draw_lead_fig3,
-        H_LEAD3,
-    )?);
-    written.extend(write_pair(
-        out_dir,
-        "leadfig4_resolution_ladder",
-        draw_lead_fig4,
-    )?);
+    // The manuscript's figures first: until 2026-08-27 nothing had been drawn
+    // for any of the four lead figures.
+    for (stem, draw, h) in PAPER_FIGURES {
+        written.extend(write_pair_sized(out_dir, stem, draw, h)?);
+    }
     // Deliberately NOT `graphical_abstract`: that file exists and depicts the
     // SECONDARY program. This one was `TODO(source needed)` until 2026-08-29 --
     // an authoring task rather than a missing number, since every value it
     // draws was already published.
-    // Figure S is lettered, beside Figure M: it belongs to the LEAD program and
-    // a fifth lead figure would renumber the secondary program 5-9 -> 6-10 one
-    // day after the 2026-08-27 renumber, for one figure.
-    written.extend(write_pair_sized(
-        out_dir,
-        "figS_substrate",
-        draw_fig_s_substrate,
-        H_FIG_S,
-    )?);
     written.extend(write_pair(
         out_dir,
         "lead_graphical_abstract",
         draw_lead_graphical_abstract,
     )?);
-    written.extend(write_pair(
-        out_dir,
-        "figM_mechanism_richness_addressability",
-        draw_fig_m,
-    )?);
     written.extend(write_pair(out_dir, "fig1_matched_rule_swap", draw_fig1)?);
-    // Figures 6 and 8. Both files existed on disk from 24 July with NO
-    // generator, so the 2026-08-27 re-run that brought the rest of the package
-    // current could not touch them: fig2_ plotted the superseded value block and
-    // fig4_ was stale at rung 1. Authored 2026-08-29; the `fig2_`/`fig4_` stems
-    // are historical and are deliberately not renamed to `fig6_`/`fig8_`.
-    written.extend(write_pair_sized(
-        out_dir,
-        "fig2_matched_means",
-        draw_fig6_matched_means,
-        H_FIG6,
-    )?);
     written.extend(write_pair(out_dir, "fig3_engine_c1_means", draw_fig3)?);
+    // Figure 8. Its file existed on disk from 24 July with NO generator, so the
+    // 2026-08-27 re-run could not touch it and it was stale at rung 1.
+    // Authored 2026-08-29; the `fig4_` stem is historical, as `fig2_` is.
     written.extend(write_pair_sized(
         out_dir,
         "fig4_transfer_ladder",
@@ -575,18 +700,14 @@ pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
     Ok(written)
 }
 
-fn write_pair(
-    out_dir: &Path,
-    stem: &str,
-    draw: fn(&DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr>,
-) -> Result<Vec<PathBuf>, DrawErr> {
+fn write_pair(out_dir: &Path, stem: &str, draw: Draw) -> Result<Vec<PathBuf>, DrawErr> {
     write_pair_sized(out_dir, stem, draw, H)
 }
 
 fn write_pair_sized(
     out_dir: &Path,
     stem: &str,
-    draw: fn(&DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr>,
+    draw: Draw,
     h: u32,
 ) -> Result<Vec<PathBuf>, DrawErr> {
     let png = out_dir.join(format!("{stem}.png"));
@@ -690,6 +811,7 @@ fn draw_bar_row(
     height: i32,
     chance: Option<f64>,
     bars: &[(&str, f64, RGBColor)],
+    face: &BarFace,
 ) -> Result<(), DrawErr> {
     let n = bars.len() as i32;
     let gap = 40;
@@ -710,12 +832,18 @@ fn draw_bar_row(
         )))?;
         centered(
             root,
-            (bx + bar_w / 2, top - 16),
+            (bx + bar_w / 2, top - face.value_dy),
             &format!("{val:.4}"),
-            14,
+            face.value,
             BLACK,
         )?;
-        centered(root, (bx + bar_w / 2, base + 18), name, 14, BLACK)?;
+        centered(
+            root,
+            (bx + bar_w / 2, base + face.name_dy),
+            name,
+            face.name,
+            BLACK,
+        )?;
     }
     if let Some(level) = chance {
         let y = base - (level * (height - 50) as f64) as i32;
@@ -730,14 +858,43 @@ fn draw_bar_row(
         }
         label(
             root,
-            (x0 + width + 6, y - 8),
+            (x0 + width + 6, y - face.chance_dy),
             &format!("chance {level:.2}"),
-            12,
+            face.chance,
             RGBColor(120, 120, 120),
         )?;
     }
     Ok(())
 }
+
+/// Type sizes and offsets for `draw_bar_row`, which Figure 7 also draws at
+/// its original poster sizes.
+struct BarFace {
+    value: i32,
+    value_dy: i32,
+    name: i32,
+    name_dy: i32,
+    chance: i32,
+    chance_dy: i32,
+}
+
+const BAR_POSTER: BarFace = BarFace {
+    value: 14,
+    value_dy: 16,
+    name: 14,
+    name_dy: 18,
+    chance: 12,
+    chance_dy: 8,
+};
+
+const BAR_PAPER: BarFace = BarFace {
+    value: ty::VALUE,
+    value_dy: 20,
+    name: ty::BODY,
+    name_dy: 22,
+    chance: ty::NOTE,
+    chance_dy: 12,
+};
 
 /// One arm's shuffle cost, drawn on a shared axis.
 ///
@@ -755,6 +912,7 @@ fn cost_bar(
     arm: &str,
     detail: &str,
     pairs: &str,
+    face: &CostFace,
 ) -> Result<(), DrawErr> {
     let h = ((cost / scale) * height as f64).round() as i32;
     let top = y_base - h;
@@ -764,28 +922,67 @@ fn cost_bar(
     )))?;
     centered(
         root,
-        (x0 + width / 2, top - 22),
+        (x0 + width / 2, top - face.value_dy),
         &format!("+{cost:.4}"),
-        26,
+        face.value,
         BLACK,
     )?;
-    centered(root, (x0 + width / 2, y_base + 26), arm, 18, BLACK)?;
     centered(
         root,
-        (x0 + width / 2, y_base + 50),
+        (x0 + width / 2, y_base + face.arm_dy),
+        arm,
+        face.arm,
+        BLACK,
+    )?;
+    centered(
+        root,
+        (x0 + width / 2, y_base + face.detail_dy),
         detail,
-        13,
+        face.detail,
         RGBColor(90, 90, 90),
     )?;
     centered(
         root,
-        (x0 + width / 2, y_base + 72),
+        (x0 + width / 2, y_base + face.pairs_dy),
         pairs,
-        13,
+        face.detail,
         RGBColor(90, 90, 90),
     )?;
     Ok(())
 }
+
+/// Type sizes and offsets for `cost_bar`, which the lead graphical abstract
+/// also draws at its original poster sizes. Both arms of one figure always
+/// share one face: equal weight is the first ban.
+struct CostFace {
+    value: i32,
+    value_dy: i32,
+    arm: i32,
+    arm_dy: i32,
+    detail: i32,
+    detail_dy: i32,
+    pairs_dy: i32,
+}
+
+const COST_POSTER: CostFace = CostFace {
+    value: 26,
+    value_dy: 22,
+    arm: 18,
+    arm_dy: 26,
+    detail: 13,
+    detail_dy: 50,
+    pairs_dy: 72,
+};
+
+const COST_PAPER: CostFace = CostFace {
+    value: ty::HEAD,
+    value_dy: 24,
+    arm: ty::VALUE,
+    arm_dy: 26,
+    detail: ty::NOTE,
+    detail_dy: 58,
+    pairs_dy: 88,
+};
 
 /// Figure 1 of the lead program — the difference-in-differences on the gain.
 ///
@@ -811,130 +1008,122 @@ fn cost_bar(
 /// bin-shuffled pair" per arm, which is drawable at n = 12 only, and that is
 /// what Panel C is.
 fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
-        root,
-        (36, 14),
-        "Figure 1 — The conditional: a difference-in-differences on the gain",
-        26,
-        BLACK,
-    )?;
-    label(
-        root,
-        (36, 48),
-        "Destroying temporal order costs the time-axis read-out almost everything it was buying, and costs the rate read-out almost nothing. The plotted quantity is each arm's own shuffle cost.",
-        13,
-        RGBColor(70, 70, 70),
-    )?;
+    let grey = RGBColor(100, 100, 100);
+    let attn = RGBColor(70, 100, 180);
+    let rate = RGBColor(200, 140, 60);
 
     // The prior-art banner. Without it the figure invites the reading it is
     // least entitled to.
-    let prior = RGBColor(238, 238, 242);
-    map_draw(root.draw(&Rectangle::new([(36, 72), (1364, 122)], prior.filled())))?;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 72), (1364, 122)],
-        RGBColor(170, 170, 178).stroke_width(1),
-    )))?;
-    label(
+    let top = boxed(
         root,
-        (48, 80),
-        "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 (≤60% on spike-count-only SHD),",
-        12,
-        RGBColor(60, 60, 60),
+        (LEFT, 8, RIGHT),
+        RGBColor(238, 238, 242),
+        RGBColor(170, 170, 178),
+        &[(
+            "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 (≤60% on spike-count-only SHD), the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
+            ty::NOTE,
+            RGBColor(60, 60, 60),
+        )],
     )?;
-    label(
-        root,
-        (48, 100),
-        "the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
-        12,
-        RGBColor(60, 60, 60),
-    )?;
+
+    // Panels A (left) and B / C (right) share a row: two bars do not need the
+    // full width, and stacking all three put Panel D off the page.
+    let (a_x0, a_x1) = (LEFT, 690);
+    let (c_x0, c_x1) = (730, RIGHT);
 
     // --- Panel A ------------------------------------------------------------
-    label(
+    let mut y = para(
         root,
-        (36, 138),
-        "Panel A — each arm's own shuffle cost. n = 32, seed-paired, h128 / published-2ms / adjacent-sum-5 / e400.",
-        16,
+        (a_x0, top + 18),
+        a_x1 - a_x0,
+        "Panel A — each arm's own shuffle cost. n = 32, seed-paired, h128 / published-2ms / e400.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
+    y = para(
         root,
-        (36, 160),
-        "Bin-shuffling permutes time bins independently per sample in BOTH the training and test splits, so the task itself becomes rate-solvable. Nothing is removed from the model.",
-        12,
-        RGBColor(110, 110, 110),
+        (a_x0, y),
+        a_x1 - a_x0,
+        "Bin-shuffling permutes time bins independently per sample in BOTH the training and test splits, so the task itself must be solved without temporal order. Nothing is removed from the model.",
+        ty::NOTE,
+        grey,
     )?;
 
-    let base = 470;
-    let axis_top = 200;
+    let axis_top = y + 44;
+    let base = axis_top + 250;
     let scale = 0.15;
     // Axis, so the 9.5x is readable off the drawing rather than only asserted.
     map_draw(root.draw(&PathElement::new(
-        vec![(150, axis_top), (150, base)],
+        vec![(110, axis_top), (110, base)],
         RGBColor(120, 120, 120).stroke_width(2),
     )))?;
     for step in 0..=3 {
         let value = 0.05 * step as f64;
         let y = base - ((value / scale) * (base - axis_top) as f64).round() as i32;
         map_draw(root.draw(&PathElement::new(
-            vec![(144, y), (1300, y)],
+            vec![(104, y), (a_x1, y)],
             RGBColor(224, 224, 228).stroke_width(1),
         )))?;
         label(
             root,
-            (96, y - 9),
+            (a_x0, y - 11),
             &format!("{value:.2}"),
-            12,
+            ty::NOTE,
             RGBColor(120, 120, 120),
         )?;
     }
     map_draw(root.draw(&PathElement::new(
-        vec![(150, base), (1300, base)],
+        vec![(110, base), (a_x1, base)],
         BLACK.stroke_width(2),
     )))?;
 
     let height = base - axis_top;
     cost_bar(
         root,
-        (280, base, 300, height),
+        (170, base, 160, height),
         scale,
         nums::SHUFFLE_COST_ATTN_32,
-        RGBColor(70, 100, 180),
-        "time-axis read-out  d32/L4",
-        "ff+fixed+attn",
-        "32 pairs · cost positive in 32/32",
+        attn,
+        "time-axis read-out",
+        "d32/L4, ff+fixed+attn",
+        "32 pairs · positive in 32/32",
+        &COST_PAPER,
     )?;
     cost_bar(
         root,
-        (870, base, 300, height),
+        (470, base, 160, height),
         scale,
         nums::SHUFFLE_COST_RATE_32,
-        RGBColor(200, 140, 60),
-        "rate read-out  ff+fixed",
-        "the control, and half the measurement",
+        rate,
+        "rate read-out",
+        "ff+fixed, the control",
         "32 pairs",
+        &COST_PAPER,
     )?;
     centered(
         root,
-        (725, 300),
+        (550, axis_top + 70),
         &format!("{:.1}×", nums::SHUFFLE_COST_RATIO_32),
-        34,
+        40,
         RGBColor(50, 50, 50),
     )?;
     centered(
         root,
-        (725, 336),
+        (550, axis_top + 112),
         "ratio of the two costs",
-        13,
+        ty::NOTE,
         RGBColor(90, 90, 90),
     )?;
+    let panel_a_end = base + COST_PAPER.pairs_dy + 20;
 
     // --- Panel B ------------------------------------------------------------
-    label(
+    let width_c = c_x1 - c_x0;
+    let mut y = para(
         root,
-        (36, 566),
-        "Panel B — the same result read as the collapse of the advantage over the rate arm.",
-        16,
+        (c_x0, top + 18),
+        width_c,
+        "Panel B — the same result as the collapse of the advantage over the rate arm.",
+        ty::HEAD,
         BLACK,
     )?;
     let rows = [
@@ -945,33 +1134,41 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             nums::CONTINGENT_PCT_32,
         ),
         (
-            "n = 12  (the registration this confirms)",
+            "n = 12",
             nums::ADVANTAGE_INTACT_12,
             nums::ADVANTAGE_SHUFFLED_12,
             nums::CONTINGENT_PCT_12,
         ),
     ];
-    for (i, (name, intact, shuffled, pct)) in rows.into_iter().enumerate() {
-        let y = 600 + (i as i32) * 52;
-        label(root, (48, y), name, 14, BLACK)?;
+    for (name, intact, shuffled, pct) in rows {
+        y += 8;
+        label(root, (c_x0, y), name, ty::BODY, BLACK)?;
         label(
             root,
-            (390, y),
-            &format!("intact  +{intact:.4}"),
-            16,
-            RGBColor(70, 100, 180),
-        )?;
-        label(root, (600, y), "→", 16, RGBColor(120, 120, 120))?;
-        label(
-            root,
-            (650, y),
-            &format!("bin-shuffled  +{shuffled:.4}"),
-            16,
-            RGBColor(200, 140, 60),
+            (c_x0 + 100, y),
+            &format!("intact +{intact:.4}"),
+            ty::VALUE,
+            attn,
         )?;
         label(
             root,
-            (940, y),
+            (c_x0 + 300, y),
+            "→",
+            ty::VALUE,
+            RGBColor(120, 120, 120),
+        )?;
+        label(
+            root,
+            (c_x0 + 340, y),
+            &format!("bin-shuffled +{shuffled:.4}"),
+            ty::VALUE,
+            rate,
+        )?;
+        y += ty::line_step(ty::VALUE);
+        y = para(
+            root,
+            (c_x0 + 100, y),
+            width_c - 100,
             // Table SHD-2 prints 96%, not 96.0%. A figure that adds a decimal
             // the sheet does not carry is quoting a number nobody computed.
             &format!(
@@ -982,73 +1179,75 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
                     format!("{pct:.1}")
                 }
             ),
-            14,
+            ty::NOTE,
             BLACK,
         )?;
     }
-    label(
+    y = para(
         root,
-        (48, 706),
-        "Twenty further seeds move the gain by +0.0017 and the shuffle cost by +0.0010. The larger run confirms the registration; it did not rescue it.",
-        12,
-        RGBColor(110, 110, 110),
+        (c_x0, y + 8),
+        width_c,
+        "n = 12 is the registration; twenty further seeds move the gain by +0.0017 and the shuffle cost by +0.0010. The larger run confirms the registration; it did not rescue it.",
+        ty::NOTE,
+        grey,
     )?;
 
     // --- Panel C ------------------------------------------------------------
-    // Absolute accuracy, deliberately small and labelled. Table SHD-2 prints
-    // `—` for the n = 32 shuffled means, so this panel is n = 12 or nothing.
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 736), (1364, 872)],
-        RGBColor(247, 247, 250).filled(),
-    )))?;
-    label(
+    // Absolute accuracy, deliberately labelled. Table SHD-2 prints `—` for the
+    // n = 32 shuffled means, so this panel is n = 12 or nothing.
+    y = para(
         root,
-        (48, 744),
-        "Panel C — the n = 12 measurement this confirms, in absolute accuracy. LABELLED n = 12: absolute bin-shuffled means are not published at n = 32.",
-        13,
+        (c_x0, y + 22),
+        width_c,
+        "Panel C — the n = 12 measurement, in absolute accuracy. LABELLED n = 12: absolute bin-shuffled means are not published at n = 32.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
-        root,
-        (48, 772),
-        &format!(
-            "time-axis read-out   {:.4} → {:.4}   cost +{:.4}, positive in 12/12",
+    for (arm, color, intact, shuffled, cost) in [
+        (
+            "time-axis read-out",
+            attn,
             nums::ABS_ATTN_INTACT_12,
             nums::ABS_ATTN_SHUFFLED_12,
-            nums::SHUFFLE_COST_ATTN_12
+            nums::SHUFFLE_COST_ATTN_12,
         ),
-        14,
-        RGBColor(70, 100, 180),
-    )?;
-    label(
-        root,
-        (48, 798),
-        &format!(
-            "rate read-out        {:.4} → {:.4}   cost +{:.4}",
+        (
+            "rate read-out",
+            rate,
             nums::ABS_RATE_INTACT_12,
             nums::ABS_RATE_SHUFFLED_12,
-            nums::SHUFFLE_COST_RATE_12
+            nums::SHUFFLE_COST_RATE_12,
         ),
-        14,
-        RGBColor(200, 140, 60),
-    )?;
-    label(
+    ] {
+        y += 6;
+        label(root, (c_x0, y), arm, ty::BODY, color)?;
+        label(
+            root,
+            (c_x0 + 220, y),
+            &format!("{intact:.4} → {shuffled:.4}"),
+            ty::VALUE,
+            color,
+        )?;
+        label(
+            root,
+            (c_x0 + 440, y),
+            &format!("cost +{cost:.4}"),
+            ty::VALUE,
+            color,
+        )?;
+        y += ty::line_step(ty::VALUE);
+    }
+    y = para(
         root,
-        (48, 828),
+        (c_x0, y + 8),
+        width_c,
         &format!(
-            "Per seed the effect falls between +{:.4} and +{:.4} — no seed in which it is absent. Every w9shf cell passes the temporal audit (counts preserved, relocated fraction ≥ 0.5).",
+            "Attention's cost is positive in 12/12; per seed it falls between +{:.4} and +{:.4}, and every w9shf cell passes the temporal audit.",
             nums::PER_SEED_MIN_12,
             nums::PER_SEED_MAX_12
         ),
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    label(
-        root,
-        (48, 850),
-        "What is measured here is which component's contribution is the order-dependent one: a difference-in-differences on the gain, not on accuracy.",
-        12,
-        RGBColor(60, 60, 60),
+        ty::NOTE,
+        grey,
     )?;
 
     // --- Panel D ------------------------------------------------------------
@@ -1063,24 +1262,21 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     //      -0.1430 against a bar of +0.829, so a line asserts a NOT MET result;
     //   3. h1024 marked as the arm whose gain is negative;
     //   4. coverage stated as a MEASURED count, never "every width".
-    label(
+    let d_head = y.max(panel_a_end) + 24;
+    let y = para(
         root,
-        (36, 900),
-        "Panel D — the same contrast at eight operating points. n = 12 per point, n = 32 at the anchor, seed-paired.",
-        16,
+        (LEFT, d_head),
+        RIGHT - LEFT,
+        "Panel D — the same contrast at eight operating points. n = 12 per point, n = 32 at h128, seed-paired.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
-        root,
-        (36, 922),
-        "Only the bin-shuffled halves are new; intact halves are reused from the corpus at the same seeds and the same pinned binary.",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
 
-    let d_left = 300;
+    const ROW: i32 = 36;
+    let d_left = 310;
     let d_right = 1180;
-    let d_top = 962;
+    let d_top = y + 40;
+    let d_bottom = d_top + 8 * ROW;
     let d_scale = 0.20_f64;
     let x_of = |v: f64| d_left + ((v / d_scale) * (d_right - d_left) as f64).round() as i32;
 
@@ -1090,90 +1286,94 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         let value = 0.05 * step as f64;
         let x = x_of(value);
         map_draw(root.draw(&PathElement::new(
-            vec![(x, d_top - 6), (x, d_top + 8 * 40)],
+            vec![(x, d_top - 6), (x, d_bottom)],
             RGBColor(228, 228, 232).stroke_width(1),
         )))?;
-        label(
+        centered(
             root,
-            (x - 14, d_top + 8 * 40 + 8),
+            (x, d_bottom + 18),
             &format!("{value:.2}"),
-            12,
+            ty::NOTE,
             RGBColor(120, 120, 120),
         )?;
     }
     let bar_x = x_of(nums::DID_BAR);
     map_draw(root.draw(&PathElement::new(
-        vec![(bar_x, d_top - 6), (bar_x, d_top + 8 * 40)],
+        vec![(bar_x, d_top - 6), (bar_x, d_bottom)],
         RGBColor(200, 90, 40).stroke_width(2),
     )))?;
     label(
         root,
-        (bar_x + 6, d_top - 26),
+        (bar_x + 8, d_top - 36),
         &format!("registered bar +{:.2}", nums::DID_BAR),
-        12,
+        ty::NOTE,
         RGBColor(200, 90, 40),
     )?;
 
     for (i, (name, did, positive, of, gain_negative)) in nums::DID_LADDER.iter().enumerate() {
-        let y = d_top + i as i32 * 40;
-        label(root, (36, y + 4), name, 13, BLACK)?;
-        // Ban 3: the one point where the read-out consumes temporal order and
-        // harms accuracy is named on the figure, not left to the caption.
-        if *gain_negative {
-            label(
-                root,
-                (150, y + 5),
-                "gain is NEGATIVE here",
-                11,
-                RGBColor(200, 90, 40),
-            )?;
-        }
+        let y = d_top + i as i32 * ROW;
+        label(root, (LEFT, y + 2), name, ty::BODY, BLACK)?;
         let fill = if *gain_negative {
             RGBColor(200, 90, 40)
         } else {
             RGBColor(46, 106, 150)
         };
         map_draw(root.draw(&Rectangle::new(
-            [(d_left, y + 6), (x_of(*did), y + 24)],
+            [(d_left, y + 6), (x_of(*did), y + 28)],
             fill.filled(),
         )))?;
+        let value = format!("+{did:.4}   {positive}/{of}");
         label(
             root,
-            (x_of(*did) + 10, y + 6),
-            &format!("+{did:.4}   {positive}/{of}"),
-            12,
+            (x_of(*did) + 10, y + 3),
+            &value,
+            ty::NOTE,
             RGBColor(60, 60, 60),
         )?;
+        // Ban 3: the one point where the read-out consumes temporal order and
+        // harms accuracy is named on the figure, not left to the caption.
+        if *gain_negative {
+            label(
+                root,
+                (x_of(*did) + 30 + text_width(root, &value, ty::NOTE), y + 3),
+                "gain is NEGATIVE here",
+                ty::NOTE,
+                RGBColor(200, 90, 40),
+            )?;
+        }
     }
 
-    // Ban 2 and ban 4 in text, beside the points they constrain.
-    let note_y = d_top + 8 * 40 + 34;
-    label(
+    // Ban 2 and ban 4 in text, beneath the points they constrain.
+    let mut y = d_bottom + 46;
+    y = para(
         root,
-        (36, note_y),
+        (LEFT, y),
+        RIGHT - LEFT,
         &format!(
             "The mechanism travels: every point clears the registered bar at BOTH budgets, and coverage is {} of {} operating points — NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
         ),
-        13,
+        ty::NOTE,
         RGBColor(60, 60, 60),
     )?;
-    label(
+    y = para(
         root,
-        (36, note_y + 24),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         &format!(
             "Its SIZE is not the gain. Spearman rho over the six widths is {:.4} against a registered bar of +{:.3} (NOT MET): h768 carries the smallest positive gain on the ladder ({:+.4}) and the largest DiD here ({:+.4}).",
             nums::DID_RHO, nums::DID_RHO_BAR, nums::GAIN_H768, nums::DID_H768
         ),
-        13,
+        ty::NOTE,
         RGBColor(60, 60, 60),
     )?;
-    label(
+    para(
         root,
-        (36, note_y + 48),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         "Points are in ladder order and are deliberately NOT connected and NOT sorted by effect size: either would assert a relationship the rank correlation rejects.",
-        12,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
 
     Ok(())
@@ -1194,26 +1394,63 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
 /// a primary source and are excluded from the paper's claims. No constant for
 /// them exists in `nums`, so they cannot be drawn by accident.
 fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
+    let grey = RGBColor(100, 100, 100);
+    let rate = RGBColor(200, 140, 60);
+    let attn = RGBColor(70, 100, 180);
+    let field = RGBColor(90, 90, 100);
+    let frontier_ink = RGBColor(60, 80, 140);
+
+    // --- Panel A: this instrument ------------------------------------------
+    let mut y = para(
         root,
-        (36, 14),
-        "Figure 2 — Headline accuracy, and the 0.80 clearance",
-        26,
+        (LEFT, 8),
+        RIGHT - LEFT,
+        "Panel A — this instrument, seed-paired. THIS IS NOT COMPETITIVE, and the axis below says so.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
+    y = para(
         root,
-        (36, 48),
-        "The read-out takes the instrument from 0.7057 to 0.8332, every seed positive and every seed at or above 0.80. THIS IS NOT COMPETITIVE, and the axis below says so.",
-        13,
-        RGBColor(70, 70, 70),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
+        &format!(
+            "n = 32 (confirmation):  {:.4} → {:.4},  gain +{:.4},  positive 32/32,  ≥ 0.80 in 32/32,  |e400 − e200| = {:.4}",
+            nums::HEAD_RATE_32, nums::HEAD_ATTN_32, nums::HEAD_GAIN_32, nums::HEAD_BUDGET_DELTA
+        ),
+        ty::BODY,
+        BLACK,
+    )?;
+    y = para(
+        root,
+        (LEFT, y),
+        RIGHT - LEFT,
+        &format!(
+            "n = 12 (registered):  {:.4} → {:.4},  gain +{:.4},  positive 12/12,  ≥ 0.80 in 12/12.  Neither supersedes the other.",
+            nums::HEAD_RATE_12, nums::HEAD_ATTN_12, nums::HEAD_GAIN_12
+        ),
+        ty::BODY,
+        RGBColor(80, 80, 80),
+    )?;
+
+    // --- Panel B: the published field, on the same axis --------------------
+    let y = para(
+        root,
+        (LEFT, y + 18),
+        RIGHT - LEFT,
+        "Panel B — the published field, on the same axis. The instrument carries no temporal kernel of any kind.",
+        ty::HEAD,
+        BLACK,
     )?;
 
     // --- the single shared axis --------------------------------------------
     let (x0, x1) = (150, 1330);
     let (lo, hi) = (0.50, 1.00);
-    let axis_y = 470;
     let at = |v: f64| x0 + (((v - lo) / (hi - lo)) * (x1 - x0) as f64).round() as i32;
+    // Label rows above the axis, top to bottom. Every label sits in a row of
+    // its own wherever its span crosses another marker's line.
+    let row = |k: i32| y + 6 + k * 32;
+    let axis_y = row(8) + 20;
+    let marker_y = axis_y - 44;
 
     // Both bands are drawn FIRST, so every marker sits over them. Painted after
     // Panel A they hid the instrument's own point, which is the one thing on
@@ -1226,58 +1463,72 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     let lo_b = at(nums::FIELD_NO_DELAY - nums::FIELD_NO_DELAY_SD);
     let hi_b = at(nums::FIELD_NO_DELAY + nums::FIELD_NO_DELAY_SD);
     map_draw(root.draw(&Rectangle::new(
-        [(lo_b, 330), (hi_b, axis_y)],
+        [(lo_b, row(6)), (hi_b, axis_y)],
         RGBColor(232, 232, 236).filled(),
     )))?;
-    // Kept short so it fits over a band this narrow. The reading it supports is
-    // in the footer, where there is room for a sentence.
     centered(
         root,
-        ((lo_b + hi_b) / 2, 298),
+        ((lo_b + hi_b) / 2, row(3) + 12),
         "no-delay recurrent baseline",
-        12,
+        ty::NOTE,
         BLACK,
     )?;
     centered(
         root,
-        ((lo_b + hi_b) / 2, 316),
+        ((lo_b + hi_b) / 2, row(4) + 12),
         "Cramer et al. 2022 — 83.2 ± 1.3%",
-        11,
+        ty::NOTE,
         RGBColor(70, 70, 70),
     )?;
 
     // The frontier band.
+    let (f_lo, f_hi) = (at(nums::FIELD_FRONTIER_LO), at(nums::FIELD_FRONTIER_HI));
     map_draw(root.draw(&Rectangle::new(
-        [
-            (at(nums::FIELD_FRONTIER_LO), 296),
-            (at(nums::FIELD_FRONTIER_HI), axis_y),
-        ],
-        RGBColor(226, 232, 244).filled(),
+        [(f_lo, row(2)), (f_hi, axis_y)],
+        RGBColor(208, 218, 240).filled(),
     )))?;
     centered(
         root,
-        (
-            (at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2,
-            236,
-        ),
-        "SHD frontier",
-        13,
-        RGBColor(60, 80, 140),
-    )?;
-    centered(
-        root,
-        (
-            (at(nums::FIELD_FRONTIER_LO) + at(nums::FIELD_FRONTIER_HI)) / 2,
-            218,
-        ),
+        ((f_lo + f_hi) / 2, row(0) + 12),
         &format!(
-            "{:.0}–{:.1}%",
+            "{:.2}–{:.1}%",
             nums::FIELD_FRONTIER_LO * 100.0,
             nums::FIELD_FRONTIER_HI * 100.0
         ),
-        15,
-        RGBColor(60, 80, 140),
+        ty::BODY,
+        frontier_ink,
     )?;
+    centered(
+        root,
+        ((f_lo + f_hi) / 2, row(1) + 12),
+        "SHD frontier",
+        ty::NOTE,
+        frontier_ink,
+    )?;
+
+    // Two published attention SNNs, 1.3 points apart: one row each, labelled
+    // to the left of their own line.
+    for (v, name, k) in [
+        (
+            nums::FIELD_TA_SNN,
+            "TA-SNN 91.08 — attention over the time axis (ICCV 2021)",
+            2,
+        ),
+        (
+            nums::FIELD_STSC_SNN,
+            "STSC-SNN 92.36 — attention inside the synapse (2022)",
+            1,
+        ),
+    ] {
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(v), row(k) + 4), (at(v), axis_y)],
+            field.stroke_width(2),
+        )))?;
+        let style = TextStyle::from(("sans-serif", ty::NOTE).into_font())
+            .color(&field)
+            .pos(Pos::new(HPos::Right, VPos::Top));
+        map_draw(root.draw(&Text::new(name.to_string(), (at(v) - 10, row(k)), style)))?;
+    }
 
     map_draw(root.draw(&PathElement::new(
         vec![(x0, axis_y), (x1, axis_y)],
@@ -1286,216 +1537,169 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     let mut tick = 50;
     while tick <= 100 {
         let v = tick as f64 / 100.0;
+        let major = tick % 10 == 0;
         map_draw(root.draw(&PathElement::new(
-            vec![(at(v), axis_y), (at(v), axis_y + 8)],
+            vec![
+                (at(v), axis_y),
+                (at(v), axis_y + if major { 10 } else { 6 }),
+            ],
             BLACK.stroke_width(1),
         )))?;
-        centered(
-            root,
-            (at(v), axis_y + 22),
-            &format!("{v:.2}"),
-            12,
-            RGBColor(90, 90, 90),
-        )?;
+        // Labelled every 0.10: at a readable size the 0.05 labels collide.
+        if major {
+            centered(
+                root,
+                (at(v), axis_y + 26),
+                &format!("{v:.2}"),
+                ty::NOTE,
+                RGBColor(90, 90, 90),
+            )?;
+        }
         tick += 5;
-    }
-    label(root, (36, axis_y - 8), "accuracy", 13, RGBColor(90, 90, 90))?;
-
-    // The 0.80 gate.
-    let mut y = 296;
-    while y < axis_y {
-        map_draw(root.draw(&PathElement::new(
-            vec![(at(0.80), y), (at(0.80), (y + 10).min(axis_y))],
-            RGBColor(120, 120, 120).stroke_width(2),
-        )))?;
-        y += 20;
     }
     label(
         root,
-        (at(0.80) + 8, 446),
+        (LEFT, axis_y - 36),
+        "accuracy",
+        ty::NOTE,
+        RGBColor(90, 90, 90),
+    )?;
+
+    // The 0.80 gate, labelled beneath its own tick.
+    let mut gy = row(6);
+    while gy < axis_y {
+        map_draw(root.draw(&PathElement::new(
+            vec![(at(0.80), gy), (at(0.80), (gy + 10).min(axis_y))],
+            RGBColor(120, 120, 120).stroke_width(2),
+        )))?;
+        gy += 20;
+    }
+    centered(
+        root,
+        (at(0.80), axis_y + 56),
         "0.80 gate",
-        12,
+        ty::NOTE,
         RGBColor(110, 110, 110),
     )?;
 
-    // --- Panel A: this instrument, on that axis -----------------------------
-    label(
-        root,
-        (36, 92),
-        "Panel A — this instrument, n = 32 seed-paired",
-        16,
-        BLACK,
-    )?;
-    let rate = RGBColor(200, 140, 60);
-    let attn = RGBColor(70, 100, 180);
-    for (v, color, name, detail) in [
-        (
-            nums::HEAD_RATE_32,
-            rate,
-            "rate read-out  ff+fixed",
-            format!("{:.4}", nums::HEAD_RATE_32),
-        ),
-        (
-            nums::HEAD_ATTN_32,
-            attn,
-            "time-axis read-out  d32/L4",
-            format!("{:.4}", nums::HEAD_ATTN_32),
-        ),
+    // --- this instrument's two markers, on that axis ------------------------
+    for (v, color, name) in [
+        (nums::HEAD_RATE_32, rate, "rate read-out  ff+fixed"),
+        (nums::HEAD_ATTN_32, attn, "time-axis read-out  d32/L4"),
     ] {
-        map_draw(root.draw(&Circle::new((at(v), 420), 9, color.filled())))?;
         map_draw(root.draw(&PathElement::new(
-            vec![(at(v), 420), (at(v), axis_y)],
-            color.stroke_width(1),
+            vec![(at(v), marker_y), (at(v), axis_y)],
+            color.stroke_width(2),
         )))?;
-        centered(root, (at(v), 392), &detail, 15, BLACK)?;
-        centered(root, (at(v), 376), name, 12, RGBColor(80, 80, 80))?;
+        map_draw(root.draw(&Circle::new((at(v), marker_y), 11, color.filled())))?;
+        centered(
+            root,
+            (at(v), row(5) + 12),
+            name,
+            ty::NOTE,
+            RGBColor(60, 60, 60),
+        )?;
+        centered(
+            root,
+            (at(v), row(6) + 14),
+            &format!("{v:.4}"),
+            ty::VALUE,
+            BLACK,
+        )?;
     }
     map_draw(root.draw(&PathElement::new(
-        vec![(at(nums::HEAD_RATE_32), 420), (at(nums::HEAD_ATTN_32), 420)],
+        vec![
+            (at(nums::HEAD_RATE_32), marker_y),
+            (at(nums::HEAD_ATTN_32), marker_y),
+        ],
         BLACK.stroke_width(2),
     )))?;
     centered(
         root,
-        ((at(nums::HEAD_RATE_32) + at(nums::HEAD_ATTN_32)) / 2, 438),
+        (
+            (at(nums::HEAD_RATE_32) + at(nums::HEAD_ATTN_32)) / 2 - 20,
+            row(6) + 14,
+        ),
         &format!("gain +{:.4}", nums::HEAD_GAIN_32),
-        14,
+        ty::BODY,
         BLACK,
     )?;
 
-    label(
-        root,
-        (36, 118),
-        &format!(
-            "n = 32 (confirmation):  {:.4} → {:.4},  gain +{:.4},  positive 32/32,  ≥ 0.80 in 32/32,  |e400 − e200| = {:.4}",
-            nums::HEAD_RATE_32, nums::HEAD_ATTN_32, nums::HEAD_GAIN_32, nums::HEAD_BUDGET_DELTA
-        ),
-        14,
-        BLACK,
-    )?;
-    label(
-        root,
-        (36, 142),
-        &format!(
-            "n = 12 (registered):     {:.4} → {:.4},  gain +{:.4},  positive 12/12,  ≥ 0.80 in 12/12",
-            nums::HEAD_RATE_12, nums::HEAD_ATTN_12, nums::HEAD_GAIN_12
-        ),
-        14,
-        RGBColor(80, 80, 80),
-    )?;
-    label(
-        root,
-        (36, 166),
-        "n = 12 is the registered measurement and n = 32 the confirmation. Neither supersedes the other.",
-        12,
-        RGBColor(120, 120, 120),
-    )?;
-
-    // --- Panel B: the published field, same axis ----------------------------
-    label(
-        root,
-        (36, 196),
-        "Panel B — the published field, on the same axis. The instrument carries no temporal kernel of any kind.",
-        16,
-        BLACK,
-    )?;
-    let field = RGBColor(90, 90, 100);
-    // Staggered: at this scale the two markers are 1.3 points apart and their
-    // labels collide on one line.
-    for (v, name, text_y) in [
-        (
-            nums::FIELD_TA_SNN,
-            "TA-SNN 91.08 — attention over the time axis (ICCV 2021)",
-            250,
-        ),
-        (
-            nums::FIELD_STSC_SNN,
-            "STSC-SNN 92.36 — attention inside the synapse (2022)",
-            272,
-        ),
-    ] {
-        map_draw(root.draw(&PathElement::new(
-            vec![(at(v), text_y + 12), (at(v), axis_y)],
-            field.stroke_width(1),
-        )))?;
-        label(root, (at(v) - 340, text_y), name, 11, field)?;
-    }
     // Ban 2, drawn to scale on this axis rather than only asserted in words.
     let band = at(lo + nums::FIELD_UNRESOLVABLE) - x0;
+    let band_y = axis_y + 84;
     map_draw(root.draw(&Rectangle::new(
-        [(x0, 512), (x0 + band, 528)],
-        RGBColor(206, 206, 214).filled(),
+        [(x0, band_y + 4), (x0 + band, band_y + 24)],
+        RGBColor(190, 190, 200).filled(),
     )))?;
-    label(
+    let y = para(
         root,
-        (x0 + band + 12, 506),
+        (x0 + band + 14, band_y),
+        x1 - x0 - band - 14,
         &format!(
-            "{:.1} points, to scale. SHD ships no validation set: Baronig et al. 2025 report one model at 95.81 validating on test and 93.79 on a held-out split.",
+            "{:.1} points, to scale. SHD ships no validation set: Baronig et al. 2025 report one model at 95.81 validating on test and 93.79 on a held-out split. Differences narrower than this between published SHD numbers are not reliably meaningful — including this paper's own.",
             nums::FIELD_UNRESOLVABLE * 100.0
         ),
-        12,
-        RGBColor(90, 90, 90),
-    )?;
-    label(
-        root,
-        (x0 + band + 12, 526),
-        "Differences narrower than this between published SHD numbers are not reliably meaningful — including this paper's own.",
-        12,
-        RGBColor(90, 90, 90),
+        ty::NOTE,
+        grey,
     )?;
 
     // --- Panel C: the clearance is geometry-specific ------------------------
-    label(
+    let mut y = para(
         root,
-        (36, 568),
+        (LEFT, y + 18),
+        RIGHT - LEFT,
         "Panel C — the 0.80 clearance is geometry-specific. The gain is not: attention buys roughly the same amount everywhere tested.",
-        16,
+        ty::HEAD,
         BLACK,
     )?;
-    for (i, (name, r, a, gain, clears)) in nums::GEOM.into_iter().enumerate() {
-        let y = 604 + (i as i32) * 46;
-        label(root, (48, y), name, 13, BLACK)?;
-        label(root, (560, y), &format!("rate {r:.4}"), 13, rate)?;
-        label(root, (720, y), &format!("attention {a:.4}"), 13, attn)?;
-        label(root, (920, y), &format!("gain +{gain:.4}"), 13, BLACK)?;
+    for (name, r, a, gain, clears) in nums::GEOM {
+        y += 6;
+        label(root, (LEFT + 12, y), name, ty::BODY, BLACK)?;
+        label(root, (580, y), &format!("rate {r:.4}"), ty::BODY, rate)?;
+        label(root, (760, y), &format!("attention {a:.4}"), ty::BODY, attn)?;
         label(
             root,
-            (1090, y),
+            (1000, y),
+            &format!("gain +{gain:.4}"),
+            ty::BODY,
+            BLACK,
+        )?;
+        label(
+            root,
+            (1180, y),
             &format!("≥ 0.80 in {clears}"),
-            13,
+            ty::BODY,
             if clears == "12/12" {
                 BLACK
             } else {
                 RGBColor(170, 90, 60)
             },
         )?;
+        y += ty::line_step(ty::BODY);
     }
 
-    label(
+    y = para(
         root,
-        (36, 742),
+        (LEFT, y + 14),
+        RIGHT - LEFT,
         "This instrument lands INSIDE the no-delay recurrent band — which is where an architecture carrying no temporal kernel of any kind should land, and is the whole reading.",
-        12,
-        RGBColor(70, 70, 70),
+        ty::NOTE,
+        RGBColor(60, 60, 60),
     )?;
-    label(
+    // The literature strip's status. It read "NOT MACHINE-CHECKED ... must be
+    // checked against its primary source before submission" until 2026-09-29;
+    // that check was done on 2026-09-03
+    // (`CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md`), and
+    // `check_section0_citations.py` now gates the `FIELD_*` constants drawn
+    // here against that record. What remains true is that no cell on disk
+    // produced them, so they are not checked against cells.
+    para(
         root,
-        (36, 770),
-        "Excluded from this axis on purpose: Pfa-SNN 96.26, Event-SSMA 95.90, SpikeSCR 95.60, d-cAdLIF 94.85 — a secondary comparison table, not a primary source.",
-        12,
-        RGBColor(120, 120, 120),
-    )?;
-    label(
-        root,
-        (36, 800),
-        "NOT MACHINE-CHECKED: every literature value in Panel B comes from a 2026-08-27 search pass. Unlike every SHD number in this paper it is not verified against cells on disk,",
-        12,
-        RGBColor(160, 80, 60),
-    )?;
-    label(
-        root,
-        (36, 822),
-        "and check_every_number.py does not sweep the section it lives in. Each must be checked against its primary source before submission.",
-        12,
+        (LEFT, y + 4),
+        RIGHT - LEFT,
+        "Literature values in Panel B are published figures, checked against their primary sources on 2026-09-03, before submission. They are NOT MACHINE-CHECKED against cells: no cell on disk produced them.",
+        ty::NOTE,
         RGBColor(160, 80, 60),
     )?;
     Ok(())
@@ -1528,25 +1732,30 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
 /// The width axis is categorical and evenly spaced. A log-width axis would
 /// visually compress the step, which is the one feature the figure exists for.
 fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
+    let grey = RGBColor(100, 100, 100);
+    let warn = RGBColor(160, 80, 60);
+
+    let mut y = para(
         root,
-        (36, 14),
-        "Figure 3 — The width ladder, and a threshold rather than a slope",
-        26,
+        (LEFT, 8),
+        RIGHT - LEFT,
+        "Panel A — attention's gain on six widths. n = 12 per rung, e400, seed-paired. Rungs are points: no curve is fitted and none may be.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
+    y = para(
         root,
-        (36, 48),
-        "EVERY RUNG IS d32/L4. The gain is positive on five rungs and inverts at h1024 — a property of THIS read-out depth, not of the width: at h1024, d32/L2 gains +0.0405 in 20/20 seeds.",
-        13,
+        (LEFT, y + 2),
+        RIGHT - LEFT,
+        "EVERY RUNG IS d32/L4. The gain inverts at h1024 as a property of THIS read-out depth, not of the width: at h1024, d32/L2 gains +0.0405 in 20/20 seeds.",
+        ty::NOTE,
         RGBColor(70, 70, 70),
     )?;
 
     // --- Panel A ------------------------------------------------------------
     let (lo, hi) = (-0.20, 0.15);
-    let (top, bottom) = (110, 470);
-    let x0 = 200;
+    let (top, bottom) = (y + 44, y + 380);
+    let x0 = 220;
     let step_x = 175;
     let at_y = |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
     let at_x = |i: usize| x0 + (i as i32) * step_x;
@@ -1555,23 +1764,29 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         let v = -0.20 + 0.05 * k as f64;
         let y = at_y(v);
         map_draw(root.draw(&PathElement::new(
-            vec![(x0 - 60, y), (1330, y)],
+            vec![(x0 - 70, y), (RIGHT, y)],
             RGBColor(232, 232, 236).stroke_width(1),
         )))?;
         label(
             root,
-            (110, y - 9),
+            (70, y - 11),
             &format!("{v:+.2}"),
-            12,
+            ty::NOTE,
             RGBColor(120, 120, 120),
         )?;
     }
     let zero = at_y(0.0);
     map_draw(root.draw(&PathElement::new(
-        vec![(x0 - 60, zero), (1330, zero)],
+        vec![(x0 - 70, zero), (RIGHT, zero)],
         BLACK.stroke_width(2),
     )))?;
-    label(root, (36, zero - 9), "gain", 13, RGBColor(90, 90, 90))?;
+    label(
+        root,
+        (LEFT - 20, zero - 44),
+        "gain",
+        ty::NOTE,
+        RGBColor(90, 90, 90),
+    )?;
 
     // The step, between h768 and h1024 and nowhere else.
     let break_x = (at_x(4) + at_x(5)) / 2;
@@ -1585,16 +1800,16 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     }
     label(
         root,
-        (break_x + 10, top + 4),
+        (break_x + 12, top),
         "the step sits HERE,",
-        12,
+        ty::NOTE,
         RGBColor(170, 90, 60),
     )?;
     label(
         root,
-        (break_x + 10, top + 22),
+        (break_x + 12, top + ty::line_step(ty::NOTE)),
         "between h768 and h1024",
-        12,
+        ty::NOTE,
         RGBColor(170, 90, 60),
     )?;
 
@@ -1605,14 +1820,14 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         } else {
             RGBColor(170, 90, 60)
         };
-        map_draw(root.draw(&Circle::new((x, y), 10, color.filled())))?;
-        centered(root, (x, y - 26), &format!("{gain:+.4}"), 16, BLACK)?;
-        centered(root, (x, bottom + 20), name, 15, BLACK)?;
+        map_draw(root.draw(&Circle::new((x, y), 12, color.filled())))?;
+        centered(root, (x, y - 32), &format!("{gain:+.4}"), ty::VALUE, BLACK)?;
+        centered(root, (x, bottom + 24), name, ty::VALUE, BLACK)?;
         centered(
             root,
-            (x, bottom + 42),
+            (x, bottom + 56),
             positive,
-            12,
+            ty::NOTE,
             RGBColor(110, 110, 110),
         )?;
     }
@@ -1620,7 +1835,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     // h384 and h512 are not distinguishable, and the figure has to say so where
     // a reader would otherwise read a dip.
     let (b0, b1) = (at_x(2), at_x(3));
-    let bracket_y = at_y(0.0) + 26;
+    let bracket_y = at_y(0.0) + 22;
     map_draw(root.draw(&PathElement::new(
         vec![
             (b0, bracket_y - 8),
@@ -1630,41 +1845,29 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         ],
         RGBColor(120, 120, 130).stroke_width(2),
     )))?;
-    centered(
+    // Left-aligned under the bracket: centred, it ran into the step line.
+    label(
         root,
-        ((b0 + b1) / 2, bracket_y + 14),
+        (x0 - 20, bracket_y + 10),
         &format!(
             "not distinguishable at n = 12: paired {:+.4}, sd {:.4}, negative in 7 of 12",
             nums::LADDER_H384_H512,
             nums::LADDER_H384_H512_SD
         ),
-        12,
+        ty::NOTE,
         RGBColor(100, 100, 110),
     )?;
 
-    label(
+    let mut y = para(
         root,
-        (36, 540),
+        (LEFT, bottom + 88),
+        RIGHT - LEFT,
         &format!(
             "The drop into h1024 is {:.4} — {:.1}× the largest gap below it ({:.4}), and more than twice the registered 3× bar. That is what makes it a threshold rather than the slope continuing.",
             nums::LADDER_DROP, nums::LADDER_DROP_RATIO, nums::LADDER_LARGEST_GAP_BELOW
         ),
-        13,
+        ty::BODY,
         BLACK,
-    )?;
-    label(
-        root,
-        (36, 562),
-        "No monotonic decay is claimed above the threshold, and no dip at h384: the registration asked for 0.005 separations over quantities inside their own noise floor.",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    label(
-        root,
-        (36, 584),
-        "n = 12 per rung, d32/L4, e400, seed-paired. Rungs are points: no curve is fitted and none may be.",
-        12,
-        RGBColor(110, 110, 110),
     )?;
 
     // Required annotation, `PAPER_FIGURE_SPEC.md` Figure 3, added 2026-08-29.
@@ -1676,83 +1879,74 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     // the eye to find the relationship the rank correlation rejects. So it is
     // said in words instead, and it sits with the other statements about what
     // this figure does NOT show.
-    //
-    // Two lines, not one: at 12pt the single-line version ran off the 1400px
-    // canvas and lost the sentence naming where the DiD ladder actually is.
-    label(
+    y = para(
         root,
-        (36, 610),
+        (LEFT, y + 6),
+        RIGHT - LEFT,
         &format!(
-            "THE MECHANISM DOES NOT TRACK THIS CURVE. Spearman rho between these rungs and their difference-in-differences is {:.4}, against a registered bar of +{:.3} — NOT MET.",
-            nums::DID_RHO, nums::DID_RHO_BAR
+            "THE MECHANISM DOES NOT TRACK THIS CURVE. Spearman rho between these rungs and their difference-in-differences is {:.4}, against a registered bar of +{:.3} — NOT MET. h768 carries the smallest positive gain on this ladder ({:+.4}) and the largest DiD in the campaign ({:+.4}). The DiD ladder is Figure 1 Panel D, and is deliberately not superimposed here.",
+            nums::DID_RHO, nums::DID_RHO_BAR, nums::GAIN_H768, nums::DID_H768
         ),
-        12,
-        RGBColor(160, 80, 60),
-    )?;
-    label(
-        root,
-        (36, 630),
-        &format!(
-            "h768 carries the smallest positive gain on this ladder ({:+.4}) and the largest DiD in the campaign ({:+.4}). The DiD ladder is Figure 1 Panel D, and is deliberately not superimposed here.",
-            nums::GAIN_H768, nums::DID_H768
-        ),
-        12,
-        RGBColor(160, 80, 60),
+        ty::NOTE,
+        warn,
     )?;
 
     // --- Panel B ------------------------------------------------------------
-    label(
+    let mut y = para(
         root,
-        (36, 666),
+        (LEFT, y + 20),
+        RIGHT - LEFT,
         "Panel B — located, and not explained. Three preregistered rescue levers at h1024 / d32/L4, n = 12 each.",
-        16,
+        ty::HEAD,
         BLACK,
     )?;
-    label(
-        root,
-        (36, 690),
-        "Every lever is negative, and every one is worse than the arm it was meant to rescue.",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    for (i, (lever, gain, positive, norm)) in nums::LEVERS.into_iter().enumerate() {
-        let y = 724 + (i as i32) * 34;
+    for (lever, gain, positive, norm) in nums::LEVERS {
+        y += 4;
         let rescued = lever.starts_with('(');
         let ink = if rescued {
             RGBColor(110, 110, 110)
         } else {
             BLACK
         };
-        label(root, (48, y), lever, 14, ink)?;
+        label(root, (LEFT + 12, y), lever, ty::BODY, ink)?;
         label(
             root,
-            (560, y),
+            (500, y),
             &format!("gain {gain:+.4}"),
-            14,
+            ty::BODY,
             RGBColor(170, 90, 60),
         )?;
-        label(root, (760, y), &format!("positive {positive}"), 13, ink)?;
         label(
             root,
-            (930, y),
-            &format!("median epoch-mean gradient norm {norm:.3}"),
-            13,
+            (690, y),
+            &format!("positive {positive}"),
+            ty::BODY,
             ink,
         )?;
+        label(
+            root,
+            (890, y + 2),
+            &format!("median epoch-mean gradient norm {norm:.3}"),
+            ty::NOTE,
+            ink,
+        )?;
+        y += ty::line_step(ty::BODY);
     }
-    label(
+    y = para(
         root,
-        (36, 870),
-        "Clipping moved the median gradient norm from 55.494 to 11.660 and accuracy did not follow. At h512 the same flag is inert: 12/12 cells byte-identical to the archived unclipped cells.",
-        12,
-        RGBColor(110, 110, 110),
+        (LEFT, y + 10),
+        RIGHT - LEFT,
+        "At h512 the clipping flag is inert: 12/12 cells byte-identical to the archived unclipped cells.",
+        ty::NOTE,
+        grey,
     )?;
-    label(
+    para(
         root,
-        (36, 900),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         "LOCATED BUT UNEXPLAINED. Gradient norms leaving O(1) are a correlate, not a cause, and overfitting on 8,156 training samples is not excluded by anything in this paper.",
-        13,
-        RGBColor(70, 70, 70),
+        ty::NOTE,
+        RGBColor(60, 60, 60),
     )?;
     Ok(())
 }
@@ -1770,23 +1964,18 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
 /// it the falling gain reads as the attention arm degrading rather than as the
 /// rate arm catching up.
 fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
+    let grey = RGBColor(100, 100, 100);
+    let y = para(
         root,
-        (36, 14),
-        "Figure 4 — The resolution ladder, with the analysis window held fixed",
-        26,
+        (LEFT, 8),
+        RIGHT - LEFT,
+        "fixed-tN: the 1400 ms analysis window is HELD FIXED and only the number of frames varies, which isolates resolution from sequence length. n = 12 per rung.",
+        ty::BODY,
         BLACK,
-    )?;
-    label(
-        root,
-        (36, 48),
-        "fixed-tN: the 1400 ms analysis window is HELD FIXED and only the number of frames varies. This is the axis that isolates resolution from sequence length. n = 12 per rung.",
-        13,
-        RGBColor(70, 70, 70),
     )?;
 
     let (lo, hi) = (0.60, 0.90);
-    let (top, bottom) = (130, 560);
+    let (top, bottom) = (y + 60, y + 440);
     let x0 = 300;
     let step_x = 380;
     let at_y = |v: f64| bottom - (((v - lo) / (hi - lo)) * (bottom - top) as f64).round() as i32;
@@ -1796,41 +1985,34 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         let v = 0.60 + 0.05 * k as f64;
         let y = at_y(v);
         map_draw(root.draw(&PathElement::new(
-            vec![(200, y), (1330, y)],
+            vec![(200, y), (RIGHT, y)],
             RGBColor(234, 234, 238).stroke_width(1),
         )))?;
         label(
             root,
-            (146, y - 9),
+            (130, y - 11),
             &format!("{v:.2}"),
-            12,
+            ty::NOTE,
             RGBColor(120, 120, 120),
         )?;
     }
+    label(
+        root,
+        (LEFT, top - 44),
+        "accuracy",
+        ty::NOTE,
+        RGBColor(90, 90, 90),
+    )?;
     // The 0.80 gate, cleared 12/12 at every rung.
     let gate = at_y(0.80);
     let mut x = 200;
-    while x < 1330 {
+    while x < RIGHT {
         map_draw(root.draw(&PathElement::new(
-            vec![(x, gate), ((x + 14).min(1330), gate)],
+            vec![(x, gate), ((x + 14).min(RIGHT), gate)],
             RGBColor(120, 120, 120).stroke_width(2),
         )))?;
         x += 28;
     }
-    label(
-        root,
-        (1210, gate - 22),
-        "0.80 gate — cleared 12/12 at every rung",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    label(
-        root,
-        (36, at_y(0.75) - 9),
-        "accuracy",
-        13,
-        RGBColor(90, 90, 90),
-    )?;
 
     let attn = RGBColor(70, 100, 180);
     let rate = RGBColor(200, 140, 60);
@@ -1843,108 +2025,126 @@ fn draw_lead_fig4(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
             .enumerate()
             .map(|(i, (_, _, r, a, _))| (at_x(i), at_y(if pick == 1 { *a } else { *r })))
             .collect();
-        map_draw(root.draw(&PathElement::new(points.clone(), color.stroke_width(2))))?;
+        map_draw(root.draw(&PathElement::new(points.clone(), color.stroke_width(3))))?;
         for point in points {
-            map_draw(root.draw(&Circle::new(point, 9, color.filled())))?;
+            map_draw(root.draw(&Circle::new(point, 11, color.filled())))?;
         }
     }
 
     for (i, (contract, bin, r, a, gain)) in nums::RESOLUTION.into_iter().enumerate() {
         let x = at_x(i);
-        centered(root, (x, at_y(a) - 28), &format!("{a:.4}"), 15, BLACK)?;
-        centered(root, (x, at_y(r) + 20), &format!("{r:.4}"), 15, BLACK)?;
-        map_draw(root.draw(&PathElement::new(
-            vec![(x, at_y(a)), (x, at_y(r))],
-            RGBColor(140, 140, 148).stroke_width(1),
-        )))?;
         centered(
             root,
-            (x + 76, (at_y(a) + at_y(r)) / 2),
-            &format!("gain +{gain:.4}"),
-            15,
+            (x, at_y(a) - 32),
+            &format!("{a:.4}"),
+            ty::VALUE,
             BLACK,
         )?;
         centered(
             root,
-            (x + 76, (at_y(a) + at_y(r)) / 2 + 20),
-            "12/12 positive",
-            12,
-            RGBColor(110, 110, 110),
+            (x, at_y(r) + 32),
+            &format!("{r:.4}"),
+            ty::VALUE,
+            BLACK,
         )?;
-        centered(root, (x, bottom + 24), contract, 16, BLACK)?;
+        map_draw(root.draw(&PathElement::new(
+            vec![(x, at_y(a)), (x, at_y(r))],
+            RGBColor(140, 140, 148).stroke_width(1),
+        )))?;
+        let mid = (at_y(a) + at_y(r)) / 2;
         centered(
             root,
-            (x, bottom + 46),
+            (x + 100, mid),
+            &format!("gain +{gain:.4}"),
+            ty::BODY,
+            BLACK,
+        )?;
+        centered(
+            root,
+            (x + 100, mid + 30),
+            "12/12 positive",
+            ty::NOTE,
+            RGBColor(110, 110, 110),
+        )?;
+        centered(root, (x, bottom + 26), contract, ty::VALUE, BLACK)?;
+        centered(
+            root,
+            (x, bottom + 58),
             &format!("{bin} bins"),
-            13,
+            ty::NOTE,
             RGBColor(110, 110, 110),
         )?;
     }
     centered(
         root,
-        (at_x(0) - 130, bottom + 24),
+        (at_x(0) - 150, bottom + 26),
         "coarse",
-        13,
+        ty::NOTE,
         RGBColor(120, 120, 120),
     )?;
     centered(
         root,
-        (at_x(2) + 130, bottom + 24),
+        (at_x(2) + 150, bottom + 26),
         "fine",
-        13,
+        ty::NOTE,
         RGBColor(120, 120, 120),
     )?;
     // Below the bin labels, not level with them.
-    label(root, (36, 636), "time-axis read-out", 13, attn)?;
-    label(root, (220, 636), "rate read-out", 13, rate)?;
-
     label(
         root,
-        (36, 664),
+        (LEFT, bottom + 84),
+        "● time-axis read-out",
+        ty::BODY,
+        attn,
+    )?;
+    label(root, (330, bottom + 84), "● rate read-out", ty::BODY, rate)?;
+    // The gate's key sits in the legend row: on the plot it ran through the
+    // t500 connector and its gain label.
+    label(
+        root,
+        (580, bottom + 86),
+        "– – 0.80 gate, cleared 12/12 at every rung",
+        ty::NOTE,
+        RGBColor(110, 110, 110),
+    )?;
+
+    let mut y = para(
+        root,
+        (LEFT, bottom + 128),
+        RIGHT - LEFT,
         &format!(
             "The advantage SHRINKS as bins get finer: gain(t500) − gain(t100) = {:.4} against a two-sided bar of 0.03.",
             nums::RESOLUTION_TREND
         ),
-        15,
+        ty::BODY,
         BLACK,
     )?;
-    label(
+    y = para(
         root,
-        (36, 692),
-        "That is the opposite of the direction the withdrawn S-5 hypothesis predicted — now asked on an axis that isolates resolution from sequence length.",
-        13,
-        RGBColor(90, 90, 90),
-    )?;
-    label(
-        root,
-        (36, 728),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         &format!(
-            "The rate baseline rises +{:.4} across the same ladder, inside the preregistered 0.05 confound bar. Both series are drawn because without the baseline the falling gain",
+            "The rate baseline rises +{:.4} across the same ladder, inside the preregistered 0.05 confound bar. Both series are drawn because without it the falling gain reads as the attention arm degrading, when it is the rate arm catching up.",
             nums::RESOLUTION_BASELINE_DRIFT
         ),
-        13,
-        RGBColor(90, 90, 90),
+        ty::NOTE,
+        RGBColor(70, 70, 70),
     )?;
-    label(
+    y = para(
         root,
-        (36, 750),
-        "reads as the attention arm degrading, when what it shows is the rate arm catching up. So this is a property of the read-out, not of the substrate beneath it.",
-        13,
-        RGBColor(90, 90, 90),
-    )?;
-    label(
-        root,
-        (36, 792),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         "NOT DRAWN, and not drawable here: the published-Nms family, which moves bin width and sequence length together so no number from it can be attributed to either.",
-        12,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
-    label(
+    para(
         root,
-        (36, 822),
+        (LEFT, y + 4),
+        RIGHT - LEFT,
         "NO MECHANISM AND NO PREFERENCE. The paper offers no account of why the advantage shrinks and recommends no operating point. \"Attention prefers coarse bins\" is not carried by this.",
-        12,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
     Ok(())
 }
@@ -1962,6 +2162,7 @@ fn rule_card(
     rule: &str,
     mechanism: &str,
     value: nums::Both,
+    face: &CardFace,
 ) -> Result<(), DrawErr> {
     map_draw(root.draw(&Rectangle::new(
         [(x0, y0), (x1, y1)],
@@ -1973,187 +2174,277 @@ fn rule_card(
     )))?;
     // The verdict is a labelled chip, not a colour alone: the categorical
     // encoding has to survive a greyscale print.
-    let chip = 128;
+    let chip = face.chip_w;
     map_draw(root.draw(&Rectangle::new(
-        [(x0 + 10, y0 + 10), (x0 + 10 + chip, y0 + 32)],
+        [(x0 + 10, y0 + 10), (x0 + 10 + chip, y0 + 10 + face.chip_h)],
         verdict.border().filled(),
     )))?;
     centered(
         root,
-        (x0 + 10 + chip / 2, y0 + 21),
+        (x0 + 10 + chip / 2, y0 + 10 + face.chip_h / 2),
         verdict.tag(),
-        12,
+        face.tag,
         WHITE,
     )?;
-    label(root, (x0 + 10 + chip + 14, y0 + 12), rule, 16, BLACK)?;
     label(
         root,
-        (x0 + 12, y0 + 44),
-        mechanism,
-        12,
-        RGBColor(90, 90, 90),
-    )?;
-    label(root, (x0 + 12, y0 + 66), &both(value), 15, BLACK)?;
-    Ok(())
-}
-
-fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
-        root,
-        (36, 16),
-        "Figure M — Mechanism: richness × addressability",
-        26,
+        (x0 + 10 + chip + 14, y0 + face.rule_dy),
+        rule,
+        face.rule,
         BLACK,
     )?;
     label(
         root,
-        (36, 50),
-        "Matched dense-LIF forward, n = 20 per cell, 2026-08-25 re-run at MATCHED_INPUT_SCALE = 2.0. Pass / fail / at-chance — not a graded surface.",
-        13,
-        RGBColor(70, 70, 70),
+        (x0 + 12, y0 + face.mechanism_dy),
+        mechanism,
+        face.mechanism,
+        RGBColor(90, 90, 90),
     )?;
+    match face.value_at {
+        ValueAt::Below(dy) => label(root, (x0 + 12, y0 + dy), &both(value), face.value, BLACK)?,
+        ValueAt::RightOfRule => {
+            let style = TextStyle::from(("sans-serif", face.value).into_font())
+                .color(&BLACK)
+                .pos(Pos::new(HPos::Right, VPos::Top));
+            map_draw(root.draw(&Text::new(both(value), (x1 - 14, y0 + face.rule_dy), style)))?
+        }
+    }
+    Ok(())
+}
 
+/// Where a `rule_card` prints its `ff / rec` value.
+#[derive(Clone, Copy)]
+enum ValueAt {
+    /// On its own line, this far below the card's top edge.
+    Below(i32),
+    /// Right-aligned on the chip row: for a full-width card, where a third
+    /// line would cost height the figure does not have.
+    RightOfRule,
+}
+
+/// Type sizes and geometry for `rule_card`. Figures 5 and 8 and the secondary
+/// graphical abstract keep `CARD_POSTER`.
+struct CardFace {
+    chip_w: i32,
+    chip_h: i32,
+    tag: i32,
+    rule: i32,
+    rule_dy: i32,
+    mechanism: i32,
+    mechanism_dy: i32,
+    value: i32,
+    value_at: ValueAt,
+}
+
+const CARD_POSTER: CardFace = CardFace {
+    chip_w: 128,
+    chip_h: 22,
+    tag: 12,
+    rule: 16,
+    rule_dy: 12,
+    mechanism: 12,
+    mechanism_dy: 44,
+    value: 15,
+    value_at: ValueAt::Below(66),
+};
+
+/// A card with its value on a third line. 128 tall.
+const CARD_PAPER_STACKED: CardFace = CardFace {
+    chip_w: 224,
+    chip_h: 36,
+    tag: ty::NOTE,
+    rule: ty::BODY,
+    rule_dy: 14,
+    mechanism: ty::NOTE,
+    mechanism_dy: 56,
+    value: ty::BODY,
+    value_at: ValueAt::Below(90),
+};
+
+/// A full-width card with its value on the chip row. 92 tall.
+const CARD_PAPER_ROW: CardFace = CardFace {
+    value_at: ValueAt::RightOfRule,
+    ..CARD_PAPER_STACKED
+};
+
+fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
+    let grey = RGBColor(100, 100, 100);
     // The ceiling is the point of the panel, not an aside: with the reference
     // saturated, every passing arm reduces to "above 0.75" and no ordering
     // among them may be drawn or claimed.
     let reference = Verdict::Reference;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 74), (1364, 112)],
-        reference.fill().filled(),
-    )))?;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 74), (1364, 112)],
-        reference.border().stroke_width(2),
-    )))?;
-    label(
+    let banner = format!(
+        "SuperSpike BPTT reference saturates: {:.4} ff / {:.4} rec, every suite, both graphs. Every other rule tested clears the gate, so this panel shows WHICH SINGLE RULE FAILS a task the rest saturate — it does not rank the rest. Pass / fail / at-chance, not a graded surface.",
+        nums::CEILING.0,
+        nums::CEILING.1
+    );
+    let y = boxed(
         root,
-        (48, 84),
-        &format!(
-            "SuperSpike BPTT reference saturates: {:.4} ff / {:.4} rec, every suite, both graphs. Every other rule tested clears the gate, so this panel shows WHICH SINGLE RULE FAILS a task the rest saturate — it does not rank the rest.",
-            nums::CEILING.0,
-            nums::CEILING.1
-        ),
-        13,
-        BLACK,
+        (LEFT, 8, RIGHT),
+        reference.fill(),
+        reference.border(),
+        &[(&banner, ty::NOTE, BLACK)],
     )?;
 
-    label(
+    // Two columns of cards beside a column of row labels.
+    let (c1_x0, c1_x1) = (190, 772);
+    let (c2_x0, c2_x1) = (792, RIGHT);
+    const CARD: i32 = 128;
+    let head_y = y + 16;
+    centered(
         root,
-        (352, 126),
+        ((c1_x0 + c1_x1) / 2, head_y + 16),
         "Low addressability (broadcast)",
-        15,
+        ty::BODY,
         BLACK,
     )?;
-    label(
+    centered(
         root,
-        (930, 126),
+        ((c2_x0 + c2_x1) / 2, head_y + 16),
         "High addressability (directed / local feedback)",
-        15,
+        ty::BODY,
         BLACK,
     )?;
-    label(root, (16, 236), "Low richness", 14, BLACK)?;
-    label(root, (16, 256), "(±1)", 14, RGBColor(90, 90, 90))?;
-    label(root, (16, 470), "High richness", 14, BLACK)?;
-    label(root, (16, 490), "(graded)", 14, RGBColor(90, 90, 90))?;
 
     // --- low richness ------------------------------------------------------
     // Two rules, one cell. Drawn apart, with the distance between them stated,
     // because that distance is the reason the lead claim says "±1 three-factor"
     // and not "broadcast".
+    let low = head_y + 44;
+    let pm1_y = low + 8;
+    let flat_y = pm1_y + CARD + 8;
+    let cell_note = flat_y + CARD + 6;
+    let note_lines = wrap(
+        root,
+        "One cell, two rules, 0.28 apart. Collapsing them into one “broadcast ±1” box is the overreach the lead claim’s wording exists to avoid.",
+        ty::NOTE,
+        c1_x1 - c1_x0 - 12,
+    );
+    let low_end = cell_note + note_lines.len() as i32 * ty::line_step(ty::NOTE) + 6;
     map_draw(root.draw(&Rectangle::new(
-        [(186, 148), (798, 372)],
-        RGBColor(248, 248, 250).filled(),
+        [(c1_x0 - 10, low), (c1_x1 + 10, low_end)],
+        RGBColor(246, 246, 249).filled(),
     )))?;
     rule_card(
         root,
-        (196, 156, 788, 254),
+        (c1_x0, pm1_y, c1_x1, pm1_y + CARD),
         Verdict::Fail,
         "±1 × surrogate eligibility",
-        "MatchedLocal — the lead FAIL, and at chance on both graphs",
+        "MatchedLocal: the lead FAIL, at chance",
         nums::BROADCAST_PM1,
+        &CARD_PAPER_STACKED,
     )?;
     rule_card(
         root,
-        (196, 262, 788, 360),
+        (c1_x0, flat_y, c1_x1, flat_y + CARD),
         Verdict::Contrast,
         "±1 broadcast REINFORCE",
-        "MatchedRlFlat — same reward, same topology, well above chance",
+        "MatchedRlFlat: same reward and topology",
         nums::RL_FLAT,
+        &CARD_PAPER_STACKED,
     )?;
-    label(
-        root,
-        (196, 366),
-        "One cell, two rules, 0.28 apart. Collapsing them into one “broadcast ±1” box is the overreach the lead claim’s wording exists to avoid.",
-        11,
-        RGBColor(110, 110, 110),
-    )?;
+    for (i, line) in note_lines.iter().enumerate() {
+        label(
+            root,
+            (c1_x0, cell_note + i as i32 * ty::line_step(ty::NOTE)),
+            line,
+            ty::NOTE,
+            grey,
+        )?;
+    }
 
     rule_card(
         root,
-        (818, 156, 1364, 254),
+        (c2_x0, pm1_y, c2_x1, pm1_y + CARD),
         Verdict::Pass,
         "REINFORCE × frozen B_i",
-        "MatchedRlReinforceFb — directed feedback, same ±1 reward",
+        "MatchedRlReinforceFb: directed, same ±1 reward",
         nums::RL_FB,
+        &CARD_PAPER_STACKED,
     )?;
+    // The reading of the grid, in the space the taller low-richness cell
+    // leaves beside it.
+    let mut ny = pm1_y + CARD + 16;
+    for (text, ink) in [
+        (
+            "Richness alone does not decide it: a graded BROADCAST rule reaches 0.9975.",
+            grey,
+        ),
+        (
+            "Addressability alone does not either: ±1 through a frozen B_i passes.",
+            grey,
+        ),
+        ("What fails is the one rule that has neither.", BLACK),
+    ] {
+        ny = para(root, (c2_x0, ny), c2_x1 - c2_x0, text, ty::NOTE, ink)? + 4;
+    }
 
     // --- high richness -----------------------------------------------------
+    let high = low_end.max(ny) + 16;
     rule_card(
         root,
-        (196, 400, 788, 498),
+        (c1_x0, high, c1_x1, high + CARD),
         Verdict::Contrast,
         "broadcast graded error",
-        "MatchedBroadcastGradedError — on the DFA schedule; not a locality proof",
+        "MatchedBroadcastGradedError: not a locality proof",
         nums::BROADCAST_GRADED,
+        &CARD_PAPER_STACKED,
     )?;
     rule_card(
         root,
-        (818, 400, 1364, 498),
+        (c2_x0, high, c2_x1, high + CARD),
         Verdict::Pass,
         "graded error × DFA",
         "MatchedDfaGradedError",
         nums::DFA,
-    )?;
-    label(
-        root,
-        (818, 512),
-        "Richness alone does not decide it: a graded BROADCAST rule reaches 0.9975.",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    label(
-        root,
-        (818, 534),
-        "Addressability alone does not either: ±1 through a frozen B_i passes.",
-        12,
-        RGBColor(110, 110, 110),
-    )?;
-    label(
-        root,
-        (818, 556),
-        "What fails is the one rule that has neither.",
-        12,
-        RGBColor(60, 60, 60),
+        &CARD_PAPER_STACKED,
     )?;
 
+    for (text, detail, cy) in [
+        ("Low richness", "(±1)", (low + low_end) / 2),
+        ("High richness", "(graded)", high + CARD / 2),
+    ] {
+        label(root, (LEFT - 20, cy - 30), text, ty::BODY, BLACK)?;
+        label(root, (LEFT - 20, cy + 2), detail, ty::BODY, grey)?;
+    }
+
     // --- Panel B -----------------------------------------------------------
+    let b_top = high + CARD + 30;
+    let b_head = wrap(
+        root,
+        "Panel B — XOR locality flip (1-layer xor_thresh). Addressability evidence: broadcast fails a task DFA solves.",
+        ty::HEAD,
+        RIGHT - LEFT - 32,
+    );
+    let chart_top = b_top + 12 + b_head.len() as i32 * ty::line_step(ty::HEAD);
+    let chart_h = 250;
+    let foot = chart_top + chart_h + 28;
+    let foot_lines = wrap(
+        root,
+        "Not claimed for 2-layer mid-init depth locality, where broadcast also solves. Matched PASS does not imply live muted-θ / k-WTA G2 PASS.",
+        ty::NOTE,
+        RIGHT - LEFT - 32,
+    );
+    let b_bottom = foot + foot_lines.len() as i32 * ty::line_step(ty::NOTE) + 8;
     map_draw(root.draw(&Rectangle::new(
-        [(36, 622), (1364, 872)],
+        [(LEFT, b_top), (RIGHT, b_bottom)],
         RGBColor(245, 245, 248).filled(),
     )))?;
-    label(
-        root,
-        (52, 632),
-        "Panel B — XOR locality flip (1-layer xor_thresh). Addressability evidence: broadcast fails a task DFA solves.",
-        15,
-        BLACK,
-    )?;
+    for (i, line) in b_head.iter().enumerate() {
+        label(
+            root,
+            (LEFT + 16, b_top + 10 + i as i32 * ty::line_step(ty::HEAD)),
+            line,
+            ty::HEAD,
+            BLACK,
+        )?;
+    }
     draw_bar_row(
         root,
         90,
-        664,
-        1180,
-        170,
+        chart_top,
+        1060,
+        chart_h,
         Some(0.5),
         &[
             (
@@ -2168,14 +2459,17 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
                 Verdict::Reference.border(),
             ),
         ],
+        &BAR_PAPER,
     )?;
-    label(
-        root,
-        (52, 848),
-        "Not claimed for 2-layer mid-init depth locality, where broadcast also solves. Matched PASS does not imply live muted-θ / k-WTA G2 PASS.",
-        12,
-        RGBColor(90, 90, 90),
-    )?;
+    for (i, line) in foot_lines.iter().enumerate() {
+        label(
+            root,
+            (LEFT + 16, foot + i as i32 * ty::line_step(ty::NOTE)),
+            line,
+            ty::NOTE,
+            grey,
+        )?;
+    }
     Ok(())
 }
 
@@ -2251,6 +2545,7 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
             title,
             mechanism,
             value,
+            &CARD_POSTER,
         )?;
     }
     Ok(())
@@ -2288,72 +2583,74 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
 ///    is why: on the recurrent substrate adaptation is what prevents
 ///    saturation, so dropping it would turn a scoped null into a general one.
 fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
+    let grey = RGBColor(100, 100, 100);
+    let y = para(
         root,
-        (36, 16),
-        "Figure S — Substrate: the read-out does not substitute for temporal state",
-        26,
-        BLACK,
-    )?;
-    label(
-        root,
-        (36, 50),
-        "h128 / published-2ms / adjacent-sum-5 / e400 / d32-L4, seed-paired. The anchor campaign's 720 cells all sat on ff+fixed, so its gain had two readings it could not separate.",
-        13,
+        (LEFT, 8),
+        RIGHT - LEFT,
+        "h128 / published-2ms / e400 / d32-L4, seed-paired. Does the read-out ADD temporal structure no such substrate represents, or SUBSTITUTE for the adaptation and recurrence ff+fixed happens not to have?",
+        ty::NOTE,
         RGBColor(70, 70, 70),
-    )?;
-    label(
-        root,
-        (36, 72),
-        "ADDS temporal structure no such substrate represents, or SUBSTITUTES for the adaptation and recurrence ff+fixed happens not to have. ETLP makes the second reading the live one.",
-        13,
-        RGBColor(110, 110, 110),
     )?;
 
     // --- Panel A ------------------------------------------------------------
-    label(
+    let y = para(
         root,
-        (36, 108),
+        (LEFT, y + 14),
+        RIGHT - LEFT,
         "Panel A — one shared accuracy axis, in the row order of Table SHD-7. NOT sorted by gain.",
-        15,
+        ty::HEAD,
         BLACK,
     )?;
 
     let (lo, hi) = (0.45, 0.90);
-    let (x0, x1) = (430, 1180);
+    let (x0, x1) = (520, 1080);
     let at_x = |v: f64| x0 + (((v - lo) / (hi - lo)) * (x1 - x0) as f64).round() as i32;
-    let (top, bottom) = (150, 380);
+    let rate_col = RGBColor(200, 140, 60);
+    let attn_col = RGBColor(70, 100, 180);
+    label(root, (x0, y + 4), "● rate read-out", ty::NOTE, rate_col)?;
+    label(
+        root,
+        (x0 + 220, y + 4),
+        "● + attention d32/L4",
+        ty::NOTE,
+        attn_col,
+    )?;
+    const ROW: i32 = 66;
+    let top = y + 44;
+    let bottom = top + 4 * ROW;
 
     for k in 0..=9 {
         let v = lo + 0.05 * k as f64;
         let x = at_x(v);
         map_draw(root.draw(&PathElement::new(
             vec![(x, top), (x, bottom)],
-            RGBColor(238, 238, 242).stroke_width(1),
+            RGBColor(232, 232, 238).stroke_width(1),
         )))?;
-        centered(
-            root,
-            (x, bottom + 14),
-            &format!("{v:.2}"),
-            11,
-            RGBColor(140, 140, 140),
-        )?;
+        if k % 2 == 0 {
+            centered(
+                root,
+                (x, bottom + 18),
+                &format!("{v:.2}"),
+                ty::NOTE,
+                RGBColor(120, 120, 120),
+            )?;
+        }
     }
 
-    let rate_col = RGBColor(200, 140, 60);
-    let attn_col = RGBColor(70, 100, 180);
     for (i, (substrate, note, scale, pairs, rate, attn, gain)) in
         nums::SUBSTRATE.into_iter().enumerate()
     {
-        let y = top + 26 + (i as i32) * 54;
-        label(root, (36, y - 18), substrate, 16, BLACK)?;
+        let y = top + 30 + (i as i32) * ROW;
+        label(root, (LEFT, y - 28), substrate, ty::VALUE, BLACK)?;
         label(
             root,
-            (36, y + 2),
-            &format!("{note} · scale {scale:.1} · n = {pairs} pairs"),
-            12,
-            RGBColor(110, 110, 110),
+            (LEFT + 150, y - 25),
+            &format!("scale {scale:.1} · n = {pairs} pairs"),
+            ty::NOTE,
+            RGBColor(80, 80, 80),
         )?;
+        label(root, (LEFT, y + 4), note, ty::NOTE, RGBColor(110, 110, 110))?;
         // Rate -> attention on one axis. The connector is within a row only:
         // the comparison this figure makes is horizontal, and joining rows
         // would draw the substrate ordering ban 1 refuses.
@@ -2361,27 +2658,25 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
             vec![(at_x(rate), y), (at_x(attn), y)],
             RGBColor(160, 160, 168).stroke_width(2),
         )))?;
-        map_draw(root.draw(&Circle::new((at_x(rate), y), 8, rate_col.filled())))?;
-        map_draw(root.draw(&Circle::new((at_x(attn), y), 8, attn_col.filled())))?;
+        map_draw(root.draw(&Circle::new((at_x(rate), y), 10, rate_col.filled())))?;
+        map_draw(root.draw(&Circle::new((at_x(attn), y), 10, attn_col.filled())))?;
+        // The values sit in a column of their own: printed beside the dots,
+        // three of the four attention labels ran through the dashed marker.
         label(
             root,
-            (at_x(rate) - 56, y - 8),
-            &format!("{rate:.4}"),
-            12,
+            (1110, y - 28),
+            &format!("{rate:.4} → {attn:.4}"),
+            ty::NOTE,
             RGBColor(80, 80, 80),
         )?;
         label(
             root,
-            (at_x(attn) + 14, y - 8),
-            &format!("{attn:.4}"),
-            12,
-            RGBColor(80, 80, 80),
+            (1110, y + 2),
+            &format!("gain +{gain:.4}"),
+            ty::BODY,
+            BLACK,
         )?;
-        label(root, (1224, y - 8), &format!("gain +{gain:.4}"), 14, BLACK)?;
     }
-    // Below the header, not level with it: the header line runs past x=430.
-    label(root, (430, 128), "● rate read-out", 12, rate_col)?;
-    label(root, (560, 128), "● + attention d32/L4", 12, attn_col)?;
 
     // Ban 1, drawn where the eye already is: a vertical marker at the
     // feed-forward attention arm, so the recurrent one is visibly BELOW it.
@@ -2396,29 +2691,24 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         )))?;
         my += 20;
     }
-    label(
+    let y = para(
         root,
-        (36, bottom + 40),
+        (LEFT, bottom + 48),
+        RIGHT - LEFT,
         &format!(
-            "THE RECURRENT SUBSTRATE DOES NOT WIN. rec+alif+attn reaches {rec_attn:.4} against ff+fixed+attn's {ff_attn:.4} at the same scale — attention closes most of the gap the",
+            "THE RECURRENT SUBSTRATE DOES NOT WIN. rec+alif+attn reaches {rec_attn:.4} against ff+fixed+attn's {ff_attn:.4} at the same scale: attention closes most of the gap the substrate gives away, and not all of it. NO VERDICT IS ISSUED ON THAT ORDERING, and nothing here is sorted by gain.",
         ),
-        14,
-        BLACK,
-    )?;
-    label(
-        root,
-        (36, bottom + 62),
-        "substrate gives away, and not all of it. NO VERDICT IS ISSUED ON THAT ORDERING, and nothing here is sorted by gain.",
-        14,
+        ty::BODY,
         BLACK,
     )?;
 
     // --- Panel B ------------------------------------------------------------
-    label(
+    let y = para(
         root,
-        (36, 496),
+        (LEFT, y + 20),
+        RIGHT - LEFT,
         "Panel B — the registered contrasts, each against its two-sided bar",
-        15,
+        ty::HEAD,
         BLACK,
     )?;
     let contrasts = [
@@ -2427,200 +2717,181 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
             nums::SUBSTRATE_A1,
             "6 of 12",
             Verdict::Fail,
-            "a coin flip — adaptation makes no difference to the gain HERE",
+            "a coin flip: adaptation makes no difference to the gain HERE",
         ),
         (
-            "M-2  gain(rec+alif) − gain(ff+fixed), both at scale 0.4",
+            "M-2  gain(rec+alif) − gain(ff+fixed), scale 0.4",
             nums::SUBSTRATE_M2,
             "10 of 10",
             Verdict::Pass,
-            "SUPPORTED — the gain roughly doubles on the recurrent substrate",
+            "SUPPORTED: the gain roughly doubles on the recurrent substrate",
         ),
         (
-            "M-4  ff+fixed at scale 0.4 vs archived at 1.0",
+            "M-4  ff+fixed at scale 0.4 vs archived 1.0",
             nums::SUBSTRATE_M4,
             "—",
             Verdict::Contrast,
             "the scale is not doing the work",
         ),
     ];
-    let (bx0, bx1) = (700, 1000);
+    let (bx0, bx1) = (600, 820);
     let at_b = |v: f64| bx0 + ((v / 0.20) * (bx1 - bx0) as f64).round() as i32;
     let bar_x = at_b(nums::SUBSTRATE_BAR);
+    let b_top = y + 34;
+    const B_ROW: i32 = 64;
     for (i, (name, value, positive, verdict, reading)) in contrasts.into_iter().enumerate() {
-        let y = 534 + (i as i32) * 46;
-        label(root, (36, y - 8), name, 13, BLACK)?;
-        map_draw(root.draw(&Circle::new((at_b(value), y), 7, verdict.border().filled())))?;
-        // A value short of the bar sits within ~45px of the axis origin, and
-        // a right-hand label then runs straight through the dashed bar. Label
-        // those on the left.
-        let text = format!("+{value:.4}   {positive}");
-        let left = value < nums::SUBSTRATE_BAR;
+        let y = b_top + 22 + (i as i32) * B_ROW;
+        label(root, (LEFT, y - 14), name, ty::BODY, BLACK)?;
+        map_draw(root.draw(&Circle::new(
+            (at_b(value), y),
+            10,
+            verdict.border().filled(),
+        )))?;
+        // The value and its seed count sit in a column of their own: beside
+        // the dot, a value short of the bar ran through the dashed bar line.
         label(
             root,
-            (
-                if left {
-                    at_b(value) - 132
-                } else {
-                    at_b(value) + 14
-                },
-                y - 8,
-            ),
-            &text,
-            12,
-            RGBColor(80, 80, 80),
+            (850, y - 14),
+            &format!("+{value:.4}   {positive}"),
+            ty::BODY,
+            RGBColor(60, 60, 60),
         )?;
-        label(root, (1080, y - 8), reading, 12, RGBColor(110, 110, 110))?;
+        para(root, (1040, y - 26), RIGHT - 1040, reading, ty::NOTE, grey)?;
     }
-    let mut by = 520;
-    while by < 640 {
+    let b_bottom = b_top + 3 * B_ROW;
+    let mut by = b_top;
+    while by < b_bottom {
         map_draw(root.draw(&PathElement::new(
-            vec![(bar_x, by), (bar_x, (by + 10).min(640))],
+            vec![(bar_x, by), (bar_x, (by + 10).min(b_bottom))],
             RGBColor(120, 120, 120).stroke_width(2),
         )))?;
         by += 20;
     }
     centered(
         root,
-        (bar_x, 508),
+        (bar_x, b_top - 16),
         &format!("bar ±{:.2}", nums::SUBSTRATE_BAR),
-        12,
+        ty::NOTE,
         RGBColor(100, 100, 100),
     )?;
 
     // Ban 2. Both readings, and the status of the second stated on its face.
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 664), (1364, 752)],
-        RGBColor(253, 246, 224).filled(),
-    )))?;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 664), (1364, 752)],
-        RGBColor(200, 160, 60).stroke_width(2),
-    )))?;
-    label(
+    let first = format!(
+        "BOTH READINGS OF “THE GAIN DOUBLES”, because neither may be quoted alone. rec+alif starts 0.18 LOWER, with {:.4} of headroom against {:.4}.",
+        nums::HEADROOM_REC,
+        nums::HEADROOM_FF
+    );
+    let second = format!(
+        "Gain / headroom is {:.3} against {:.3}, so the ratio falls {:.1}× → {:.2}×. The ORDERING SURVIVES; most of its apparent size does not.",
+        nums::HEADROOM_RATIO_REC,
+        nums::HEADROOM_RATIO_FF,
+        nums::RAW_RATIO,
+        nums::NORMALISED_RATIO
+    );
+    let y = boxed(
         root,
-        (48, 674),
-        &format!(
-            "BOTH READINGS OF “THE GAIN DOUBLES”, because neither may be quoted alone. rec+alif starts 0.18 LOWER, with {:.4} of headroom against {:.4}.",
-            nums::HEADROOM_REC,
-            nums::HEADROOM_FF
-        ),
-        14,
-        BLACK,
-    )?;
-    label(
-        root,
-        (48, 698),
-        &format!(
-            "Gain / headroom is {:.3} against {:.3}, so the ratio falls {:.1}× → {:.2}×. The ORDERING SURVIVES; most of its apparent size does not.",
-            nums::HEADROOM_RATIO_REC,
-            nums::HEADROOM_RATIO_FF,
-            nums::RAW_RATIO,
-            nums::NORMALISED_RATIO
-        ),
-        13,
-        RGBColor(70, 70, 70),
-    )?;
-    label(
-        root,
-        (48, 722),
-        "That normalisation is POST-HOC AND NOT REGISTERED, and saying so is not licence to prefer whichever of the two numbers is more convenient, in either direction.",
-        12,
-        RGBColor(120, 120, 120),
+        (LEFT, b_bottom + 16, RIGHT),
+        RGBColor(253, 246, 224),
+        RGBColor(200, 160, 60),
+        &[
+            (&first, ty::BODY, BLACK),
+            (&second, ty::NOTE, RGBColor(70, 70, 70)),
+            (
+                "That normalisation is POST-HOC AND NOT REGISTERED, and saying so is not licence to prefer whichever of the two numbers is more convenient, in either direction.",
+                ty::NOTE,
+                RGBColor(110, 110, 110),
+            ),
+        ],
     )?;
 
     // --- Panel C ------------------------------------------------------------
-    label(
+    let y = para(
         root,
-        (36, 782),
+        (LEFT, y + 22),
+        RIGHT - LEFT,
         "Panel C — usability, which had to be measured before any row of Panel A could be. This is why the recurrent row exists at one scale only.",
-        15,
+        ty::HEAD,
         BLACK,
     )?;
-    label(root, (36, 812), "arm", 12, RGBColor(110, 110, 110))?;
-    label(root, (230, 812), "scale", 12, RGBColor(110, 110, 110))?;
-    label(root, (330, 812), "completed", 12, RGBColor(110, 110, 110))?;
-    label(root, (460, 812), "voided", 12, RGBColor(110, 110, 110))?;
-    label(root, (570, 812), "diverged", 12, RGBColor(110, 110, 110))?;
+    let head = RGBColor(110, 110, 110);
+    let cols = [LEFT, 200, 290, 450, 560];
+    for (x, name) in cols
+        .iter()
+        .zip(["arm", "scale", "completed", "voided", "diverged"])
+    {
+        label(root, (*x, y + 4), name, ty::NOTE, head)?;
+    }
+    let t_top = y + 4 + ty::line_step(ty::NOTE);
     for (i, (arm, scale, completed, voided, diverged)) in nums::USABILITY.into_iter().enumerate() {
-        let y = 836 + (i as i32) * 24;
-        label(root, (36, y), arm, 13, BLACK)?;
-        label(root, (230, y), &format!("{scale:.1}"), 13, BLACK)?;
-        label(root, (330, y), &format!("{completed} / 12"), 13, BLACK)?;
+        let y = t_top + (i as i32) * ty::line_step(ty::BODY);
+        let flag = |n: u32| if n > 0 { Verdict::Fail.border() } else { BLACK };
+        label(root, (cols[0], y), arm, ty::BODY, BLACK)?;
+        label(root, (cols[1], y), &format!("{scale:.1}"), ty::BODY, BLACK)?;
         label(
             root,
-            (460, y),
-            &format!("{voided}"),
-            13,
-            if voided > 0 {
-                Verdict::Fail.border()
-            } else {
-                BLACK
-            },
+            (cols[2], y),
+            &format!("{completed} / 12"),
+            ty::BODY,
+            BLACK,
         )?;
         label(
             root,
-            (570, y),
+            (cols[3], y),
+            &format!("{voided}"),
+            ty::BODY,
+            flag(voided),
+        )?;
+        label(
+            root,
+            (cols[4], y),
             &format!("{diverged}"),
-            13,
-            if diverged > 0 {
-                Verdict::Fail.border()
-            } else {
-                BLACK
-            },
+            ty::BODY,
+            flag(diverged),
         )?;
     }
-    label(
+    let t_bottom = t_top + 4 * ty::line_step(ty::BODY);
+    let side = 700;
+    let mut sy = para(
         root,
-        (700, 836),
+        (side, y + 4),
+        RIGHT - side,
         &format!(
-            "rec+fixed's ten voids are ALL SATURATION — up to {:.1}% of hidden units pinned at",
+            "rec+fixed's ten voids are ALL SATURATION — up to {:.1}% of hidden units pinned at maximum firing — and NONE is divergence at scale 0.4. So on the recurrent substrate",
             nums::SATURATED_FRACTION_MAX * 100.0
         ),
-        13,
+        ty::NOTE,
         RGBColor(70, 70, 70),
     )?;
-    label(
+    sy = para(
         root,
-        (700, 858),
-        "maximum firing — and NONE is divergence at scale 0.4. So on the recurrent substrate",
-        13,
-        RGBColor(70, 70, 70),
-    )?;
-    label(
-        root,
-        (700, 880),
+        (side, sy),
+        RIGHT - side,
         "ADAPTATION IS STABILISING, the opposite of the sign that wave's own hypothesis asserted.",
-        13,
+        ty::NOTE,
         BLACK,
     )?;
-    label(
+    sy = para(
         root,
-        (700, 906),
+        (side, sy),
+        RIGHT - side,
         "A-1 above is therefore inert AT THIS OPERATING POINT, on this substrate — not in general.",
-        12,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
 
-    // Ban 3, last line, where a reader leaves the figure.
-    label(
+    // Ban 3, last, where a reader leaves the figure.
+    para(
         root,
-        (36, 948),
+        (LEFT, sy.max(t_bottom) + 16),
+        RIGHT - LEFT,
         // The count comes from the row it describes rather than from the
         // sentence: "TEN" and an array that says 9 would disagree silently.
         &format!(
-            "TEN PAIRS ({} of 12), THE REGISTERED MINIMUM. The two recurrent arms lost different seeds and one further loss on either would have made M-2 unreportable. Pairing REDUCES",
+            "TEN PAIRS ({} of 12), THE REGISTERED MINIMUM. The two recurrent arms lost different seeds and one further loss on either would have made M-2 unreportable. Pairing REDUCES survivorship rather than removing it: the surviving pairs are those that did not diverge, and divergence is not random. The feed-forward rows carry no such exposure at 12/12.",
             nums::SUBSTRATE[2].3
         ),
-        13,
-        RGBColor(120, 120, 120),
-    )?;
-    label(
-        root,
-        (36, 970),
-        "survivorship rather than removing it: the surviving pairs are those that did not diverge, and divergence is not random. The feed-forward rows carry no such exposure at 12/12.",
-        13,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
     Ok(())
 }
@@ -2710,8 +2981,8 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
             "in BOTH the training and",
             "test splits",
             "",
-            "the task becomes",
-            "rate-solvable",
+            "the task must be solved",
+            "without temporal order",
         ],
     )?;
     label(
@@ -2756,6 +3027,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         "time-axis attention",
         "d32 / L4 read-out",
         "32 / 32 seed pairs positive",
+        &COST_POSTER,
     )?;
     cost_bar(
         root,
@@ -2766,6 +3038,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         "rate read-out",
         "ff+fixed — half the measurement,",
         "not a faint control",
+        &COST_POSTER,
     )?;
     centered(
         root,
@@ -2932,50 +3205,24 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
 ///    floor" and "cleared the gate" are different sentences everywhere else in
 ///    this package.
 fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(
+    let grey = RGBColor(100, 100, 100);
+    let y = para(
         root,
-        (36, 16),
-        "Figure 6 — Matched means, by verdict",
-        26,
+        (LEFT, 8),
+        RIGHT - LEFT,
+        "Panel A — primary mean, grouped by verdict. Every value is feed-forward / recurrent.",
+        ty::HEAD,
         BLACK,
     )?;
-    label(
+    // The saturated reference is the reason the passing arms cannot be
+    // ordered, so it is said before any card rather than after them.
+    let y = para(
         root,
-        (36, 50),
-        "Matched dense-LIF forward, n = 20 per arm, 2026-08-25 re-run at MATCHED_INPUT_SCALE = 2.0. Every value is feed-forward / recurrent. Gate: primary mean ≥ 0.65 AND gap LCB > 0.5.",
-        13,
+        (LEFT, y),
+        RIGHT - LEFT,
+        "Against a SuperSpike BPTT reference at 1.0000 every PASS reduces to “the arm scored above 0.75”, so this figure does not rank them: rows are in the order of Table A. Accuracy is printed, never encoded as a length or a position.",
+        ty::NOTE,
         RGBColor(70, 70, 70),
-    )?;
-
-    // The reference leads, as it does in Figure M, because it is the reason the
-    // passing arms cannot be ordered rather than an aside about the ceiling.
-    let reference = Verdict::Reference;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 74), (1364, 112)],
-        reference.fill().filled(),
-    )))?;
-    map_draw(root.draw(&Rectangle::new(
-        [(36, 74), (1364, 112)],
-        reference.border().stroke_width(2),
-    )))?;
-    label(
-        root,
-        (48, 84),
-        &format!(
-            "SuperSpike BPTT reference saturates at {:.4} ff / {:.4} rec. Against it every PASS below reduces to “the arm scored above 0.75”, so this figure does not rank them: rows are in the order of Table A.",
-            nums::CEILING.0,
-            nums::CEILING.1
-        ),
-        13,
-        BLACK,
-    )?;
-
-    label(
-        root,
-        (36, 128),
-        "Panel A — primary mean, grouped by verdict. Accuracy is printed, never encoded as a length or a position.",
-        15,
-        BLACK,
     )?;
 
     // Grouped by verdict, and the contrast group is labelled as ungated in the
@@ -3043,25 +3290,27 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
         ),
     ];
 
-    // `rule_card` writes its value line at y0 + 66 in a 15px face, so a card
-    // shorter than 92 puts that line on its own bottom border. It did, at 76.
+    // `CARD_PAPER_ROW` puts the value on the chip row and the mechanism line
+    // at y0 + 56 in a 26 request, so 92 is the shortest card that keeps that
+    // line off its own bottom border.
     const CARD_H: i32 = 92;
-    let mut y = 152;
+    let mut y = y + 10;
     for (verdict, heading, arms) in groups {
-        label(root, (36, y), heading, 13, verdict.border())?;
-        y += 22;
+        label(root, (LEFT, y), heading, ty::NOTE, verdict.border())?;
+        y += ty::line_step(ty::NOTE) + 2;
         for (rule, mechanism, value) in arms {
             rule_card(
                 root,
-                (36, y, 1364, y + CARD_H),
+                (LEFT, y, RIGHT, y + CARD_H),
                 verdict,
                 rule,
                 mechanism,
                 *value,
+                &CARD_PAPER_ROW,
             )?;
-            y += CARD_H + 8;
+            y += CARD_H + 6;
         }
-        y += 14;
+        y += 10;
     }
 
     // --- Panel B — the gate quantity ---------------------------------------
@@ -3073,32 +3322,33 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     let panel_b = y + 20;
     label(
         root,
-        (36, panel_b),
-        "Panel B — gap LCB against the > 0.5 gate. Same row order; the second half of the gate, drawn because clearing the floor and clearing the gate are different sentences.",
-        15,
+        (LEFT, panel_b),
+        "Panel B — gap LCB against the > 0.5 gate: the second half of the gate, same row order.",
+        ty::HEAD,
         BLACK,
     )?;
 
     let (lcb_lo, lcb_hi) = (-0.25, 1.05);
-    let (lx0, lx1) = (470, 1330);
+    let (lx0, lx1) = (450, 1150);
     let at_lcb =
         |v: f64| lx0 + (((v - lcb_lo) / (lcb_hi - lcb_lo)) * (lx1 - lx0) as f64).round() as i32;
 
     // Zero, then the gate. Zero is drawn because the broadcast recurrent value
     // is below it and a reader needs to see which side of nothing it is on.
+    const LCB_ROW: i32 = 40;
     let strip_top = panel_b + 48;
-    let strip_bottom = strip_top + 4 * 34;
+    let strip_bottom = strip_top + 4 * LCB_ROW;
     let zero = at_lcb(0.0);
     map_draw(root.draw(&PathElement::new(
         vec![(zero, strip_top), (zero, strip_bottom)],
         RGBColor(170, 170, 176).stroke_width(1),
     )))?;
-    label(
+    centered(
         root,
-        (zero - 8, strip_bottom + 4),
+        (zero, strip_bottom + 18),
         "0",
-        12,
-        RGBColor(140, 140, 140),
+        ty::NOTE,
+        RGBColor(120, 120, 120),
     )?;
     let gate = at_lcb(nums::GATE_LCB);
     let mut gy = strip_top;
@@ -3111,73 +3361,65 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     }
     centered(
         root,
-        (gate, strip_top - 14),
+        (gate, strip_bottom + 18),
         &format!("gate: gap LCB > {:.1}", nums::GATE_LCB),
-        13,
+        ty::NOTE,
         RGBColor(100, 100, 100),
+    )?;
+    // The two values are printed in a column of their own. Beside their dots
+    // they ran into the gate line on the one row whose LCBs straddle it.
+    let value_x = 1180;
+    label(
+        root,
+        (value_x, strip_top - 30),
+        "ff / rec",
+        ty::NOTE,
+        RGBColor(110, 110, 110),
     )?;
 
     for (i, (arm, ff, rec)) in nums::GAP_LCB.into_iter().enumerate() {
-        let y = strip_top + 22 + (i as i32) * 34;
+        let y = strip_top + 20 + (i as i32) * LCB_ROW;
         let verdict = if ff > nums::GATE_LCB {
             Verdict::Pass
         } else {
             Verdict::Fail
         };
-        label(root, (36, y - 8), arm, 14, BLACK)?;
+        label(root, (LEFT, y - 15), arm, ty::BODY, BLACK)?;
         map_draw(root.draw(&PathElement::new(
             vec![(at_lcb(ff.min(rec)), y), (at_lcb(ff.max(rec)), y)],
-            verdict.border().stroke_width(2),
+            verdict.border().stroke_width(3),
         )))?;
-        map_draw(root.draw(&Circle::new((at_lcb(ff), y), 7, verdict.border().filled())))?;
+        map_draw(root.draw(&Circle::new((at_lcb(ff), y), 9, verdict.border().filled())))?;
         map_draw(root.draw(&Circle::new(
             (at_lcb(rec), y),
-            7,
-            verdict.border().stroke_width(2),
+            9,
+            verdict.border().stroke_width(3),
         )))?;
-        let (left, right) = if ff <= rec { (ff, rec) } else { (rec, ff) };
         label(
             root,
-            (at_lcb(left) - 66, y - 8),
-            &format!("{left:.4}"),
-            12,
-            RGBColor(80, 80, 80),
-        )?;
-        label(
-            root,
-            (at_lcb(right) + 14, y - 8),
-            &format!("{right:.4}"),
-            12,
-            RGBColor(80, 80, 80),
+            (value_x, y - 13),
+            &format!("{ff:.4} / {rec:.4}"),
+            ty::NOTE,
+            RGBColor(60, 60, 60),
         )?;
     }
     label(
         root,
-        (940, strip_bottom + 28),
+        (value_x - 110, strip_bottom + 46),
         "● feed-forward   ○ recurrent",
-        12,
+        ty::NOTE,
         RGBColor(110, 110, 110),
     )?;
-    label(
+    para(
         root,
-        (36, strip_bottom + 28),
+        (LEFT, strip_bottom + 46),
+        value_x - 150 - LEFT,
         &format!(
             "Broadcast ±1 is BELOW ZERO on the recurrent graph ({:.4}), not merely short of the gate.",
             nums::GAP_LCB[0].2
         ),
-        12,
-        RGBColor(120, 120, 120),
-    )?;
-    label(
-        root,
-        (36, strip_bottom + 52),
-        &format!(
-            "Disclose with this figure: the broadcast-GRADED contrast reaches {:.4} and ±1 broadcast REINFORCE reaches {:.4}. Neither is a PASS and neither erases the ±1 × eligibility FAIL.",
-            nums::BROADCAST_GRADED.0,
-            nums::RL_FLAT.0
-        ),
-        12,
-        RGBColor(120, 120, 120),
+        ty::NOTE,
+        grey,
     )?;
     Ok(())
 }
@@ -3211,6 +3453,7 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
             ("gradient-ref", nums::C1_GRAD, RGBColor(90, 120, 200)),
             ("eligibility-ref", nums::C1_ELIG, RGBColor(90, 170, 110)),
         ],
+        &BAR_POSTER,
     )?;
 
     box_card(
@@ -3280,6 +3523,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
         "matched REINFORCE × frozen B_i (v12)",
         "gap LCB 0.9765 ff / 0.9079 rec — clears both halves of the gate on both forward graphs",
         nums::RL_FB,
+        &CARD_POSTER,
     )?;
 
     // --- The break. Everything below runs on a different engine.
@@ -3575,6 +3819,7 @@ fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
             title,
             mechanism,
             value,
+            &CARD_POSTER,
         )?;
     }
     // The passes are stacked, not ranked: with the reference saturated there is
@@ -3668,5 +3913,100 @@ mod tests {
             assert!(dir.join(format!("{stem}.pdf")).is_file(), "{stem}.pdf");
         }
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// One manuscript figure rendered to SVG text, as `write_pair_sized` draws it.
+    fn render(draw: Draw, h: u32) -> String {
+        let mut svg = String::new();
+        {
+            let root = SVGBackend::with_string(&mut svg, (W, h)).into_drawing_area();
+            root.fill(&WHITE).expect("fill");
+            draw(&root).expect("draw");
+            root.present().expect("present");
+        }
+        svg
+    }
+
+    /// Every `font-size` the SVG sets, in SVG units.
+    fn font_sizes(svg: &str) -> Vec<f64> {
+        svg.split("font-size=\"")
+            .skip(1)
+            .map(|rest| {
+                let value = &rest[..rest.find('"').expect("unterminated font-size")];
+                value
+                    .trim_end_matches("px")
+                    .parse::<f64>()
+                    .unwrap_or_else(|e| panic!("font-size {value:?}: {e}"))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_type_floor_is_seven_points_at_linewidth() {
+        assert!(
+            ty::printed_pt(ty::NOTE) >= 7.0,
+            "{}",
+            ty::printed_pt(ty::NOTE)
+        );
+        assert!(
+            ty::printed_pt(ty::NOTE - 1) < 7.0,
+            "NOTE is larger than it needs to be"
+        );
+        assert!(ty::NOTE < ty::BODY && ty::BODY < ty::VALUE && ty::VALUE < ty::HEAD);
+    }
+
+    /// The manuscript sets each of these at `\linewidth`, 468 pt for a
+    /// `W`-wide canvas. Before 2026-09-29 their annotations printed at
+    /// 2.4-4.3 pt; this renders each figure and refuses any smaller than 7.
+    #[test]
+    fn paper_figures_print_at_seven_points_or_more() {
+        for (stem, draw, h) in PAPER_FIGURES {
+            let sizes = font_sizes(&render(draw, h));
+            assert!(
+                sizes.len() > 20,
+                "{stem}: parsed only {} font sizes",
+                sizes.len()
+            );
+            let smallest = sizes.iter().cloned().fold(f64::INFINITY, f64::min);
+            let printed = smallest * 468.0 / W as f64;
+            assert!(
+                printed >= 7.0,
+                "{stem}: smallest text prints at {printed:.2} pt at \\linewidth"
+            );
+            // The SVG unit this parses must be the one `ty::printed_pt`
+            // assumes, or the floor above is checking a different quantity.
+            assert!(
+                (printed - ty::printed_pt(ty::NOTE)).abs() < 0.05,
+                "{stem}: smallest text {printed:.2} pt is not the NOTE tier"
+            );
+        }
+    }
+
+    /// LaTeX numbers the figures and the caption carries the title. A title
+    /// drawn into the artwork disagrees with both the moment the manuscript
+    /// orders them differently, and did: the artwork said "Figure 6" for a
+    /// figure the manuscript typesets under another number.
+    #[test]
+    fn paper_figures_carry_no_figure_title_of_their_own() {
+        for (stem, draw, h) in PAPER_FIGURES {
+            let svg = render(draw, h);
+            for tag in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "S", "M", "D"] {
+                let title = format!("Figure {tag} —");
+                assert!(!svg.contains(&title), "{stem} draws the title {title:?}");
+            }
+        }
+    }
+
+    /// Height at `\linewidth` plus the longest manuscript caption (about nine
+    /// lines, 1.4 in) must fit the 9 in text block.
+    #[test]
+    fn paper_figures_fit_a_page_with_their_caption() {
+        for (stem, _, h) in PAPER_FIGURES {
+            let inches = h as f64 * 6.5 / W as f64;
+            assert!(
+                inches + 1.4 <= 9.0,
+                "{stem}: {inches:.2} in tall at \\linewidth"
+            );
+        }
     }
 }

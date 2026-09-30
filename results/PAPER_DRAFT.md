@@ -1,4 +1,4 @@
-# What a time-axis read-out buys is temporal order: a difference-in-differences on SHD
+# What a time-axis read-out consumes: temporal order on SHD, by difference-in-differences
 
 > **Provenance, current as of 2026-08-25.** Seven results have been withdrawn from
 > this package and **none of them appears above**. Four went during the
@@ -45,26 +45,28 @@ Adding a time-axis attention read-out to a spiking network raises accuracy on
 the Spiking Heidelberg Digits (SHD) from 0.7057 to **0.8332** (gain
 **+0.1275**, positive in 32/32 seeds). That SHD depends on temporal information
 is established; what has not been measured is which *component's* contribution
-is the order-dependent one. We measure it with a seed-paired
-**difference-in-differences on the gain**, not on accuracy: when temporal order
-is destroyed by permuting time bins independently per sample, in **both the
-training and test splits**, so that the task itself becomes rate-solvable, the
-attention arm loses **+0.1347** while the rate read-out loses only **+0.0142**,
-so the read-out's advantage over a rate read-out collapses by **+0.1205**. Preregistered waves carry the
-control to **all twenty-one operating points** of the instrument at **two
-training budgets**, and every one clears its +0.03 bar. Time reversal, which
-displaces spikes *further* than shuffling but destroys no information, leaves
-the difference-in-differences flat, so the cost is not brittleness to
-displacement; destroying cross-channel synchrony *as well as* order costs
-**+0.1308**, **+0.1038** and **+0.0575** more at three input-binning settings
-and nothing at two others, so the read-out reads synchrony as well as order.
-Our own registered prediction failed: the size of the effect does not track the
-gain (Spearman **ρ = −0.1430** against a bar of +0.829), so we claim presence,
-not proportion, and report scope limits in width, read-out depth and geometry.
-Every claim carries a numeric bar fixed before its run, on a frozen
-configuration hash (§2.4), and we report **seven results withdrawn from this
-package, three of them passes**, each a defect that produced plausible numbers
-and none caught by an arm's own accuracy (§4.7).
+is the order-dependent one. We measure it as a seed-paired
+**difference-in-differences on the gain** — the read-out × destruction
+interaction — rather than on accuracy: when temporal order is destroyed by
+permuting time bins independently per sample, in **both the training and test
+splits**, the attention arm loses **+0.1347** while a rate read-out, which is
+invariant to the permutation by construction, loses **+0.0142**, so the
+read-out's advantage collapses by **+0.1205** (95% CI [+0.114, +0.127]).
+Permuting only the read-out's view of the hidden spike train, with the
+substrate left bit-identical, gives nearly the same **+0.1159**. Across
+**twenty-one operating points at two training budgets** the read-out's gain
+depends on order **wherever it has a gain to lose**: at five points after long
+training it has none, and there the positive difference-in-differences reflects
+attention falling below the rate read-out once order is gone, which we report
+as a limitation rather than as support. Time reversal, which displaces spikes
+*further* than shuffling but destroys no information, leaves the contrast flat,
+so the cost is not brittleness to displacement; destroying cross-channel
+synchrony as well costs up to **+0.1308** more at coarse bins, an upper bound
+because that operator also raises the substrate's activity. Our registered
+prediction that the effect's size tracks the gain failed (Spearman
+**ρ = −0.1430**), so we claim presence, not proportion. Every contrast was
+preregistered with a numeric bar on a frozen configuration, and all numbers are
+recomputed from archived runs by scripts released with the paper.
 
 ## Abstract — matched-architecture kill gate (secondary program)
 
@@ -92,7 +94,7 @@ Broadcast ±1 three-factor plasticity — surrogate eligibility multiplied by a 
 > d-cAdLIF 94.85) came only from a secondary comparison table; this pass did not
 > reach their primaries either, and they remain **excluded** from every claim
 > here. Percentages in this section are quoted from published papers and are
-> **not** machine-checked against cells on disk, which is what every SHD number
+> **not** machine-checked against runs on disk, which is what every SHD number
 > elsewhere in this paper is.
 
 
@@ -105,12 +107,16 @@ time axis and reports 91.08%; STSC-SNN [@yu2022stsc] places temporal
 attention inside the synaptic connection and reports 92.36%. Attention as a
 *temporal read-out* is older still outside spiking networks — attentive
 statistics pooling [@okabe2018] is the same idea on speaker
-embeddings. The specific placement used here — attention **only** at the
-read-out, added alongside a mean spike-rate read-out — appears unoccupied, but a
-configuration gap is not a mechanism. Note what the comparator is: the rate
-read-out is exactly invariant to permuting time, by construction, and it is
-**not** the field's default unweighted Σₜ softmax(u[t]), which reads the
-membrane and is order-sensitive. This paper does not run that default.
+embeddings. Re-weighting the read-out's sum over time is not new either:
+loss shaping [@nowotny2025lossshaping] replaces the unweighted sum with a fixed
+exponentially time-weighted one on SHD. The specific placement used here — a
+learned attention block **only** at the read-out, added alongside a mean
+spike-rate read-out — appears unoccupied, but a configuration gap is not a
+mechanism. Note what the comparator is: the rate read-out is exactly invariant
+to permuting time, by construction, and it is **not** the field's default
+unweighted Σₜ softmax(u[t]), which reads the membrane and is order-sensitive.
+This paper does not run that default; comparing against it is the experiment
+§4.8 names first.
 
 **Not new: that SHD depends on temporal information.** The dataset's own authors
 constructed spike-count-only variants — patterns "without temporal information" —
@@ -119,9 +125,12 @@ accuracy mark for the SHD" [@cramer2022]. The
 Neuromorphic Sequential Arena [@chen2025nsa] removes temporal propagation
 **model-side** rather than data-side and reports SHD falling 86.48 → 68.51 (its
 Table S4). Two destruction operators on two different sides of the model, one
-conclusion, both prior to this work. Neither separates *order* from the other
-things a spike train carries, which is what §3.5 does and what makes synchrony
-visible there as a second term.
+conclusion, both prior to this work. Count-preserving randomisation of spike
+order has been proposed as a robustness benchmark in its own right
+[@hindman2026tempo], and for N-MNIST it has been shown that timing is not needed
+at all [@iyer2021nmnist]. None of these separates *order* from the other things
+a spike train carries, which is what §3.5 does and what makes synchrony visible
+there as a second term.
 
 **Not new, and worth conceding plainly: the accuracy.** The SHD frontier runs
 from **95.07 ± 0.24%** — learned delays [@hammouamri2024dcls], the best published
@@ -135,31 +144,43 @@ best-effort no-delay recurrent baseline the dataset's authors themselves report
 carrying no temporal kernel should land, and is the external corroboration §3.8
 argues for from ablation alone.
 
-**Prior work that corroborates the reversal control, rather than the shuffle
-result.** @yu2025timing reverse time on SHD with an operator
-that, in their words, "perturb[s] spatio-temporal spike patterns but leave[s]
-interspike intervals and coincidence information unchanged" — the same
-information-preserving property §3.5's `reversed` control was built to have. Their
-finding is that "when axonal delays are not used, networks perform well under time
-reversal, whereas networks trained with delays perform poorly." This instrument
-has no delays and no temporal kernel, and its reversal difference-in-differences is
-flat at all three points measured. **That is an independent prediction of what
-§3.5 observes**, and it is the reason the reversal result is reported here as a
-control that behaved as the literature says it should rather than as a surprise.
+**Prior work closest to the reversal control, and how it differs.**
+@yu2025timing reverse time on SHD with an operator that, in their words,
+"perturb[s] spatio-temporal spike patterns but leave[s] interspike intervals and
+coincidence information unchanged" — the information-preserving property §3.5's
+`reversed` control was built to have — and find that "when axonal delays are not
+used, networks perform well under time reversal, whereas networks trained with
+delays perform poorly." Theirs is a test-time perturbation of a model trained on
+intact data; §3.5 reverses the training split as well, which leaves a task
+isomorphic to the original, so a flat contrast there is expected of any model
+without a built-in direction and is a control on the shuffle result rather than a
+replication of theirs. Yu et al. also compare networks with and without learned
+delays under increasing perturbation, and per-spike against per-neuron jitter —
+a component-level contrast and a timing-versus-coincidence split, both close in
+spirit to the difference-in-differences and synchrony term of §3.5.
 
 **New: which component's contribution is the order-dependent one.** Every result
 above measures how much *accuracy* survives destroying temporal structure. None
 measures how much of a *specific component's marginal contribution* survives it.
 The contrast in §3.5 is a difference-in-differences — attention's shuffle cost
 against the rate read-out's own, on the same seeds, same splits, same
-destruction operator — and we find no published equivalent for any read-out on
-any neuromorphic benchmark.
+destruction operator — and we find no published equivalent for a read-out on a
+neuromorphic benchmark. It is the interaction term of a 2 × 2 factorial design
+(read-out × destruction), and the logic is that of a control task
+[@hewitt2019control]: what matters is not accuracy under destruction but the
+difference a component makes with and without the structure it is supposed to
+use. Destroying order in training as well as test data has precedent in
+language modelling [@sinha2021order]. And the outcome is not guaranteed by the
+architecture: attention with positional encodings has been found nearly
+insensitive to shuffled input in time-series forecasting [@zeng2023ltsf].
 
-**The claim is about presence, not proportion.** Measured across **all
-twenty-one** operating points and at two training budgets, the order-dependence is
-present everywhere and its *size* is uncorrelated with the gain (§3.5). The contribution is therefore a statement about what the
-read-out consumes, and explicitly not a decomposition of the gain into an
-order-dependent share and a remainder.
+**The claim is about presence, not proportion.** Across twenty-one operating
+points at two training budgets, the read-out's gain depends on order wherever it
+has a gain to lose — at every point after 100 epochs and at sixteen of
+twenty-one after 400 — and the *size* of the dependence is uncorrelated with the
+gain (§3.5). The contribution is therefore a statement about what the read-out
+consumes, and explicitly not a decomposition of the gain into an order-dependent
+share and a remainder.
 
 **New, and unsupported in either direction: the width collapse.** No published
 work reports an attention read-out degrading with hidden width, and none reports
@@ -167,7 +188,7 @@ gradient pathology in an attention read-out over spike trains. Width normally
 *helps* on SHD (Cramer et al.: 1024 neurons → 76.5%; Bittar & Garner [@bittar2022]: RadLIF at
 3×128 → 3×1024 improves 92.88 → 94.62). §3.5's inversion is therefore an anomaly
 against the baseline expectation with no citation to lean on, and the parsimonious
-alternative — overfitting on the **8,156** training samples every cell in this
+alternative — overfitting on the **8,156** training samples every run in this
 campaign records loading — is **not excluded by anything in this paper**. Cramer
 et al. report overfitting on SHD repeatedly, and that noise injection reduced it.
 
@@ -178,6 +199,10 @@ model at 95.81 ± 0.56 validating on the test set "to ensure comparability" and
 property of the protocol, not of the model.
 Differences below ~1.5 points between published SHD numbers are not reliably
 meaningful, and that applies to this paper's comparisons as much as anyone's.
+It applies to this paper's headline directly: every number here is test-set
+accuracy, and the anchor configuration was carried forward because it cleared
+0.80 on the test set, so **0.8332 is test-selected**. The paired contrasts are
+not, because both arms of every pair are selected together.
 
 ---
 
@@ -194,7 +219,8 @@ because the mechanism and the improvement are confounded in it.
 in every other respect, on the same seeds and splits, and measure the gain.
 Then destroy the temporal order of the input — permuting time bins
 independently per sample, in the training split as well as the test split, so
-that the task itself becomes rate-solvable rather than merely harder — and
+that the task itself must be solved without temporal order rather than merely
+being made harder — and
 measure the gain again. The difference of those two differences is the
 quantity this paper reports. It is a statement about a component's marginal
 contribution, not about how much accuracy survives a corrupted input, and it is
@@ -218,8 +244,12 @@ separates the mechanism from the schedule it was measured on.
 
 **Coverage, because a mechanism claim at one configuration is a configuration
 result.** The contrast is measured at every one of the twenty-one operating
-points this instrument defines — widths 128 to 1024, both binning contracts,
-both channel geometries, five read-out depths — and at two budgets at each.
+points this instrument defines — widths 128 to 1024, both binning schemes,
+both channel geometries, five read-out configurations — and at two budgets at
+each. Coverage also exposes the contrast's limit: where the read-out has no gain
+to lose, a positive difference-in-differences means only that attention falls
+below the rate read-out once order is gone, and we report those five points as
+such rather than as support.
 
 **What failed is reported at the same weight as what held.** The registered
 prediction that the shuffle cost would *track* the gain across width is refuted
@@ -254,52 +284,96 @@ The C1 harness encodes coincidence sequences with a latency encoder, integrates 
 
 ### 2.3 SHD attention readout
 
-On the Spiking Heidelberg Digits dataset [@cramer2022], we evaluate a time-axis self-attention read-out (`+attn`) over LIF hidden activations, comparing against a standard mean-rate read-out. The read-out is **additive**: at $W_a = 0$ the arm reduces exactly to its non-attention counterpart, so any difference between them is attributable to the read-out and not to a perturbed spiking forward.
+**Task and substrate.** On the Spiking Heidelberg Digits [@cramer2022] (20
+classes; 8,156 training and 2,264 test utterances; 700 input channels), a single
+hidden layer of leaky integrate-and-fire (LIF) neurons is trained with surrogate
+gradients [@zenke2021robustness] through full backpropagation through time. The
+**rate arm** reads the mean spike count of each hidden unit over the utterance
+through a linear layer. The **attention arm** adds a time-axis self-attention
+block over the hidden spike train, whose mean-pooled output passes through a
+second linear layer and is **added** to the rate arm's logits. Its output weights
+start at zero, so at initialisation the attention arm *is* its rate twin, and
+both arms of a pair share every base weight at the same seed; any difference
+between them is attributable to the read-out, not to a perturbed spiking forward.
 
-Two properties of the block are stated explicitly because they bound what the result can mean. It is **not causal** — every timestep attends to every other, through a full $[T, T]$ row-softmax with no mask, so the arm consumes the whole utterance at inference. And it is **single-head**: one $q, k, v$ triple of shape $[d, d]$ per block, with depth supplied by stacking $L$ blocks rather than by splitting heads. Positional information is a fixed sinusoidal code over normalised position; without it, mean-pooled attention is permutation-invariant and the block would be blind to the order it exists to use. Every arm here is trained by the matched BPTT instrument, not by the local rule under test elsewhere in this paper; the read-out is a gradient reference, and no claim of locality is made for it.
+**The attention block** is single-head, $L$ blocks deep at width $d$ (one $q, k,
+v$ triple of shape $[d, d]$ per block, residual connections only, no
+normalisation or MLP), and **not causal**: a full $[T, T]$ row-softmax with no
+mask, so the arm sees the whole utterance at inference. Position enters as a
+fixed sinusoidal code over normalised position; without it, mean-pooled
+attention would be permutation-invariant. Every arm is trained by the same
+gradient instrument; no locality claim is made for the read-out.
 
-The benchmark tests temporal structure preservation across read-out depth ($L \in \{1, 2, 3, 4\}$ blocks, at attention width $d \in \{32, 64\}$), width ($h \in \{128, 256, 384, 512, 768, 1024\}$), binning geometries (`adjacent-sum-5`, `channels-700`, `published-10ms`), temporal resolution at fixed window (`fixed-t100/t250/t500`), temporal shuffling controls (`bin-shuffled`, `channel-shuffled`), and — for the substitution question of §3.7 — the **spiking substrate itself**: $\{$feed-forward, recurrent$\} \times \{$fixed threshold, adaptive threshold$\}$, written `ff+fixed`, `ff+alif`, `rec+fixed`, `rec+alif`.
+**Operating points.** An operating point is one configuration of hidden width
+$h \in \{128, 256, 384, 512, 768, 1024\}$, binning, channel geometry and read-out
+depth ($L \in \{1, 2, 3, 4\}$ at $d \in \{32, 64\}$). *Binning* is either
+`published-Nms` (bins of N ms from the first event, so the number of steps $T$
+varies by utterance; 358 steps on average at 2 ms) or `fixed-tN` (a fixed 1400 ms
+window cut into N bins: 14.0, 5.6 or 2.8 ms). *Channels* are either all 700
+(`channels-700`) or adjacent groups of five summed to 140 (`adjacent-sum-5`).
+The **anchor** is $h = 128$, `published-2ms`, `adjacent-sum-5`, $d = 32$,
+$L = 4$, 400 epochs. The substrate question of §3.7 also varies the substrate:
+feed-forward or recurrent, fixed or adaptive threshold (`ff+fixed`, `ff+alif`,
+`rec+fixed`, `rec+alif`).
+
+**Destruction operators**, each drawn once per sample before training and applied
+identically to the training and test splits: `bin-shuffled` permutes the time
+bins (one permutation for all channels); `channel-shuffled` permutes each
+channel's bins independently; `reversed` reverses time; `hidden-shuffled`
+permutes only the time axis the attention block sees, leaving the substrate
+intact. Every manipulated run uses the same manipulation seed, so all model seeds
+see the same permutations.
+
+| component | setting |
+|---|---|
+| neuron | LIF, $u_t = \alpha\, u_{t-1}(1 - s_{t-1}) + W_{\text{in}} x_t$, threshold 1, hard reset (not differentiated); $\alpha = e^{-\Delta t/\tau}$, $\tau = 10.05$ ms (retention 0.82 per 2 ms step) |
+| surrogate | arctan derivative, $\sigma'(x) = (\beta/2)/(1 + (\pi\beta x/2)^2)$, $\beta = 5$ |
+| input | integer event counts per bin and channel, unscaled |
+| loss | softmax cross-entropy, batch mean, full BPTT |
+| optimiser | Adam ($\beta_1 = 0.9$, $\beta_2 = 0.999$, $\epsilon = 10^{-8}$), L2 penalty $10^{-5}$ added to the gradient (not decoupled), none on the output bias |
+| learning rate | one-cycle: $10^{-3}$ to $5 \times 10^{-3}$ over the first 30% of steps, annealed to $10^{-5}$ |
+| batch, epochs | 256 (32 steps per epoch); 400 or 100 epochs |
+| initialisation | Glorot-uniform for every weight matrix, each from its own seeded stream; output biases and attention output weights zero |
+| regularisation | none: no dropout, no data augmentation; no gradient clipping at the anchor |
+| seeds | 12 per arm per point (32 at the anchor), paired across arms |
+| precision | 32-bit floating point throughout |
+
+**Evaluation.** SHD has no validation split, and no model selection was done on
+one: every accuracy reported is **test-set accuracy after the final epoch**.
+The consequences for the headline are stated in §0.
+
+**Compute.** The instrument is written in Rust and runs on CPU only. The
+paper's evidence comprises 3,934 runs totalling 12,916 hours of per-run wall
+time on aarch64 and x86-64 cloud instances and one Apple-silicon machine; an
+anchor attention run takes 3–11 hours depending on host and load, a rate run a
+few minutes. Runs of the same configuration on the two cloud architectures are
+bit-identical — 129,253 recorded values across 83 run pairs — and the
+Apple-silicon rate arm at the anchor lands 0.0006 from the cloud fleet's (§5).
 
 ### 2.4 Preregistration, frozen hashes, and kill-gates
 
-Four disciplines separate this record from an ablation sweep. Each is enforced
-by tooling rather than by intention, which is the only reason any of them can be
-cited as evidence.
+Each experiment in this paper was run as a preregistered **wave**: a batch of
+runs whose hypotheses, numeric bars, stopping rules and analysis script were
+committed before its first run existed, a constraint the version history
+attests rather than the prose [@bertinetto2021prereg]. Three rules make that
+record citable.
 
-**Frozen configuration hashes.** Every scientific run is named by a hash over its
-configuration. A protocol may not be reinterpreted under its old hash; a new
-hypothesis requires a new hash. `c1-118207fbc3eaba53` (Gate G2) and
-`r2-afafa0fa6f43e3fc` (Gate G4) are frozen and are reopened by no downstream
-result here. When a hash is found to name two experiments — as four `c1-*`
-hashes were, having never mixed in the load-bearing `MATCHED_INPUT_SCALE` — it is
-retired rather than quietly reinterpreted, and `scripts/test_published_hashes_resolve.py`
-fails if a retired hash is cited anywhere in the repository as a live result.
+**Frozen configurations.** Every run is named by a hash over its configuration.
+A result may not be reinterpreted under its old hash; a new hypothesis needs a
+new hash. A hash found to name two different experiments is retired rather than
+reinterpreted, and a test fails if a retired hash is cited as a live result.
 
-**Kill-gates are permanent.** G2 FAIL is terminal: every downstream experiment
-(C2, C3, R1, R2) requires an explicit opt-in flag (`--enable-c2`, and so on) to
-run at all, so that post-G2 work cannot be mistaken for a rescue of G2.
+**Failed predictions stay failed.** Where a registered prediction failed we
+report it as failed; the size prediction of §3.5 is the worked case. A bar that
+turns out to be wrong is reported together with the result it produced, and a
+replacement bar governs only the next wave, on new runs. Re-reading the same
+runs against a bar chosen afterwards is what this rule exists to prevent.
 
-**Preregistered bars and falsifiers.** Each claim carries a numeric bar fixed
-before the run and a stated falsifier, registered in a PREREG document whose
-analyser is committed before the first cell of that wave exists — a constraint
-the git history attests rather than the prose. Where a preregistered prediction
-failed we report it as failed; the registered size prediction of §3.5 is the
-worked case. A bar that turns out to be wrong is reported as a wrong bar
-together with the result it produced, and a replacement bar governs the *next*
-wave on new cells. Re-reading the same cells against a bar chosen afterwards is
-the failure this rule exists to prevent.
-
-**A check that could not run must not report what a check that ran and passed
-reports.** `scripts/record_checks.sh` runs twelve gates over the manuscript and
-the archived cells, with the coverage boundary stated in §0. One audits the
-others: `scripts/find_weak_checks.py` reports every assertion that would still
-print `ok` if the thing under test did nothing — an ablation whose variants all
-equal the baseline, a shuffle that is the identity, a loop over a possibly empty
-collection. It exists because silent success is the dominant class in this
-instrument's own defect register, **five of its ten defects**
-([`AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md`](AUDIT_2026-08-03_RUST_DEFECT_REGISTER.md);
-[`DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md`](DEFECT_2026-08-29_THE_EVALUATION_FORWARD_WAS_NEVER_CHECKED.md)).
-Its count is a standing figure that may not rise unexplained.
+**A check that could not run must not look like one that passed.** A suite of
+record checks recomputes every published number from the archived runs; one of
+them reports every assertion that would still pass if the thing under test did
+nothing, because silent success was the most common class in this project's own
+defect register (five of its ten defects).
 
 ---
 
@@ -307,7 +381,7 @@ Its count is a standing figure that may not rise unexplained.
 
 ### 3.1 Matched-architecture primary results
 
-All figures below are the 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`, n = 20, reported on both forward graphs. The forward is held fixed and only the update rule changes (Figure 5); the arm means and both halves of the gate are drawn by verdict rather than ranked (Figure 6) because the arms were historically split across two and the difference exceeds the registered 0.02 bar on two of them ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
+All figures below are the 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`, n = 20, reported on both forward graphs. The forward is held fixed and only the update rule changes; the arm means and both halves of the gate are drawn by verdict rather than ranked (Figure 6) because the arms were historically split across two and the difference exceeds the registered 0.02 bar on two of them ([`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md)).
 
 | arm | feed-forward | recurrent | verdict |
 |---|---:|---:|---|
@@ -328,55 +402,140 @@ Honesty note required in the main text: on the DFA matched schedule, a broadcast
 
 ### 3.2 Engine C1 secondary results
 
-Canonical C1 fails Gate G2 (local 0.4912, gap LCB −0.0048) (Figure 7); local-assembly and dense-local are **at chance on a two-class task**, which the figure marks with an explicit 0.50 line rather than letting bars from a zero baseline read as half the reference. Trial isolation and temporal positive-control sensitivities fail without clearing the accuracy floor. Capacity sensitivity clears the accuracy floor (0.6775) but leaves gap LCB at 0.0000 versus dense/gradient references—descriptive only, not a G2 PASS.
+Canonical C1 fails Gate G2 (local 0.4912, gap LCB −0.0048); local-assembly and dense-local are **at chance on a two-class task**, which the figure marks with an explicit 0.50 line rather than letting bars from a zero baseline read as half the reference. Trial isolation and temporal positive-control sensitivities fail without clearing the accuracy floor. Capacity sensitivity clears the accuracy floor (0.6775) but leaves gap LCB at 0.0000 versus dense/gradient references—descriptive only, not a G2 PASS.
 
 ### 3.3 Live transfer, gap-close, and break-it
 
-The ladder from the matched PASS down through every live arm (Figure 8) is drawn on **two** axes — the 0.65 accuracy floor and the 0.5 gap-LCB gate — because clearing the floor is not clearing the gate, and with a substrate break between rung 1 and the rest, because rung 1 is the matched dense-LIF forward and nothing below it is. Live opt-in REINFORCE feedback fails G2 (local 0.4900, gap LCB 0.0737). Epoch matching alone does not rescue random-B live RFB (local 0.4838). Structured frozen B clears the accuracy floor (0.7262) with gap LCB 0.2567 but still fails the gap bar. Stacking epochs under structured B regresses (0.5200). Structured B on a capacity substrate yields the best gap LCB in the prior suite (0.3127) while clearing the floor (0.6825), remaining short of 0.5. Eligibility×REINFORCE and restored target teach clear the floor but do not beat structured B alone. Break-it protocols close remaining differentials without remassage: live graded DFA (v20) reaches local 0.7325 with gate LCB 0.2601 and chance LCB 0.3321—floor yes, gate no. Soft-WTA × structured B (v21) regresses to chance (0.5025). Matched three-factor under 4× epochs (v22) stays at 0.5000. Finite-θ under SFB (v23) clears the floor (0.6638) with LCB 0.2370. Continuous structured B (v24) does not beat sign-truncated v15 (0.6437 / 0.1380). Spiking-path true DFA rescue fails in one honest attempt (0.6513, gap LCB 0.0733). Differential closure: [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md).
+The ladder from the matched PASS down through every live arm is read on **two** axes — the 0.65 accuracy floor and the 0.5 gap-LCB gate — because clearing the floor is not clearing the gate, and with a substrate break between rung 1 and the rest, because rung 1 is the matched dense-LIF forward and nothing below it is. Live opt-in REINFORCE feedback fails G2 (local 0.4900, gap LCB 0.0737). Epoch matching alone does not rescue random-B live RFB (local 0.4838). Structured frozen B clears the accuracy floor (0.7262) with gap LCB 0.2567 but still fails the gap bar. Stacking epochs under structured B regresses (0.5200). Structured B on a capacity substrate yields the best gap LCB in the prior suite (0.3127) while clearing the floor (0.6825), remaining short of 0.5. Eligibility×REINFORCE and restored target teach clear the floor but do not beat structured B alone. Break-it protocols close remaining differentials without remassage: live graded DFA (v20) reaches local 0.7325 with gate LCB 0.2601 and chance LCB 0.3321—floor yes, gate no. Soft-WTA × structured B (v21) regresses to chance (0.5025). Matched three-factor under 4× epochs (v22) stays at 0.5000. Finite-θ under SFB (v23) clears the floor (0.6638) with LCB 0.2370. Continuous structured B (v24) does not beat sign-truncated v15 (0.6437 / 0.1380). Spiking-path true DFA rescue fails in one honest attempt (0.6513, gap LCB 0.0733). Differential closure: [`DIFF_CLOSURE.md`](DIFF_CLOSURE.md).
 
 ### 3.4 Task evidence
 
-On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip (Figure 9). On mid-init two-layer depth locality, broadcast error also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
+On one-layer `xor_thresh`, broadcast error stays at chance (0.5008) while DFA reaches 0.8267 against gradient 0.7733—a locality flip. On mid-init two-layer depth locality, broadcast error also succeeds (0.8158) alongside DFA (0.8250) and REINFORCE×B (0.8033); depth help is not treated as a locality-flip claim.
 
 ### 3.5 SHD attention read-out and mechanism
 
-Across 1,000+ cells (n=12 per contrast, extended to n=32 where noted), the time-axis attention read-out establishes five findings on SHD. Every feed-forward contrast below is 0 voided; the ten cells this campaign has voided are all `rec+fixed`, by saturation, and are reported in §3.7:
+Every number in this section is seed-paired test-set accuracy after the final
+epoch (§2.3), and every contrast was preregistered with a numeric bar before its
+first run existed (§2.4). Appendix K lists every operating point with paired
+bootstrap 95% intervals.
 
-1. **Headline accuracy** (Figure 2): `ff+fixed+attn` at `d32/L4` at `e400` reaches **0.8320** with **12/12 seeds ≥ 0.80**, budget-stable (|e400−e200|=0.0002), providing a **+0.1258** gain over the rate readout `ff+fixed` (0.7062). ([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md)) **Confirmed at n=32**: 0.8332 against 0.7057, gain **+0.1275**, positive in **32/32** and **32/32 at or above 0.80**. Twenty seeds beyond the registered twelve move the gain by +0.0017. ([`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
-2. **Temporal order is the mechanism** (Figure 1): under bin-shuffling, the attention arm drops **+0.1337** (from 0.8320 to 0.6983) across **12 of 12 seeds**, while the plain arm drops only **+0.0128** (from 0.7062 to 0.6934)—a **10× factor**. The attention advantage collapses from +0.1258 to +0.0050; **96% of the readout benefit is contingent on temporal order** (94.5% at n=32, where the advantage falls +0.1275 → +0.0070). ([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md)) **Confirmed at n=32**: the attention arm's shuffle cost is **+0.1347**, positive in **32/32**, against the rate arm's +0.0142 — a **9.5× factor**. Twenty further seeds move it by +0.0010. ([`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
+**The headline** (Figure 2). At the anchor — 128 hidden units, `published-2ms`
+binning, `adjacent-sum-5` channels, attention width 32 with four blocks, 400
+epochs — the attention arm reaches **0.8332** against the rate arm's 0.7057 over
+32 seeds, a gain of **+0.1275** (95% CI [+0.123, +0.132]), positive in 32 of 32
+seeds and at or above 0.80 in 32 of 32. The twelve registered seeds gave 0.8320
+against 0.7062 (+0.1258); twenty further seeds moved the gain by +0.0017.
+([`RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md`](RESULT_2026-08-20_D32L4_CLEARS_THE_080_GATE.md);
+[`RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md`](RESULT_2026-08-27_W15_17_THE_COLLAPSE_IS_A_THRESHOLD.md))
 
-   **The mechanism is not unique to the anchor.** A preregistered wave carried the same operator, the same seeds and the same pinned binary to seven further operating points — 168 cells, **zero divergences and zero voided**, every point clearing the registered floor of nine seed-paired quadruples:
+**The conditional** (Figure 1). Under bin-shuffling, on the same 32 seeds, the
+attention arm loses **+0.1347** and the rate arm **+0.0142**. The gain falls from
++0.1275 to **+0.0070**, so the read-out × shuffle interaction — the
+difference-in-differences (DiD) — is **+0.1205** (95% CI [+0.114, +0.127]),
+positive in 32 of 32. The rate arm cannot pay for a permutation of time except
+through the substrate, whose membrane retains 0.82 of its state per 2 ms step;
+its +0.0142 is that substrate's own dependence on order.
+([`RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md`](RESULT_2026-08-21_W9_THE_MECHANISM_HOLDS_AT_THE_HEADLINE.md))
 
-   | operating point | quadruples | gain | **DiD** | positive |
-   |---|---:|---:|---:|---:|
-   | h256 | 12 | +0.0966 | **+0.0862** | 12/12 |
-   | h384 | 12 | +0.0760 | **+0.0767** | 12/12 |
-   | h512 | 12 | +0.0876 | **+0.0968** | 12/12 |
-   | h768 | 12 | +0.0560 | **+0.1881** | 12/12 |
-   | h1024 | 12 | −0.1318 | **+0.1122** | 10/12 |
-   | h128 / `channels-700` | 12 | +0.1090 | **+0.1122** | 12/12 |
-   | h128 / `published-10ms` | 12 | +0.1491 | **+0.0959** | 12/12 |
+**The same contrast with the substrate untouched.** `hidden-shuffled` permutes
+only the read-out's view of the hidden spike train. The substrate trains on the
+intact input and its spike train is bit-identical to the intact twin's, so the
+rate arm pays exactly nothing — in 12 of 12 seed pairs, every recorded field is
+identical. The attention arm's gain falls from +0.1258 to +0.0099: DiD
+**+0.1159**, positive in 12 of 12, close to what destroying order in the data
+costs on the same seeds (+0.1208). What the read-out consumes, it reads off the
+hidden layer's time axis.
+([`RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md`](RESULT_2026-09-05_W27_THE_TIMESCALE_IS_261_MS.md))
 
-   **Coverage is complete, and the dissociation is wider than one width** (wave 22, preregistered). The twelve operating points that previously carried intact arms with no `bin-shuffled` twin were measured on a **self-contained** 504-cell wave — all four arms on one binary, so no difference-in-differences is built across two. **All twelve clear the registered +0.03 bar**, the smallest at **+0.0610** and the weakest positive count at **11 of 12**, so `scripts/mechanism_coverage.py` now reports **21 of 21**. At **h1024/`d32`/L1 the read-out makes accuracy worse — gain −0.0159 — and destroying temporal order still costs it +0.0675 in 12 of 12 seeds**; at h512 the gain is **+0.0043**, indistinguishable from nothing, against a DiD of **+0.0893**; and `channels-700` gains **+0.0243** while carrying the wave's largest DiD, **+0.1369**. The dissociation above was found at h1024 and recorded as this paper's leading open problem; it is **not an h1024 pathology**, and it recurs at widths and geometries where nothing collapses. ([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md))
+**Twenty-one operating points, and where the read-out has no gain to lose.**
+Preregistered waves measured the same DiD at every operating point the
+instrument defines — widths 128 to 1024, both binning schemes, both channel
+geometries, and read-out depths of one to four blocks at attention width 32 or
+64 — at 400 epochs and again at 100. The DiD clears its registered +0.03 bar at
+every point and both budgets.
+([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md);
+[`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md);
+[`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md))
 
-   **The operator that carries every one of those numbers is now controlled** (wave 24, preregistered). Until this point every difference-in-differences in this paper rested on a single destruction operator, and `bin-shuffled` destroys temporal order *and* displaces almost every spike. On that evidence "the read-out consumes temporal order" was not distinguishable from "the read-out is more brittle than the rate arm to having its input moved about." The control is **time reversal**, which by the instrument's own per-cell manipulation audit relocates **0.9986** of entries at a mean displacement of **145.2 bins** — against bin-shuffling's 0.9972 and 109.2, so it moves spikes *a third further* — while preserving per-channel counts, cross-channel synchrony and every inter-spike interval. Because the manipulation is applied to the training split as well, a globally reversed task is isomorphic to the intact one: the displacement is maximal and the information loss is nil. **At all three points measured the difference-in-differences under reversal is negative** — −0.0222 at h128/`d32`/L2, −0.0040 at h1024/`d32`/L1, −0.0099 at h128/`fixed-t250`/`d32`/L4 — and positive in 2, 4 and 3 of twelve seed quadruples, against the same +0.03 bar the shuffle clears everywhere. The cost is not in the displacement. It is in what the displacement destroys. **This is the one result in the paper with an independent prediction behind it**: Yu et al. (2025) report that delay-free networks are robust to a time reversal that preserves intervals and coincidences, and this instrument has no delays (§0). ([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md))
+That statistic alone overstates the claim. The DiD is gain(intact) −
+gain(shuffled), and where the intact gain is near zero a positive DiD records
+only that the attention arm trains *below* the rate arm once order is gone, not
+that the read-out bought anything order-dependent. At 100 epochs the read-out has
+a gain at every point — the smallest lower bound of any intact-gain interval is
++0.034 — so there the DiD measures an order-dependent benefit everywhere. At 400
+epochs it has a gain above +0.03 at sixteen of the twenty-one points (fourteen
+with the whole interval above it). At the other five — one block at widths 256,
+512 and 1024, one block on `channels-700`, and four blocks at width 1024 — the
+intact gain lies between −0.1618 and +0.0243 and the shuffled gain between
+−0.2740 and −0.0608. **The claim this paper defends is therefore that wherever
+the read-out has a gain to lose, that gain depends on temporal order.** The
+negative shuffled gains are a finding in their own right: at one block and a
+long budget, attention on a task that has lost its order falls 0.06 to 0.27
+below a read-out that ignores time. Each training sample's permutation is drawn
+once and held fixed (§2.3), so a positional code can fit it; this paper does not
+test that account.
 
-   **But order is not the whole of it at every operating point.** `bin-shuffled` applies one permutation to every channel, so temporal order dies and within-bin synchrony survives; `channel-shuffled` permutes each channel independently and destroys both. Their difference is what cross-channel synchrony contributes, and the same wave registered it as a question with no directional prediction. At both `published-2ms` points the answer is **order alone** — the two DiDs differ by −0.0117 and −0.0181, inside a ±0.03 band. At **`fixed-t250` destroying synchrony as well as order doubles the cost: +0.2157 against +0.1119**, a difference of **+0.1038**. **The read-out reads cross-channel synchrony as well as temporal order**, and the paper's one-word summary of the mechanism is incomplete. Wave 24 could say that of one operating point; the next paragraph says it of the whole resolution ladder.
+**What "order" means.** Bin-shuffling destroys order and also displaces almost
+every spike, so on that operator alone the result could be brittleness to
+displacement. **Time reversal** displaces spikes further — it relocates
+**0.9986** of entries at a mean of **145.2 bins**, against bin-shuffling's 0.9972
+and 109.2 — while preserving per-channel counts, cross-channel synchrony and every
+inter-spike interval, and because it is applied to the training split as well, it
+leaves a task isomorphic to the intact one. At all three points measured its DiD
+is negative (−0.0222, −0.0040, −0.0099; positive in 2, 4 and 3 of twelve), against
+the same +0.03 bar. The cost is in what the displacement destroys, not in the
+displacement.
+([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md))
 
-   **Synchrony is an axis, not a single point.** Wave 24 found the term at `fixed-t250` and nowhere else, and both remaining rungs of that ladder now answer the same way: destroying cross-channel synchrony on top of temporal order costs **+0.1308** more at `fixed-t100` (DiD +0.2631 against +0.1323) and **+0.0575** more at `fixed-t500` (+0.1736 against +0.1161), while both `published-2ms` points sit inside the ±0.03 band and slightly negative. **The read-out reads cross-channel synchrony as well as temporal order, and how much depends on the contract.** As an observation carrying no registered claim, the term falls monotonically as bins get finer — +0.1308, +0.1038, +0.0575 at 14.0, 5.6 and 2.8 ms, and absent at 2 ms — which is the direction a bin-width account predicts, because a wider bin holds more coincident spikes for `channel-shuffled` to destroy and `bin-shuffled` to preserve. Three rungs are three points, no curve is fitted, and the `published-2ms` points differ in sequence length as well as bin width so they are not a fourth rung. ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md))
+**Synchrony, as an upper bound.** `bin-shuffled` applies one permutation to all
+channels, so order dies and within-bin synchrony survives; `channel-shuffled`
+permutes each channel independently and destroys both. At the three `fixed-tN`
+windows, destroying synchrony as well costs **+0.1308**, **+0.1038** and
+**+0.0575** more (DiDs +0.2631, +0.2157 and +0.1736 against +0.1323, +0.1119 and
++0.1161), falling as bins get finer (14.0, 5.6, 2.8 ms); at both `published-2ms`
+points the increment is within ±0.03 (−0.0117, −0.0181). **These increments are
+upper bounds.** `channel-shuffled` also changes the substrate's activity: at
+the three `fixed-tN` windows it more than doubles the rate arm's mean firing
+rate (from 0.18–0.20 to 0.38–0.45) and pins up to 3.5% of its hidden units at
+maximum firing, where `bin-shuffled` pins none. Part of each increment may
+therefore be an activity effect. A re-measurement at matched activity
+has not been run. The read-out reads synchrony as well as order at coarse bins;
+how much of the increment is synchrony is open.
 
-   **What the advantage runs through** (waves 26–29, each preregistered). Everything above destroys order in the *data*; three further manipulations ask what in the read-out consumes it, all at one operating point — h128, feed-forward, `published-2ms`, `d32/L4`, e400. **Position** carries part of it but not all: deleting only the read-out's positional encoding drops the gain to **+0.0506** from **+0.1258**, a cost of **0.0752** in 12 of 12, yet destroying order in the data leaves just **+0.0050**, so something besides the positional code carries order here and this paper does not say what. **The timescale is long**: permuting bins inside a sliding window reaches half the full shuffle's effect at **130.33 bins — 261 ms**, about 36% of the 716 ms mean utterance. **It is not spike counts**: under random deletion the advantage does not fall but **grows**, to **+0.1640** at p90, the substrate losing 0.1080 where the read-out loses **0.0698**. That clause was registered two-sided for a one-sided question and **is recorded NOT MET and reported as NOT MET**; wave 29 re-registered it as two one-sided clauses on a fresh seed block and **both are MET** (DiD **−0.0467**, 11 of 12). What stands is the comparison — destroying order costs the read-out **0.1208**, destroying counts costs it nothing. None of this decomposition transfers to h1024 or to a recurrent substrate on this evidence: the difference-in-differences travels to twenty-one points, its decomposition does not. **Appendix F** carries the three manipulations in full.
+**What in the read-out consumes it** (waves 26–29, one operating point).
+Removing only the positional encoding cuts the gain from +0.1258 to **+0.0506**,
+while destroying order in the data leaves +0.0050, so something besides the
+positional code carries order, and this paper does not identify it. Permuting
+bins inside a sliding window reaches half the full shuffle's effect at a window
+of **130.33 bins (261 ms)**, interpolated linearly between the measured windows
+of 128 and 192 bins; that is about 36% of the mean utterance. Spike counts are
+not what it consumes: under random spike deletion the advantage grows, to
++0.1640 at 90% deletion, and a two-sided registration of that contrast was NOT
+MET before a one-sided re-registration on fresh seeds was MET (DiD −0.0467, 11
+of 12). Appendix F gives the three manipulations in full.
+([`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md);
+[`RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md))
 
-   **The budget limit is retired.** Wave 24 measured the contrast at `e100` at two of the twenty-one — **+0.1183** at h128/`d32`/L2 and **+0.0633** at h1024/`d32`/L1, each positive in **12 of 12** seed quadruples and each within 0.005 of its own `e400` value, with reversal still flat at both (−0.0068, −0.0307). Wave 25 measured the other nineteen. **All nineteen clear the +0.03 bar**, seventeen at 12/12 seed quadruples and the weakest at 11/12, ranging from **+0.0469** (h1024 `d32l2`) to **+0.1381** (h128 `d64l4`). **Every one of the twenty-one operating points now carries the difference-in-differences at two budgets, and the mechanism is not a property of the anchor budget.** Two budgets are still two budgets; nothing here maps the contrast as a function of training length.
+**Presence, not proportion.** The registered prediction that the DiD would track
+the gain across the six widths failed: Spearman ρ = **−0.1430** against the
+one-tailed n = 6 critical value of +0.829. With six points only a near-perfectly
+monotone relation could have passed, so the failure is weak evidence, and the
+five points without a gain explain much of the mismatch: there the DiD is carried
+by the shuffled gain, not by the intact one. We claim that the read-out's gain
+is order-dependent, not how much of it is.
 
-   **The depth question that wave 22 could not evaluate is now answered, and it is answered NOT MET.** H22-3 was **NOT EVALUABLE** because its analyser needs a `d32l4` twin drawn from the wave's own cells and the plan contained none — the self-containment that makes every other verdict sound is what starved it, and neither the analyser nor the corpus was touched afterwards ([`DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md`](DEFECT_2026-08-31_H22_3_CANNOT_BE_EVALUATED.md)). Wave 25 ran the missing twins as a registered wave of its own rather than as a repair, and against them the contrast is largely indifferent to read-out depth: h128 (`d32l2` **+0.0063**, `d64l4` **+0.0123**), h256 (**+0.0104**) and h512 (**+0.0075**) all sit inside 0.013 of their twin, against a registered bar of 0.10. **h768 `d32l2` is +0.1271 from its twin and outside it**, so the question is answered **NOT MET** and **read-out depth is a scope axis for the mechanism claim, at one width of five.** h768 is also where the campaign records its largest difference-in-differences (+0.1881) and its smallest positive gain (+0.0560); this paper does not explain either, and one point outside a bar is a scope limit to disclose rather than a depth effect to characterise.
-
-   **The `gain` and `DiD` columns are over the same seeds everywhere except h1024**, where the DiD is over the twelve quadruples and the gain over the twenty intact pairs waves 18–19 extended that width to; over the twelve quadruple seeds the h1024 gain is **−0.1618**. The rank is identical either way.
-
-   **The size of the effect is not the gain.** Spearman ρ between the six per-width gains and their DiDs is **−0.1430** against a preregistered bar of **+0.829**, the n = 6 one-tailed critical value — not a weak positive, absent and faintly negative. h768 buys the least on the ladder and carries the largest DiD in the wave. The registered reading is that the difference-in-differences is a property of the read-out and **not a quantitative account of what the gain is made of**. ([`RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md`](RESULT_2026-08-29_W21_THE_MECHANISM_TRAVELS_BUT_ITS_SIZE_DOES_NOT.md))
-3. **Sample efficiency:** Attention reaches 98.1% of e400 accuracy by 10 epochs (0.7337), bracketing convergence at `(5, 10]` epochs. **The denominator is the `d32/L1` arm at convergence (0.7483), not the `d32/L4` headline** — against the headline's 0.8320 the same cell is 88.2%. The two operating points differ: the L1 ladder's e400 gain is +0.0421, not +0.1258. ([`RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md`](RESULT_2026-08-20_W7_CONVERGENCE_IS_BRACKETED.md); refines [`RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md`](RESULT_2026-08-20_W6_ATTENTION_IS_SAMPLE_EFFICIENCY.md))
-4. **Scope limits:** the gain inverts at width h1024 — +0.1258 at h128 falling to +0.0560 at h768 and then to **−0.1618** — and that inversion is a **threshold rather than a continuing slope**, sitting between h768 and h1024 at **6.9×** the largest gap below it. It is a property of read-out *depth* at that width rather than of the width: `d32/L2` and `d32/L3` both gain there. Three preregistered rescue levers are negative and no mechanism is offered. The difference-in-differences nonetheless stays **positive** at h1024 (**+0.1122**, 10 of 12 seeds) — the read-out consumes temporal order while performing worse than no read-out at all, which §4.8 records as this paper's leading open problem. **Appendix E** carries the ladder, the budget dependence, the rescue attempts and what each does not settle. Gain is positive across geometries (+0.1090 on `channels-700`, +0.1491 on `published-10ms`), but 0.80 clearance is geometry-specific (0.7864 on `channels-700`).
-5. **Temporal resolution is an axis, and the gain falls as bins get finer.** The `published-Nms` test of this (S-5) was **refuted and is withdrawn**: that family moves bin width and sequence length together, so a single number cannot be attributed to either. Re-asked on `fixed-tN`, which holds a 1400 ms window fixed and varies only the frame count, the read-out helps at **every** rung and the gain is monotone in resolution — **+0.1927** at 14.0 ms bins, **+0.1751** at 5.6 ms, **+0.1474** at 2.8 ms, each 12/12 seeds positive and 12/12 over the 0.80 gate. gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so the advantage **shrinks** as bins get finer while never reversing. **Appendix I** carries the ladder.
+**Scope.** *Depth:* four of five widths put the DiD within 0.013 of their
+four-block twin; h768 with two blocks is 0.1271 away, outside the registered
+0.10 bar. *Width:* the gain falls from +0.1258 at width 128 to +0.0560 at 768
+and inverts to −0.1618 at 1024, a threshold between 768 and 1024 at 6.9× the
+largest step below it, which two- and three-block read-outs at that width do not
+show (Appendix E). *Resolution:* holding a 1400 ms window fixed, the gain is
++0.1927, +0.1751 and +0.1474 at 14.0, 5.6 and 2.8 ms bins, shrinking by −0.0453
+as bins get finer but never reversing (Appendix I). *Geometry:* the gain is
+positive on both channel geometries, but 0.80 is cleared only on
+`adjacent-sum-5` (0.7864 on `channels-700`). *Substrate:* every manipulated run
+is feed-forward; the registered attempt on a recurrent substrate could not be
+evaluated (§3.7).
 
 ---
 
@@ -438,7 +597,7 @@ The difference is **+0.1411** against a bar of 0.03, positive in **10 of 10** re
 
 **So substitution is refuted on both axes**, and the read-out's advantage is indifferent to adaptation and *larger* where the substrate is recurrent.
 
-**This paragraph used to read that finding through §3.5's shuffle result and conclude that the claim is "about what the read-out consumes". That reading is withdrawn.** Every manipulated cell in this corpus is feed-forward, and the wave registered to fix that — 72 recurrent cells under `intact`, `bin-shuffled` and `reversed` — **could not be evaluated**: ten failed on the instrument's non-finite-training guard, five of them the rate arm under time reversal, leaving the reversal contrast at three seed-paired quadruples against a floor of nine. **Whether the recurrent read-out's advantage is order-dependent is unmeasured**, and this section no longer asserts it. What the attempt did establish is that `rec+alif` at the registered surrogate scale is numerically unstable under time reversal, which is a fact about the substrate and not about the read-out ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
+**Whether the recurrent advantage is order-dependent is not measured.** Every manipulated run in this paper is feed-forward, and the wave registered to change that — 72 recurrent cells under `intact`, `bin-shuffled` and `reversed` — **could not be evaluated**: ten failed on the instrument's non-finite-training guard, five of them the rate arm under time reversal, leaving the reversal contrast at three seed-paired quadruples against a floor of nine. What the attempt did establish is that `rec+alif` at the registered surrogate scale is numerically unstable under time reversal, which is a fact about the substrate and not about the read-out ([`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
 
 Four limits are load-bearing and are stated here rather than in a footnote.
 
@@ -506,107 +665,112 @@ Continual forgetting (C2 / Gate G3 FAIL), multi-area scaling (R2 / Gate G4 **NO-
 
 ### 4.6 Neuromorphic benchmark scope and non-claims
 
-The SHD attention readout results are anchored at **h128 / `published-2ms` /
-`adjacent-sum-5`**, and the **mechanism** result is no longer scoped to it: the
-destruction control exists at **21 of 21 operating points**, covering widths 128
-through 1024, both contracts and both geometries, and
-`scripts/mechanism_coverage.py` recomputes that on every gate run. Wave 22
-measured the twelve points that previously carried intact arms with no
-`bin-shuffled` twin, and every one of them clears the registered bar
-([`RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md`](RESULT_2026-09-01_W22_THE_MECHANISM_AT_EVERY_OPERATING_POINT.md)). **The budget limit that stood beside that coverage is
-discharged:** wave 24 measured the contrast at `e100` at two of the twenty-one
-and wave 25 at the other nineteen, and every one of the twenty-one clears the
-registered bar at both budgets. Two budgets are not a curve, and nothing
-maps the contrast as a function of training length. Wave 24 also supplies what
-the mechanism claim had never had — a destruction control that is
-displacement-matched and information-preserving — and finds a second term that
-wave 25 then measured across the resolution ladder: destroying cross-channel
-synchrony as well as order costs +0.1308, +0.1038 and +0.0575 more than
-destroying order alone at `fixed-t100`, `fixed-t250` and `fixed-t500`, and
-nothing at either `published-2ms` point, so **"temporal order" is an incomplete
-description of the mechanism** and how incomplete depends on the contract
-([`RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md`](RESULT_2026-09-02_W24_ORDER_SYNCHRONY_AND_BUDGET.md);
-[`RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md`](RESULT_2026-09-03_W25_THE_MECHANISM_WHERE_IT_WAS_UNMEASURED.md)).
-**Two limits replace it.** Read-out depth is a scope axis: four of five widths
-put the contrast within 0.013 of their `d32l4` twin and h768 is 0.1271 away,
-outside the registered 0.10 bar. And every manipulated cell in the corpus is
-feed-forward — the registered attempt to measure the recurrent substrate under
-shuffling and reversal returned **NOT EVALUABLE**, ten of its cells lost to the
-instrument's non-finite-training guard.
+**What is claimed.** On SHD, a time-axis attention read-out's gain over a rate
+read-out depends on the temporal order of the input wherever the read-out has a
+gain to lose: at all twenty-one operating points after 100 epochs, and at
+sixteen of twenty-one after 400 (§3.5, Appendix K). Removing order in the data
+and removing it only from the read-out's view give nearly the same contrast at
+the anchor (+0.1208 and +0.1159), and time reversal, which destroys no
+information, gives none. At coarse bins the read-out also reads cross-channel
+synchrony, by an amount this paper can only bound from above.
 
-**We do not claim calibration**, and what blocks it is criterion 5 — a Python
-mirror of the attention axis, which does not exist and is not attempted here
-(§4.8). The two criteria that previously read `false` no longer do, and they
-were false for a provenance reason rather than an accuracy one; nor should **the
-0.80 `CELL_PASS` floor be read as a standard the instrument is failing to
-meet**. Both are matters of the third-party reference artifact rather than of
-the read-out, and **Appendix G** carries them.
+**What is not claimed, and why.**
 
-We do not claim cortical realism, Assembly Calculus PASS, neuromorphic deployment, or impossibility of local learning in principle.
+- *Proportion.* The size of the contrast does not track the size of the gain
+  (§3.5), so we do not decompose the gain into an order-dependent share and a
+  remainder.
+- *A strong comparator.* The rate read-out cannot see order by construction.
+  The result shows that the component able to read order is the one whose
+  contribution depends on it, and how strongly; whether it survives against
+  read-outs that also see order is the first open problem (§4.8).
+- *Generality beyond this substrate and dataset.* Every manipulated run is a
+  single feed-forward LIF layer without delays or learned temporal kernels, on
+  one dataset. The registered attempt on a recurrent substrate could not be
+  evaluated: ten of its runs failed the instrument's non-finite-training guard
+  (§3.7).
+- *Depth and width.* Read-out depth is a scope axis at one width of five (h768,
+  outside the registered 0.10 bar), and the gain inverts between widths 768 and
+  1024 for reasons this paper does not identify (Appendix E).
+- *The frontier.* 0.8332 is test-selected and roughly 0.12 below the published
+  state of the art; §0 and §3.8 place it.
+- *Calibration.* No number here is comparable to an externally recorded one: the
+  instrument has no Python mirror of its attention axis (Appendix G).
 
-Seven suites are explicitly **withdrawn**. §4.7 states the count and what it
-cost; Appendix C is the ledger, entry by entry.
+We make no claim about biology, cortical realism, neuromorphic hardware, or the
+impossibility of local learning in principle.
 
 ### 4.7 The withdrawal ledger
 
-**Seven results have been withdrawn from this package, three of them PASSes.**
-We report the count in the main text because a record that shows only surviving
-results tells a reader nothing about how hard the instrument was tried, and
-because the withdrawals are what license the survivors. The episode-by-episode
-ledger, with the diagnosis for each, is
-Appendix C.
-
-Two episodes produced them. The **2026-08-19→22 record repair** withdrew four,
-including this project's most spectacular number — an online learned-feedback
-arm at **1.0000**, which a ceiling-health repair re-reads as saturation rather
-than credit assignment. The **2026-08-25 matched re-run** withdrew three more on
-the finding that every previously published matched-architecture number had been
-produced on a forward pass emitting **zero spikes at any seed**. **The lead
-negative survived both episodes on both forward graphs, which is the only reason
-it is reported at all.**
-
-The generalisable point is not that defects occurred. It is that **every one of
-these defects produced plausible numbers, and none was caught by an arm's own
-accuracy.** All were caught by instrument-health checks that ask a different
-question — could this run have produced this number for the wrong reason? The
-zero-spike forward is the cautionary case: it ran for weeks, produced
-publishable-looking results across an entire suite, and was invisible to every
-experiment's own verdict. A harness that scores whatever it is given will
-eventually score an artefact.
+**Seven results have been withdrawn from the wider project this paper comes
+from, three of them passes.** None is a number from the SHD attention campaign
+reported above; they belong to the secondary programme (§3.1). We report
+the count because a record that shows only surviving results tells a reader
+nothing about how hard it was tested, and because the withdrawals are what
+license the survivors. Two episodes produced them: a record repair that
+re-read an online learned-feedback arm's **1.0000** as saturation rather than
+credit assignment, and a re-run which found that every previously published
+matched-architecture number had been produced on a forward pass emitting **zero
+spikes at any seed**. The general point is not that defects occurred. It is that
+**every one of them produced plausible numbers, and none was caught by an arm's
+own accuracy**; each was caught by a check that asked whether a run could have
+produced its number for the wrong reason. Appendix C gives the ledger entry by
+entry.
 
 ### 4.8 Open problems
 
-We state these as open rather than as future work, because each is a thing this
-paper's own evidence cannot currently settle.
+**Order-sensitive comparators.** The contrast of §3.5 should be repeated against
+read-outs that can themselves see order — the membrane-based Σₜ softmax(u[t]),
+max-over-time and last-step read-outs — at the anchor. That is the experiment
+that separates "attention consumes order" from "the only order-sensitive
+component consumes order".
 
-**The gain/DiD dissociation** is the leading one. The order-dependence is present at all twenty-one operating points, but its *size* is uncorrelated with the size of the gain it is supposed to explain (Spearman $\rho$ = −0.1430 over the six widths), and two waves of narrowing widened the puzzle rather than closing it. Nothing here explains why a read-out whose contribution depends everywhere on temporal order should contribute an amount unrelated to how much order it consumes. **The h1024 threshold** is located between h768 and h1024, unexplained, with three rescue levers negative and order-dependence persisting through the collapse (Appendix E). **Calibration** is unmet: criterion 5, a Python mirror of the attention axis, does not exist and is not attempted here, so no number in this paper is comparable to an externally recorded one. **The reference residual** — the 0.087 calibration gap once assigned to a 25-tap learned temporal kernel — is now known to be the net of offsetting terms rather than the kernel's value: ablating the kernel costs the reference +0.3111, restoring the instrument's membrane recovers +0.1666, and **0.0378** remains unidentified (§3.8). And **whether any local rule crosses the k-WTA transfer barrier** is open, given that a structured feedback matrix moves accuracy but not the gap (§4.2).
+**Negative shuffled gains.** At five points after long training, attention on a
+task without order falls 0.06 to 0.27 below the rate read-out. A fixed
+per-sample permutation that a positional code can fit is one account; drawing a
+fresh permutation each epoch would test it.
+
+**Synchrony at matched activity.** The synchrony increments are upper bounds
+until they are re-measured with the input scaled so that both destruction
+operators leave the substrate equally active.
+
+**The width threshold** between h768 and h1024, with three preregistered rescue
+attempts negative (Appendix E), and **the recurrent substrate**, where the
+contrast has not been measured.
+
+**A second dataset.** Everything here is SHD. The Spiking Speech Commands set is
+the natural second test.
+
+**The reference residual** — the 0.087 calibration gap once assigned to a 25-tap
+learned temporal kernel — is the net of offsetting terms rather than the
+kernel's value: ablating the kernel costs the reference +0.3111, restoring the
+instrument's membrane recovers +0.1666, and **0.0378** remains unidentified
+(§3.8). **Whether any local rule crosses the k-WTA transfer barrier** is open in
+the secondary programme (§4.2).
 
 ---
 
 ## 5. Reproducibility
 
-Scientific hashes and commands are listed in [`REPRO_ARTIFACT_CHECKLIST.md`](REPRO_ARTIFACT_CHECKLIST.md) and [`PAPER_RESULTS_TABLE.md`](PAPER_RESULTS_TABLE.md). Camera-ready citations must point at on-disk notes or exact `--config-hash` replays.
+The anonymised supplement contains the instrument's full source, every archived
+run the paper cites, the preregistrations, and the record checks.
+`python3 scripts/verify_published_numbers.py` recomputes every headline number
+from the archived runs, `python3 scripts/check_every_number.py` traces every
+four-decimal number in the manuscript to the runs or to a named record, and
+`python3 scripts/did_confidence_intervals.py --paper` regenerates Appendix K;
+each was run inside the anonymised copy before submission, together with a
+compile of the whole workspace. The two external crates the workspace depends on
+are included at the versions its lock file pins. Appendix H lists the commands.
 
-The full record rebuilds and re-checks itself from a clean checkout with `cargo test --locked --workspace`, `./scripts/gc_checks.sh` (GC1-GC7) and `./scripts/record_checks.sh` (twelve gates, 125 SHD-campaign assertions); **Appendix H** lists the commands, including the canonical Gate G2 replay.
-
-Post-G2 gates require explicit opt-in (`--enable-c2`, `--enable-c3`,
-`--enable-r1`, `--enable-r2`); see §2.4. The current matched figures come from
-the 2026-08-25 re-run recorded in
-[`RESULT_2026-08-25_MATCHED_ARCH_RERUN.md`](RESULT_2026-08-25_MATCHED_ARCH_RERUN.md),
-not from the four hashes retired with it.
-
-Attention-campaign cells are preserved in five corpora, all five of which the
-number sweep reads: `results/shd_attention_campaign_v1/cells` (waves 1–7 plus
-`r1cal`), `results/shd_attention_campaign_v2` (waves 8–25), the Azure d32/L4
-scope cells under `results/azure-d32l4-scope-v1/results`,
-`results/shd_attention_campaign_v3` (waves 26–28), and
-`results/shd_attention_wave29_local` (wave 29, Apple libm not glibc). A corpus
-outside that list derives nothing — a failure this paper has had once and now
-tests against.
+Runs are preserved in five corpora, all read by the number checks:
+`results/shd_attention_campaign_v1/cells` (waves 1–7), 
+`results/shd_attention_campaign_v2` (waves 8–25), the x86-64 scope runs under
+`results/azure-d32l4-scope-v1/results`, `results/shd_attention_campaign_v3`
+(waves 26–28), and `results/shd_attention_wave29_local` (wave 29, run on
+Apple silicon with Apple's libm rather than glibc).
 
 ## LLM-use disclosure
 
-A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits that led to the withdrawals in §4.7; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived cells by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
+A large language model (Anthropic's Claude, used through the Claude Code agent) was used throughout this work: to write and review the simulator, training and analysis code; to launch, monitor and audit the experiment campaigns; to write the preregistrations, the checks and the audits that led to the withdrawals in §4.7; and to draft and edit this manuscript. Every number in the paper is recomputed from the archived runs by scripts in the accompanying record rather than taken from model output, and the author reviewed the text and takes full responsibility for its content.
 
 ---
 
@@ -767,3 +931,66 @@ gain(t500) − gain(t100) = **−0.0453** against a two-sided bar of 0.03, so th
 **What no experiment here has asked.** This paper establishes *that* broadcast ±1 fails and that graded DFA and per-neuron RL pass. It has never asked whether the passing arms *contain* a sparse value population and the failing arm does not. That is a probe on hidden-activity traces the matched runs already export, it costs no new instrumentation, and it is **unregistered and unrun**: no number is claimed for it here, and none may be cited until it exists under a config hash. The same applies to every other candidate in that reading note.
 
 **Placement.** This belongs in §4.1 and is here instead for one measured reason: the main text is at 9 of 9 permitted pages, and inserting even a single sentence of it into §4.1 displaces the five full-width figures enough to cost a tenth page. The framing is the deliverable; the page is not available.
+
+
+## Appendix K — Every operating point, with intervals
+
+Every bin-shuffled operating point at both training budgets. *Bins*: `2ms` and
+`10ms` are `published-Nms`, `t100`/`t250`/`t500` are `fixed-tN`; *chan.*:
+`a5` is `adjacent-sum-5`, `700` is `channels-700`; $d$/$L$ is attention
+width and number of blocks; *ep.* is epochs; $>0$ counts seeds with a positive
+DiD. Gains are the
+attention arm's accuracy minus the rate arm's over the same seeds; the DiD is
+gain(intact) − gain(shuffled). Brackets are paired percentile-bootstrap 95%
+intervals over seed quadruples (10,000 resamples). **†** marks an intact gain
+below the +0.03 bar — a point where the read-out has no gain to lose, so a
+positive DiD there reflects the attention arm falling below the rate arm once
+order is destroyed (§3.5); **‡** marks a gain above the bar whose interval is
+not. Width-1024 four-block gains are over the twelve quadruple seeds. The table
+is the output of `scripts/did_confidence_intervals.py --paper`, and a test fails
+if the two differ.
+
+| width | bins | chan. | $d$/$L$ | ep. | $n$ | gain, intact | gain, shuffled | DiD | $>0$ |
+|----:|-----|------|-----|---:|--:|---------------------------|---------------------------|---------------------------|----:|
+| 128 | t100 | a5 | 32/4 | 400 | 12 | +0.193 [+0.184, +0.201] | +0.060 [+0.054, +0.067] | +0.132 [+0.119, +0.144] | 12/12 |
+| 128 | t100 | a5 | 32/4 | 100 | 12 | +0.190 [+0.179, +0.199] | +0.075 [+0.070, +0.080] | +0.114 [+0.102, +0.127] | 12/12 |
+| 128 | t250 | a5 | 32/4 | 400 | 12 | +0.175 [+0.169, +0.181] | +0.063 [+0.055, +0.070] | +0.112 [+0.103, +0.122] | 12/12 |
+| 128 | t250 | a5 | 32/4 | 100 | 12 | +0.178 [+0.167, +0.189] | +0.079 [+0.073, +0.084] | +0.099 [+0.086, +0.113] | 12/12 |
+| 128 | t500 | a5 | 32/4 | 400 | 12 | +0.147 [+0.139, +0.156] | +0.031 [+0.023, +0.040] | +0.116 [+0.106, +0.125] | 12/12 |
+| 128 | t500 | a5 | 32/4 | 100 | 12 | +0.152 [+0.143, +0.161] | +0.041 [+0.033, +0.048] | +0.111 [+0.101, +0.124] | 12/12 |
+| 128 | 10ms | a5 | 32/4 | 400 | 12 | +0.149 [+0.138, +0.160] | +0.053 [+0.046, +0.061] | +0.096 [+0.085, +0.107] | 12/12 |
+| 128 | 10ms | a5 | 32/4 | 100 | 12 | +0.153 [+0.144, +0.162] | +0.061 [+0.057, +0.066] | +0.092 [+0.080, +0.103] | 12/12 |
+| 128 | 2ms | a5 | 32/1 | 400 | 12 | +0.042 [+0.032, +0.052] | −0.049 [−0.056, −0.042] | +0.091 [+0.082, +0.099] | 12/12 |
+| 128 | 2ms | a5 | 32/1 | 100 | 12 | +0.084 [+0.070, +0.097] | −0.015 [−0.020, −0.010] | +0.099 [+0.087, +0.111] | 12/12 |
+| 128 | 2ms | a5 | 32/2 | 400 | 12 | +0.083 [+0.072, +0.095] | −0.031 [−0.037, −0.024] | +0.115 [+0.101, +0.129] | 12/12 |
+| 128 | 2ms | a5 | 32/2 | 100 | 12 | +0.120 [+0.110, +0.129] | +0.002 [−0.004, +0.008] | +0.118 [+0.106, +0.131] | 12/12 |
+| 128 | 2ms | a5 | 32/4 | 400 | 32 | +0.127 [+0.123, +0.132] | +0.007 [+0.003, +0.011] | +0.121 [+0.114, +0.127] | 32/32 |
+| 128 | 2ms | a5 | 32/4 | 100 | 12 | +0.150 [+0.142, +0.158] | +0.024 [+0.016, +0.032] | +0.126 [+0.115, +0.136] | 12/12 |
+| 128 | 2ms | a5 | 64/4 | 400 | 12 | +0.138 [+0.130, +0.145] | +0.005 [−0.000, +0.011] | +0.133 [+0.124, +0.142] | 12/12 |
+| 128 | 2ms | a5 | 64/4 | 100 | 12 | +0.168 [+0.162, +0.174] | +0.030 [+0.021, +0.039] | +0.138 [+0.130, +0.147] | 12/12 |
+| 128 | 2ms | 700 | 32/1 | 400 | 12 | +0.024 [+0.009, +0.039]† | −0.113 [−0.120, −0.106] | +0.137 [+0.120, +0.154] | 12/12 |
+| 128 | 2ms | 700 | 32/1 | 100 | 12 | +0.059 [+0.045, +0.073] | −0.055 [−0.062, −0.048] | +0.114 [+0.104, +0.124] | 12/12 |
+| 128 | 2ms | 700 | 32/4 | 400 | 12 | +0.109 [+0.086, +0.128] | −0.003 [−0.011, +0.006] | +0.112 [+0.088, +0.133] | 12/12 |
+| 128 | 2ms | 700 | 32/4 | 100 | 12 | +0.150 [+0.140, +0.159] | +0.025 [+0.018, +0.032] | +0.125 [+0.112, +0.137] | 12/12 |
+| 256 | 2ms | a5 | 32/1 | 400 | 12 | +0.015 [+0.005, +0.025]† | −0.061 [−0.073, −0.049] | +0.076 [+0.062, +0.091] | 12/12 |
+| 256 | 2ms | a5 | 32/1 | 100 | 12 | +0.061 [+0.049, +0.075] | −0.022 [−0.028, −0.016] | +0.083 [+0.068, +0.101] | 12/12 |
+| 256 | 2ms | a5 | 32/4 | 400 | 12 | +0.097 [+0.087, +0.107] | +0.010 [+0.003, +0.018] | +0.086 [+0.072, +0.101] | 12/12 |
+| 256 | 2ms | a5 | 32/4 | 100 | 12 | +0.125 [+0.112, +0.137] | +0.025 [+0.018, +0.033] | +0.100 [+0.082, +0.116] | 12/12 |
+| 384 | 2ms | a5 | 32/4 | 400 | 12 | +0.076 [+0.067, +0.086] | −0.001 [−0.010, +0.008] | +0.077 [+0.065, +0.088] | 12/12 |
+| 384 | 2ms | a5 | 32/4 | 100 | 12 | +0.121 [+0.113, +0.129] | +0.032 [+0.024, +0.040] | +0.089 [+0.077, +0.100] | 12/12 |
+| 512 | 2ms | a5 | 32/1 | 400 | 12 | +0.004 [−0.011, +0.019]† | −0.085 [−0.094, −0.076] | +0.089 [+0.073, +0.103] | 12/12 |
+| 512 | 2ms | a5 | 32/1 | 100 | 12 | +0.057 [+0.044, +0.070] | −0.016 [−0.021, −0.012] | +0.073 [+0.060, +0.086] | 12/12 |
+| 512 | 2ms | a5 | 32/4 | 400 | 12 | +0.088 [+0.078, +0.097] | −0.009 [−0.016, −0.001] | +0.097 [+0.083, +0.109] | 12/12 |
+| 512 | 2ms | a5 | 32/4 | 100 | 12 | +0.107 [+0.101, +0.113] | +0.021 [+0.017, +0.025] | +0.086 [+0.081, +0.091] | 12/12 |
+| 768 | 2ms | a5 | 32/2 | 400 | 12 | +0.042 [+0.034, +0.051] | −0.019 [−0.027, −0.011] | +0.061 [+0.051, +0.073] | 12/12 |
+| 768 | 2ms | a5 | 32/2 | 100 | 12 | +0.067 [+0.057, +0.077] | +0.008 [−0.000, +0.015] | +0.059 [+0.049, +0.069] | 12/12 |
+| 768 | 2ms | a5 | 32/4 | 400 | 12 | +0.056 [+0.022, +0.079]‡ | −0.132 [−0.182, −0.083] | +0.188 [+0.144, +0.234] | 12/12 |
+| 768 | 2ms | a5 | 32/4 | 100 | 12 | +0.101 [+0.093, +0.108] | +0.029 [+0.023, +0.035] | +0.071 [+0.059, +0.082] | 12/12 |
+| 1024 | 2ms | a5 | 32/1 | 400 | 12 | −0.016 [−0.022, −0.010]† | −0.083 [−0.092, −0.077] | +0.068 [+0.058, +0.078] | 12/12 |
+| 1024 | 2ms | a5 | 32/1 | 100 | 12 | +0.044 [+0.034, +0.055] | −0.019 [−0.025, −0.012] | +0.063 [+0.055, +0.072] | 12/12 |
+| 1024 | 2ms | a5 | 32/2 | 400 | 12 | +0.039 [+0.031, +0.048] | −0.027 [−0.033, −0.021] | +0.066 [+0.054, +0.078] | 12/12 |
+| 1024 | 2ms | a5 | 32/2 | 100 | 12 | +0.055 [+0.044, +0.066] | +0.009 [+0.000, +0.016] | +0.047 [+0.033, +0.058] | 11/12 |
+| 1024 | 2ms | a5 | 32/3 | 400 | 12 | +0.032 [+0.016, +0.046]‡ | −0.035 [−0.044, −0.027] | +0.068 [+0.049, +0.082] | 11/12 |
+| 1024 | 2ms | a5 | 32/3 | 100 | 12 | +0.071 [+0.063, +0.079] | +0.021 [+0.015, +0.026] | +0.050 [+0.044, +0.056] | 12/12 |
+| 1024 | 2ms | a5 | 32/4 | 400 | 12 | −0.162 [−0.210, −0.118]† | −0.274 [−0.360, −0.210] | +0.112 [+0.037, +0.203] | 10/12 |
+| 1024 | 2ms | a5 | 32/4 | 100 | 12 | +0.083 [+0.073, +0.092] | +0.020 [+0.015, +0.026] | +0.063 [+0.052, +0.073] | 12/12 |

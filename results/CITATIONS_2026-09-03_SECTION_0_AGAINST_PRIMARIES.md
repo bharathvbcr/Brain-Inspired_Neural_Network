@@ -29,6 +29,8 @@ claims were wrong.** They are corrected in §0 and recorded here.
 | `chen2025nsa` | Neuromorphic Sequential Arena, **IJCAI 2025** | arXiv:2505.22035 | `0424ce7510852004` |
 | `soydan2024s7` | Soydan, Zubić, Messikommer, Mishra, Scaramuzza, S7 | arXiv:2410.03464v1 | `4467b8cd531acc61` |
 | `bittar2022` | Bittar & Garner, Front. Neurosci. **16**:865897, 2022 | PMC9479696 | *(HTML; see note)* |
+| `nowotny2025lossshaping` | Nowotny, Turner, Knight, Neuromorphic Comput. Eng. **5(1):014001**, 2025 — added 2026-09-29, cited for method only, no number quoted | arXiv:2212.01232v3 | `38d6e295ff1514fa` |
+| `zeng2023ltsf` | Zeng, Chen, Zhang, Xu, AAAI **37**, pp. 11121–11128, 2023 — added 2026-09-29, cited for its shuffle finding, no number quoted | arXiv:2205.13504v3 | `97abddd1821cc729` |
 
 Bittar & Garner was read as the publisher's HTML record rather than a PDF, so it
 carries no hash here. Its two numbers are quoted from Table 5 of that record and

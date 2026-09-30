@@ -431,11 +431,14 @@ class LeadFigure2Test(unittest.TestCase):
         for value in ("0.9626", "0.9590", "0.9560", "0.9485"):
             self.assertNotIn(value, nums_block)
 
-    def test_the_literature_strip_says_it_is_unverified(self):
-        """Ban 4: every value in Panel B came from a search pass, is not
-        machine-checked against cells, and check_every_number.py does not sweep
-        the section it lives in."""
-        self.assertIn("NOT MACHINE-CHECKED", self.fig)
+    def test_the_literature_strip_states_how_it_was_checked(self):
+        """Ban 4: every value in Panel B is a published figure, checked by hand
+        against its primary source on 2026-09-03, and not machine-checked
+        against cells: check_every_number.py does not sweep the section it
+        lives in. Until 2026-09-29 this test was named for the strip being
+        unverified, which stopped being true on 2026-09-03."""
+        self.assertIn("NOT MACHINE-CHECKED against cells", self.fig)
+        self.assertIn("checked against their primary sources on 2026-09-03", self.fig)
         self.assertIn("before submission", self.fig)
 
 
@@ -1160,6 +1163,13 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
     that was "a live authoring gap, not something this file should assert away".
     Two of those five had no artwork to cite; both now do, so the gap is closed
     rather than scoped around and the assertion covers the whole package.
+
+    Scoped again on 2026-09-29, to the figures the build typesets. The TMLR
+    rewrite cut Figures 5, 7, 8 and 9 from the paper: they remain specified and
+    drawn, but `build_paper.py` does not place them, and a citation of an
+    untypeset figure stops the build. So "every figure is cited" became two
+    assertions: every typeset numbered figure is cited, and every other
+    numbered figure is not. Together they still cover all nine.
     """
 
     DRAFT = ROOT / "results/PAPER_DRAFT.md"
@@ -1169,14 +1179,30 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "build_paper", ROOT / "scripts/build_paper.py")
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
         cls.text = cls.DRAFT.read_text()
+        #: The numbered figures the paper typesets, from the builder's own map.
+        cls.TYPESET = tuple(sorted(
+            int(k) for k in builder.SPEC_FIGURE_ID if k.isdigit()))
 
-    def test_every_numbered_figure_is_cited(self):
-        for n in self.NUMBERED:
+    def test_every_typeset_figure_is_cited(self):
+        self.assertTrue(self.TYPESET, "the builder typesets no numbered figure")
+        for n in self.TYPESET:
             with self.subTest(figure=n):
                 self.assertRegex(
                     self.text, rf"\(Figure {n}\)",
-                    f"Figure {n} is drawn but the manuscript never refers to it")
+                    f"Figure {n} is typeset but the manuscript never refers to it")
+
+    def test_no_untypeset_figure_is_cited(self):
+        """A reference to a figure the paper does not contain points the
+        reader at nothing. The build refuses it too; this names it earlier."""
+        for n in sorted(set(self.NUMBERED) - set(self.TYPESET)):
+            with self.subTest(figure=n):
+                self.assertNotRegex(self.text, rf"\bFigure {n}\b")
 
     def test_figure_m_is_cited(self):
         self.assertIn("Figure M", self.text)
@@ -1185,7 +1211,7 @@ class TheManuscriptReachesTheFiguresTest(unittest.TestCase):
         """Each is placed once, at the claim a reader meets it on. Repeating a
         callout in the abstract and again in the discussion is a layout
         decision, not something to accrue by accident."""
-        for n in self.NUMBERED:
+        for n in self.TYPESET:
             with self.subTest(figure=n):
                 self.assertEqual(len(re.findall(rf"\(Figure {n}\)", self.text)), 1)
 
@@ -1264,6 +1290,15 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         source = SOURCE.read_text()
         stems = set(re.findall(r'write_pair(?:_sized)?\(\s*out_dir,\s*"([\w]+)"',
                                source))
+        # The seven manuscript figures are written from one table,
+        # `PAPER_FIGURES`, so that the legibility tests and the generator read
+        # the same list. Its rows are `("stem", draw_fn, H_CONST),`, which
+        # rustfmt spreads over several lines when the stem is long.
+        table = source[source.index("const PAPER_FIGURES"):]
+        table = table[:table.index("];")]
+        rows = re.findall(r'\(\s*"(\w+)",\s*draw_\w+,\s*H_\w+,?\s*\)', table)
+        self.assertEqual(len(rows), 7, rows)
+        stems |= set(rows)
         self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
                          sorted(stems))
 

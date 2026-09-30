@@ -67,6 +67,10 @@ claim as "order-dependent wherever the read-out has a gain to lose: 16 of 21
 points". This changes what the paper asserts, so it needs an amendment the
 author owns. It is not edited here.
 
+**Adopted the same day** with the author's approval, sharpened by the
+intervals (all 21 points at `e100`, 16 of 21 at `e400`):
+[`AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md`](AMENDMENT_2026-09-29_THE_CLAIM_IS_WHERE_THERE_IS_A_GAIN_TO_LOSE.md).
+
 ## 3. Writing-only items before submission (the author's decisions)
 
 1. **Synchrony increment.** The abstract quotes +0.1308 / +0.1038 / +0.0575

@@ -193,18 +193,20 @@ KNOWN_COINCIDENCE = {
     # cells it was flagged, at 504 it was not, and at 1,773 it is again. A value
     # that appears and disappears as unrelated cells land is not being derived
     # by anything.
-    "0.0893": "W22's seed-paired DiD at h512. A difference OF paired "
-              "differences, second order, judged as every DiD before it.",
-    "0.0959": "W21's seed-paired DiD at h128 / `published-10ms`. Same class, "
-              "same judgement.",
     # Surfaced on 2026-09-29, when the abstract began quoting the anchor DiD
     # itself instead of misreporting the attention arm's own shuffle cost
     # (0.1347) as the collapse of the advantage. The statistic is recomputed
     # from the four-arm seed intersection by `w21_point` in
     # verify_published_numbers.py; the `paired` generator only reaches it by
     # arithmetic accident.
-    "0.1205": "W21's seed-paired DiD at the h128 anchor, n=32. Same class, "
-              "same judgement as 0.0893 and 0.0959.",
+    # 2026-09-29: six declarations of this class (0.0767, 0.0862, 0.0893,
+    # 0.0959, 0.0968, 0.1881) were deleted the same day, when the rewritten
+    # section 3.5 stopped quoting them; the judgement they recorded stands for
+    # this one.
+    "0.1205": "W21's seed-paired DiD at the h128 anchor, n=32: a difference "
+              "OF paired differences, which this sweep generates no "
+              "second-order quantity for; recomputed by name in "
+              "verify_published_numbers.py.",
     "0.9972": "the mean `temporal_audit.relocated_fraction` over wave 24's 48 "
               "`bin-shuffled` cells. This sweep generates quantities from "
               "`accuracy` alone, so no generator computes a relocated fraction "
@@ -330,13 +332,6 @@ KNOWN_COINCIDENCE = {
     # GENERATOR SETS grew, which is exactly how this gate is supposed to behave
     # as evidence accumulates. Both are judged below on the precedents directly
     # above them, not on convenience.
-    "0.1881": "H21-3, the seed-paired DiD at h768 — the largest in the "
-              "campaign, and the one Figure 3's annotation names. Identical in "
-              "class to the four DiDs below and judged the same way: a DiD is a "
-              "difference OF paired differences and this sweep generates no "
-              "second-order quantity, so `paired` cannot hold the same "
-              "computation. It is recomputed by name in "
-              "verify_published_numbers.py, which is what establishes it.",
     "0.6638": "v23 finite-θ under structured B, a July C1 / Gate G2 LOCAL "
               "accuracy from the matched-architecture program — which does not "
               "run on the SHD instrument at all. Same reasoning as 0.6775 and "
@@ -359,9 +354,6 @@ KNOWN_COINCIDENCE = {
               "rerun, same reasoning as 0.9150 and as 0.6638 above: a different "
               "programme, a different instrument, and a collision that did not "
               "exist one hundred cells ago.",
-    "0.0862": "H21-1, the seed-paired DiD at h256. Second-order; see above.",
-    "0.0767": "H21-1, the seed-paired DiD at h384. Second-order; see above.",
-    "0.0968": "H21-1, the seed-paired DiD at h512. Second-order; see above.",
     "0.1122": "the seed-paired DiD at h1024 (H21-2) and at `channels-700` "
               "(H21-4), which are equal to four places. Second-order; see "
               "above.",

@@ -125,7 +125,9 @@ FIGURE_PLACEMENT = {
     # placed away from the text that reads it is worse than no figure.
     "leadfig3_width_ladder": "appendix",
     "leadfig4_resolution_ladder": "appendix",
-    "figS_substrate": "main",
+    # Followed §3.7 into the appendix on 2026-09-29, when the main text was
+    # rewritten around the SHD claim and the substrate question became support.
+    "figS_substrate": "appendix",
     "figM_mechanism_richness_addressability": "appendix",
     "fig2_matched_means": "appendix",
 }
@@ -239,9 +241,144 @@ def to_latex(markdown: str) -> str:
     return proc.stdout
 
 
-def figure_block(captions: list[tuple[str, str]], half: str) -> str:
+#: The spec's figure identities ("Figure 1", "Figure S", "Figure M") are the
+#: names the prose uses; LaTeX numbers the typeset figures in float order. So a
+#: prose reference is rewritten to `\ref` its stem, and a reference to a spec
+#: figure that is NOT typeset stops the build -- it would point a reader at a
+#: figure the paper does not contain.
+SPEC_FIGURE_ID = {
+    "1": "leadfig1_the_conditional",
+    "2": "leadfig2_headline_accuracy",
+    "3": "leadfig3_width_ladder",
+    "4": "leadfig4_resolution_ladder",
+    "S": "figS_substrate",
+    "M": "figM_mechanism_richness_addressability",
+    "6": "fig2_matched_means",
+}
+
+TOP_LEVEL = re.compile(r"^(\d+)\.\s")
+SUB_LEVEL = re.compile(r"^(\d+\.\d+)\s")
+APPENDIX_HEAD = re.compile(r"^Appendix ([A-Z])\b")
+
+
+def plan_numbering(main: list[str], appendix: list[str], promote: set[str],
+                   titles: dict[str, str]) -> tuple[list[tuple[str, str, str]], dict[str, str]]:
+    """Paper numbers for every placed section, and the map the prose needs.
+
+    The draft numbers its headings for the repository record ("3.5", "Appendix
+    E"), and other documents cite those numbers, so the draft keeps them. The
+    paper cannot: its main text would read 2.3, 2.4, 3.5, 3.7, 4.6 with the
+    gaps living in the appendix. So the build numbers sections in manifest
+    order -- main text 1, 2, ... with subsections N.k; appendices A, B, ... --
+    and returns (heading, paper number, display title) plus {draft id: paper
+    id} for rewriting cross-references.
+
+    In the appendix, an entry starting "Appendix X" or "Abstract", or listed in
+    `promote`, opens a new lettered appendix; any other entry is a subsection
+    of the one before it.
+    """
+    placed: list[tuple[str, str, str]] = []
+    ids: dict[str, str] = {}
+
+    def title_of(heading: str) -> str:
+        if heading in titles:
+            return titles[heading]
+        for pattern in (TOP_LEVEL, SUB_LEVEL):
+            if pattern.match(heading):
+                return pattern.sub("", heading, count=1).strip()
+        return re.sub(r"^Appendix [A-Z]\s*—\s*", "", heading).strip()
+
+    top = sub = 0
+    for heading in main:
+        if TOP_LEVEL.match(heading):
+            top, sub = top + 1, 0
+            number = str(top)
+            ids[TOP_LEVEL.match(heading).group(1)] = number
+        elif SUB_LEVEL.match(heading):
+            if top == 0:
+                fail(f"main-text subsection {heading!r} comes before any section.")
+            sub += 1
+            number = f"{top}.{sub}"
+            ids[SUB_LEVEL.match(heading).group(1)] = number
+        else:
+            fail(f"main-text heading {heading!r} carries no draft number, so the "
+                 "build cannot place it or resolve references to it.")
+        placed.append((heading, number, title_of(heading)))
+
+    letter, sub = "", 0
+    for heading in appendix:
+        opens = (APPENDIX_HEAD.match(heading) or heading.startswith("Abstract")
+                 or heading in promote)
+        if opens:
+            letter, sub = chr(ord(letter) + 1) if letter else "A", 0
+            number = letter
+        else:
+            if not letter:
+                fail(f"appendix entry {heading!r} comes before any appendix opens.")
+            sub += 1
+            number = f"{letter}.{sub}"
+        if APPENDIX_HEAD.match(heading):
+            ids[f"Appendix {APPENDIX_HEAD.match(heading).group(1)}"] = number
+        for pattern in (SUB_LEVEL, TOP_LEVEL):
+            if pattern.match(heading):
+                ids[pattern.match(heading).group(1)] = number
+                break
+        placed.append((heading, number, title_of(heading)))
+    return placed, ids
+
+
+XREF = re.compile(r"(§\s?|Section )(\d+(?:\.\d+)?)\b|\bAppendix ([A-Z])\b(?!\s*—)")
+FIGREF = re.compile(r"\bFigure ([0-9]+|S|M)\b")
+
+
+def rewrite_xrefs(text: str, ids: dict[str, str], where: str) -> str:
+    """Rewrite the draft's section and figure references to the paper's.
+    An unresolvable one stops the build and names itself."""
+    def section(match: re.Match) -> str:
+        if match.group(3):
+            key = f"Appendix {match.group(3)}"
+            if key not in ids:
+                fail(f"{where}: {match.group(0)!r} names an appendix the paper "
+                     "does not contain.")
+            return f"Appendix {ids[key]}"
+        key = match.group(2)
+        if key not in ids:
+            fail(f"{where}: {match.group(0)!r} names a section the paper does "
+                 "not contain.")
+        target = ids[key]
+        if not target[0].isdigit():
+            # A section that moved to the appendix reads as one: "§E" is not
+            # a form a reader recognises.
+            return f"Appendix {target}"
+        return f"{match.group(1)}{target}"
+
+    def figure(match: re.Match) -> str:
+        stem = SPEC_FIGURE_ID.get(match.group(1))
+        if stem is None:
+            fail(f"{where}: {match.group(0)!r} names a spec figure the paper does "
+                 "not typeset. Remove the reference or typeset the figure.")
+        # A plain space: pandoc escapes `~` in text, which printed "Figure~2".
+        return rf"Figure \ref{{fig:{stem}}}"
+
+    return FIGREF.sub(figure, XREF.sub(section, text))
+
+
+def supplement():
+    """`build_supplement.py`, which owns the project-name rename. Loaded by
+    path so the anonymous PDF and the anonymous archive share one table."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "build_supplement", ROOT / "scripts/build_supplement.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def figure_block(captions: list[tuple[str, str]], half: str,
+                 prepare=lambda text, where: text) -> str:
     out = []
     for stem, caption in captions:
+        caption = prepare(caption, f"caption of {stem}")
         if FIGURE_PLACEMENT[stem] != half:
             continue
         if not (FIGDIR / f"{stem}.pdf").exists():
@@ -304,6 +441,8 @@ PREAMBLE = r"""\usepackage[utf8]{inputenc}
 \newunicodechar{≠}{\ensuremath{\neq}}
 \newunicodechar{Σ}{\ensuremath{\Sigma}}
 \newunicodechar{ₜ}{\ensuremath{{}_{t}}}
+\newunicodechar{†}{\ensuremath{^{\dagger}}}
+\newunicodechar{‡}{\ensuremath{^{\ddagger}}}
 \providecommand{\tightlist}{%
   \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
 %% pandoc emits `\def\LTcaptype{none}` for a longtable with no caption, which
@@ -324,7 +463,7 @@ PREAMBLE = r"""\usepackage[utf8]{inputenc}
 #: Declared in PREAMBLE with `newunicodechar`. Kept here as data so the build
 #: can refuse an undeclared character by name instead of letting pdflatex halt
 #: on a character code thirty lines into a log.
-DECLARED_UNICODE = set("—–−×±§→′“”θσρ≥≤≠Σₜ")
+DECLARED_UNICODE = set("—–−×±§→′“”θσρ≥≤≠Σₜ†‡")
 
 
 def check_unicode(text: str) -> None:
@@ -419,30 +558,70 @@ def build(variant: str = "submission") -> None:
              + "\nThe manifest has drifted from the draft; a stale split "
                "silently reorders the paper.")
 
+    placed, ids = plan_numbering(want_main, want_appendix,
+                                 set(manifest.get("numbering", {}).get("promote", [])),
+                                 dict(manifest.get("titles", {})))
+    number_of = {heading: (number, title) for heading, number, title in placed}
+    bodies = dict(sections)
+
+    def prepare(text: str, where: str) -> str:
+        """Record links to markers, cross-references to the paper's numbers,
+        and -- in the anonymous variant only -- the project's name to the
+        supplement's neutral one, so printed commands match the archive."""
+        text = rewrite_xrefs(text, ids, where)
+        if variant == "submission":
+            text, _ = supplement().rename_project(text)
+        return text
+
+    captions = spec_captions()
+    caption_of = dict(captions)
+
     register: dict[str, int] = {}
-    def render(wanted: list[str]) -> str:
+    def render(wanted: list[str], half: str) -> str:
+        """Each figure is set right after the section that first cites it.
+        Emitted at the end of the half, [t] floats could only land after all
+        of it -- which is how three main-text figures ended up inside the
+        reference list. A figure its half never cites goes at the end."""
+        pending = [stem for stem, _ in captions if FIGURE_PLACEMENT[stem] == half]
+
+        def raw(stem: str) -> str:
+            # A raw-LaTeX block passes through pandoc untouched, so the whole
+            # half converts in ONE call. Per-section calls lost every heading
+            # whose body is empty: pandoc with --natbib emits nothing for a
+            # document that is only a heading, and "3 Methods", "4 Results"
+            # and "5 Discussion" vanished from the PDF.
+            block = figure_block([(stem, caption_of[stem])], half, prepare)
+            return f"\n```{{=latex}}\n{block}\n```\n"
+
         chunks = []
-        for heading, body in sections:
-            if heading not in wanted:
-                continue
-            # The manuscript numbers its own headings ("3.5 ...", "Appendix C
-            # ..."), and the prose cross-references those numbers. So every
-            # heading is emitted unnumbered (`{-}`): letting LaTeX number them
-            # too printed "0.2 1. Introduction" -- `##` became a numbered
-            # \subsection under a section counter that never left zero.
-            level = "#" if re.match(r"^(Abstract|\d+\.\s|Appendix )", heading) else "##"
-            chunks.append(f"{level} {heading} {{-}}\n{rewrite_record_links(body, register)}")
+        for heading in wanted:
+            number, title = number_of[heading]
+            # Emitted unnumbered (`{-}`) with the paper's number in the title:
+            # letting LaTeX number headings too once printed "0.2 1.
+            # Introduction". Top level is a lone number or letter.
+            level = "#" if "." not in number else "##"
+            body = prepare(rewrite_record_links(bodies[heading], register), heading)
+            # A trailing `---` is the draft's divider between parts; in the
+            # paper it typeset as a stray rule before the next heading.
+            body = re.sub(r"\n\s*-{3,}\s*$", "\n", body.rstrip()) + "\n"
+            chunks.append(f"{level} {number} {prepare(title, heading)} {{-}}\n{body}")
+            cited = [stem for stem in pending if rf"\ref{{fig:{stem}}}" in body]
+            for stem in cited:
+                chunks.append(raw(stem))
+                pending.remove(stem)
+        chunks += [raw(stem) for stem in pending]
         return to_latex("\n".join(chunks))
 
-    main_tex = render(want_main)
-    appendix_tex = render(want_appendix)
+    main_tex = render(want_main, "main")
+    appendix_tex = render(want_appendix, "appendix")
 
     record_rows = "\n".join(
         rf"\textsc{{r}}{n} & \texttt{{\small {name.replace('_', r'\_')}}} \\"
         for name, n in sorted(register.items(), key=lambda kv: kv[1]))
 
-    abstract_tex = to_latex_inline(rewrite_record_links(abstract, register))
-    disclosure_tex = to_latex_inline(rewrite_record_links(disclosure, register))
+    abstract_tex = to_latex_inline(prepare(rewrite_record_links(abstract, register), "Abstract"))
+    disclosure_tex = to_latex_inline(prepare(rewrite_record_links(disclosure, register),
+                                             "LLM-use disclosure"))
     if "\n\n" in disclosure_tex:
         fail("the LLM-use disclosure is more than one paragraph; it is typeset "
              "as a footnote and must be one.")
@@ -450,7 +629,6 @@ def build(variant: str = "submission") -> None:
     BUILD = build_dir
     BUILD.mkdir(exist_ok=True)
     (BUILD / "figures").mkdir(exist_ok=True)
-    captions = spec_captions()
     for stem, _ in captions:
         shutil.copy(FIGDIR / f"{stem}.pdf", BUILD / "figures" / f"{stem}.pdf")
     for name in STYLE_FILES:
@@ -471,7 +649,9 @@ def build(variant: str = "submission") -> None:
         abstract_tex + rf"\footnote{{{disclosure_tex}}}",
         r"\end{abstract}",
         main_tex,
-        figure_block(captions, "main"),
+        # Flush every pending float before the references, so no main-text
+        # figure can drift into the reference list.
+        r"\clearpage",
         r"\bibliographystyle{tmlr}",
         r"\bibliography{references}",
         r"\appendix",
@@ -484,7 +664,6 @@ def build(variant: str = "submission") -> None:
         record_rows,
         r"\bottomrule\end{longtable}",
         appendix_tex,
-        figure_block(captions, "appendix"),
         r"\end{document}", ""])
     (BUILD / "main.tex").write_text(doc)
     print(f"wrote {BUILD/'main.tex'} "
@@ -620,6 +799,13 @@ def check(variant: str = "submission") -> int:
             if needle.lower() in body:
                 problems.append(f"the rendered PDF contains {needle!r} — {what}. "
                                 "This is a double-blind submission.")
+        # The project's and the author's crates' names: the public repository
+        # is called by the first. Checked with the supplement's own pattern,
+        # which spares "binning", so the PDF and the archive share one rule.
+        leak = supplement().IDENTIFYING.search(body.encode())
+        if leak:
+            problems.append(f"the rendered PDF contains {leak.group(0).decode()!r}, "
+                            "a name that leads to the public repository.")
         meta = subprocess.run(["pdfinfo", str(pdf)], capture_output=True, text=True).stdout
         for line in meta.splitlines():
             field, _, value = line.partition(":")

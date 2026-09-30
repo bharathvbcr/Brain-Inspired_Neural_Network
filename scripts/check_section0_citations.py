@@ -45,6 +45,9 @@ BIB = ROOT / "results/references.bib"
 #: quote the same numbers, and on 2026-09-03 the abstract was still carrying a
 #: frontier band that §0 had already had corrected -- a gate scoped to §0 alone
 #: would have reported a pass over it.
+#: Hashed sources the record must list. See the check that reads it.
+MIN_SOURCES = 12
+
 SECTION_START = "## Abstract"
 SECTION_END = "## 2. Methods"
 
@@ -150,11 +153,14 @@ def main() -> int:
 
     # 3. Record and bibliography agree on the sources.
     keys = BIB_KEY.findall(record)
-    if len(keys) < 8:
+    # The floor tracks the table: ten on 2026-09-03, twelve from 2026-09-29
+    # (Nowotny et al. and Zeng et al., added to section 0). A floor left below
+    # the table's size lets rows disappear unnoticed until it is reached.
+    if len(keys) < MIN_SOURCES:
         failures.append(
-            f"{RECORD.name} lists only {len(keys)} hashed sources. The "
-            "2026-09-03 pass read ten; a shrunken table would let this gate "
-            "pass by checking less.")
+            f"{RECORD.name} lists only {len(keys)} hashed sources, below the "
+            f"{MIN_SOURCES} the record has held since 2026-09-29; a shrunken "
+            "table would let this gate pass by checking less.")
     for key in keys:
         if f"{{{key}," not in bib:
             failures.append(
