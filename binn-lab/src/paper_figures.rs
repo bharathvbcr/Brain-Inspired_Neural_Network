@@ -1020,7 +1020,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         RGBColor(238, 238, 242),
         RGBColor(170, 170, 178),
         &[(
-            "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 (≤60% on spike-count-only SHD), the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
+            "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established: Cramer et al. 2022 (≤60% on spike-count-only SHD), the Neuromorphic Sequential Arena 2025 (86.48 → 68.51 with temporal processing removed model-side), Yu et al. 2025 (randomised spike times, reversed time).",
             ty::NOTE,
             RGBColor(60, 60, 60),
         )],
@@ -1036,7 +1036,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (a_x0, top + 18),
         a_x1 - a_x0,
-        "Panel A — each arm's own shuffle cost. n = 32, seed-paired, h128 / published-2ms / e400.",
+        "Panel A: each arm's own shuffle cost. n = 32, seed-paired, h128 / published-2ms / e400.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1122,7 +1122,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (c_x0, top + 18),
         width_c,
-        "Panel B — the same result as the collapse of the advantage over the rate arm.",
+        "Panel B: the same result as the collapse of the advantage over the rate arm.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1199,7 +1199,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (c_x0, y + 22),
         width_c,
-        "Panel C — the n = 12 measurement, in absolute accuracy. LABELLED n = 12: absolute bin-shuffled means are not published at n = 32.",
+        "Panel C: the n = 12 measurement, in absolute accuracy. LABELLED n = 12: absolute bin-shuffled means are not published at n = 32.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1267,7 +1267,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, d_head),
         RIGHT - LEFT,
-        "Panel D — the same contrast at eight operating points. n = 12 per point, n = 32 at h128, seed-paired.",
+        "Panel D: the same contrast at eight operating points. n = 12 per point, n = 32 at h128, seed-paired.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1350,7 +1350,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y),
         RIGHT - LEFT,
         &format!(
-            "The mechanism travels: every point clears the registered bar at BOTH budgets, and coverage is {} of {} operating points — NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
+            "The mechanism travels: every point clears the registered bar at BOTH budgets, and coverage is {} of {} operating points, NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL
         ),
         ty::NOTE,
@@ -1405,7 +1405,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, 8),
         RIGHT - LEFT,
-        "Panel A — this instrument, seed-paired. THIS IS NOT COMPETITIVE, and the axis below says so.",
+        "Panel A: this instrument, seed-paired. THIS IS NOT COMPETITIVE, and the axis below says so.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1437,7 +1437,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, y + 18),
         RIGHT - LEFT,
-        "Panel B — the published field, on the same axis. The instrument carries no temporal kernel of any kind.",
+        "Panel B: the published field, on the same axis. The instrument carries no temporal kernel of any kind.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1476,7 +1476,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     centered(
         root,
         ((lo_b + hi_b) / 2, row(4) + 12),
-        "Cramer et al. 2022 — 83.2 ± 1.3%",
+        "Cramer et al. 2022: 83.2 ± 1.3%",
         ty::NOTE,
         RGBColor(70, 70, 70),
     )?;
@@ -1511,12 +1511,12 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
     for (v, name, k) in [
         (
             nums::FIELD_TA_SNN,
-            "TA-SNN 91.08 — attention over the time axis (ICCV 2021)",
+            "TA-SNN 91.08: attention over the time axis (ICCV 2021)",
             2,
         ),
         (
             nums::FIELD_STSC_SNN,
-            "STSC-SNN 92.36 — attention inside the synapse (2022)",
+            "STSC-SNN 92.36: attention inside the synapse (2022)",
             1,
         ),
     ] {
@@ -1637,7 +1637,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (x0 + band + 14, band_y),
         x1 - x0 - band - 14,
         &format!(
-            "{:.1} points, to scale. SHD ships no validation set: Baronig et al. 2025 report one model at 95.81 validating on test and 93.79 on a held-out split. Differences narrower than this between published SHD numbers are not reliably meaningful — including this paper's own.",
+            "{:.1} points, to scale. SHD ships no validation set: Baronig et al. 2025 report one model at 95.81 validating on test and 93.79 on a held-out split. Differences narrower than this between published SHD numbers are not reliably meaningful, including this paper's own.",
             nums::FIELD_UNRESOLVABLE * 100.0
         ),
         ty::NOTE,
@@ -1649,7 +1649,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, y + 18),
         RIGHT - LEFT,
-        "Panel C — the 0.80 clearance is geometry-specific. The gain is not: attention buys roughly the same amount everywhere tested.",
+        "Panel C: the 0.80 clearance is geometry-specific. The gain is not: attention buys roughly the same amount everywhere tested.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1683,7 +1683,7 @@ fn draw_lead_fig2(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, y + 14),
         RIGHT - LEFT,
-        "This instrument lands INSIDE the no-delay recurrent band — which is where an architecture carrying no temporal kernel of any kind should land, and is the whole reading.",
+        "This instrument lands INSIDE the no-delay recurrent band, which is where an architecture carrying no temporal kernel of any kind should land, and is the whole reading.",
         ty::NOTE,
         RGBColor(60, 60, 60),
     )?;
@@ -1739,7 +1739,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, 8),
         RIGHT - LEFT,
-        "Panel A — attention's gain on six widths. n = 12 per rung, e400, seed-paired. Rungs are points: no curve is fitted and none may be.",
+        "Panel A: attention's gain on six widths. n = 12 per rung, e400, seed-paired. Rungs are points: no curve is fitted and none may be.",
         ty::HEAD,
         BLACK,
     )?;
@@ -1863,7 +1863,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, bottom + 88),
         RIGHT - LEFT,
         &format!(
-            "The drop into h1024 is {:.4} — {:.1}× the largest gap below it ({:.4}), and more than twice the registered 3× bar. That is what makes it a threshold rather than the slope continuing.",
+            "The drop into h1024 is {:.4}, {:.1}× the largest gap below it ({:.4}), and more than twice the registered 3× bar. That is what makes it a threshold rather than the slope continuing.",
             nums::LADDER_DROP, nums::LADDER_DROP_RATIO, nums::LADDER_LARGEST_GAP_BELOW
         ),
         ty::BODY,
@@ -1884,7 +1884,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y + 6),
         RIGHT - LEFT,
         &format!(
-            "THE MECHANISM DOES NOT TRACK THIS CURVE. Spearman rho between these rungs and their difference-in-differences is {:.4}, against a registered bar of +{:.3} — NOT MET. h768 carries the smallest positive gain on this ladder ({:+.4}) and the largest DiD in the campaign ({:+.4}). The DiD ladder is Figure 1 Panel D, and is deliberately not superimposed here.",
+            "THE MECHANISM DOES NOT TRACK THIS CURVE. Spearman rho between these rungs and their difference-in-differences is {:.4}, against a registered bar of +{:.3}: NOT MET. h768 carries the smallest positive gain on this ladder ({:+.4}) and the largest DiD in the campaign ({:+.4}). The DiD ladder is Figure 1 Panel D, and is deliberately not superimposed here.",
             nums::DID_RHO, nums::DID_RHO_BAR, nums::GAIN_H768, nums::DID_H768
         ),
         ty::NOTE,
@@ -1896,7 +1896,7 @@ fn draw_lead_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         root,
         (LEFT, y + 20),
         RIGHT - LEFT,
-        "Panel B — located, and not explained. Three preregistered rescue levers at h1024 / d32/L4, n = 12 each.",
+        "Panel B: located, and not explained. Three preregistered rescue levers at h1024 / d32/L4, n = 12 each.",
         ty::HEAD,
         BLACK,
     )?;
@@ -2274,7 +2274,7 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
     // among them may be drawn or claimed.
     let reference = Verdict::Reference;
     let banner = format!(
-        "SuperSpike BPTT reference saturates: {:.4} ff / {:.4} rec, every suite, both graphs. Every other rule tested clears the gate, so this panel shows WHICH SINGLE RULE FAILS a task the rest saturate — it does not rank the rest. Pass / fail / at-chance, not a graded surface.",
+        "SuperSpike BPTT reference saturates: {:.4} ff / {:.4} rec, every suite, both graphs. Every other rule tested clears the gate, so this panel shows WHICH SINGLE RULE FAILS a task the rest saturate; it does not rank the rest. Pass / fail / at-chance, not a graded surface.",
         nums::CEILING.0,
         nums::CEILING.1
     );
@@ -2412,7 +2412,7 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
     let b_top = high + CARD + 30;
     let b_head = wrap(
         root,
-        "Panel B — XOR locality flip (1-layer xor_thresh). Addressability evidence: broadcast fails a task DFA solves.",
+        "Panel B: XOR locality flip (1-layer xor_thresh). Addressability evidence: broadcast fails a task DFA solves.",
         ty::HEAD,
         RIGHT - LEFT - 32,
     );
@@ -2448,13 +2448,13 @@ fn draw_fig_m(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> 
         Some(0.5),
         &[
             (
-                "Broadcast — at chance",
+                "Broadcast: at chance",
                 nums::XOR_BCAST,
                 Verdict::Fail.border(),
             ),
-            ("DFA — solves", nums::XOR_DFA, Verdict::Pass.border()),
+            ("DFA: solves", nums::XOR_DFA, Verdict::Pass.border()),
             (
-                "Gradient — ceiling",
+                "Gradient: ceiling",
                 nums::XOR_GRAD,
                 Verdict::Reference.border(),
             ),
@@ -2508,21 +2508,21 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
             120,
             Verdict::Fail,
             "±1 × surrogate eligibility",
-            "MatchedLocal — scalar reward, no addressing",
+            "MatchedLocal: scalar reward, no addressing",
             nums::BROADCAST_PM1,
         ),
         (
             300,
             Verdict::Pass,
             "graded error × DFA",
-            "MatchedDfaGradedError — graded error, fixed random feedback",
+            "MatchedDfaGradedError: graded error, fixed random feedback",
             nums::DFA,
         ),
         (
             480,
             Verdict::Pass,
             "REINFORCE × frozen B_i",
-            "MatchedRlReinforceFb — ±1 reward through directed feedback",
+            "MatchedRlReinforceFb: ±1 reward through directed feedback",
             nums::RL_FB,
         ),
         (
@@ -2598,7 +2598,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         root,
         (LEFT, y + 14),
         RIGHT - LEFT,
-        "Panel A — one shared accuracy axis, in the row order of Table SHD-7. NOT sorted by gain.",
+        "Panel A: one shared accuracy axis, in the row order of Table SHD-7. NOT sorted by gain.",
         ty::HEAD,
         BLACK,
     )?;
@@ -2707,7 +2707,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         root,
         (LEFT, y + 20),
         RIGHT - LEFT,
-        "Panel B — the registered contrasts, each against its two-sided bar",
+        "Panel B: the registered contrasts, each against its two-sided bar",
         ty::HEAD,
         BLACK,
     )?;
@@ -2809,7 +2809,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         root,
         (LEFT, y + 22),
         RIGHT - LEFT,
-        "Panel C — usability, which had to be measured before any row of Panel A could be. This is why the recurrent row exists at one scale only.",
+        "Panel C: usability, which had to be measured before any row of Panel A could be. This is why the recurrent row exists at one scale only.",
         ty::HEAD,
         BLACK,
     )?;
@@ -2856,7 +2856,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         (side, y + 4),
         RIGHT - side,
         &format!(
-            "rec+fixed's ten voids are ALL SATURATION — up to {:.1}% of hidden units pinned at maximum firing — and NONE is divergence at scale 0.4. So on the recurrent substrate",
+            "rec+fixed's ten voids are ALL SATURATION (up to {:.1}% of hidden units pinned at maximum firing), and NONE is divergence at scale 0.4. So on the recurrent substrate",
             nums::SATURATED_FRACTION_MAX * 100.0
         ),
         ty::NOTE,
@@ -2874,7 +2874,7 @@ fn draw_fig_s_substrate(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(),
         root,
         (side, sy),
         RIGHT - side,
-        "A-1 above is therefore inert AT THIS OPERATING POINT, on this substrate — not in general.",
+        "A-1 above is therefore inert AT THIS OPERATING POINT, on this substrate, not in general.",
         ty::NOTE,
         grey,
     )?;
@@ -2949,7 +2949,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
     label(
         root,
         (48, 96),
-        "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established — Cramer et al. 2022 could not exceed 60% on spike-count-only SHD;",
+        "NOT SHOWN HERE, AND NOT CLAIMED: that SHD depends on temporal order. That is established: Cramer et al. 2022 could not exceed 60% on spike-count-only SHD;",
         13,
         RGBColor(90, 90, 90),
     )?;
@@ -2974,7 +2974,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         (36, 216, 356, 496),
         RGBColor(246, 243, 236),
         RGBColor(180, 150, 70),
-        "The operation — on the INPUT",
+        "The operation, on the INPUT",
         &[
             "permute time bins,",
             "independently per sample,",
@@ -3011,7 +3011,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
     label(
         root,
         (410, 196),
-        "Each arm's OWN shuffle cost — the pair is the measurement",
+        "Each arm's OWN shuffle cost: the pair is the measurement",
         16,
         BLACK,
     )?;
@@ -3036,7 +3036,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         nums::SHUFFLE_COST_RATE_32,
         RGBColor(200, 140, 60),
         "rate read-out",
-        "ff+fixed — half the measurement,",
+        "ff+fixed, half the measurement,",
         "not a faint control",
         &COST_POSTER,
     )?;
@@ -3060,7 +3060,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
     centered(
         root,
         (625, base + 116),
-        "That is the collapse of the ADVANTAGE, which is not the gain and not a share of it — see the strip below.",
+        "That is the collapse of the ADVANTAGE, which is not the gain and not a share of it; see the strip below.",
         12,
         RGBColor(120, 120, 120),
     )?;
@@ -3131,7 +3131,7 @@ fn draw_lead_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Re
         root,
         (36, 734),
         &format!(
-            "Accuracy, for scale and no more: the read-out reaches {:.4} against the rate arm's {:.4}. It is NOT COMPETITIVE — the SHD frontier is {:.2}–{:.1}% via learned delays,",
+            "Accuracy, for scale and no more: the read-out reaches {:.4} against the rate arm's {:.4}. It is NOT COMPETITIVE: the SHD frontier is {:.2}–{:.1}% via learned delays,",
             nums::HEAD_ATTN_32,
             nums::HEAD_RATE_32,
             nums::FIELD_FRONTIER_LO * 100.0,
@@ -3210,7 +3210,7 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
         root,
         (LEFT, 8),
         RIGHT - LEFT,
-        "Panel A — primary mean, grouped by verdict. Every value is feed-forward / recurrent.",
+        "Panel A: primary mean, grouped by verdict. Every value is feed-forward / recurrent.",
         ty::HEAD,
         BLACK,
     )?;
@@ -3230,51 +3230,51 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     let groups: [VerdictGroup<'_>; 4] = [
         (
             Verdict::Fail,
-            "Does not clear the gate — the lead negative, and the only one",
+            "Does not clear the gate: the lead negative, and the only one",
             &[(
                 "broadcast ±1 three-factor",
-                "MatchedLocal — ±1 reward × surrogate eligibility. At chance on both graphs.",
+                "MatchedLocal: ±1 reward × surrogate eligibility. At chance on both graphs.",
                 nums::BROADCAST_PM1,
             )],
         ),
         (
             Verdict::Pass,
-            "Clears the gate — unordered, and not orderable against a saturated reference",
+            "Clears the gate: unordered, and not orderable against a saturated reference",
             &[
                 (
                     "graded DFA",
-                    "MatchedDfaGradedError — graded error through fixed random feedback",
+                    "MatchedDfaGradedError: graded error through fixed random feedback",
                     nums::DFA,
                 ),
                 (
                     "REINFORCE × frozen B_i",
-                    "MatchedRlReinforceFb — the same ±1 reward, addressed",
+                    "MatchedRlReinforceFb: the same ±1 reward, addressed",
                     nums::RL_FB,
                 ),
                 (
                     "discrete EventProp-style spike-adjoint",
-                    "MatchedEventProp — the archived FAIL is WITHDRAWN; it had no spikes to differentiate through",
+                    "MatchedEventProp: the archived FAIL is WITHDRAWN; it had no spikes to differentiate through",
                     nums::EVENTPROP,
                 ),
             ],
         ),
         (
             Verdict::Contrast,
-            "Measured and NOT gated — neither passes to be counted nor failures to be explained away",
+            "Measured and NOT gated: neither passes to be counted nor failures to be explained away",
             &[
                 (
                     "broadcast graded error",
-                    "MatchedBroadcastGradedError — why the lead negative says “±1 three-factor” and not “any broadcast”",
+                    "MatchedBroadcastGradedError: why the lead negative says “±1 three-factor” and not “any broadcast”",
                     nums::BROADCAST_GRADED,
                 ),
                 (
                     "RL graded-reward broadcast",
-                    "MatchedRlGraded — richness without addressing",
+                    "MatchedRlGraded: richness without addressing",
                     nums::RL_GRADED,
                 ),
                 (
                     "RL ±1 broadcast",
-                    "MatchedRlFlat — same reward and topology as the lead FAIL, 0.28 above it",
+                    "MatchedRlFlat: same reward and topology as the lead FAIL, 0.28 above it",
                     nums::RL_FLAT,
                 ),
             ],
@@ -3323,7 +3323,7 @@ fn draw_fig6_matched_means(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
     label(
         root,
         (LEFT, panel_b),
-        "Panel B — gap LCB against the > 0.5 gate: the second half of the gate, same row order.",
+        "Panel B: gap LCB against the > 0.5 gate: the second half of the gate, same row order.",
         ty::HEAD,
         BLACK,
     )?;
@@ -3501,7 +3501,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, 50),
-        "A rule that clears the matched gate does not clear it on the live engine. Gate: local acc ≥ 0.65 AND gap LCB > 0.5 — both, which is why both axes are drawn.",
+        "A rule that clears the matched gate does not clear it on the live engine. Gate: local acc ≥ 0.65 AND gap LCB > 0.5, both, which is why both axes are drawn.",
         13,
         RGBColor(70, 70, 70),
     )?;
@@ -3510,7 +3510,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, 88),
-        "Rung 1 — matched dense-LIF forward, n = 20",
+        "Rung 1: matched dense-LIF forward, n = 20",
         14,
         Verdict::Pass.border(),
     )?;
@@ -3521,7 +3521,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
         (36, 110, 1364, 202),
         Verdict::Pass,
         "matched REINFORCE × frozen B_i (v12)",
-        "gap LCB 0.9765 ff / 0.9079 rec — clears both halves of the gate on both forward graphs",
+        "gap LCB 0.9765 ff / 0.9079 rec: clears both halves of the gate on both forward graphs",
         nums::RL_FB,
         &CARD_POSTER,
     )?;
@@ -3629,7 +3629,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, y - 30),
-        "Rung 2 — live REINFORCE transfer",
+        "Rung 2: live REINFORCE transfer",
         13,
         RGBColor(90, 90, 90),
     )?;
@@ -3639,7 +3639,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, y - 22),
-        "Rung 3 — gap-close family, in protocol order (v14–v19)",
+        "Rung 3: gap-close family, in protocol order (v14–v19)",
         13,
         RGBColor(90, 90, 90),
     )?;
@@ -3653,7 +3653,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, y - 22),
-        "Rung 4 — break-it family, in protocol order (v20–v24)",
+        "Rung 4: break-it family, in protocol order (v20–v24)",
         13,
         RGBColor(90, 90, 90),
     )?;
@@ -3724,7 +3724,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
         root,
         (36, legend_y + 58),
         &format!(
-            "Floor cleared is not gate cleared, and the two axes exist so that cannot be read off one. The best local below the break is v15's {:.4} — on accuracy alone it looks like a near miss.",
+            "Floor cleared is not gate cleared, and the two axes exist so that cannot be read off one. The best local below the break is v15's {:.4}; on accuracy alone it looks like a near miss.",
             nums::BEST_LOCAL_GAP_CLOSE
         ),
         13,
@@ -3747,7 +3747,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
     label(
         root,
         (36, legend_y + 154),
-        "NO MECHANISM. Four suspects for the transfer gap — sticky last_spike, partial membrane reset, θ=∞ muting, hard k-WTA — have never been tested individually, and this figure does not attribute the gap to any of them.",
+        "NO MECHANISM. Four suspects for the transfer gap (sticky last_spike, partial membrane reset, θ=∞ muting, hard k-WTA) have never been tested individually, and this figure does not attribute the gap to any of them.",
         12,
         RGBColor(120, 120, 120),
     )?;
@@ -3755,7 +3755,7 @@ fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Resul
 }
 
 fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(root, (40, 20), "BINN — graphical abstract", 26, BLACK)?;
+    label(root, (40, 20), "BINN: graphical abstract", 26, BLACK)?;
     label(
         root,
         (40, 54),
@@ -3794,19 +3794,19 @@ fn draw_graphical_abstract(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<
         (
             Verdict::Fail,
             "±1 × surrogate eligibility",
-            "MatchedLocal — scalar reward, no addressing",
+            "MatchedLocal: scalar reward, no addressing",
             nums::BROADCAST_PM1,
         ),
         (
             Verdict::Pass,
             "graded error × DFA",
-            "MatchedDfaGradedError — richer error, addressed",
+            "MatchedDfaGradedError: richer error, addressed",
             nums::DFA,
         ),
         (
             Verdict::Pass,
             "REINFORCE × frozen B_i",
-            "MatchedRlReinforceFb — same ±1 reward, addressed",
+            "MatchedRlReinforceFb: same ±1 reward, addressed",
             nums::RL_FB,
         ),
     ];
@@ -3990,9 +3990,12 @@ mod tests {
     fn paper_figures_carry_no_figure_title_of_their_own() {
         for (stem, draw, h) in PAPER_FIGURES {
             let svg = render(draw, h);
+            // Both separators: the figure labels moved from dashes to colons on
+            // 2026-09-29, so a title would now most likely arrive as the second.
             for tag in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "S", "M", "D"] {
-                let title = format!("Figure {tag} —");
-                assert!(!svg.contains(&title), "{stem} draws the title {title:?}");
+                for title in [format!("Figure {tag} —"), format!("Figure {tag}:")] {
+                    assert!(!svg.contains(&title), "{stem} draws the title {title:?}");
+                }
             }
         }
     }

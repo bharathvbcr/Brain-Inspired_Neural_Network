@@ -185,13 +185,13 @@ accuracy it must be **labelled n = 12**; an n = 32 absolute-accuracy version is
    near-identity is the message — not a widening effect.
 
 **Caption (required wording):**
-“The conditional. Bin-shuffling the input — independently per sample, in **both
-the training and test splits**, so the task must be solved without temporal order — costs the
+“The conditional. Bin-shuffling the input (independently per sample, in **both
+the training and test splits**, so the task must be solved without temporal order) costs the
 time-axis attention read-out **+0.1347** accuracy (positive in **32/32**
 seed-paired runs) and costs the rate read-out **+0.0142**, a **9.5×** ratio. The
 read-out’s advantage over the rate arm falls from **+0.1275** to **+0.0070**:
 **94.5% of it is contingent on temporal order.** That SHD depends on temporal
-order is **not** what this figure shows — that is established (Cramer et al.
+order is **not** what this figure shows; that is established (Cramer et al.
 2022, ≤60% on spike-count-only SHD; two 2025 studies with model-side and
 spike-time operators). What is measured here is **which component’s
 contribution is the order-dependent one**, a difference-in-differences on the
@@ -484,7 +484,7 @@ h1024** (−0.1618, positive in 1/12). The inversion is a **threshold, not the
 slope continuing**: the drop into h1024 is **0.2178**, **6.9×** the largest gap
 below it, so the collapse is located **between h768 and h1024** and every rung
 below it remains positive. **No monotonic decay is claimed above the
-threshold** — h384 and h512 are not distinguishable at twelve seeds (paired
+threshold**: h384 and h512 are not distinguishable at twelve seeds (paired
 difference −0.0116, sd 0.0253, negative in 7 of 12). Three preregistered rescue
 levers (surrogate scale 0.5 and 0.25, gradient clipping at 1000.0) are all
 negative and all worse than the arm they were meant to rescue, though clipping
@@ -555,8 +555,8 @@ registered in [`PREREG_2026-08-22_SHD_ATTENTION_RESOLUTION_LADDER.md`](PREREG_20
 
 **Caption (required wording):**
 “The resolution ladder. Holding the 1400 ms analysis window fixed and varying
-only the number of frames, the attention read-out helps at every rung —
-**+0.1927** at 14.0 ms bins, **+0.1751** at 5.6 ms, **+0.1474** at 2.8 ms — with
+only the number of frames, the attention read-out helps at every rung:
+**+0.1927** at 14.0 ms bins, **+0.1751** at 5.6 ms, **+0.1474** at 2.8 ms, with
 **12/12** seeds positive and **12/12** at or above 0.80 on each. The advantage
 **shrinks with finer resolution**: gain(t500) − gain(t100) = **−0.0453** against
 a two-sided bar of 0.03, the opposite of the direction the withdrawn S-5
@@ -668,7 +668,7 @@ stabilising**, the opposite of the sign that wave's own hypothesis name asserted
 
 **Caption (required wording):**
 “The read-out does not substitute for temporal state. Attention's gain is
-**+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif` — a difference of
+**+0.1258** on `ff+fixed` and **+0.1285** on `ff+alif`, a difference of
 **+0.0027** against a two-sided bar of 0.03, positive in 6 of 12 seeds, so
 threshold adaptation makes no difference to it at this operating point. On a
 recurrent substrate the gain roughly doubles, **+0.2612** against **+0.1201**
@@ -677,7 +677,7 @@ confounded (**+0.1411**, positive in **10 of 10**). **The recurrent substrate
 does not win**: `rec+alif+attn` reaches 0.7874 against `ff+fixed+attn`'s 0.8289,
 and no verdict is issued on that ordering. The recurrent gain is measured from a
 base 0.18 lower, and a **post-hoc, unregistered** headroom normalisation takes
-the ratio from 2.2× to **1.34×** — the ordering survives, most of its apparent
+the ratio from 2.2× to **1.34×**; the ordering survives, most of its apparent
 size does not. Ten paired seeds, the registered minimum.”
 
 **Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figS_substrate.{png,pdf}`
@@ -867,7 +867,7 @@ aside: **SuperSpike BPTT = 1.0000 in every suite, on both graphs.**
 Source: [`deep_xor_thresh.json`](deep_xor_thresh.json). Do **not** claim the same flip for mid-init depth locality (broadcast also solves there).
 
 **Caption (required wording):**  
-“Mechanism evidence for H\*: richness × addressability on a matched dense-LIF forward, n = 20 per cell. The lead matched FAIL is **±1 × surrogate eligibility** specifically — not a ban on every broadcast scalar (broadcast-graded reaches 0.9975) and not on every ±1 rule (±1 broadcast REINFORCE reaches 0.78). Against a SuperSpike BPTT reference at **1.0000**, every other rule tested clears the gate, so this panel shows **which single rule fails a task the rest saturate** and does not rank the rest. Locality / addressability as a necessary ingredient is the XOR flip (broadcast fails; DFA solves), not coincidence alone. Matched PASS still does not imply live muted-θ / k-WTA G2 PASS.”
+“Mechanism evidence for H\*: richness × addressability on a matched dense-LIF forward, n = 20 per cell. The lead matched FAIL is **±1 × surrogate eligibility** specifically, not a ban on every broadcast scalar (broadcast-graded reaches 0.9975) and not on every ±1 rule (±1 broadcast REINFORCE reaches 0.78). Against a SuperSpike BPTT reference at **1.0000**, every other rule tested clears the gate, so this panel shows **which single rule fails a task the rest saturate** and does not rank the rest. Locality / addressability as a necessary ingredient is the XOR flip (broadcast fails; DFA solves), not coincidence alone. Matched PASS still does not imply live muted-θ / k-WTA G2 PASS.”
 
 **Artwork target:** `runs/2026-07-23-paper-hard-both/figures/figM_mechanism_richness_addressability.{png,pdf}` — **redrawn 2026-08-27** to this specification. Panel A encodes pass / fail / contrast as labelled chips with no accuracy-to-size mapping; the low-richness / low-addressability cell draws `MatchedLocal` and `MatchedRlFlat` as two rules with the 0.28 between them stated; the saturated reference leads the panel. Panel B carries an explicit chance line at 0.50, so the broadcast bar cannot read as “half as good” rather than “did not learn”. Not renamed.  
 **Draft cite:** [`PAPER_DRAFT.md`](PAPER_DRAFT.md) §3.1 / §4.1.
@@ -942,8 +942,8 @@ specifically; on the DFA schedule the broadcast-*graded* contrast reaches
 
 **Caption (required wording):**
 “Matched dense-LIF kill gate, 2026-08-25 re-run at `MATCHED_INPUT_SCALE = 2.0`,
-n = 20, feed-forward / recurrent. **Broadcast ±1 three-factor** — ±1 reward ×
-surrogate eligibility — is the only rule tested that does not clear the gate,
+n = 20, feed-forward / recurrent. **Broadcast ±1 three-factor** (±1 reward ×
+surrogate eligibility) is the only rule tested that does not clear the gate,
 and it fails on **both** forward graphs (0.5000 / 0.5100, gap LCB 0.0000 /
 −0.0192). Every other rule clears it against a SuperSpike BPTT reference at
 1.0000, so each PASS reduces to ‘above 0.75’ and **no ordering among the

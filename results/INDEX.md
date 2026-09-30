@@ -2,7 +2,7 @@
 
 # Record index
 
-369 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+370 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -13,7 +13,7 @@
 | Amendments | 22 | 1 |
 | Defects | 9 | 0 |
 | Hardening | 9 | 0 |
-| Audits | 7 | 0 |
+| Audits | 8 | 0 |
 | Blockers | 1 | 0 |
 | Summaries | 2 | 1 |
 | Reconciliations | 1 | 0 |
@@ -279,6 +279,7 @@ Read these only through the document that retired them.
 | date | document | title |
 |---|---|---|
 | 2026-09-29 | [AUDIT_2026-09-29_THE_MANUSCRIPT_READ_AS_A_REVIEWER_WOULD.md](AUDIT_2026-09-29_THE_MANUSCRIPT_READ_AS_A_REVIEWER_WOULD.md) | Audit 2026-09-29 — the manuscript read as a reviewer would |
+| 2026-09-29 | [AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md](AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md) | Audit 2026-09-29 (second pass): the manuscript before the dash-edit commit |
 | 2026-09-07 | [AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md](AUDIT_2026-09-07_THE_EXPERIMENT_BINARIES.md) | Audit — the experiment binaries |
 | 2026-09-07 | [AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md](AUDIT_2026-09-07_THE_ENGINE_AND_AREAS_SEMANTICS.md) | Audit — `binn-engine` and `binn-areas`, semantically |
 | 2026-09-05 | [AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md](AUDIT_2026-09-05_THE_CROSS_REPOSITORY_REVIEW_READ_AGAINST_THE_RECORD.md) | Audit — the cross-repository review of September 4, read against the record |
