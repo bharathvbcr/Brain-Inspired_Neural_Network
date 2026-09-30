@@ -34,6 +34,15 @@ class FreshCloneTest(unittest.TestCase):
         self.assertEqual(sorted(plan.get("binn-core/Cargo.toml", [])),
                          ["sparsl", "tessl"])
 
+    def test_every_crates_io_patch_is_used(self):
+        """Cargo records a `[patch]` entry that matches nothing in the graph as
+        `[[patch.unused]]` and builds anyway, so a dead patch ships in every
+        clone and supplement unnoticed. `patches/block` was one: it served the
+        `metal` crate, which is no longer in the lock file, and it stayed until
+        2026-09-29."""
+        lock = (ROOT / "Cargo.lock").read_text()
+        self.assertNotIn("[[patch.unused]]", lock)
+
     def test_a_path_outside_the_repository_is_refused(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:

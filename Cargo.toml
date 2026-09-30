@@ -81,6 +81,3 @@ overflow-checks = true
 lto = "fat"
 codegen-units = 1
 
-[patch.crates-io]
-block = { path = "patches/block" }
-

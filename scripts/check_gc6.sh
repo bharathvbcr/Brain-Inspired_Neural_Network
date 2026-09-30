@@ -2,9 +2,10 @@
 # GC6: no unsafe without a documented invariant (doc comment immediately above).
 # Clippy also runs with -D warnings in CI.
 #
-# Scope is BINN-owned source only. `patches/` holds vendored crates pulled in
-# via [patch.crates-io]; BINN does not author them and annotating a third-party
-# crate would be a fork, not a fix. Their 30 `unsafe` sites were drowning the
+# Scope is BINN-owned source only. `patches/` is where a crate vendored via
+# [patch.crates-io] would live (none since 2026-09-29, when the unused `block`
+# patch was deleted); BINN does not author such crates and annotating one would
+# be a fork, not a fix. The `block` patch's 30 `unsafe` sites once drowned the
 # real signal, which is that BINN itself contains no `unsafe` at all.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
