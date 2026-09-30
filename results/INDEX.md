@@ -2,7 +2,7 @@
 
 # Record index
 
-370 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+371 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -30,7 +30,7 @@
 | Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
-| Other | 30 | 0 |
+| Other | 31 | 0 |
 
 ## Retired documents
 
@@ -570,6 +570,7 @@ Read these only through the document that retired them.
 |---|---|---|
 | 2026-09-29 | [METHODS_TABLES_2026-09-29.md](METHODS_TABLES_2026-09-29.md) | Methods tables: SHD attention read-out (2026-09-29) |
 | 2026-09-29 | [DID_INTERVALS_2026-09-29.md](DID_INTERVALS_2026-09-29.md) | Bootstrap intervals on the gain and the difference-in-differences |
+| 2026-09-29 | [DID_FAMILYWISE_2026-09-29.md](DID_FAMILYWISE_2026-09-29.md) | Bonferroni-corrected intervals over the paper's 42 contrasts |
 | 2026-09-05 | [DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md](DESIGN_2026-09-05_THE_COUNTERFACTUAL_ARM.md) | The counterfactual arm — instrument built, no wave registered |
 | 2026-09-03 | [CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md](CITATIONS_2026-09-03_SECTION_0_AGAINST_PRIMARIES.md) | §0's citations, read against their primary sources |
 | 2026-08-02 | [PERF_AUDIT_2026-08-02.md](PERF_AUDIT_2026-08-02.md) | Performance audit — hot path, 2026-08-02 |

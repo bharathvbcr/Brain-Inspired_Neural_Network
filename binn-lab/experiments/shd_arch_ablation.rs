@@ -13,9 +13,9 @@
 //! | ETLP (fully local three-factor, hardware-targeted) | full | 0.746 |
 //! | this project, feed-forward fixed-θ DFA | full | 0.234 |
 //!
-//! ETLP's own conclusion is that *"threshold adaptation in spiking neurons and a
-//! recurrent topology are necessary to learn spatio-temporal patterns with a
-//! rich temporal structure"*. Both are absent from the current architecture, so
+//! ETLP's own conclusion is that *"when using local plasticity, threshold
+//! adaptation in spiking neurons and a recurrent topology are necessary to learn
+//! spatio-temporal patterns with a rich temporal structure"*. Both are absent from the current architecture, so
 //! the 0.234 figure is confounded.
 //!
 //! Preregistration: `results/PREREG_2026-07-25_SHD_ARCH_ABLATION.md`.

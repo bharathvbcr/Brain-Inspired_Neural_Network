@@ -939,6 +939,7 @@ supplement with:
 cargo test --locked --workspace
 ./scripts/record_checks.sh      # recomputes every published number
 python3 scripts/did_confidence_intervals.py --paper   # Appendix K
+python3 scripts/did_confidence_intervals.py --familywise   # Bonferroni counts
 python3 scripts/build_paper.py  # this manuscript, page limit enforced
 ```
 

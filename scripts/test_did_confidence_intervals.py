@@ -241,6 +241,18 @@ class FamilyWise(unittest.TestCase):
     """Bonferroni over the paper's contrasts. Until 2026-09-29 the paper said
     only that a corrected interval "would likely cross" the bar."""
 
+    @classmethod
+    def setUpClass(cls):
+        # Depends only on each row's seed quadruples, not on the resample
+        # count ROWS was computed at, so it equals the full-size run.
+        cls.alpha, cls.corrected = DCI.familywise(ROWS)
+
+    def test_the_archived_record_is_current(self):
+        record = ROOT / "results/DID_FAMILYWISE_2026-09-29.md"
+        self.assertEqual(record.read_text(),
+                         DCI.familywise_document(self.alpha, self.corrected),
+                         "regenerate it with --familywise --markdown")
+
     def test_the_family_is_the_paired_bin_shuffled_rows(self):
         paired = DCI.Row(128, "published-2ms", "adjacent-sum-5", "d32l4", 400, "t",
                          quads={s: (0.1 + 0.01 * s, 0.0, 0.1) for s in range(12)})
@@ -258,8 +270,7 @@ class FamilyWise(unittest.TestCase):
             DCI.familywise([])
 
     def test_the_manuscript_prints_these_counts(self):
-        alpha, corrected = DCI.familywise(ROWS)
-        s = DCI.familywise_summary(corrected)
+        s = DCI.familywise_summary(self.corrected)
         self.assertEqual(s["family"], 42)
         draft = (ROOT / "results/PAPER_DRAFT.md").read_text()
         para = draft.split("**Statistics.**", 1)[1].split("\n\n", 1)[0]
@@ -282,8 +293,7 @@ class FamilyWise(unittest.TestCase):
         self.assertEqual(s["gain_points_did_above_zero"], g)
 
     def test_the_named_exceptions_are_the_only_ones(self):
-        _, corrected = DCI.familywise(ROWS)
-        gain = [(r, s) for r, s in corrected if s["gain_intact"] >= DCI.NO_GAIN_BAR]
+        gain = [(r, s) for r, s in self.corrected if s["gain_intact"] >= DCI.NO_GAIN_BAR]
         below_bar = [(r.hidden, r.depth, r.budget, round(s["did_ci"][0], 3))
                      for r, s in gain if s["did_ci"][0] <= DCI.NO_GAIN_BAR]
         self.assertEqual(below_bar, [(1024, "d32l2", 100, 0.022)])
