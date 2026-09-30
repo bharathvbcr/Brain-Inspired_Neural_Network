@@ -21,6 +21,50 @@ bs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bs)
 
 
+class FreshCloneTest(unittest.TestCase):
+    """No manifest may depend on a path outside the repository.
+
+    Until 2026-09-29 `binn-core` depended on sparsl and tessl by paths into
+    sibling checkouts, so no fresh clone of this repository built, and nor did
+    a supplement copied from it. Both are now exact crates.io pins; this is the
+    guard that keeps them so."""
+
+    def test_the_repository_has_no_path_dependency_outside_itself(self):
+        plan = bs.vendoring_plan(bs.source_files())
+        self.assertEqual(sorted(plan.get("binn-core/Cargo.toml", [])),
+                         ["sparsl", "tessl"])
+
+    def test_a_path_outside_the_repository_is_refused(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            (repo / "core").mkdir(parents=True)
+            (repo / "core/Cargo.toml").write_text(
+                '[package]\nname = "core"\n\n'
+                '[dependencies]\nsibling = { path = "../../sibling" }\n')
+            saved = bs.ROOT
+            bs.ROOT = repo
+            try:
+                with self.assertRaises(SystemExit):
+                    bs.vendoring_plan(["core/Cargo.toml"])
+            finally:
+                bs.ROOT = saved
+
+    def test_both_pin_forms_are_repointed_and_other_keys_kept(self):
+        sparsl, tessl = bs.locked_version("sparsl"), bs.locked_version("tessl")
+        text = (f'sparsl = "={sparsl}"\n'
+                f'tessl = {{ version = "={tessl}", optional = true }}\n')
+        text = bs.repoint(text, "binn-core/Cargo.toml", "sparsl")
+        text = bs.repoint(text, "binn-core/Cargo.toml", "tessl")
+        self.assertEqual(text,
+                         'sparsl = { path = "../vendor/sparsl" }\n'
+                         'tessl = { path = "../vendor/tessl", optional = true }\n')
+
+    def test_a_pin_off_the_locked_version_is_refused(self):
+        with self.assertRaises(SystemExit):
+            bs.repoint('sparsl = "=0.0.1"\n', "binn-core/Cargo.toml", "sparsl")
+
+
 class RedactionTest(unittest.TestCase):
 
     CASES = [

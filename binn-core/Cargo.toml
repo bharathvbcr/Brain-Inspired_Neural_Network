@@ -17,8 +17,15 @@ gpu = ["sparsl/metal"]
 tessl-interop = ["gpu", "dep:tessl"]
 
 [dependencies]
-sparsl = { path = "../../MLSystemsLab/Rust_MLKit/crates/sparsl" }
-tessl = { path = "../../tessl", optional = true }
+# Both from crates.io at exact versions, so a fresh clone builds. They were
+# path dependencies on sibling checkouts until 2026-09-29, which no clone has
+# and which moved under the lock (tessl reached 0.2.0 while Cargo.lock pinned
+# 0.1.4). The published 0.3.0 and 0.1.4 packages were diffed against the git
+# commits the lock described (sparsl ef15f28e, tessl 1085d7f1): src/, build.rs,
+# kernels/ and the manifest are identical. To develop against a local
+# checkout, override with an untracked `[patch.crates-io]` entry.
+sparsl = "=0.3.0"
+tessl = { version = "=0.1.4", optional = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 rayon = { workspace = true }

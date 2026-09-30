@@ -2966,6 +2966,8 @@ dependencies = [
 [[package]]
 name = "sparsl"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "763134357633fbad02c411630c77549f85a2f6db4d037c4bb3aee118909249c9"
 dependencies = [
  "objc2",
  "objc2-foundation",
@@ -3160,6 +3162,8 @@ dependencies = [
 [[package]]
 name = "tessl"
 version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75c3a0b043102cbc96febc8f15bf73c0b42eed09379f86f79bb88e04fe95547b"
 dependencies = [
  "libc",
  "objc2",

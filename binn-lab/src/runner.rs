@@ -3332,6 +3332,9 @@ mod tests {
         );
     }
 
+    // `parse_condition_json` is compiled only without `plots`, so this test is
+    // too; otherwise `cargo test --features plots` does not compile.
+    #[cfg(not(feature = "plots"))]
     #[test]
     fn counterfactual_counts_survive_the_isolate_child_boundary() {
         // The parent runs each condition in a child process and reads one JSON
