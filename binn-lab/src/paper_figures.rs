@@ -1358,7 +1358,7 @@ fn draw_lead_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawE
         (LEFT, y),
         RIGHT - LEFT,
         &format!(
-            "The DiD clears the registered bar at all {} of {} operating points and BOTH budgets, but the read-out has a gain to lose at only {} of them after 400 epochs (all after 100), and only there is the DiD order-dependence. NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
+            "The DiD clears the registered bar at all {} of {} operating points and BOTH budgets, but the read-out has a gain to lose at only {} of them after 400 epochs (all after 100), and only there does the DiD measure order-dependence. NOT every width and NOT every read-out depth: h768/d32l2 is 0.1271 from its d32l4 twin, outside the 0.10 bar.",
             nums::COVERAGE_COVERED, nums::COVERAGE_TOTAL, nums::GAIN_POINTS_E400
         ),
         ty::NOTE,

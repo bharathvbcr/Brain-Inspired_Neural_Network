@@ -360,7 +360,10 @@ def render(rows):
             out.append(lead + f"| — | not paired: {row.reason} | — | — | — | |")
             continue
         s = row.stats
-        flag = ("**no gain to lose**" if s["gain_intact_ci"][0] < NO_GAIN_BAR else "")
+        # Named for its criterion, the LOWER BOUND. The paper's † is the point
+        # estimate ("no gain to lose"); until 2026-09-29 both carried that name.
+        flag = ("**gain interval reaches below the bar**"
+                if s["gain_intact_ci"][0] < NO_GAIN_BAR else "")
         if row.note:
             notes.append(len(notes) + 1)
             flag = (flag + f" [{notes[-1]}]").strip()
@@ -384,7 +387,7 @@ def document(table, footnotes):
         "their difference (the DiD), each with a paired percentile bootstrap 95% "
         f"interval ({RESAMPLES:,} resamples of seed quadruples, RNG seed "
         f"{RNG_SEED}). Arms are read through each wave's frozen analyser. "
-        f"**no gain to lose** marks rows whose intact-gain lower bound is below "
+        f"**gain interval reaches below the bar** marks rows whose intact-gain lower bound is below "
         f"+{NO_GAIN_BAR:.2f}: there, a positive DiD does not show attention "
         "losing a temporal advantage it had.",
         "",

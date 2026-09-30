@@ -55,8 +55,10 @@ same breath, printed "94.5% of the advantage is contingent on temporal order"
 in Figure 1, its caption and §3.8. The second-pass audit
 ([`AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md`](AUDIT_2026-09-29_SECOND_PASS_BEFORE_COMMIT.md))
 found the contradiction. The author chose to keep the number and narrow the
-non-claim: the claim is now **presence everywhere and a proportion at one
-point**.
+non-claim: the claim is now **presence wherever there is a gain to lose, and a
+proportion at one point**. (A first draft of this change said "presence
+everywhere", the phrase the first section retired; it was caught in review
+before submission.)
 
 **The number.** At the anchor (n = 32), destroying order removes **94.5%** of
 the gain, DiD / gain(intact) as a ratio of seed means, with a paired bootstrap

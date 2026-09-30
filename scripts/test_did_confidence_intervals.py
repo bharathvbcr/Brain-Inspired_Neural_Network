@@ -195,7 +195,10 @@ class Bootstrap(unittest.TestCase):
         self.assertIn((512, "d32l1", 400), flagged)
         self.assertNotIn((128, "d32l4", 400), flagged)
         table, _ = DCI.render([find(512, *ANCHOR, "d32l1", 400)])
-        self.assertIn("no gain to lose", table[-1])
+        # The lower-bound criterion carries its own name; "no gain to lose"
+        # is the paper's point-estimate mark (†), a different, smaller set.
+        self.assertIn("gain interval reaches below the bar", table[-1])
+        self.assertNotIn("no gain to lose", table[-1])
 
 
 class ShareOfTheGain(unittest.TestCase):

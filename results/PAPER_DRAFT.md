@@ -66,7 +66,7 @@ synchrony as well costs up to **+0.1308** more at coarse bins, an upper bound
 because that operator also raises the substrate's activity. Our registered
 prediction that the effect's size tracks the gain across widths failed
 (Spearman **ρ = −0.1429**), so the anchor's share does not transfer: we claim
-presence everywhere and a proportion at one point. Every contrast was
+presence wherever there is a gain to lose, and a proportion at one point. Every contrast was
 preregistered with a numeric bar on a frozen configuration; the intervals, the
 share and the gain-to-lose reading were added afterwards and are marked as such.
 All numbers are recomputed from archived runs by scripts released with the
@@ -131,7 +131,7 @@ Neuromorphic Sequential Arena [@chen2025nsa] removes temporal propagation
 Table S4). Two destruction operators on two different sides of the model, one
 conclusion, both prior to this work. Our shuffle is not their counts-only
 condition: it keeps each utterance's length and the synchrony within a bin, and a
-rate read-out on bin-shuffled input still reaches 0.6934 at the anchor, above
+rate read-out on bin-shuffled input still reaches 0.6934 at the anchor (n = 12), above
 their 60% mark. Count-preserving randomisation of spike
 order has been proposed as a robustness benchmark in its own right
 [@hindman2026tempo], and for N-MNIST it has been shown that timing is not needed
@@ -181,7 +181,8 @@ language modelling [@sinha2021order]. And the outcome is not guaranteed by the
 architecture: attention with positional encodings has been found nearly
 insensitive to shuffled input in time-series forecasting [@zeng2023ltsf].
 
-**The claim is presence everywhere, and a proportion at one point.** Across
+**The claim is presence wherever there is a gain to lose, and a proportion at
+one point.** Across
 twenty-one operating points at two training budgets, the read-out's gain depends
 on order wherever it has a gain to lose (at every point after 100 epochs and at
 sixteen of twenty-one after 400), and the *size* of the dependence does not track
@@ -549,7 +550,7 @@ of 12). Appendix F gives the three manipulations in full.
 ([`RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md`](RESULT_2026-09-06_W28_THE_READ_OUT_SURVIVES_WHAT_THE_SUBSTRATE_CANNOT.md);
 [`RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md`](RESULT_2026-09-09_W29_THE_ASYMMETRY_HAS_ITS_OWN_BAR.md))
 
-**Presence everywhere, and a proportion at one point.** At the anchor,
+**Presence wherever there is a gain to lose, and a proportion at one point.** At the anchor,
 destroying order removes **94.5%** of the gain (95% CI 90.9–97.9%, n = 32). That
 share does not transfer. The registered prediction that the DiD would track the
 gain across the six widths failed: Spearman ρ = **−0.1429** against the
