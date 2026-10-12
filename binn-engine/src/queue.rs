@@ -653,29 +653,75 @@ mod tests {
     /// Insert+drain must stay roughly linear: 1e5 events must not cliff vs 1e3
     /// (sorted `VecDeque::insert` was ~quadratic in bucket occupancy).
     ///
-    /// Timed as the *minimum* of several repetitions, not a single sample.
-    /// Scheduling noise is one-sided — it can only add time — and the two
-    /// measurements are not equally exposed to it: the 1e5 run occupies a
-    /// window three orders of magnitude longer than the 1e3 run, so under
-    /// `cargo test --workspace`, where every crate's test binary runs at once,
-    /// contention inflates the numerator alone. The one observed failure had a
-    /// perfectly ordinary small sample (887us, against a 808-1048us band) and a
-    /// large sample of 836ms against a 46-55ms band — 17x its usual value, from
-    /// code that measured ~48ms in nineteen other runs.
+    /// Timed as per-thread CPU time (time actually on-CPU), as the *minimum* of
+    /// several repetitions.
     ///
-    /// The minimum tightens this rather than relaxing it. A real quadratic
-    /// cliff inflates *every* repetition, so it still trips the same unchanged
-    /// threshold; a single unlucky time slice no longer can.
+    /// Wall time was not enough. Scheduling noise is one-sided — it can only
+    /// add time — and the two measurements are not equally exposed to it: the
+    /// 1e5 run occupies a window three orders of magnitude longer than the 1e3
+    /// run, so under `cargo test --workspace`, where every crate's test binary
+    /// runs at once, contention inflates the numerator alone. Best-of-3 wall
+    /// time fixed an isolated unlucky slice (836ms against a 46-55ms band) but
+    /// not sustained contention: at load ~170 on 18 cores every repetition of
+    /// the large run was descheduled (1.416s vs ~48ms, ratio 1462 > 500).
+    ///
+    /// `CLOCK_THREAD_CPUTIME_ID` does not advance while the thread is off-CPU,
+    /// so descheduling drops out of both numerator and denominator. What stays
+    /// is cache and memory-bandwidth interference from co-tenants, which is
+    /// bounded (a small constant factor), unlike a descheduling window. A real
+    /// quadratic cliff is an algorithmic cost and inflates on-CPU time in
+    /// *every* repetition, so the unchanged 500 threshold still trips on it.
+    ///
+    /// The clock is declared directly against the libc that std already links
+    /// (no new dependency) on 64-bit Linux and macOS; elsewhere it falls back
+    /// to wall time, which is the weaker, load-sensitive measurement above.
     #[test]
     fn insert_throughput_no_quadratic_cliff() {
+        #[cfg(all(any(target_os = "linux", target_os = "macos"), target_pointer_width = "64"))]
+        mod clock {
+            #[repr(C)]
+            struct Timespec {
+                tv_sec: i64,
+                tv_nsec: i64,
+            }
+            extern "C" {
+                fn clock_gettime(clk_id: i32, tp: *mut Timespec) -> i32;
+            }
+            pub const SOURCE: &str = "thread CPU time";
+            #[cfg(target_os = "linux")]
+            const CLOCK_THREAD_CPUTIME_ID: i32 = 3;
+            #[cfg(target_os = "macos")]
+            const CLOCK_THREAD_CPUTIME_ID: i32 = 16;
+
+            /// Calling thread's CPU time in ns, or `None` if the clock fails.
+            pub fn thread_cpu_ns() -> Option<u128> {
+                let mut ts = Timespec { tv_sec: 0, tv_nsec: 0 };
+                // SAFETY: `ts` is a valid, writable `struct timespec` (two
+                // 64-bit fields on every cfg-gated target) for the call.
+                let rc = unsafe { clock_gettime(CLOCK_THREAD_CPUTIME_ID, &mut ts) };
+                (rc == 0).then(|| ts.tv_sec as u128 * 1_000_000_000 + ts.tv_nsec as u128)
+            }
+        }
+        #[cfg(not(all(any(target_os = "linux", target_os = "macos"), target_pointer_width = "64")))]
+        mod clock {
+            pub const SOURCE: &str = "wall time (fallback)";
+            pub fn thread_cpu_ns() -> Option<u128> {
+                None
+            }
+        }
+
         fn fill_and_drain(n: usize) -> std::time::Duration {
-            let start = Instant::now();
+            let wall = Instant::now();
+            let cpu0 = clock::thread_cpu_ns();
             let mut q = TimingWheel::new();
             for i in 0..n {
                 q.insert((i % 128) as u64, Event::new(i as u64));
             }
             while q.pop_earliest().is_some() {}
-            start.elapsed()
+            match (cpu0, clock::thread_cpu_ns()) {
+                (Some(a), Some(b)) => std::time::Duration::from_nanos((b - a) as u64),
+                _ => wall.elapsed(),
+            }
         }
 
         fn best_of(n: usize, reps: usize) -> std::time::Duration {
@@ -693,7 +739,8 @@ mod tests {
         assert!(
             ratio < 500.0,
             "insert/drain cliff: 1e5/1e3 time ratio {ratio:.1} \
-             (small={t_small:?}, large={t_large:?}, best of {REPS})"
+             (small={t_small:?}, large={t_large:?}, best of {REPS}, {})",
+            clock::SOURCE
         );
     }
 
