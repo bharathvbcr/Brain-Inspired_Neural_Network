@@ -574,7 +574,10 @@ as bins get finer but never reversing (Appendix I). *Geometry:* the gain is
 positive on both channel geometries, but 0.80 is cleared only on
 `adjacent-sum-5` (0.7864 on `channels-700`). *Substrate:* every manipulated run
 is feed-forward; the registered attempt on a recurrent substrate could not be
-evaluated (§3.7).
+evaluated (§3.7). *Attention settings:* attention width is 32 at every
+operating point but one (64, at width 128 with four blocks), depth was varied
+at only some widths (Appendix K), and the positional code's range, 1 to 64
+cycles per utterance, was not swept.
 
 ---
 
