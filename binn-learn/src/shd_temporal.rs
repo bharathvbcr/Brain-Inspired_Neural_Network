@@ -70,7 +70,9 @@ pub enum TemporalCondition {
     /// the invariant [`OperatorInvariants`] checks: a window shuffle that moved
     /// an entry further than its own window would be a different manipulation
     /// wearing this label.
-    WindowShuffled { window: usize },
+    WindowShuffled {
+        window: usize,
+    },
     /// Delete each individual spike independently with probability
     /// `percent / 100`.
     ///
@@ -85,7 +87,9 @@ pub enum TemporalCondition {
     /// variable and count-dependent number of spikes. Per-spike deletion makes
     /// the surviving count exactly `Binomial(count, 1 - p)`, which is what the
     /// registered retention band is written against.
-    SpikeDropout { percent: u32 },
+    SpikeDropout {
+        percent: u32,
+    },
     /// Permute the **hidden** spike train's time axis, leaving the input alone.
     ///
     /// Every other operator manipulates what the network is shown and then asks
@@ -419,8 +423,7 @@ impl OperatorInvariants {
                 }
                 let observed = audit.count_after / audit.count_before;
                 // Standard error of the mean of `n` Bernoulli(survival) draws.
-                let deviation =
-                    (survival * (1.0 - survival) / audit.count_before).sqrt() * sigmas;
+                let deviation = (survival * (1.0 - survival) / audit.count_before).sqrt() * sigmas;
                 if (observed - survival).abs() > deviation {
                     return Err(format!(
                         "temporal condition {label} retained {observed:.6} of {} spikes; \
@@ -863,7 +866,6 @@ pub fn apply_temporal(
 /// Largest integer f32 represents exactly. See [`channel_totals`].
 const MAX_EXACT_INTEGER_F32: f32 = 16_777_216.0;
 
-
 impl TemporalAudit {
     /// Fold a per-sample audit into a running dataset-level audit.
     pub fn merge(&mut self, other: &TemporalAudit) {
@@ -1305,7 +1307,10 @@ mod tests {
                 let mut manipulated = dense_sample(seed % 5);
                 audit.merge(&apply_temporal(&mut manipulated, condition, seed * 13).unwrap());
             }
-            assert_eq!(audit.relocated_fraction, 0.0, "p{percent} relocated entries");
+            assert_eq!(
+                audit.relocated_fraction, 0.0,
+                "p{percent} relocated entries"
+            );
             assert_eq!(audit.max_bin_displacement, 0.0, "p{percent} moved an entry");
             assert!(
                 !audit.counts_preserved,
@@ -1431,13 +1436,18 @@ mod tests {
             condition
                 .invariants()
                 .check(&condition.label(), &audits[own])
-                .unwrap_or_else(|error| panic!("{} rejected its own audit: {error}", condition.label()));
+                .unwrap_or_else(|error| {
+                    panic!("{} rejected its own audit: {error}", condition.label())
+                });
             for (other, audit) in audits.iter().enumerate() {
                 if other == own {
                     continue;
                 }
                 assert!(
-                    condition.invariants().check(&condition.label(), audit).is_err(),
+                    condition
+                        .invariants()
+                        .check(&condition.label(), audit)
+                        .is_err(),
                     "{}'s invariants accepted {}'s audit",
                     condition.label(),
                     conditions[other].label(),
@@ -1546,12 +1556,14 @@ mod tests {
                 arm.label()
             );
             assert_eq!(
-                intact_forward.logits, shuffled_forward.logits,
+                intact_forward.logits,
+                shuffled_forward.logits,
                 "{} logits moved under hidden-shuffled",
                 arm.label()
             );
             assert_eq!(
-                intact_gradient, shuffled_gradient,
+                intact_gradient,
+                shuffled_gradient,
                 "{} gradient moved under hidden-shuffled",
                 arm.label()
             );
@@ -1601,7 +1613,9 @@ mod tests {
         let base = MatchedWeights::deterministic(n_inputs, hidden, n_classes, 0x51E6_0001);
         let w_rec = if arm.recurrent {
             let mut rng = PortableRng::new(0x51E6_0002);
-            (0..hidden * hidden).map(|_| rng.uniform(-0.1, 0.1)).collect()
+            (0..hidden * hidden)
+                .map(|_| rng.uniform(-0.1, 0.1))
+                .collect()
         } else {
             Vec::new()
         };
@@ -1638,8 +1652,7 @@ mod tests {
     fn hidden_shuffled_touches_no_frame_and_is_still_auditable() {
         let before = dense_sample(3);
         let mut after = dense_sample(3);
-        let audit =
-            apply_temporal(&mut after, TemporalCondition::HiddenShuffled, 0x1234).unwrap();
+        let audit = apply_temporal(&mut after, TemporalCondition::HiddenShuffled, 0x1234).unwrap();
         assert_eq!(before.frames, after.frames, "the input must be untouched");
         assert_eq!(audit.relocated_fraction, 0.0);
         assert_eq!(audit.count_before, audit.count_after);

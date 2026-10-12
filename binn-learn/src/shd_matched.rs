@@ -437,6 +437,14 @@ pub fn loss_and_gradient(
     ))
 }
 
+/// Adam for the matched SHD reference.
+///
+/// Weight decay is coupled L2: `update_slice` feeds
+/// `gradient + weight_decay * weight` into the moments. Output bias is called
+/// with weight decay 0. This is not AdamW. The same rule is copied in
+/// `ArmAdam` and in `scripts/shd_calibration/model.py::Adam`. Those copies are
+/// not byte-identical, so they stay separate: recorded goldens depend on each
+/// one.
 #[derive(Clone, Debug)]
 pub struct MatchedAdam {
     mw_in: Vec<f32>,

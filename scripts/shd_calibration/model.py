@@ -193,6 +193,13 @@ def loss_and_gradient(weights: Weights, sample: FramedSample) -> tuple[Forward, 
 
 
 class Adam:
+    """Coupled L2 weight decay: `grad + decay * value` enters the moments.
+
+    Bias (group index 2) uses decay 0. This is not AdamW. Same rule as
+    `MatchedAdam.update_slice` in `binn-learn`; the two are not byte-identical,
+    so they are not merged.
+    """
+
     def __init__(self, weights: Weights):
         self.first = [
             np.zeros_like(weights.w_in),
