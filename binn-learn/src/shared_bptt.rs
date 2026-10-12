@@ -174,6 +174,16 @@ impl SharedGradients {
         }
     }
 
+    fn all_components_finite(&self) -> bool {
+        self.layer_weights
+            .iter()
+            .flatten()
+            .chain(self.layer_bias.iter().flatten())
+            .chain(&self.readout)
+            .chain(&self.readout_bias)
+            .all(|value| value.is_finite())
+    }
+
     /// Accumulate another gradient, useful for deterministic minibatches.
     pub fn add_assign(&mut self, other: &Self) {
         for (dst, src) in self
@@ -607,7 +617,27 @@ impl SharedTemporalNet {
     }
 }
 
+/// A gradient Adam and the SGD ceiling both refuse, instead of writing it into
+/// moments or weights.
+///
+/// `NaN > GRADIENT_CLIP_NORM` is false, so a NaN used to pass the clip. An
+/// infinite norm used to scale by `GRADIENT_CLIP_NORM / inf == 0`, and
+/// `inf * 0` is NaN, which then stuck in the moments.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NonFiniteGradient;
+
+impl std::fmt::Display for NonFiniteGradient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("non-finite gradient refused")
+    }
+}
+
+impl std::error::Error for NonFiniteGradient {}
+
 /// Deterministic Adam state for the BPTT ceiling.
+///
+/// Weight decay is absent. The step is the clipped gradient with bias-corrected
+/// moments and no L2 term on the gradient or the parameters.
 #[derive(Clone, Debug)]
 pub struct Adam {
     moment1: Vec<f32>,
@@ -628,13 +658,8 @@ impl Adam {
         &mut self,
         model: &mut SharedTemporalNet,
         gradients: &SharedGradients,
-    ) -> StepDiagnostics {
-        let mut clipped = gradients.clone();
-        let unclipped_global_norm = clipped.global_norm();
-        if unclipped_global_norm > GRADIENT_CLIP_NORM {
-            clipped.scale(GRADIENT_CLIP_NORM / unclipped_global_norm);
-        }
-        let clipped_global_norm = clipped.global_norm();
+    ) -> Result<StepDiagnostics, NonFiniteGradient> {
+        let (clipped, unclipped_global_norm, clipped_global_norm) = clip_gradients(gradients)?;
         let flat = clipped.flat();
         self.step += 1;
         let mut applied = vec![0.0f32; flat.len()];
@@ -663,28 +688,51 @@ impl Adam {
         let readout_gradient_rms = rms(&flat[cursor..cursor + readout_length]);
         let readout_step_rms = rms(&applied[cursor..cursor + readout_length]);
         model.apply_flat_step(&applied);
-        StepDiagnostics {
+        Ok(StepDiagnostics {
             unclipped_global_norm,
             clipped_global_norm,
             layer_gradient_rms,
             layer_step_rms,
             readout_gradient_rms,
             readout_step_rms,
+        })
+    }
+}
+
+fn clip_gradients(
+    gradients: &SharedGradients,
+) -> Result<(SharedGradients, f32, f32), NonFiniteGradient> {
+    if !gradients.all_components_finite() {
+        return Err(NonFiniteGradient);
+    }
+    let mut clipped = gradients.clone();
+    let unclipped = clipped.global_norm();
+    if !unclipped.is_finite() {
+        return Err(NonFiniteGradient);
+    }
+    if unclipped > GRADIENT_CLIP_NORM {
+        let factor = GRADIENT_CLIP_NORM / unclipped;
+        if !factor.is_finite() {
+            return Err(NonFiniteGradient);
+        }
+        clipped.scale(factor);
+        if !clipped.all_components_finite() {
+            return Err(NonFiniteGradient);
         }
     }
+    let clipped_norm = clipped.global_norm();
+    if !clipped_norm.is_finite() {
+        return Err(NonFiniteGradient);
+    }
+    Ok((clipped, unclipped, clipped_norm))
 }
 
 fn apply_sgd_step(
     model: &mut SharedTemporalNet,
     gradients: &SharedGradients,
     lr: f32,
-) -> StepDiagnostics {
-    let mut clipped = gradients.clone();
-    let unclipped_global_norm = clipped.global_norm();
-    if unclipped_global_norm > GRADIENT_CLIP_NORM {
-        clipped.scale(GRADIENT_CLIP_NORM / unclipped_global_norm);
-    }
-    let clipped_global_norm = clipped.global_norm();
+) -> Result<StepDiagnostics, NonFiniteGradient> {
+    let (clipped, unclipped_global_norm, clipped_global_norm) = clip_gradients(gradients)?;
     let flat = clipped.flat();
     let applied: Vec<f32> = flat.iter().map(|gradient| -lr * gradient).collect();
     let mut layer_gradient_rms = Vec::with_capacity(model.layers.len());
@@ -700,14 +748,14 @@ fn apply_sgd_step(
     let readout_gradient_rms = rms(&flat[cursor..cursor + readout_length]);
     let readout_step_rms = rms(&applied[cursor..cursor + readout_length]);
     model.apply_flat_step(&applied);
-    StepDiagnostics {
+    Ok(StepDiagnostics {
         unclipped_global_norm,
         clipped_global_norm,
         layer_gradient_rms,
         layer_step_rms,
         readout_gradient_rms,
         readout_step_rms,
-    }
+    })
 }
 
 /// Train a BPTT ceiling for a fixed number of epochs.
@@ -722,7 +770,11 @@ pub fn train_bptt(
     for _ in 0..epochs {
         for example in train {
             let (_, gradients) = model.loss_and_gradients(example);
-            diagnostics.push(optimizer.update(model, &gradients));
+            diagnostics.push(
+                optimizer
+                    .update(model, &gradients)
+                    .expect("non-finite gradient refused"),
+            );
         }
     }
     diagnostics
@@ -755,7 +807,8 @@ pub fn train_bptt_sgd(
     for _ in 0..epochs {
         for example in train {
             let (_, gradients) = model.loss_and_gradients(example);
-            diagnostics.push(apply_sgd_step(model, &gradients, lr));
+            diagnostics
+                .push(apply_sgd_step(model, &gradients, lr).expect("non-finite gradient refused"));
         }
     }
     diagnostics
@@ -766,6 +819,9 @@ pub fn train_bptt_sgd(
 /// The realised step size actually taken, as opposed to the nominal `lr`. Two
 /// arms whose realised step sizes differ by an order of magnitude are not
 /// comparable regardless of what their learning rates say.
+///
+/// A non-finite component is returned as itself. Dropping it and averaging the
+/// rest would report a finite mean for a step that did not happen.
 pub fn mean_step_rms(diagnostics: &[StepDiagnostics]) -> f32 {
     if diagnostics.is_empty() {
         return 0.0;
@@ -774,15 +830,17 @@ pub fn mean_step_rms(diagnostics: &[StepDiagnostics]) -> f32 {
     let mut count = 0usize;
     for d in diagnostics {
         for &rms in &d.layer_step_rms {
-            if rms.is_finite() {
-                total += rms as f64;
-                count += 1;
+            if !rms.is_finite() {
+                return rms;
             }
-        }
-        if d.readout_step_rms.is_finite() {
-            total += d.readout_step_rms as f64;
+            total += f64::from(rms);
             count += 1;
         }
+        if !d.readout_step_rms.is_finite() {
+            return d.readout_step_rms;
+        }
+        total += f64::from(d.readout_step_rms);
+        count += 1;
     }
     if count == 0 {
         return 0.0;
@@ -817,7 +875,8 @@ pub fn train_feedback(
     for _ in 0..epochs {
         for example in train {
             let gradients = model.feedback_gradients(example, feedback);
-            diagnostics.push(apply_sgd_step(model, &gradients, lr));
+            diagnostics
+                .push(apply_sgd_step(model, &gradients, lr).expect("non-finite gradient refused"));
         }
     }
     diagnostics
@@ -839,7 +898,7 @@ pub fn train_learned_feedback(
     for _ in 0..epochs {
         for example in train {
             let gradients = model.feedback_gradients(example, feedback);
-            let _ = apply_sgd_step(model, &gradients, lr);
+            apply_sgd_step(model, &gradients, lr).expect("non-finite gradient refused");
             align_feedback(model, feedback, feedback_lr);
         }
     }
@@ -874,7 +933,11 @@ pub fn train_learned_feedback_adam(
     for _ in 0..epochs {
         for example in train {
             let gradients = model.feedback_gradients(example, feedback);
-            diagnostics.push(optimizer.update(model, &gradients));
+            diagnostics.push(
+                optimizer
+                    .update(model, &gradients)
+                    .expect("non-finite gradient refused"),
+            );
             align_feedback(model, feedback, feedback_lr);
         }
     }
@@ -1270,12 +1333,82 @@ mod tests {
         );
     }
 
+    fn step_diag(layer_step: f32, readout_step: f32) -> StepDiagnostics {
+        StepDiagnostics {
+            unclipped_global_norm: 1.0,
+            clipped_global_norm: 1.0,
+            layer_gradient_rms: vec![0.1],
+            layer_step_rms: vec![layer_step],
+            readout_gradient_rms: 0.1,
+            readout_step_rms: readout_step,
+        }
+    }
+
+    /// NaN or infinity must not reach the moments. `NaN > GRADIENT_CLIP_NORM` is
+    /// false, and `inf * 0` (the clip scale of an infinite norm) is NaN, so the
+    /// old clip wrote non-finite values into `moment1`/`moment2` and the next
+    /// finite gradient could not recover.
+    #[test]
+    fn non_finite_gradients_do_not_enter_adam() {
+        for poison in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let mut model = SharedTemporalNet::new(3, 4, 3, &[4], 0.8, 0.5, 2.0, 17);
+            let start = model.parameter_fingerprint();
+            let (_, mut gradients) = model.loss_and_gradients(&example(1));
+            gradients.readout[0] = poison;
+            let mut adam = Adam::new(&model);
+            let refused = adam.update(&mut model, &gradients);
+            assert!(
+                refused.is_err(),
+                "{poison} gradient was accepted: {refused:?}"
+            );
+            assert_eq!(
+                model.parameter_fingerprint(),
+                start,
+                "{poison} gradient moved parameters"
+            );
+            let (_, finite) = model.loss_and_gradients(&example(0));
+            let step = adam
+                .update(&mut model, &finite)
+                .expect("a finite gradient is a normal Adam step");
+            assert!(
+                step.readout_step_rms.is_finite()
+                    && step.readout_step_rms > ADAM_LR * 0.5
+                    && step.readout_step_rms < ADAM_LR * 2.0,
+                "{poison} stayed in the moments: next readout step RMS {}",
+                step.readout_step_rms
+            );
+        }
+    }
+
+    #[test]
+    fn mean_step_rms_does_not_hide_a_non_finite_step() {
+        assert!(
+            mean_step_rms(&[step_diag(1.0e-3, 1.0e-3)]).is_finite(),
+            "an all-finite run must still report a finite mean"
+        );
+        assert_eq!(mean_step_rms(&[]), 0.0);
+
+        let mixed_mean = mean_step_rms(&[step_diag(1.0e-3, 1.0e-3), step_diag(1.0e-3, f32::NAN)]);
+        assert!(
+            !mixed_mean.is_finite(),
+            "mean {mixed_mean} dropped the NaN step and reported a finite mean"
+        );
+
+        let bad_mean = mean_step_rms(&[step_diag(f32::INFINITY, f32::NAN)]);
+        assert!(
+            !bad_mean.is_finite(),
+            "all-non-finite mean was {bad_mean}; dropping those steps reports 0"
+        );
+    }
+
     #[test]
     fn adam_clips_global_norm_and_records_steps() {
         let mut model = SharedTemporalNet::new(3, 4, 3, &[4], 0.8, 0.5, 2.0, 17);
         let (_, mut gradients) = model.loss_and_gradients(&example(1));
         gradients.scale(1_000.0);
-        let diagnostics = Adam::new(&model).update(&mut model, &gradients);
+        let diagnostics = Adam::new(&model)
+            .update(&mut model, &gradients)
+            .expect("finite gradient");
         assert!(diagnostics.unclipped_global_norm > GRADIENT_CLIP_NORM);
         assert!(diagnostics.clipped_global_norm <= GRADIENT_CLIP_NORM + 1e-4);
         assert!(diagnostics.layer_step_rms.iter().all(|value| *value > 0.0));

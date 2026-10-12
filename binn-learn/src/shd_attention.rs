@@ -179,7 +179,9 @@ impl ReadoutVariant {
 
     pub fn from_code(code: u32) -> Result<Self, String> {
         if code > 0b11 {
-            return Err(format!("unknown read-out variant code {code} in weight file"));
+            return Err(format!(
+                "unknown read-out variant code {code} in weight file"
+            ));
         }
         Ok(Self {
             no_position: code & 1 != 0,
@@ -774,7 +776,10 @@ pub fn attention_forward_presented(
         // needs. Storing the raw vectors instead would leave the score backward
         // reading a quantity the forward never used.
         let (q_scale, k_scale) = if variant.qk_norm {
-            (normalise_rows(&mut q, t_steps, d), normalise_rows(&mut k, t_steps, d))
+            (
+                normalise_rows(&mut q, t_steps, d),
+                normalise_rows(&mut k, t_steps, d),
+            )
         } else {
             (Vec::new(), Vec::new())
         };
@@ -1093,8 +1098,7 @@ pub fn attention_gradient(
         let source = cache.presentation.as_ref().map_or(t, |order| order[t]);
         for h in 0..hidden {
             let embedding = &params.w_e[h * d..(h + 1) * d];
-            ds_attn[source * hidden + h] =
-                embedding.iter().zip(upstream).map(|(w, g)| w * g).sum();
+            ds_attn[source * hidden + h] = embedding.iter().zip(upstream).map(|(w, g)| w * g).sum();
             let spike = spikes[source * hidden + h];
             if spike != 0.0 {
                 for (accumulator, g) in gradient.w_e[h * d..(h + 1) * d].iter_mut().zip(upstream) {
@@ -1106,7 +1110,6 @@ pub fn attention_gradient(
 
     Ok((gradient, ds_attn))
 }
-
 
 /// Read-out diagnostics for `PREREG_2026-08-25_THE_H1024_COLLAPSE`.
 ///
@@ -1330,9 +1333,8 @@ impl AttentionProbe {
             self.normalised_entropy.len(),
             other.normalised_entropy.len()
         );
-        let weight = |a: f64, b: f64| {
-            (a * self.samples as f64 + b * other.samples as f64) / total as f64
-        };
+        let weight =
+            |a: f64, b: f64| (a * self.samples as f64 + b * other.samples as f64) / total as f64;
         self.mean_t_steps = weight(self.mean_t_steps, other.mean_t_steps);
         self.residual_norm = weight(self.residual_norm, other.residual_norm);
         if self.samples == 0 {
@@ -1907,7 +1909,10 @@ mod tests {
         let order: Vec<usize> = (0..t_steps).map(|t| (t * 3 + 1) % t_steps).collect();
         let mut seen = vec![false; t_steps];
         for &source in &order {
-            assert!(!seen[source], "the fixture permutation is not a permutation");
+            assert!(
+                !seen[source],
+                "the fixture permutation is not a permutation"
+            );
             seen[source] = true;
         }
         order
@@ -2247,7 +2252,11 @@ mod tests {
                     let numerical = (objective(&params, &plus, t_steps, &d_logits)
                         - objective(&params, &minus, t_steps, &d_logits))
                         / 2e-3;
-                    assert_close(&name(&format!("ds_attn[{index}]")), ds_attn[index], numerical);
+                    assert_close(
+                        &name(&format!("ds_attn[{index}]")),
+                        ds_attn[index],
+                        numerical,
+                    );
                 }
             }
         }
@@ -2442,8 +2451,7 @@ mod tests {
             cache.pooled
         );
         let d_logits = vec![0.3_f32; n_classes];
-        let (gradient, ds_attn) =
-            attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+        let (gradient, ds_attn) = attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
         assert!(gradient.all_finite(), "gradient went non-finite");
         assert!(ds_attn.iter().all(|value| value.is_finite()));
     }

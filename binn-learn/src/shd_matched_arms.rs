@@ -30,8 +30,7 @@ use std::path::Path;
 
 use crate::shd_attention::{
     attention_forward_presented, attention_gradient, attention_logits, AttentionConfig,
-    AttentionGradient, ReadoutVariant,
-    AttentionParams,
+    AttentionGradient, AttentionParams, ReadoutVariant,
 };
 use crate::shd_matched::{
     surrogate_derivative_scaled, MatchedAdam, MatchedForward, MatchedGradient, MatchedShdSample,
@@ -658,7 +657,9 @@ pub fn loss_and_gradient_arm_tau(
     tau_m: f32,
 ) -> Result<(MatchedForward, ArmGradient), String> {
     if !(tau_m.is_finite() && tau_m > 0.0) {
-        return Err(format!("membrane tau must be finite and positive, got {tau_m}"));
+        return Err(format!(
+            "membrane tau must be finite and positive, got {tau_m}"
+        ));
     }
     let base = &weights.base;
     let arm = weights.arm;
@@ -1103,6 +1104,9 @@ impl ArmAdam {
         let mut squared_step =
             f64::from(base_rms) * f64::from(base_rms) * self.base_parameter_count as f64;
         let mut n_step = self.base_parameter_count;
+        // Coupled L2, same arithmetic as `MatchedAdam::update_slice`
+        // (`gradient + weight_decay * weight` before the moments). Not
+        // byte-identical with that function, so it is not merged.
         for index in 0..weights.w_rec.len() {
             let gradient_value = gradient.w_rec[index] + weight_decay * weights.w_rec[index];
             self.m_rec[index] = crate::shd_matched::MATCHED_ADAM_BETA1 * self.m_rec[index]
@@ -1115,9 +1119,13 @@ impl ArmAdam {
             squared_step += f64::from(update) * f64::from(update);
             n_step += 1;
         }
-        // Attention parameters take the same Adam rule and the same decoupled
-        // weight decay, walked in the canonical `iter_all` order so the moment
-        // buffers stay aligned with the parameters across save and load.
+        // Attention parameters take the same coupled L2 rule as the recurrent
+        // loop and as `MatchedAdam::update_slice`
+        // (`entry + weight_decay * parameter` before the moments). The earlier
+        // comment called this decoupled; the arithmetic is coupled L2, not
+        // AdamW. Not byte-identical with either copy, so it stays separate.
+        // Walked in the canonical `iter_all` order so the moment buffers stay
+        // aligned with the parameters across save and load.
         if let (Some(params), Some(attention)) = (weights.attn.as_mut(), gradient.attn.as_ref()) {
             for (index, (parameter, entry)) in
                 params.iter_all_mut().zip(attention.iter_all()).enumerate()
@@ -2386,15 +2394,11 @@ mod tests {
         // The variant word sits directly after `d_model` and `layers`, which
         // follow the base weights. Find it by value rather than by offset: the
         // code is 1 and there is exactly one such word after the header.
-        let parameter_bytes = AttentionParams::deterministic(
-            hidden,
-            20,
-            AttentionConfig::new(6, 1).unwrap(),
-            5,
-        )
-        .unwrap()
-        .parameter_count()
-            * 4;
+        let parameter_bytes =
+            AttentionParams::deterministic(hidden, 20, AttentionConfig::new(6, 1).unwrap(), 5)
+                .unwrap()
+                .parameter_count()
+                * 4;
         let offset = bytes.len() - parameter_bytes - 4;
         assert_eq!(
             u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap()),
@@ -2467,14 +2471,9 @@ mod tests {
             let layout = ArmWeightLayout::prepare(&weights);
             let (constant_forward, constant_gradient) =
                 loss_and_gradient_arm_scaled_prepared(&weights, &layout, &sample, 1.0).unwrap();
-            let (tau_forward, tau_gradient) = loss_and_gradient_arm_tau(
-                &weights,
-                &layout,
-                &sample,
-                1.0,
-                MATCHED_PHYSICAL_TAU_MS,
-            )
-            .unwrap();
+            let (tau_forward, tau_gradient) =
+                loss_and_gradient_arm_tau(&weights, &layout, &sample, 1.0, MATCHED_PHYSICAL_TAU_MS)
+                    .unwrap();
             assert_eq!(
                 constant_forward.loss.to_bits(),
                 tau_forward.loss.to_bits(),
@@ -2482,20 +2481,18 @@ mod tests {
                 arm.label()
             );
             assert_eq!(
-                constant_forward.membrane, tau_forward.membrane,
+                constant_forward.membrane,
+                tau_forward.membrane,
                 "{} membrane",
                 arm.label()
             );
             assert_eq!(
-                constant_forward.spikes, tau_forward.spikes,
+                constant_forward.spikes,
+                tau_forward.spikes,
                 "{} spikes",
                 arm.label()
             );
-            assert_eq!(
-                constant_gradient, tau_gradient,
-                "{} gradient",
-                arm.label()
-            );
+            assert_eq!(constant_gradient, tau_gradient, "{} gradient", arm.label());
         }
     }
 
