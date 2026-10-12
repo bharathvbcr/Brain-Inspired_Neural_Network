@@ -160,3 +160,7 @@ wandb/
 
 # Personal writing (LinkedIn drafts, cover art) — moved off root 2026-09-05
 writing/
+
+# Third-party papers kept for reading. Never ship: build_supplement.py stages
+# untracked files, so an unignored PDF here would enter the anonymous archive.
+Research_Papers/
