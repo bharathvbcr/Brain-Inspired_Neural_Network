@@ -29,18 +29,38 @@ DOCS = [
     ROOT / "results/VENUE_FORMATTING.md",
 ]
 
-#: A qualifier close enough to the word to disambiguate it. Checked in a window
-#: around the occurrence rather than by sentence, because the qualifier is as
-#: often before ("RL ±1 broadcast") as after ("broadcast graded error").
-QUALIFIER = re.compile(
-    # Names the variant outright.
-    r"±1 three-factor|three-factor|graded|error|scalar|REINFORCE|±1|"
-    r"credit topolog|topological|err_broadcast|"
-    # Or marks the sentence as being about something that is NOT the lead
-    # FAIL: a contrast arm, a denial of the general reading, or one of the
-    # NumPy locality tasks whose arm is `err_broadcast` throughout.
-    r"contrasts?\b|any broadcast|\bRL\b|xor|depth.locality|e-prop", re.I)
-WINDOW = 80
+#: A qualifier that names the variant or marks the sentence as about something
+#: that is NOT the lead FAIL: a contrast arm, a denial of the general reading,
+#: or one of the NumPy locality tasks whose arm is `err_broadcast` throughout.
+#:
+#: It must BIND to the term. A STRONG qualifier names the rule itself and may sit
+#: within BIND_WORDS words of it, in the same sentence, before or after ("RL ±1
+#: broadcast", "broadcast graded error"). A GENERIC word means something else on
+#: its own ("error bars", "standard error", "as XOR shows"), so it only counts
+#: as a compound: the very next word on either side ("scalar broadcast",
+#: "broadcast error", "RL broadcast contrasts"), or the task label a table line
+#: opens with ("xor_thresh: broadcast 0.501"). Before this split, generic words
+#: cleared a +/-80 character window and then a 3-word window: "Broadcast fails
+#: with error bars overlapping chance" still passed on the `error` of `error
+#: bars`.
+STRONG = re.compile(
+    r"±1|three-factor|surrogate eligibility|graded|REINFORCE|"
+    r"credit topolog|topological|err_broadcast|low-richness|e-prop", re.I)
+GENERIC = re.compile(
+    r"(?:error|scalar|RL|xor\w*|contrasts?|depth.locality)", re.I)
+#: "broadcast error bars/rate" is the statistic, not the arm.
+NOT_ARM_AFTER_ERROR = re.compile(r"(?:bars?|rates?|margins?|estimates?)$", re.I)
+#: A task name opening the line's label: "xor_thresh: broadcast", "NumPy
+#: depth_locality mid: broadcast".
+TASK_LABEL = re.compile(r"(?:xor|depth.locality)\w*(?:\s+\w+)?\s*:\s*$", re.I)
+#: A code span is a MENTION of the word only when the sentence says so.
+MENTION_CUE = re.compile(r"\b(?:bare|word|term|string|token|phrase|label)\b", re.I)
+#: "any broadcast" only counts when quoted, as the phrase being denied.
+QUOTED_ANY = re.compile(r"[\"“‘']any\s*$", re.I)
+BIND_WORDS = 3
+SENTENCE_BREAK = re.compile(r"[.!?;](?:\s|$)|\n\s*\n")
+#: DELIBERATE phrases are looked for this many characters around the term.
+DELIBERATE_WINDOW = 80
 
 #: Bare uses that are correct as written. Each is a phrase, matched exactly.
 DELIBERATE = {
@@ -57,7 +77,64 @@ DELIBERATE = {
     "broadcast 0.5008": "a value that identifies the arm on its own",
 }
 
-WORD = re.compile(r"\bbroadcast\b", re.I)
+#: Inflections too: "Broadcasting", "broadcasts", "broadcast-based".
+WORD = re.compile(r"\bbroadcast\w*", re.I)
+# Markdown emphasis and code ticks are not words.
+MARKUP = re.compile(r"[*`]")
+
+
+def _words(chunk: str) -> list[str]:
+    return MARKUP.sub("", chunk).split()
+
+
+def sentence_sides(text: str, match: re.Match) -> tuple[str, str]:
+    """The text before and after the term, cut at the sentence's edges."""
+    before = text[:match.start()]
+    breaks = list(SENTENCE_BREAK.finditer(before))
+    if breaks:
+        before = before[breaks[-1].end():]
+    after = text[match.end():]
+    brk = SENTENCE_BREAK.search(after)
+    if brk:
+        after = after[:brk.start()]
+    return before, after
+
+
+def bound_context(text: str, match: re.Match) -> str:
+    """The BIND_WORDS words either side of the term, stopping at the sentence."""
+    before, after = sentence_sides(text, match)
+    left = " ".join(_words(before)[-BIND_WORDS:])
+    right = " ".join(_words(after)[:BIND_WORDS])
+    return f"{left} {match.group(0)} {right}"
+
+
+def _bare(token: str) -> str:
+    return token.strip("()[]{}\"“”‘’'")
+
+
+def is_qualified(text: str, match: re.Match) -> bool:
+    """Whether the term carries a qualifier that binds to it (see STRONG)."""
+    if STRONG.search(bound_context(text, match)):
+        return True
+    before, after = sentence_sides(text, match)
+    # Tokens with no letter or digit ("&gt;", "/") are separators, not words.
+    left = [t for t in _words(before) if re.search(r"\w", t)]
+    right = [t for t in _words(after) if re.search(r"\w", t)]
+    if left and GENERIC.fullmatch(_bare(left[-1])):
+        return True
+    if right and GENERIC.fullmatch(_bare(right[0])):
+        return not (right[0].lower().startswith("error") and len(right) > 1
+                    and NOT_ARM_AFTER_ERROR.match(right[1].rstrip(".,;:)")))
+    return bool(TASK_LABEL.search(MARKUP.sub("", before)))
+
+
+def is_mentioned(text: str, match: re.Match) -> bool:
+    """A code span ``word`` that the sentence introduces as the word itself."""
+    if text[max(0, match.start() - 1):match.start()] != "`" or \
+            text[match.end():match.end() + 1] != "`":
+        return False
+    before, _ = sentence_sides(text, match)
+    return bool(MENTION_CUE.search(" ".join(_words(before)[-BIND_WORDS:])))
 
 
 def main() -> int:
@@ -72,8 +149,13 @@ def main() -> int:
         text = doc.read_text()
         for match in WORD.finditer(text):
             checked += 1
-            around = text[max(0, match.start() - WINDOW):match.end() + WINDOW]
-            if QUALIFIER.search(around):
+            around = text[max(0, match.start() - DELIBERATE_WINDOW):
+                          match.end() + DELIBERATE_WINDOW]
+            if is_qualified(text, match):
+                continue
+            if is_mentioned(text, match):
+                continue  # the word is being mentioned (a code span), not used
+            if QUOTED_ANY.search(text[max(0, match.start() - 8):match.start()]):
                 continue
             if any(phrase in around for phrase in DELIBERATE):
                 continue
@@ -81,7 +163,7 @@ def main() -> int:
             excerpt = " ".join(around.split())
             failures.append(
                 f"{doc.name}:{line} uses `broadcast` with no qualifier within "
-                f"{WINDOW} characters:\n      ...{excerpt}...\n"
+                f"{BIND_WORDS} words in its sentence:\n      ...{excerpt}...\n"
                 "    The lead matched FAIL is broadcast ±1 three-factor "
                 "specifically; broadcast-graded reaches 0.9975 and ±1 "
                 "broadcast REINFORCE 0.7775. Name which arm is meant, or add "

@@ -8,7 +8,7 @@ manuscript rather than from a parallel `.tex`:
 ```
 python3 scripts/build_paper.py                      # anonymous submission -> paper/build/main.pdf
 python3 scripts/build_paper.py --variant preprint   # named arXiv version  -> paper/build-preprint/main.pdf
-python3 scripts/build_supplement.py --verify        # anonymised ZIP       -> paper/build/supplement.zip
+python3 scripts/build_supplement.py                 # anonymised ZIP, verified inside -> paper/build/supplement.zip (clean tree only)
 ```
 
 `scripts/build_paper.py --check` runs inside `record_checks.sh` and fails on any
@@ -19,9 +19,13 @@ threshold); an abstract of more than one paragraph (TMLR's template); no LLM-use
 footnote on page 1 (TMLR's FAQ); or an identity in the body text or PDF metadata.
 `build_supplement.py` redacts the record's identities (home paths in run
 manifests, the licences, the project website, the repository URL), refuses if
-any survives in any byte, caps the archive at TMLR's 100 MB, and with
-`--verify` re-runs the published-number, number-derivation and record-link
-checks **inside the redacted copy**. On 2026-09-29: 6,542 files, 1,128
+any survives in any byte or file name (staged copy and written zip), caps the
+archive at TMLR's 100 MB, and by default re-runs the published-number,
+number-derivation and record-link checks (plus `cargo check`) **inside the
+redacted copy**. It stages tracked files only and refuses a dirty tree unless
+`--allow-dirty` (the archive's `BUILD_INFO.json` records commit, tree and the
+dirty flag). `--no-verify` exits 3 and writes `supplement.unverified.zip`,
+never `supplement.zip`. On 2026-09-29: 6,542 files, 1,128
 redactions in 380 files, 51.0 MB, all three checks passing inside it.
 
 **Readiness pass, 2026-09-29 (second round).** Done after an independent

@@ -30,6 +30,7 @@ What this refuses to do, and why each refusal exists:
 Usage:
     python3 scripts/build_paper.py                      # build and check the submission
     python3 scripts/build_paper.py --check              # check a build already on disk
+                                                        # (fails if its inputs changed since)
     python3 scripts/build_paper.py --variant preprint   # the named arXiv version
 
 The preprint is the same source under TMLR's own `[preprint]` option, which
@@ -40,6 +41,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -490,7 +492,7 @@ def supplement():
     path so the anonymous PDF and the anonymous archive share one table."""
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "build_supplement", ROOT / "scripts/build_supplement.py")
+        "build_supplement", SUPPLEMENT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -669,6 +671,12 @@ def build(variant: str = "submission") -> None:
     if not shutil.which("pandoc"):
         fail("pandoc is not installed; the build cannot convert the manuscript.")
     build_dir = VARIANTS[variant]["build"]
+    # A build that dies half way must not leave the previous build's manifest
+    # next to a PDF that no longer matches it.
+    (build_dir / INPUTS_MANIFEST).unlink(missing_ok=True)
+    # Hashed before anything is read, and compared again before the manifest
+    # is written: an edit during the pdflatex passes must not be blessed.
+    started_with = build_inputs(variant)
     manifest = tomllib.loads(MANIFEST.read_text())
     want_main = list(manifest["main"]["sections"])
     want_appendix = list(manifest["appendix"]["sections"])
@@ -855,9 +863,86 @@ def build(variant: str = "submission") -> None:
             # cannot be built must not look like one that built empty on
             # purpose, so the outcome is carried to `check()` rather than
             # dropped.
-            subprocess.run(["bibtex", "main"], cwd=BUILD,
-                           capture_output=True, text=True, env=env)
+            bib = subprocess.run(["bibtex", "main"], cwd=BUILD,
+                                 capture_output=True, text=True, env=env)
+            # bibtex exits 2 on an error ("I couldn't open ...") and 1 on a
+            # warning, so only 2 stops the build here; the warnings (a missing
+            # database entry) are read from main.blg by `check()`.
+            if bib.returncode >= 2:
+                fail("bibtex failed:\n" + "\n".join(bib.stdout.splitlines()[-20:]))
+    write_inputs_manifest(variant, BUILD, started_with)
     print(f"built {BUILD/'main.pdf'}")
+
+
+#: What the build records about its inputs, in the build directory it wrote.
+#: `--check` reads the PDF on disk and the draft separately, so without this a
+#: PDF built before the draft last changed was blessed by a check that only
+#: re-read the abstract. Each variant has its own directory, so one variant's
+#: manifest cannot vouch for the other's PDF; the variant is also recorded.
+INPUTS_MANIFEST = "inputs.sha256.json"
+SELF = pathlib.Path(__file__).resolve()
+#: Loaded by `supplement()`; its rename table rewrites the submission's text.
+SUPPLEMENT = ROOT / "scripts/build_supplement.py"
+
+
+def _input_key(path: pathlib.Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def build_inputs(variant: str) -> dict[str, str]:
+    """sha256 of everything the PDF is a function of, keyed by repo-relative path.
+
+    Hashes, not mtimes: a `touch` or a checkout that rewrites identical bytes
+    is not a stale build, and an edit that keeps the mtime is."""
+    paths = [DRAFT, BIB, MANIFEST, SPEC, SELF, SUPPLEMENT]
+    paths += [PAPER / name for name in STYLE_FILES]
+    paths += [FIGDIR / f"{stem}.pdf" for stem, _ in spec_captions()
+              if FIGURE_PLACEMENT[stem] != "omitted"]
+    out = {"variant": variant}
+    for path in paths:
+        if not path.exists():
+            fail(f"{path} is an input of the paper build and does not exist.")
+        out[_input_key(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return out
+
+
+def write_inputs_manifest(variant: str, build_dir: pathlib.Path,
+                          expected: dict[str, str] | None = None) -> None:
+    """Record the inputs. `expected` is what `build` hashed before it read
+    anything; if the inputs differ now, the PDF may reflect either version, so
+    no manifest is written and the build fails instead of blessing it."""
+    current = build_inputs(variant)
+    if expected is not None and current != expected:
+        changed = sorted(k for k in set(expected) | set(current)
+                         if expected.get(k) != current.get(k))
+        fail(f"{', '.join(changed)} changed while the paper was building, so "
+             "the PDF cannot be tied to one version of its inputs; rebuild.")
+    (build_dir / INPUTS_MANIFEST).write_text(
+        json.dumps(current, indent=1, sort_keys=True) + "\n")
+
+
+def stale_build_problems(variant: str, build_dir: pathlib.Path) -> list[str]:
+    """Whether the PDF in `build_dir` was built from the inputs on disk now."""
+    rebuild = ("rebuild with `python3 scripts/build_paper.py"
+               f"{'' if variant == 'submission' else ' --variant ' + variant}`")
+    path = build_dir / INPUTS_MANIFEST
+    if not path.exists():
+        return [f"stale build: {path} is missing, so nothing says what this PDF "
+                f"was built from; {rebuild}."]
+    try:
+        recorded = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return [f"stale build: {path} is unreadable; {rebuild}."]
+    current = build_inputs(variant)
+    changed = sorted(k for k in set(recorded) | set(current)
+                     if recorded.get(k) != current.get(k))
+    if not changed:
+        return []
+    return [f"stale build: {', '.join(changed)} changed since this PDF was built; "
+            f"{rebuild}."]
 
 
 def content_pages(pdf: pathlib.Path) -> tuple[int, int]:
@@ -922,6 +1007,63 @@ def bibliography_problems(build_dir: pathlib.Path | None = None) -> list[str]:
     return []
 
 
+#: Failures bibtex and LaTeX report in their logs while still exiting 0 (or 1),
+#: each of which leaves a "(?)" in the PDF. A missing database entry is a bibtex
+#: WARNING, so the exit status never carried it.
+BIBTEX_FAILURES = [
+    (re.compile(r"Warning--I didn't find a database entry for \"([^\"]*)\""),
+     "bibtex found no database entry for {0!r} in references.bib"),
+    (re.compile(r"I couldn't open (?:database|style) file (\S+)"),
+     "bibtex could not open {0}"),
+]
+LATEX_FAILURES = [
+    (re.compile(r"LaTeX Warning: Citation\s.{0,120}?undefined", re.S),
+     "main.log reports an undefined citation"),
+    (re.compile(r"LaTeX Warning: Reference\s.{0,120}?undefined", re.S),
+     "main.log reports an undefined reference"),
+    (re.compile(r"There were undefined references"),
+     "main.log says there were undefined references"),
+]
+#: What an unresolved \cite / \ref prints. Measured with this template
+#: (natbib, tmlr.sty) and pdftotext: `\citep` -> "(?)", `\citet`/`\cite` -> "?",
+#: `\ref` -> "??", two undefined keys in one `\citep` -> "(??)".
+UNRESOLVED_IN_PDF = re.compile(r"\(\?\)|\?\?")
+
+
+def resolution_problems(build_dir: pathlib.Path, pdf_text: str,
+                        source_text: str = "") -> list[str]:
+    """Citations and cross-references that did not resolve, from the logs and
+    from the rendered text. Both, because the PDF is what a reviewer reads and
+    the logs say which key failed.
+
+    The rendered "(?)" / "??" is indistinguishable from prose that says it
+    ("Is it real?? Yes."), so the PDF only fails when it carries MORE of them
+    than the manuscript source does -- every one the author wrote is excused,
+    and an unresolved reference on top of them is not."""
+    problems = []
+    blg = build_dir / "main.blg"
+    if blg.exists():
+        text = blg.read_text(errors="replace")
+        for pattern, message in BIBTEX_FAILURES:
+            for match in pattern.finditer(text):
+                problems.append(message.format(*match.groups()) + " (main.blg).")
+    log = build_dir / "main.log"
+    if not log.exists():
+        problems.append("pdflatex left no main.log, so whether every citation and "
+                        "reference resolved is unknown.")
+    else:
+        text = log.read_text(errors="replace")
+        for pattern, message in LATEX_FAILURES:
+            if pattern.search(text):
+                problems.append(message + ".")
+    if (len(UNRESOLVED_IN_PDF.findall(pdf_text))
+            > len(UNRESOLVED_IN_PDF.findall(source_text))):
+        problems.append("the rendered PDF contains '(?)' or '??' that the "
+                        "manuscript does not, an unresolved citation or "
+                        "reference.")
+    return problems
+
+
 #: Text the first page must carry for the LLM-use footnote to count as present.
 #: The disclosure section is required to say it; the check reads the PDF.
 DISCLOSURE_MARKER = "language model"
@@ -936,7 +1078,7 @@ def check(variant: str = "submission") -> int:
              "first. A missing build and a passing check must not look alike.")
     verify_style()
     verify_style(build_dir)
-    problems: list[str] = []
+    problems: list[str] = stale_build_problems(variant, build_dir)
 
     # The draft is re-read so that a multi-paragraph abstract written after the
     # last build is caught by `--check`, which is what record_checks.sh runs.
@@ -958,6 +1100,10 @@ def check(variant: str = "submission") -> int:
             f"page 1 does not mention {DISCLOSURE_MARKER!r}. TMLR requires LLM "
             "use to be disclosed in a footnote on the first page.")
     problems.extend(bibliography_problems(build_dir))
+    problems.extend(resolution_problems(
+        build_dir, subprocess.run(["pdftotext", str(pdf), "-"],
+                                  capture_output=True, text=True).stdout,
+        DRAFT.read_text()))
 
     if variant == "submission":
         body = subprocess.run(["pdftotext", str(pdf), "-"],

@@ -580,5 +580,269 @@ class BibliographyIsNotSilentlyEmptyTest(unittest.TestCase):
         return tmp
 
 
+def _linked_build(testcase: unittest.TestCase, variant: str,
+                  keep_manifest: bool = False) -> pathlib.Path:
+    """The real build for `variant`, linked entry by entry into a temp dir, with
+    no inputs manifest unless asked (it is written by the caller, under
+    whichever inputs the test has patched in)."""
+    src = bp.VARIANTS[variant]["build"]
+    if not (src / "main.pdf").exists():
+        testcase.fail(f"{src / 'main.pdf'} does not exist; build the paper first. "
+                      "A missing build must not read as a pass.")
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    testcase.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+    for entry in src.iterdir():
+        if entry.name != "inputs.sha256.json":
+            (tmp / entry.name).symlink_to(entry)
+    return tmp
+
+
+def _run_check(variant: str, build: pathlib.Path, **patched) -> tuple[int, str]:
+    patched.setdefault("DRAFT", bp.DRAFT)    # patch.multiple needs one keyword
+    variants = {k: dict(v) for k, v in bp.VARIANTS.items()}
+    variants[variant]["build"] = build
+    out = io.StringIO()
+    with mock.patch.object(bp, "VARIANTS", variants), \
+            mock.patch.multiple(bp, create=True, **patched), contextlib.redirect_stdout(out):
+        return bp.check(variant), out.getvalue()
+
+
+class StaleBuildTest(unittest.TestCase):
+    """`--check` is what record_checks.sh runs. It used to re-read only the
+    abstract from the draft and then validate whatever PDF was on disk, so a
+    PDF built before the draft last changed was blessed. Appending "The sole
+    author of this work is Bharath, see results/foo." to the draft left
+    `--check` exiting 0 while a real rebuild failed with four problems."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.draft = self.tmp / "PAPER_DRAFT.md"
+        shutil.copy(bp.DRAFT, self.draft)
+        self.figs = self.tmp / "figures"
+        shutil.copytree(bp.FIGDIR, self.figs,
+                        ignore=shutil.ignore_patterns("*.png", "*.svg"))
+        self.me = self.tmp / "build_paper.py"
+        shutil.copy(BUILDER, self.me)
+        self.inputs = dict(DRAFT=self.draft, FIGDIR=self.figs, SELF=self.me)
+
+    def _built(self, variant: str = "submission") -> pathlib.Path:
+        build = _linked_build(self, variant)
+        with mock.patch.multiple(bp, create=True, **self.inputs):
+            bp.write_inputs_manifest(variant, build)
+        return build
+
+    def test_a_build_matching_its_inputs_passes(self):
+        build = self._built()
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 0, out)
+
+    def test_a_missing_manifest_is_stale_not_a_pass(self):
+        code, out = _run_check("submission", _linked_build(self, "submission"),
+                               **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale build", out)
+
+    def test_a_draft_edited_after_the_build_is_stale(self):
+        build = self._built()
+        self.draft.write_text(self.draft.read_text() +
+                              "\nThe sole author of this work is Bharath, see results/foo.\n")
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale build", out)
+        self.assertIn("PAPER_DRAFT.md", out)
+
+    def test_a_touched_but_identical_file_is_not_stale(self):
+        build = self._built()
+        self.draft.write_bytes(self.draft.read_bytes())
+        import os
+        os.utime(self.draft, (1, 1))
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 0, out)
+
+    def test_a_changed_figure_is_stale(self):
+        build = self._built()
+        stem = next(s for s, _ in bp.spec_captions()
+                    if bp.FIGURE_PLACEMENT[s] != "omitted")
+        fig = self.figs / f"{stem}.pdf"
+        fig.write_bytes(fig.read_bytes() + b"\n% redrawn\n")
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"{stem}.pdf", out)
+
+    def test_a_changed_builder_is_stale(self):
+        build = self._built()
+        self.me.write_text(self.me.read_text() + "\n# changed\n")
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale build", out)
+
+    def test_a_changed_supplement_module_is_stale(self):
+        """`build_paper.py` loads `build_supplement.py` to rewrite the
+        submission's text, so the PDF is a function of it too."""
+        supp = self.tmp / "build_supplement.py"
+        shutil.copy(bp.SUPPLEMENT, supp)
+        self.inputs["SUPPLEMENT"] = supp
+        build = self._built()
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 0, out)
+        supp.write_text(supp.read_text() + "\n# changed\n")
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("build_supplement.py", out)
+
+    def _build_with_fake_latex(self, mutate) -> tuple[pathlib.Path, str]:
+        """`build()` for real (pandoc included) with pdflatex/bibtex replaced by
+        a stub that runs `mutate()` once, as an edit made during compilation."""
+        out_dir = self.tmp / "out"
+        out_dir.mkdir()
+        real = subprocess.run
+        fired = []
+
+        def fake(cmd, *a, **kw):
+            if cmd[0] in ("pdflatex", "bibtex"):
+                if not fired:
+                    fired.append(1)
+                    mutate()
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+            return real(cmd, *a, **kw)
+
+        variants = {k: dict(v) for k, v in bp.VARIANTS.items()}
+        variants["submission"]["build"] = out_dir
+        err = io.StringIO()
+        with mock.patch.object(bp, "VARIANTS", variants), \
+                mock.patch.multiple(bp, create=True, **self.inputs), \
+                mock.patch.object(bp.subprocess, "run", fake), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(err):
+            try:
+                bp.build("submission")
+            except SystemExit:
+                pass
+        return out_dir, err.getvalue()
+
+    def test_a_build_with_stable_inputs_records_them(self):
+        out_dir, _ = self._build_with_fake_latex(lambda: None)
+        self.assertTrue((out_dir / bp.INPUTS_MANIFEST).exists())
+
+    def test_an_input_edited_mid_build_is_not_blessed(self):
+        """Hashing after the pdflatex passes blessed whichever version of the
+        draft was on disk by then, while the PDF came from the one read first."""
+        def edit():
+            self.draft.write_text(self.draft.read_text() + "\nedited mid-build\n")
+        out_dir, err = self._build_with_fake_latex(edit)
+        self.assertFalse((out_dir / bp.INPUTS_MANIFEST).exists())
+        self.assertIn("changed while the paper was building", err)
+        self.assertIn("PAPER_DRAFT.md", err)
+
+    def test_a_changed_reference_list_is_stale(self):
+        build = self._built()
+        bib = self.tmp / "references.bib"
+        bib.write_text(bp.BIB.read_text() + "\n% edited\n")
+        code, out = _run_check("submission", build, BIB=bib, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("references.bib", out)
+
+    def test_the_other_variants_manifest_does_not_vouch(self):
+        """The preprint's manifest, dropped into the submission build, is for a
+        different PDF."""
+        pre = self._built("preprint")
+        build = _linked_build(self, "submission")
+        shutil.copy(pre / "inputs.sha256.json", build / "inputs.sha256.json")
+        code, out = _run_check("submission", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("variant", out)
+
+    def test_the_preprint_is_checked_the_same_way(self):
+        build = _linked_build(self, "preprint")
+        code, out = _run_check("preprint", build, **self.inputs)
+        self.assertEqual(code, 1, out)
+        self.assertIn("stale build", out)
+        self.assertIn("--variant preprint", out)
+
+
+class UnresolvedReferencesTest(unittest.TestCase):
+    """bibtex exits 0 or 1 on a missing database entry, and pdflatex exits 0 on
+    an undefined citation, so neither status carries it. Deleting baronig2025
+    from references.bib built and checked clean while main.blg said "didn't
+    find a database entry" and the PDF printed "(?)"."""
+
+    def _check_with(self, name: str, extra: str):
+        build = _linked_build(self, "submission")
+        target = build / name
+        original = (bp.VARIANTS["submission"]["build"] / name).read_text(errors="replace")
+        target.unlink()
+        target.write_text(original + extra)
+        # Freshness is StaleBuildTest's subject; here the build is current, so
+        # a failure can only be the logs.
+        if hasattr(bp, "write_inputs_manifest"):
+            bp.write_inputs_manifest("submission", build)
+        return _run_check("submission", build)
+
+    def test_the_real_logs_and_pdf_are_clean(self):
+        build = _linked_build(self, "submission")
+        text = subprocess.run(["pdftotext", str(build / "main.pdf"), "-"],
+                              capture_output=True, text=True).stdout
+        self.assertEqual(bp.resolution_problems(build, text), [])
+
+    def test_a_missing_database_entry_fails_the_check(self):
+        code, out = self._check_with(
+            "main.blg", "Warning--I didn't find a database entry for \"baronig2025\"\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("baronig2025", out)
+
+    def test_a_missing_database_file_fails_the_check(self):
+        code, out = self._check_with("main.blg", "I couldn't open database file x.bib\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("could not open x.bib", out)
+
+    def test_an_undefined_citation_fails_the_check(self):
+        code, out = self._check_with(
+            "main.log", "LaTeX Warning: Citation `baronig2025' on page 3 undefined on input line 9.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("undefined citation", out)
+
+    def test_an_undefined_reference_fails_the_check(self):
+        code, out = self._check_with(
+            "main.log", "LaTeX Warning: Reference `fig:x' on page 3 undefined on input line 9.\n"
+                        "LaTeX Warning: There were undefined references.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("undefined reference", out)
+
+    def test_a_question_mark_citation_in_the_pdf_text_fails(self):
+        for rendered in ("as shown by Baronig (?) and others", "see Figure ??"):
+            with self.subTest(rendered=rendered):
+                problems = bp.resolution_problems(
+                    bp.VARIANTS["submission"]["build"], rendered)
+                self.assertTrue(any("'(?)' or '??'" in p for p in problems))
+
+    def test_prose_that_says_question_marks_is_not_an_unresolved_reference(self):
+        build = bp.VARIANTS["submission"]["build"]
+        for rendered in ("Is it real?? Yes.", "what (?) means"):
+            with self.subTest(rendered=rendered):
+                self.assertEqual(
+                    bp.resolution_problems(build, rendered, rendered), [])
+
+    def test_an_unresolved_reference_on_top_of_prose_ones_still_fails(self):
+        build = bp.VARIANTS["submission"]["build"]
+        problems = bp.resolution_problems(
+            build, "Is it real?? Yes. See Figure ??.", "Is it real?? Yes.")
+        self.assertTrue(any("'(?)' or '??'" in p for p in problems))
+
+    def test_the_forms_this_template_prints_for_undefined_keys_are_detected(self):
+        """Measured with tmlr.sty + pdflatex + pdftotext: \\citep -> "(?)",
+        \\ref -> "??", two keys in one \\citep -> "(??)"."""
+        build = bp.VARIANTS["submission"]["build"]
+        for rendered in ("A (?) B", "Figure ??", "G (??)."):
+            with self.subTest(rendered=rendered):
+                self.assertTrue(any("'(?)' or '??'" in p for p in
+                                    bp.resolution_problems(build, rendered, "")))
+
+    def test_a_missing_latex_log_is_unknown_not_clean(self):
+        build = _linked_build(self, "submission")
+        (build / "main.log").unlink()
+        self.assertTrue(bp.resolution_problems(build, ""))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

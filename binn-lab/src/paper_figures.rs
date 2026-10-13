@@ -673,45 +673,40 @@ const PAPER_FIGURES: [(&str, Draw, u32); 7] = [
     ("fig2_matched_means", draw_fig6_matched_means, H_FIG6),
 ];
 
+/// The figures `generate_all` emits that the manuscript does not typeset, with
+/// their canvas heights.
+///
+/// `lead_graphical_abstract` is deliberately NOT `graphical_abstract`: that file
+/// exists and depicts the SECONDARY program. This one was `TODO(source needed)`
+/// until 2026-08-29 -- an authoring task rather than a missing number, since
+/// every value it draws was already published. `fig4_transfer_ladder` is
+/// Figure 8: its file existed on disk from 24 July with NO generator, so the
+/// 2026-08-27 re-run could not touch it and it was stale at rung 1; authored
+/// 2026-08-29, and the `fig4_` stem is historical, as `fig2_` is.
+const OTHER_FIGURES: [(&str, Draw, u32); 5] = [
+    ("lead_graphical_abstract", draw_lead_graphical_abstract, H),
+    ("fig1_matched_rule_swap", draw_fig1, H),
+    ("fig3_engine_c1_means", draw_fig3, H),
+    ("fig4_transfer_ladder", draw_fig8_transfer_ladder, H_FIG8),
+    ("graphical_abstract", draw_graphical_abstract, H),
+];
+
+/// Every figure `generate_all` emits, in emission order: the manuscript's
+/// figures first (until 2026-08-27 nothing had been drawn for any of the four
+/// lead figures), then the rest. The one list the generator and the
+/// all-figures tests read.
+fn all_figures() -> impl Iterator<Item = (&'static str, Draw, u32)> {
+    PAPER_FIGURES.into_iter().chain(OTHER_FIGURES)
+}
+
 /// Generate required camera-ready figures into `out_dir`.
 pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {
     fs::create_dir_all(out_dir)?;
     let mut written = Vec::new();
-    // The manuscript's figures first: until 2026-08-27 nothing had been drawn
-    // for any of the four lead figures.
-    for (stem, draw, h) in PAPER_FIGURES {
+    for (stem, draw, h) in all_figures() {
         written.extend(write_pair_sized(out_dir, stem, draw, h)?);
     }
-    // Deliberately NOT `graphical_abstract`: that file exists and depicts the
-    // SECONDARY program. This one was `TODO(source needed)` until 2026-08-29 --
-    // an authoring task rather than a missing number, since every value it
-    // draws was already published.
-    written.extend(write_pair(
-        out_dir,
-        "lead_graphical_abstract",
-        draw_lead_graphical_abstract,
-    )?);
-    written.extend(write_pair(out_dir, "fig1_matched_rule_swap", draw_fig1)?);
-    written.extend(write_pair(out_dir, "fig3_engine_c1_means", draw_fig3)?);
-    // Figure 8. Its file existed on disk from 24 July with NO generator, so the
-    // 2026-08-27 re-run could not touch it and it was stale at rung 1.
-    // Authored 2026-08-29; the `fig4_` stem is historical, as `fig2_` is.
-    written.extend(write_pair_sized(
-        out_dir,
-        "fig4_transfer_ladder",
-        draw_fig8_transfer_ladder,
-        H_FIG8,
-    )?);
-    written.extend(write_pair(
-        out_dir,
-        "graphical_abstract",
-        draw_graphical_abstract,
-    )?);
     Ok(written)
-}
-
-fn write_pair(out_dir: &Path, stem: &str, draw: Draw) -> Result<Vec<PathBuf>, DrawErr> {
-    write_pair_sized(out_dir, stem, draw, H)
 }
 
 fn write_pair_sized(
@@ -2485,7 +2480,7 @@ fn draw_fig1(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
         (40, 24),
-        "Figure 5 — Matched rule-swap schematic",
+        "Figure 5: Matched rule-swap schematic",
         26,
         BLACK,
     )?;
@@ -3437,7 +3432,7 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
     label(
         root,
         (40, 24),
-        "Figure 7 — Engine C1 condition means",
+        "Figure 7: Engine C1 condition means",
         26,
         BLACK,
     )?;
@@ -3506,7 +3501,7 @@ fn draw_fig3(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
 ///    no family-wise claim, so they are drawn in protocol order and the only
 ///    two called out are the two the spec names as landmarks.
 fn draw_fig8_transfer_ladder(root: &DrawingArea<SVGBackend<'_>, Shift>) -> Result<(), DrawErr> {
-    label(root, (36, 16), "Figure 8 — The transfer ladder", 26, BLACK)?;
+    label(root, (36, 16), "Figure 8: The transfer ladder", 26, BLACK)?;
     label(
         root,
         (36, 50),
@@ -4006,6 +4001,67 @@ mod tests {
                     assert!(!svg.contains(&title), "{stem} draws the title {title:?}");
                 }
             }
+        }
+    }
+
+    /// No figure the module emits, typeset or not, draws an em dash in its
+    /// text. The one allowed use is `—` as an empty table cell (Table SHD-2
+    /// prints it for the same reason): the whole text element, or the last
+    /// column of a row after the three-space gap (Figure S's M-4 row).
+    /// Commit 24c3d38 moved the typeset figures' labels to colons and missed
+    /// the cut secondary programme's Figure 5/7/8 titles.
+    #[test]
+    fn no_emitted_figure_draws_an_em_dash_outside_an_empty_cell() {
+        for (stem, draw, h) in all_figures() {
+            if let Some(context) = stray_em_dash(stem, &render(draw, h)) {
+                panic!("{stem} draws an em dash outside an empty table cell: {context:?}");
+            }
+        }
+    }
+
+    /// The text around the first em dash in `svg` that is not Figure S's
+    /// empty M-4 seed-count cell (`+0.0xxx   —`: a number, the three-space
+    /// gap, the dash). That cell is matched exactly and only in `figS_substrate`,
+    /// so "Figure 9: Rule swap   —" is a stray dash wherever it appears.
+    fn stray_em_dash(stem: &str, svg: &str) -> Option<String> {
+        let m4_cell = format!("+{:.4}   \u{2014}", nums::SUBSTRATE_M4);
+        let stripped = if stem == "figS_substrate" {
+            svg.replace(&m4_cell, "")
+        } else {
+            svg.to_string()
+        };
+        let at = stripped.find('\u{2014}')?;
+        let from = stripped[..at]
+            .char_indices()
+            .rev()
+            .nth(40)
+            .map_or(0, |(i, _)| i);
+        let to = stripped[at..]
+            .char_indices()
+            .nth(40)
+            .map_or(stripped.len(), |(i, _)| at + i);
+        Some(stripped[from..to].to_string())
+    }
+
+    #[test]
+    fn the_em_dash_allowance_is_only_figure_ss_empty_cell() {
+        let cell = format!("+{:.4}   \u{2014}", nums::SUBSTRATE_M4);
+        let allowed = format!("<text>{cell}\n</text>");
+        assert_eq!(stray_em_dash("figS_substrate", &allowed), None);
+        // The same cell is not allowed in any other figure.
+        assert!(stray_em_dash("figM_mechanism_richness_addressability", &allowed).is_some());
+        // Nor is a title that happens to end in the same gap and dash.
+        let title = "<text>Figure 9: Rule swap   \u{2014}\n</text>";
+        assert!(stray_em_dash("figS_substrate", title).is_some());
+        assert!(stray_em_dash("fig1_matched_rule_swap", title).is_some());
+    }
+
+    #[test]
+    fn every_emitted_figure_is_in_the_one_list() {
+        let stems: Vec<&str> = all_figures().map(|(stem, _, _)| stem).collect();
+        assert_eq!(stems.len(), PAPER_FIGURES.len() + OTHER_FIGURES.len());
+        for stem in ["figS_substrate", "fig4_transfer_ladder", "graphical_abstract"] {
+            assert!(stems.contains(&stem), "{stem}");
         }
     }
 

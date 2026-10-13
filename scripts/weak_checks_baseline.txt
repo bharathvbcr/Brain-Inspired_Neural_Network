@@ -1,0 +1,44 @@
+# Findings of scripts/find_weak_checks.py that have been READ and accepted
+# (robustness and smoke tests). `--strict` fails on a finding not listed
+# here and on a listed finding that no longer exists. Regenerate with
+#   python3 scripts/find_weak_checks.py --write-baseline
+# and review the diff: a new line here is a weak check you are accepting.
+empty-loop	binn-data/src/decoder.rs::latency_round_trip_near_identity_on_grid
+empty-loop	binn-data/src/temporal_order.rs::accessible_variant_changes_only_the_fixed_total_class_marker
+empty-loop	binn-data/src/temporal_order.rs::every_quartet_has_byte_identical_rate_features
+empty-loop	binn-engine/src/queue.rs::parity_vs_binary_heap_scripted
+empty-loop	binn-hybrid-lab/src/benchmark.rs::c3_terminal_teacher_matches_finite_difference
+empty-loop	binn-hybrid-lab/src/production_diagnostics.rs::existing_arm_applies_production_eligibility_times_post_credit
+empty-loop	binn-hybrid-lab/src/production_diagnostics.rs::terminal_teacher_matches_finite_difference
+empty-loop	binn-hybrid-lab/src/teacher.rs::terminal_teacher_matches_finite_difference
+empty-loop	binn-lab/experiments/shd_instrument.rs::parallelism_is_bit_identical_to_serial_for_every_arm
+empty-loop	binn-lab/src/c2_config.rs::from_hash_round_trips
+empty-loop	binn-lab/src/c3_config.rs::from_hash_round_trips
+empty-loop	binn-lab/src/c3_v2_config.rs::hashes_round_trip_and_override_is_neutral
+empty-loop	binn-lab/src/config.rs::from_hash_round_trips_presets
+empty-loop	binn-lab/src/config.rs::paper_known_presets_round_trip_every_family
+empty-loop	binn-lab/src/guards.rs::every_deep_snn_v134_ceiling_row_is_now_flagged
+empty-loop	binn-lab/src/r1_config.rs::from_hash_round_trips
+empty-loop	binn-lab/src/r2_config.rs::from_hash_round_trips
+empty-loop	binn-lab/src/r2_credit_config.rs::from_hash_round_trips
+empty-loop	binn-lab/src/runner_r1.rs::hub_coupling_scores_floor_means_no_coupling
+empty-loop	binn-lab/tests/preset_census.rs::no_config_family_has_shrunk
+empty-loop	binn-lab/tests/preset_census.rs::no_config_family_is_empty
+empty-loop	binn-learn/src/credit.rs::multi_channel_signal_reverses_with_rpe_sign
+empty-loop	binn-learn/src/shared_bptt.rs::gradient_addition_covers_all_groups
+empty-loop	binn-learn/src/shd_alif.rs::recurrent_diagonal_stays_zero
+empty-loop	binn-learn/src/shd_alif.rs::widening_is_bit_identical_below_the_overflow_threshold
+empty-loop	binn-learn/src/shd_attention.rs::every_read_out_variant_matches_finite_difference
+empty-loop	binn-learn/src/shd_attention.rs::repeated_evaluation_is_bitwise_identical
+empty-loop	binn-learn/src/shd_matched_arms.rs::argmax_matches_the_shipped_rule_on_degenerate_logits
+empty-loop	binn-learn/src/shd_matched_arms.rs::attention_parameters_match_finite_difference_through_the_arm
+empty-loop	binn-learn/src/shd_matched_arms.rs::readout_gradient_matches_finite_difference_for_every_arm
+empty-loop	binn-learn/src/shd_matched_arms.rs::recurrent_drive_uses_previous_timestep_spikes
+empty-loop	binn-learn/src/shd_matched_arms.rs::recurrent_gradient_has_zero_diagonal
+empty-loop	binn-learn/src/shd_matched_arms.rs::the_default_tau_is_bit_identical_to_the_constant_path
+empty-loop	binn-learn/src/shd_temporal.rs::each_operator_is_separated_by_its_own_invariants
+empty-loop	binn-learn/src/shd_temporal.rs::labels_round_trip_through_parse
+empty-loop	binn-learn/src/shd_temporal.rs::no_manipulation_perturbs_the_initialisation_stream
+tautology	binn-data/src/temporal_order.rs::splits_and_shuffle_replay_byte_identically	assert_eq!(time_shuffle(&a.test, 12), time_shuffle(&a.test, 12));
+tautology	binn-learn/src/credit.rs::broadcast_modulators_preserve_legacy_scalar	assert_eq!(m.for_post(999), m.for_post(0));
+weak	binn-hybrid-lab/src/temperature_ablation.rs::suite_covers_at_least_two_ablation_axes

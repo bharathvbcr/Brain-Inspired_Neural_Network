@@ -618,6 +618,11 @@ impl MetalGpuContext {
     }
 }
 
+/// One gate shared with the integration tests (`tests/common`).
+#[cfg(test)]
+#[path = "../tests/common/mod.rs"]
+mod metal_gate;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -667,7 +672,10 @@ mod tests {
     #[cfg(feature = "gpu")]
     #[test]
     fn metal_gpu_backend_constructs_when_available() {
-        if !Backend::MetalGpu.is_available() {
+        if !metal_gate::require_metal(
+            "metal_gpu_backend_constructs_when_available",
+            Backend::MetalGpu.is_available(),
+        ) {
             return;
         }
         let backend = SpmvBackend::try_new(SpmvBackendConfig {
@@ -678,6 +686,10 @@ mod tests {
         assert_eq!(backend.backend(), Backend::MetalGpu);
         assert_eq!(backend.label(), "Metal GPU");
         assert!(backend.metal_device().is_some());
+        eprintln!(
+            "RAN: metal_gpu_backend_constructs_when_available on {}",
+            backend.label()
+        );
     }
 
     /// A benchmark driven by `benchmarkable_backends()` can never produce a
@@ -712,7 +724,11 @@ mod tests {
     #[cfg(feature = "gpu")]
     #[test]
     fn metal_gpu_matches_cpu_reference() {
-        if !METAL_GPU_DISPATCH_IMPLEMENTED || !Backend::MetalGpu.is_available() {
+        const { assert!(METAL_GPU_DISPATCH_IMPLEMENTED) };
+        if !metal_gate::require_metal(
+            "metal_gpu_matches_cpu_reference",
+            Backend::MetalGpu.is_available(),
+        ) {
             return;
         }
         let (csr, weights, x) = tiny_problem();
@@ -738,6 +754,8 @@ mod tests {
             .unwrap_or(0);
         let max_abs_result = y_cpu.iter().copied().fold(0.0f32, |a, b| a.max(b.abs()));
         let tol = sparsl::tolerance_for_spmv(max_row_nnz, max_abs_term, max_abs_result);
+        assert_eq!(gpu.label(), "Metal GPU");
+        eprintln!("RAN: metal_gpu_matches_cpu_reference on {}", gpu.label());
 
         for (a, b) in y_cpu.iter().zip(y_gpu.iter()) {
             assert!(
@@ -752,7 +770,11 @@ mod tests {
     #[cfg(feature = "gpu")]
     #[test]
     fn metal_fused_and_lif_match_cpu_reference() {
-        if !METAL_GPU_DISPATCH_IMPLEMENTED || !Backend::MetalGpu.is_available() {
+        const { assert!(METAL_GPU_DISPATCH_IMPLEMENTED) };
+        if !metal_gate::require_metal(
+            "metal_fused_and_lif_match_cpu_reference",
+            Backend::MetalGpu.is_available(),
+        ) {
             return;
         }
         let (csr, weights, x) = tiny_problem();
@@ -843,6 +865,24 @@ mod tests {
             assert!((th_l[i] - th_g[i]).abs() <= 1e-5, "LIF theta[{i}]");
             assert_eq!(spk_l[i], spk_g[i], "LIF spike[{i}]");
         }
+        assert_eq!(gpu.label(), "Metal GPU");
+        eprintln!(
+            "RAN: metal_fused_and_lif_match_cpu_reference on {}",
+            gpu.label()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "refusing to report a pass")]
+    fn metal_gate_panics_when_expected_and_missing() {
+        metal_gate::metal_gate_decision("t", false, true, false);
+    }
+
+    #[test]
+    fn metal_gate_skips_only_when_opted_out_or_not_expected() {
+        assert!(!metal_gate::metal_gate_decision("t", false, true, true));
+        assert!(!metal_gate::metal_gate_decision("t", false, false, false));
+        assert!(metal_gate::metal_gate_decision("t", true, true, false));
     }
 
     #[test]

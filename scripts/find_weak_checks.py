@@ -215,9 +215,51 @@ def test_bodies(text: str):
         yield match.group(1), text[start:i]
 
 
+#: Directories that hold build output, vendored patches or scratch copies of the
+#: tree. Scanning `.tmp/` and `paper/build/` (supplement staging) reported every
+#: finding two or three times and tied any baseline to scratch state.
+SKIPPED_DIRS = {"target", "patches", ".tmp"}
+SKIPPED_PREFIXES = ("paper/build/",)
+
+DEFAULT_BASELINE = pathlib.Path(__file__).resolve().parent / "weak_checks_baseline.txt"
+
+
+def finding_keys(rows, tautologies, empty_loops) -> set[str]:
+    """Stable identities for findings: kind, file and test name -- never a line
+    number, so moving a test does not invalidate its entry. A tautology also
+    carries its assertion text, so a second one added to an already-baselined
+    test is a new finding rather than riding on the old entry."""
+    keys = {f"weak\t{path}::{name}" for path, name, _ in rows}
+    keys |= {f"empty-loop\t{path}::{name}" for path, name, _ in empty_loops}
+    keys |= {f"tautology\t{path}::{name}\t{' '.join(assertion.split())}"
+             for path, name, assertion in tautologies}
+    return keys
+
+
+def read_baseline(path: pathlib.Path) -> set[str] | None:
+    if not path.is_file():
+        return None
+    return {line for line in path.read_text().splitlines()
+            if line.strip() and not line.startswith("#")}
+
+
+BASELINE_HEADER = (
+    "# Findings of scripts/find_weak_checks.py that have been READ and accepted\n"
+    "# (robustness and smoke tests). `--strict` fails on a finding not listed\n"
+    "# here and on a listed finding that no longer exists. Regenerate with\n"
+    "#   python3 scripts/find_weak_checks.py --write-baseline\n"
+    "# and review the diff: a new line here is a weak check you are accepting.\n")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".")
+    parser.add_argument("--strict", action="store_true",
+                        help="exit 1 on a finding absent from the baseline, or "
+                             "a baseline entry with no finding")
+    parser.add_argument("--baseline", type=pathlib.Path, default=DEFAULT_BASELINE)
+    parser.add_argument("--write-baseline", action="store_true",
+                        help="record the current findings as the baseline")
     args = parser.parse_args()
 
     def weak(assertion: str) -> bool:
@@ -238,10 +280,13 @@ def main() -> int:
         """The fixture first, then the tree. The fixture is not a real path, so
         anything it contributes to `rows` or `tautologies` is dropped below."""
         yield CALIBRATION_FIXTURE_PATH, CALIBRATION_FIXTURE
-        for path in sorted(pathlib.Path(args.root).rglob("*.rs")):
-            if "/target/" in str(path) or "/patches/" in str(path):
+        root = pathlib.Path(args.root)
+        for path in sorted(root.rglob("*.rs")):
+            rel = path.relative_to(root)
+            if (set(rel.parts) & SKIPPED_DIRS
+                    or rel.as_posix().startswith(SKIPPED_PREFIXES)):
                 continue
-            yield str(path), path.read_text(errors="replace")
+            yield rel.as_posix(), path.read_text(errors="replace")
 
     for path, text in sources():
         for name, body in test_bodies(text):
@@ -283,6 +328,41 @@ def main() -> int:
         return 2
 
     print(f"calibration ok ({len(seen)} detectors, each found its own instance)")
+    current = finding_keys(rows, tautologies, empty_loops)
+
+    if args.write_baseline:
+        args.baseline.write_text(BASELINE_HEADER + "".join(
+            f"{key}\n" for key in sorted(current)))
+        print(f"wrote {len(current)} finding(s) to {args.baseline}")
+        return 0
+
+    if args.strict:
+        accepted = read_baseline(args.baseline)
+        if accepted is None:
+            # A check that could not run must not read as one that passed.
+            print(f"FAIL: baseline {args.baseline} is missing, so the findings "
+                  "cannot be compared. Run with --write-baseline, read the "
+                  "list, and commit it.")
+            return 1
+        new, stale = sorted(current - accepted), sorted(accepted - current)
+        if new:
+            print(f"\nNEW: {len(new)} finding(s) not in the baseline - each is a "
+                  "check a degenerate result would satisfy:\n")
+            for key in new:
+                print(f"  {key.replace(chr(9), '  ')}")
+        if stale:
+            print(f"\nSTALE: {len(stale)} baseline entr(ies) with no matching "
+                  "finding (fixed, renamed or deleted). Remove them with "
+                  "--write-baseline so the baseline cannot shield a future "
+                  "regression:\n")
+            for key in stale:
+                print(f"  {key.replace(chr(9), '  ')}")
+        if new or stale:
+            return 1
+        print(f"strict: {len(current)} finding(s), all in the baseline "
+              f"({len(accepted)} entries, none stale).")
+        return 0
+
     if tautologies:
         print(f"\n{len(tautologies)} assertion(s) whose two sides differ only in a "
               f"numeric literal:\n")
