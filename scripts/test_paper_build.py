@@ -469,6 +469,16 @@ class PreprintTest(unittest.TestCase):
         self.assertNotIn("TMLR", first)
         self.assertNotIn(bp.ANONYMOUS_BANNER, " ".join(first.split()))
 
+    def test_its_metadata_carries_the_title_and_author(self):
+        """The preamble blanks every info field for the anonymous build, and the
+        preprint shared it: a named PDF with an empty Title and Author, which an
+        upload form seeded from the PDF reads as untitled."""
+        meta = dict(line.partition(":")[::2] for line in subprocess.run(
+            ["pdfinfo", str(self.pdf)], capture_output=True, text=True).stdout.splitlines())
+        title = bp.DRAFT.read_text().split("\n", 1)[0].lstrip("# ").strip()
+        self.assertEqual(meta.get("Title", "").strip(), title)
+        self.assertEqual(meta.get("Author", "").strip(), bp.VARIANTS["preprint"]["pdf_author"])
+
     def test_the_submission_check_rejects_the_preprint(self):
         """If the named PDF were ever copied into the submission directory,
         the submission check must fail on it."""

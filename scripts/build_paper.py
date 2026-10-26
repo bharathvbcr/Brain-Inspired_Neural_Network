@@ -78,15 +78,17 @@ STYLE_FILES = {
 PAGE_LIMIT = 12
 
 #: `submission` is anonymous and goes to OpenReview; `preprint` names the author
-#: and goes to arXiv. The style option and the author block are the only
-#: differences, so no manuscript text changes between them.
+#: and goes to arXiv. The style option, the author block and the PDF's Title and
+#: Author fields are the only differences, so no manuscript text changes between
+#: them. An empty `pdf_author` leaves the info dictionary blank, as PREAMBLE sets it.
 VARIANTS = {
-    "submission": {"build": BUILD, "option": "", "author": ""},
+    "submission": {"build": BUILD, "option": "", "author": "", "pdf_author": ""},
     "preprint": {
         "build": PREPRINT_BUILD,
         "option": "[preprint]",
         "author": (r"\name Bharath Chandra Vaddaram \email bharath.vbcr@gmail.com \\"
                    "\n" r"\addr Independent Researcher"),
+        "pdf_author": "Bharath Chandra Vaddaram",
     },
 }
 
@@ -818,9 +820,13 @@ def build(variant: str = "submission") -> None:
     verify_style(BUILD)
     shutil.copy(BIB, BUILD / "references.bib")
 
+    pdf_author = VARIANTS[variant]["pdf_author"]
+    named = ([rf"\hypersetup{{pdftitle={{{title}}},pdfauthor={{{pdf_author}}}}}"]
+             if pdf_author else [])
     doc = "\n".join([
         document_head(variant),
         PREAMBLE,
+        *named,
         rf"\title{{{title}}}",
         rf"\author{{{VARIANTS[variant]['author']}}}",
         r"\begin{document}",
@@ -1140,6 +1146,14 @@ def check(variant: str = "submission") -> int:
             problems.append(
                 "the preprint's first page is still the anonymous TMLR "
                 "submission. It must name the author and not mention TMLR.")
+        meta = dict(line.partition(":")[::2] for line in subprocess.run(
+            ["pdfinfo", str(pdf)], capture_output=True, text=True).stdout.splitlines())
+        title = DRAFT.read_text().split("\n", 1)[0].lstrip("# ").strip()
+        for field, want in (("Title", title), ("Author", VARIANTS[variant]["pdf_author"])):
+            if meta.get(field, "").strip() != want:
+                problems.append(f"PDF metadata {field} is {meta.get(field, '').strip()!r}, "
+                                f"not {want!r}; an upload form seeded from it reads "
+                                "the preprint as untitled.")
 
     for line in problems:
         print(f"  FAIL: {line}")
