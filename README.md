@@ -353,11 +353,15 @@ Root holds five documents; everything else lives under `results/`,
 
 ---
 
-## License
+## License & Acknowledgements
 
 Dual-licensed under either of:
 
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
 - MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
-at your option.
+at your option. See [NOTICE](NOTICE) for full scientific and baseline attributions:
+
+- **[Thvnvtos/SNN-delays](https://github.com/Thvnvtos/SNN-delays)** (*Hammouamri, Khalfaoui-Hassani, & Masquelier, ICLR 2024*) — Published delayed-SNN reference baseline on SHD.
+- **Spiking Heidelberg Digits (SHD)** (*Cramer, Stradmann, Schemmel, & Zenke, IEEE TNNLS 2020*, [Zenke Lab](https://compneuro.net/)) — Primary spiking audio benchmark dataset.
+- **Local Credit-Assignment Foundations** — Inspired by *e-prop* (*Bellec et al., Nature Communications 2020*), *Direct Feedback Alignment* (*Nøkland, NeurIPS 2016*), and *SuperSpike* (*Zenke & Ganguli, 2018*).

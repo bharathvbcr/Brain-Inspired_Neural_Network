@@ -1,0 +1,19 @@
+BINN (Brain-Inspired Neural Network)
+Copyright (c) 2026 Bharath Chandra Vaddaram
+
+Scientific & Upstream Prior-Art Acknowledgements
+------------------------------------------------
+- SNN-delays (`Thvnvtos/SNN-delays`, https://github.com/Thvnvtos/SNN-delays)
+  Ilyass Hammouamri, Ismail Khalfaoui-Hassani, and Timothée Masquelier,
+  "Learning Delays in Spiking Neural Networks using Dilated Convolutions with Learnable Spacings," ICLR 2024.
+  Used as the published SHD delayed-SNN reference baseline.
+
+- Spiking Heidelberg Digits (SHD) Dataset (https://compneuro.net/)
+  Benjamin Cramer, Yannik Stradmann, Johannes Schemmel, and Friedemann Zenke (Zenke Lab),
+  "The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks,"
+  IEEE Transactions on Neural Networks and Learning Systems, 2020.
+
+- Local Plasticity & Credit-Assignment Foundations:
+  - Guillaume Bellec et al., "A solution to the learning dilemma for recurrent networks of spiking neurons" (e-prop), Nature Communications, 2020.
+  - Arild Nøkland, "Direct Feedback Alignment Provides Learning in Deep Neural Networks," NeurIPS 2016.
+  - Friedemann Zenke & Surya Ganguli, "SuperSpike: Supervised Learning in Multilayer Spiking Neural Networks," Neural Computation, 2018.
