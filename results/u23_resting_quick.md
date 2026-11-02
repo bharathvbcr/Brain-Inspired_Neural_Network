@@ -11,7 +11,7 @@
 | condition | mean activity | metastability | reactivation | transitions | lag-1 autocorrelation |
 |---|---:|---:|---:|---:|---:|
 | observed | 0.0153 | 0.0141 | 0.0233 | 0.0000 | -0.0171 |
-| RateMatched | 0.0152 | 0.0142 | 0.0200 | 0.0000 | -0.0411 |
+| RateMatched | 0.0153 | 0.0143 | 0.0200 | 0.0000 | -0.0441 |
 | ActivityMatched | 0.0153 | 0.0141 | 0.0033 | 0.0000 | -0.0171 |
 | SpectrumMatched | 0.0153 | 0.0160 | 0.0100 | 0.0000 | -0.0069 |
 

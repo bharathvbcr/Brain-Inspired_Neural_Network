@@ -16,7 +16,7 @@ use binn_engine::{
 use binn_lab::mean;
 use binn_learn::{
     prune, replay_schedule, ConsolidationBudget, ConsolidationMode, ExactReplayBuffer,
-    GenerativeReplay, PruningStrategy, ReplayItem, ReplaySource,
+    GenerativeReplay, PruningStrategy, ReplayItem, ReplaySource, SleepConsolidationLearner,
 };
 
 const G2_HASH: &str = "c1-118207fbc3eaba53";
@@ -162,6 +162,7 @@ fn consolidation_note(quick: bool) -> String {
         ConsolidationMode::ExactReplay,
         ConsolidationMode::GenerativeReplay,
         ConsolidationMode::OfflineLocal,
+        ConsolidationMode::SleepProvenance,
     ];
     for mode in modes {
         let mut forgettings = Vec::new();
@@ -180,6 +181,7 @@ fn consolidation_note(quick: bool) -> String {
             };
             let mut stream = ClassIncrementalStream::new(stream_config);
             let mut learner = LocalLearner::new(n_classes, n_features);
+            let mut sleep_learner = SleepConsolidationLearner::new(n_classes, n_features);
             let mut exact = ExactReplayBuffer::new(budget.max_items);
             let mut generator = GenerativeReplay::new();
             let mut learned_accuracy = vec![0.0; n_classes];
@@ -191,16 +193,28 @@ fn consolidation_note(quick: bool) -> String {
                         label: example.label,
                         source: ReplaySource::Train,
                     };
-                    learner.observe(&item, true);
+                    if mode == ConsolidationMode::SleepProvenance {
+                        sleep_learner.observe_wake(&item);
+                    } else {
+                        learner.observe(&item, true);
+                    }
                     exact.observe(item.clone());
                     generator.observe(&item);
                 }
                 let probe = probe_items(&stream, class as u32);
-                learned_accuracy[class] = learner.accuracy(&probe);
-                for replay in
-                    replay_schedule(mode, &exact, &generator, budget, 0x51EE_0000 + class as u64)
-                {
-                    learner.observe(&replay, mode != ConsolidationMode::OfflineLocal);
+                learned_accuracy[class] = if mode == ConsolidationMode::SleepProvenance {
+                    sleep_learner.accuracy(&probe)
+                } else {
+                    learner.accuracy(&probe)
+                };
+                let replays =
+                    replay_schedule(mode, &exact, &generator, budget, 0x51EE_0000 + class as u64);
+                if mode == ConsolidationMode::SleepProvenance {
+                    sleep_learner.consolidate_sleep(&replays);
+                } else {
+                    for replay in replays {
+                        learner.observe(&replay, mode != ConsolidationMode::OfflineLocal);
+                    }
                 }
                 if !stream.advance_phase() {
                     break;
@@ -209,7 +223,12 @@ fn consolidation_note(quick: bool) -> String {
             let mut final_acc = Vec::new();
             let mut forgetting = Vec::new();
             for (class, &initial_accuracy) in learned_accuracy.iter().enumerate() {
-                let accuracy = learner.accuracy(&probe_items(&stream, class as u32));
+                let probes = probe_items(&stream, class as u32);
+                let accuracy = if mode == ConsolidationMode::SleepProvenance {
+                    sleep_learner.accuracy(&probes)
+                } else {
+                    learner.accuracy(&probes)
+                };
                 final_acc.push(accuracy);
                 forgetting
                     .push(Metrics::forgetting(initial_accuracy as f64, accuracy as f64) as f32);
@@ -241,8 +260,10 @@ fn consolidation_note(quick: bool) -> String {
          - exact and generated arms use the same replay/update budget\n\
          - test examples are rejected by replay storage and generation\n\n\
          | arm | mean forgetting | final mean accuracy |\n|---|---:|---:|\n{table}\n\
-         `offline-local-consolidation` drops replay labels and reinforces the \
-         locally predicted assembly; the other replay arms disclose supervised \
+         `offline-local-consolidation` and `sleep-provenance-consolidation` drop replay \
+         labels and reinforce the locally predicted assembly (`sleep-provenance-consolidation` \
+         adds decoupled coordinate-wise erase/write gating, homeostatic dormancy renewal, \
+         and bipartite episodic provenance); the other replay arms disclose supervised \
          labels. The comparison identifies whether offline local consolidation \
          adds value beyond matched replay without changing the C1 decision.\n",
         if quick { "PILOT" } else { "scientific" }

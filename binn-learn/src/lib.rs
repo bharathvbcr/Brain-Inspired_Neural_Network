@@ -38,8 +38,11 @@ pub use bptt_baseline::{
 };
 pub use c2_replay_baseline::{C2ReplayBaseline, ReplayExample, C2_REPLAY_BASELINE_LABEL};
 pub use consolidation::{
-    replay_schedule, ConsolidationBudget, ConsolidationMode, ExactReplayBuffer, GenerativeReplay,
-    ReplayItem, ReplaySource,
+    replay_schedule, ConsolidationBudget, ConsolidationMode, DecoupledConsolidationGate,
+    ExactReplayBuffer, GenerativeReplay, HomeostaticRenewal, ProvenanceRecord, ProvenanceTable,
+    ReplayItem, ReplaySource, RevocationSummary, SleepConsolidationLearner, SpikingEpisodicTrace,
+    SpikingSleepConsolidator, SpikingSynapseEvent, SynapseAudit, LAYER_FAST_TO_SLOW,
+    LAYER_IN_TO_SLOW,
 };
 pub use contrastive::ContrastiveWakeSleepLearner;
 pub use credit::{

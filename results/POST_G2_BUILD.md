@@ -18,7 +18,7 @@ checkout. They are exploratory extensions, not a retroactive G2 pass.
 | U18 | [`u20_efficiency.md`](u20_efficiency.md) / [`f1_f5_systems.md`](f1_f5_systems.md) | Adaptive graph-partitioned delta stepping; thin ticks skip rayon; sequential spike/work parity |
 | U19 | [`u20_efficiency.md`](u20_efficiency.md) / [`f1_f5_systems.md`](f1_f5_systems.md) | Reset-aware associative-scan training; barrier fraction + scan headroom (F1) |
 | U20 / G5 | [`u20_efficiency.md`](u20_efficiency.md) | Full matched work-per-accuracy decision + F5 activity≠compute ratios |
-| U21 | [`u21_consolidation.md`](u21_consolidation.md) | Matched no-sleep, exact, generated, and offline-local consolidation arms |
+| U21 | [`u21_consolidation.md`](u21_consolidation.md) | Matched no-sleep (`0.8000` forgetting), exact (`0.8000`), generated (`0.0000`), offline-local (`0.8000`), and `sleep-provenance-consolidation` (`0.0000` forgetting, `1.0000` final accuracy without sleep label disclosure) |
 | U22 | [`u22_pruning.md`](u22_pruning.md) | Magnitude, age, eligibility, and random pruning at exact matched sparsity |
 | U23 | [`u23_resting.md`](u23_resting.md) | Stimulus-free dynamics against rate-, activity-, and spectrum-matched nulls |
 

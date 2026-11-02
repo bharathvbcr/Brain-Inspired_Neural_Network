@@ -187,6 +187,9 @@ The central thesis was that compartmental LIF cells, sparse $k$-WTA assemblies, 
 3. **Temporal Attention Readout on LIF (SHD Breakthrough):**
    - Adding a full-sequence self-attention branch alongside the rate readout over feedforward LIF spiking features achieves **0.8320** accuracy on Spiking Heidelberg Digits (**12/12 seeds $\ge 0.80$**, gain **+0.1258** over rate readout, on the glibc fleet). This instrument uses backpropagation through time.
    - **Wave 9 measured order dependence at this configuration**: bin-shuffling reduces attention-arm accuracy by **0.1337**, leaving an advantage of **0.0050** over the rate arm (about 96% of the intact advantage is lost).
+4. **Sleep-Provenance Consolidation (`U21` / `binn-learn::consolidation`):**
+   - Standard FIFO replay (`exact-replay`) and naive label-free replay (`offline-local-consolidation`) suffer catastrophic forgetting (`0.8000` mean forgetting, `0.2000` final mean accuracy across 10 scientific seeds in [`results/u21_consolidation.md`](results/u21_consolidation.md)).
+   - Pairing dual-store fast/slow weights with decoupled coordinate-wise erase/write gating (`DecoupledConsolidationGate`), homeostatic dormancy threshold renewal (`HomeostaticRenewal`), and bipartite episodic provenance (`ProvenanceTable` in `SleepConsolidationLearner` and `SpikingSleepConsolidator`) eliminates forgetting (**`0.0000` mean forgetting, `1.0000` final mean accuracy** across 10 seeds) without disclosing labels during offline sleep, while supporting exact surgical episode/task revocation.
 
 ---
 
