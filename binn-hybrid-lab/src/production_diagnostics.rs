@@ -719,7 +719,8 @@ impl ProductionGraph {
     fn capture_production_eligibility(&mut self) -> Vec<f32> {
         self.learner.observe_spikes(&mut self.engine);
         let now = self.engine.time();
-        Eligibility::new(self.eligibility_tau).decay_all_to(self.engine.syn.as_mut_slice(), now);
+        Eligibility::new(self.eligibility_tau)
+            .decay_all_to(self.engine.syn.as_mut_slice_keeping_delays(), now);
         self.engine
             .syn
             .as_slice()
@@ -817,14 +818,14 @@ impl ProductionGraph {
             }
             let weight = (self.engine.edge_w[edge] + delta).clamp(-WEIGHT_LIMIT, WEIGHT_LIMIT);
             self.engine.edge_w[edge] = weight;
-            self.engine.syn.as_mut_slice()[edge].weight = weight;
+            self.engine.syn.set_weight_keeping_delay(edge, weight);
         }
     }
 
     fn clamp_weights(&mut self) {
         for (edge, weight) in self.engine.edge_w.iter_mut().enumerate() {
             *weight = weight.clamp(-WEIGHT_LIMIT, WEIGHT_LIMIT);
-            self.engine.syn.as_mut_slice()[edge].weight = *weight;
+            self.engine.syn.set_weight_keeping_delay(edge, *weight);
         }
     }
 
@@ -1253,9 +1254,13 @@ fn edge_index(conn: &Csr, pre: CellId, post: CellId) -> Option<usize> {
 
 fn clear_eligibility(engine: &mut Engine) {
     let now = engine.time();
-    for synapse in engine.syn.as_mut_slice() {
-        synapse.eligibility = 0.0;
-        synapse.last_elig_update = now;
+    for synapse in engine.syn.as_mut_slice_keeping_delays() {
+        if synapse.eligibility.to_bits() != 0 {
+            synapse.eligibility = 0.0;
+        }
+        if synapse.last_elig_update != now {
+            synapse.last_elig_update = now;
+        }
     }
 }
 

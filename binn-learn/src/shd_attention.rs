@@ -530,6 +530,11 @@ impl AttentionGradient {
     }
 }
 
+#[inline(never)]
+fn sincos_pair(phase: f32) -> (f32, f32) {
+    (phase.sin(), phase.cos())
+}
+
 /// Fixed sinusoidal position code, written into `out` (`d_model` long).
 ///
 /// `u = t / (t_steps - 1)` in `[0, 1]`; a one-frame sample has `u = 0`.
@@ -711,7 +716,21 @@ pub fn attention_forward_presented(
 
     // --- embedding + position ------------------------------------------------
     let mut z0 = vec![0.0_f32; t_steps * d];
-    let mut position = vec![0.0_f32; d];
+    let pairs = d / 2;
+    let mut tau_cycles = Vec::new();
+    if !variant.no_position {
+        tau_cycles.reserve_exact(pairs);
+        let ratio = ATTENTION_MAX_CYCLES / ATTENTION_MIN_CYCLES;
+        for pair in 0..pairs {
+            let exponent = if pairs > 1 {
+                pair as f32 / (pairs - 1) as f32
+            } else {
+                0.0
+            };
+            let cycles = ATTENTION_MIN_CYCLES * ratio.powf(exponent);
+            tau_cycles.push(std::f32::consts::TAU * cycles);
+        }
+    }
     // `(unit, value)`. Spikes are exactly 0.0 or 1.0 on every real trace, so
     // skipping silent units is exact; the value is carried rather than assumed
     // so that the embedding is genuinely linear in `spikes` — which is what
@@ -731,8 +750,19 @@ pub fn attention_forward_presented(
         if variant.no_position {
             stream.fill(0.0);
         } else {
-            positional_code(t, t_steps, &mut position);
-            stream.copy_from_slice(&position);
+            let u = if t_steps > 1 {
+                t as f32 / (t_steps - 1) as f32
+            } else {
+                0.0
+            };
+            for (pair, &tc) in tau_cycles.iter().enumerate() {
+                let (s, c) = sincos_pair(tc * u);
+                stream[2 * pair] = s;
+                stream[2 * pair + 1] = c;
+            }
+            if d % 2 == 1 {
+                stream[d - 1] = 0.0;
+            }
         }
         let source = presentation.map_or(t, |order| order[t]);
         active.clear();
@@ -2588,5 +2618,40 @@ mod tests {
             "one collapsed row must survive the fold"
         );
         assert_eq!(total.score_bound[0], 9.0, "a bound is a max, not a mean");
+    }
+
+    #[test]
+    fn hoisted_positional_table_is_bit_identical_to_positional_code() {
+        let mut rows_checked = 0usize;
+        for &d_model in &[2usize, 4, 6, 8, 16, 32, 64] {
+            for &t_steps in &[1usize, 2, 17, 40, 128, 250, 358] {
+                let cfg = AttentionConfig::new(d_model, 1).unwrap();
+                let params = AttentionParams::deterministic(6, 4, cfg, 99).unwrap();
+                let spikes = vec![0.0_f32; t_steps * 6];
+                let cache = attention_forward(
+                    std::hint::black_box(&params),
+                    std::hint::black_box(&spikes),
+                    std::hint::black_box(t_steps),
+                )
+                .unwrap();
+                assert_eq!(cache.z[0].len(), t_steps * d_model);
+                let mut expected = vec![0.0_f32; d_model];
+                for t in 0..t_steps {
+                    rows_checked += 1;
+                    positional_code(
+                        std::hint::black_box(t),
+                        std::hint::black_box(t_steps),
+                        std::hint::black_box(&mut expected),
+                    );
+                    let actual = &cache.z[0][t * d_model..(t + 1) * d_model];
+                    assert_eq!(
+                        actual.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                        expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                        "d_model={d_model} t_steps={t_steps} t={t}"
+                    );
+                }
+            }
+        }
+        assert_eq!(rows_checked, 7 * (1 + 2 + 17 + 40 + 128 + 250 + 358));
     }
 }

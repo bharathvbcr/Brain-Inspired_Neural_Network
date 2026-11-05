@@ -653,7 +653,7 @@ impl ExactGraph {
             }
             let weight = (self.engine.edge_w[edge] + delta).clamp(-8.0, 8.0);
             self.engine.edge_w[edge] = weight;
-            self.engine.syn.as_mut_slice()[edge].weight = weight;
+            self.engine.syn.set_weight_keeping_delay(edge, weight);
             changed = changed.saturating_add(1);
         }
         changed

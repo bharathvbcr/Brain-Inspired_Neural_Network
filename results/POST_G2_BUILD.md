@@ -21,6 +21,8 @@ checkout. They are exploratory extensions, not a retroactive G2 pass.
 | U21 | [`u21_consolidation.md`](u21_consolidation.md) | Matched no-sleep (`0.8000` forgetting), exact (`0.8000`), generated (`0.0000`), offline-local (`0.8000`), and `sleep-provenance-consolidation` (`0.0000` forgetting, `1.0000` final accuracy without sleep label disclosure) |
 | U22 | [`u22_pruning.md`](u22_pruning.md) | Magnitude, age, eligibility, and random pruning at exact matched sparsity |
 | U23 | [`u23_resting.md`](u23_resting.md) | Stimulus-free dynamics against rate-, activity-, and spectrum-matched nulls |
+| U24 / WSP | [`WEIGHT_SPACE_PROGRAMMING.md`](WEIGHT_SPACE_PROGRAMMING.md) | **DIAGNOSTIC & SURGERY** — direct weight-space reading and zero-gradient surgery: finite $\theta = 1.0$ natural spiking ($0.4700 \to 0.9887$), compositional depth ($D^* = 3 \to 8$), continual forgetting ($0.8948 \to 0.1760$), 700-ch `SHD` LIF homeostasis ($0.0500 \to 0.0861$), and QK saturation recovery ($0.0043 \to 2.6614$) |
+| U25 / Waves 1–4 | [`PERF_AUDIT_2026-11-02_WAVES_1_3.md`](PERF_AUDIT_2026-11-02_WAVES_1_3.md) | **SYSTEMS ACCELERATION & MEGA-KERNELS** — $\sim 8.1\times$ process / $9.1\times$ condition cumulative end-to-end speedup ($844\text{ ms} \to 104.3\text{ ms}$ process / $92.4\text{ ms}$ condition on $c1\text{ --micro}$, $N=10\text{k}$), $43.96\times$ FF / $10.22\times$ recurrent ALIF factored mega-kernels, $8.72\times$ sparse 700-ch e-prop/DFA, $18.93\times\text{–}35.25\times$ single-CB 64-tick Metal GPU recurrent fusion, $90.57\times$ lazy $O(D)$ cell reset, and $\sim 606,000\times$ atomic delay queries while preserving 100% bit-exact numerics |
 
 Quick/PILOT artifacts with the same harnesses use the `_quick.md` suffix.
 

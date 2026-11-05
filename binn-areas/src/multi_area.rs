@@ -10,7 +10,7 @@ use binn_core::sparse::Csr;
 use binn_engine::{CellId, Engine};
 
 use crate::area::{ActivityLog, Area};
-use crate::wta::{k_wta, soft_k_wta};
+use crate::wta::{k_wta_in_place, soft_k_wta};
 
 /// Directed projection layer connecting source area `src` to destination area `dst`.
 #[derive(Clone, Debug)]
@@ -49,6 +49,8 @@ pub struct MultiAreaNetwork {
     pub areas: Vec<Area>,
     pub projections: Vec<InterAreaProjection>,
     pub activity_logs: Vec<ActivityLog>,
+    dst_charge_scratch: Vec<f32>,
+    scores_scratch: Vec<(CellId, f32)>,
 }
 
 impl MultiAreaNetwork {
@@ -71,6 +73,8 @@ impl MultiAreaNetwork {
             areas,
             projections: Vec::new(),
             activity_logs,
+            dst_charge_scratch: Vec::with_capacity(cells_per_area),
+            scores_scratch: Vec::with_capacity(cells_per_area),
         }
     }
 
@@ -100,27 +104,35 @@ impl MultiAreaNetwork {
         src_winners: &[CellId],
         opts: InterAreaStepOpts<'_>,
     ) -> Vec<CellId> {
-        let dst_area = &self.areas[dst_idx];
-        let dst_start = dst_area.cells.start as usize;
-        let dst_len = dst_area.len();
+        let src_cells = self.areas[src_idx].cells.clone();
+        let dst_cells = self.areas[dst_idx].cells.clone();
+        let dst_start = dst_cells.start;
+        let dst_len = self.areas[dst_idx].len();
+        let effective_k = self.areas[dst_idx].effective_k();
 
-        let mut dst_charge = vec![0.0f32; dst_len];
+        self.dst_charge_scratch.clear();
+        self.dst_charge_scratch.resize(dst_len, 0.0);
+        let dst_charge = &mut self.dst_charge_scratch[..dst_len];
 
         // Find relevant projection
-        if let Some(proj) = self.projections.iter().find(|p| {
-            p.src_range == self.areas[src_idx].cells && p.dst_range == self.areas[dst_idx].cells
-        }) {
+        if let Some(proj) = self
+            .projections
+            .iter()
+            .find(|p| p.src_range == src_cells && p.dst_range == dst_cells)
+        {
             // Sparse inter-area projection from src_winners
-            let src_start = self.areas[src_idx].cells.start;
+            let src_start = src_cells.start;
             for &w in src_winners {
                 let local_src = (w - src_start) as usize;
                 if local_src < proj.conn.nrows() {
                     let start_edge = proj.conn.row_ptr[local_src] as usize;
                     let end_edge = proj.conn.row_ptr[local_src + 1] as usize;
-                    for edge in start_edge..end_edge {
-                        let post_col = proj.conn.col[edge] as usize;
+                    let cols = &proj.conn.col[start_edge..end_edge];
+                    let ws = &proj.weights[start_edge..end_edge];
+                    for (&post_col_u32, &weight) in cols.iter().zip(ws.iter()) {
+                        let post_col = post_col_u32 as usize;
                         if post_col < dst_len {
-                            dst_charge[post_col] += proj.weights[edge];
+                            dst_charge[post_col] += weight;
                         }
                     }
                 }
@@ -133,24 +145,30 @@ impl MultiAreaNetwork {
                 dst_len,
                 "extra_charge length must match destination area"
             );
-            for i in 0..dst_len {
-                dst_charge[i] += extra[i];
+            for (slot, &bias) in dst_charge.iter_mut().zip(extra.iter()) {
+                *slot += bias;
             }
         }
 
-        // Combine charge + dendritic coincidence score
-        let scores: Vec<(CellId, f32)> = (0..dst_len)
-            .map(|i| {
-                let id = dst_start as CellId + i as CellId;
-                let dend_score = engine.cell(id).dendritic_coincidence_score();
-                (id, dst_charge[i] + dend_score)
-            })
-            .collect();
+        // Combine charge + dendritic coincidence score in reusable scratch.
+        let cells = engine.cells();
+        self.scores_scratch.clear();
+        self.scores_scratch.reserve(dst_len);
+        for (i, &charge) in dst_charge.iter().enumerate() {
+            let id = dst_start + i as CellId;
+            let dend_score = cells[id as usize].dendritic_coincidence_score();
+            self.scores_scratch.push((id, charge + dend_score));
+        }
 
         let winners = if opts.temperature > 0.0 {
-            soft_k_wta(&scores, dst_area.effective_k(), opts.temperature, opts.seed)
+            soft_k_wta(
+                &self.scores_scratch,
+                effective_k,
+                opts.temperature,
+                opts.seed,
+            )
         } else {
-            k_wta(&scores, dst_area.effective_k())
+            k_wta_in_place(&mut self.scores_scratch, effective_k)
         };
 
         self.activity_logs[dst_idx].record(dst_len, winners.len());
@@ -195,5 +213,51 @@ mod tests {
         assert_eq!(net.areas[0].cells, 0..32);
         assert_eq!(net.areas[1].cells, 32..64);
         assert_eq!(net.areas[2].cells, 64..96);
+    }
+
+    #[test]
+    fn fused_inter_area_step_reuses_scratch_and_clears_between_steps() {
+        let mut net = MultiAreaNetwork::new(2, 16, 3);
+        let mut eng = Engine::with_cells(32);
+        let csr = Csr::from_adjacency(&[
+            vec![1, 5, 9],
+            vec![2, 5, 11],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        ]);
+        net.add_projection(0, 1, csr, vec![0.4, 0.9, 0.2, 0.8, 0.7, 0.1]);
+
+        let w1 = net.fused_inter_area_step(&mut eng, 0, 1, &[0, 1], InterAreaStepOpts::new(0.0, 0));
+        let charge_ptr_1 = net.dst_charge_scratch.as_ptr();
+        let scores_ptr_1 = net.scores_scratch.as_ptr();
+        assert_eq!(w1, vec![17, 18, 21]); // 16 + {1, 2, 5}
+
+        // Second step with different winners must not leak prior step's charge
+        // and must reuse the existing scratch allocations.
+        let bias = [
+            0.0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 1.1, 0.0, 0.0, 0.0,
+        ];
+        let w2 = net.fused_inter_area_step(
+            &mut eng,
+            0,
+            1,
+            &[],
+            InterAreaStepOpts::new(0.0, 0).with_bias(&bias),
+        );
+        assert_eq!(w2, vec![19, 23, 28]); // 16 + {3, 7, 12}
+        assert_eq!(net.dst_charge_scratch.as_ptr(), charge_ptr_1);
+        assert_eq!(net.scores_scratch.as_ptr(), scores_ptr_1);
     }
 }

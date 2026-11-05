@@ -9,7 +9,7 @@ use binn_engine::{CellId, Engine};
 
 use crate::area::Area;
 use crate::assembly::Assembly;
-use crate::wta::k_wta;
+use crate::wta::k_wta_in_place;
 
 const ASSOCIATE_BOOST: f32 = 5.0;
 const PROJECT_HEBB: f32 = 1.0;
@@ -35,12 +35,12 @@ pub fn project(engine: &mut Engine, src: &Assembly, dst: &mut Area) -> Assembly 
         .expect("projection settle time overflow");
     let _ = engine.step_until(settle_until);
 
-    let scores: Vec<(CellId, f32)> = dst
+    let mut scores: Vec<(CellId, f32)> = dst
         .cells
         .clone()
         .map(|cell| (cell, engine.last_step_charge(cell)))
         .collect();
-    let winners = k_wta(&scores, dst.effective_k());
+    let winners = k_wta_in_place(&mut scores, dst.effective_k());
     dst.log_activity(winners.len());
     let assembly = Assembly::from_members(winners);
 
@@ -73,12 +73,12 @@ pub fn project_reference(engine: &mut Engine, src: &Assembly, dst: &mut Area) ->
             }
         }
     }
-    let pairs: Vec<(CellId, f32)> = scores
+    let mut pairs: Vec<(CellId, f32)> = scores
         .iter()
         .enumerate()
         .map(|(i, &score)| (base + i as CellId, score))
         .collect();
-    let winners = k_wta(&pairs, dst.effective_k());
+    let winners = k_wta_in_place(&mut pairs, dst.effective_k());
     dst.log_activity(winners.len());
     let assembly = Assembly::from_members(winners);
     potentiate_existing(engine, src, &assembly, PROJECT_HEBB);

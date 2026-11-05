@@ -12,6 +12,8 @@ default = []
 plots = ["dep:plotters", "dep:svg2pdf", "dep:usvg", "dep:resvg"]
 # Optional Polars result-table harvest (not on scientific hot path).
 tables = ["dep:polars"]
+# Optional Apple Silicon Metal SpMV/LIF backend for scaling benchmarks.
+gpu = ["binn-core/gpu"]
 # Documentation / discoverability alias for the C2 kill-gate override.
 # The binary still requires `--enable-c2` (or env) at runtime; this feature
 # does not silently schedule C2.

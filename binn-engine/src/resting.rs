@@ -74,6 +74,12 @@ pub fn simulate_resting(engine: &mut Engine, config: RestingConfig) -> RestingRa
 
 pub fn matched_null(raster: &RestingRaster, kind: RestingNull, seed: u64) -> RestingRaster {
     let ticks = raster.spikes_by_tick.len();
+    if ticks == 0 {
+        return RestingRaster {
+            n_cells: raster.n_cells,
+            spikes_by_tick: Vec::new(),
+        };
+    }
     let mut rng = Rng::new(seed ^ 0xA011_5EED_0000_0001 ^ kind as u64);
     let mut out = vec![Vec::new(); ticks];
     match kind {
@@ -97,31 +103,47 @@ pub fn matched_null(raster: &RestingRaster, kind: RestingNull, seed: u64) -> Res
             let total: usize = raster.spikes_by_tick.iter().map(Vec::len).sum();
             let capacity = ticks.saturating_mul(raster.n_cells);
             let target = total.min(capacity);
+            let mut visited = vec![0u64; capacity.div_ceil(64)];
             let mut placed = 0usize;
             while placed < target {
                 let tick = rng.gen_index(ticks);
-                let cell = rng.gen_index(raster.n_cells) as CellId;
-                if !out[tick].contains(&cell) {
-                    out[tick].push(cell);
+                let cell_idx = rng.gen_index(raster.n_cells);
+                let flat = tick * raster.n_cells + cell_idx;
+                let word = &mut visited[flat >> 6];
+                let mask = 1u64 << (flat & 63);
+                if *word & mask == 0 {
+                    *word |= mask;
+                    out[tick].push(cell_idx as CellId);
                     placed += 1;
                 }
             }
         }
         RestingNull::ActivityMatched => {
+            let mut visited = vec![0u64; raster.n_cells.div_ceil(64)];
             for (tick, spikes) in raster.spikes_by_tick.iter().enumerate() {
-                while out[tick].len() < spikes.len().min(raster.n_cells) {
-                    let cell = rng.gen_index(raster.n_cells) as CellId;
-                    if !out[tick].contains(&cell) {
-                        out[tick].push(cell);
+                let want = spikes.len().min(raster.n_cells);
+                if want == 0 {
+                    continue;
+                }
+                visited.fill(0);
+                out[tick].reserve(want);
+                while out[tick].len() < want {
+                    let cell_idx = rng.gen_index(raster.n_cells);
+                    let word = &mut visited[cell_idx >> 6];
+                    let mask = 1u64 << (cell_idx & 63);
+                    if *word & mask == 0 {
+                        *word |= mask;
+                        out[tick].push(cell_idx as CellId);
                     }
                 }
             }
         }
         RestingNull::SpectrumMatched => {
-            for cell in 0..raster.n_cells as CellId {
-                let shift = rng.gen_index(ticks);
-                for (tick, spikes) in raster.spikes_by_tick.iter().enumerate() {
-                    if spikes.contains(&cell) {
+            let shifts: Vec<usize> = (0..raster.n_cells).map(|_| rng.gen_index(ticks)).collect();
+            for (tick, spikes) in raster.spikes_by_tick.iter().enumerate() {
+                for &cell in spikes {
+                    let idx = cell as usize;
+                    if let Some(&shift) = shifts.get(idx) {
                         out[(tick + shift) % ticks].push(cell);
                     }
                 }
@@ -190,11 +212,31 @@ pub fn characterize(
     }
 }
 
+fn is_strictly_sorted(xs: &[CellId]) -> bool {
+    xs.windows(2).all(|w| w[0] < w[1])
+}
+
 fn jaccard(a: &[CellId], b: &[CellId]) -> f32 {
     if a.is_empty() && b.is_empty() {
         return 0.0;
     }
-    let intersection = a.iter().filter(|cell| b.contains(cell)).count();
+    let intersection = if is_strictly_sorted(a) && is_strictly_sorted(b) {
+        let (mut i, mut j, mut count) = (0usize, 0usize, 0usize);
+        while i < a.len() && j < b.len() {
+            match a[i].cmp(&b[j]) {
+                std::cmp::Ordering::Less => i += 1,
+                std::cmp::Ordering::Greater => j += 1,
+                std::cmp::Ordering::Equal => {
+                    count += 1;
+                    i += 1;
+                    j += 1;
+                }
+            }
+        }
+        count
+    } else {
+        a.iter().filter(|cell| b.contains(cell)).count()
+    };
     let union = a.len() + b.len() - intersection;
     intersection as f32 / union.max(1) as f32
 }
@@ -308,5 +350,119 @@ mod tests {
             simulate_resting(&mut a, config),
             simulate_resting(&mut b, config)
         );
+    }
+
+    #[test]
+    fn spectrum_matched_and_jaccard_match_reference_on_edge_cases() {
+        let empty = RestingRaster {
+            n_cells: 4,
+            spikes_by_tick: Vec::new(),
+        };
+        assert_eq!(
+            matched_null(&empty, RestingNull::SpectrumMatched, 3).spikes_by_tick,
+            Vec::<Vec<CellId>>::new()
+        );
+
+        // Unsorted, duplicate, and out-of-range cell entries must match the
+        // reference per-cell shift + dedup semantics bit-for-bit.
+        let messy = RestingRaster {
+            n_cells: 5,
+            spikes_by_tick: vec![vec![4, 1, 1, 9], vec![0, 3], vec![], vec![2, 4, 2]],
+        };
+        for seed in 0..16u64 {
+            let ticks = messy.spikes_by_tick.len();
+            let mut rng =
+                Rng::new(seed ^ 0xA011_5EED_0000_0001 ^ RestingNull::SpectrumMatched as u64);
+            let mut expected = vec![Vec::new(); ticks];
+            for cell in 0..messy.n_cells as CellId {
+                let shift = rng.gen_index(ticks);
+                for (tick, spikes) in messy.spikes_by_tick.iter().enumerate() {
+                    if spikes.contains(&cell) {
+                        expected[(tick + shift) % ticks].push(cell);
+                    }
+                }
+            }
+            for spikes in &mut expected {
+                spikes.sort_unstable();
+                spikes.dedup();
+            }
+            let got = matched_null(&messy, RestingNull::SpectrumMatched, seed);
+            assert_eq!(got.spikes_by_tick, expected);
+        }
+
+        // Jaccard two-pointer fast path vs unsorted/duplicate fallback.
+        for (a, b) in [
+            (&[][..], &[1u32, 2][..]),
+            (&[1, 3, 5, 9], &[2, 3, 5, 8, 9]),
+            (&[5, 1, 3], &[3, 9, 1]),
+            (&[1, 1, 3], &[1, 2, 3]),
+        ] {
+            let ref_inter = a.iter().filter(|c| b.contains(c)).count();
+            let ref_j = if a.is_empty() && b.is_empty() {
+                0.0
+            } else {
+                ref_inter as f32 / (a.len() + b.len() - ref_inter).max(1) as f32
+            };
+            assert_eq!(jaccard(a, b).to_bits(), ref_j.to_bits());
+        }
+
+        // RateMatched and ActivityMatched bitset fast paths must consume the
+        // exact same RNG draws and emit identical rasters as `.contains()`.
+        let dense_fixture = RestingRaster {
+            n_cells: 70, // spans multiple 64-bit words
+            spikes_by_tick: vec![
+                (0..35).map(|i| i * 2).collect(),
+                vec![],
+                (0..70).collect(), // full-saturation tick
+                vec![1, 63, 64, 69],
+            ],
+        };
+        let ticks = dense_fixture.spikes_by_tick.len();
+        for seed in 0..8u64 {
+            // RateMatched naive reference
+            let mut rng_r =
+                Rng::new(seed ^ 0xA011_5EED_0000_0001 ^ RestingNull::RateMatched as u64);
+            let mut exp_r = vec![Vec::new(); ticks];
+            let total: usize = dense_fixture.spikes_by_tick.iter().map(Vec::len).sum();
+            let target = total.min(ticks * dense_fixture.n_cells);
+            let mut placed = 0usize;
+            while placed < target {
+                let tick = rng_r.gen_index(ticks);
+                let cell = rng_r.gen_index(dense_fixture.n_cells) as CellId;
+                if !exp_r[tick].contains(&cell) {
+                    exp_r[tick].push(cell);
+                    placed += 1;
+                }
+            }
+            for s in &mut exp_r {
+                s.sort_unstable();
+                s.dedup();
+            }
+            assert_eq!(
+                matched_null(&dense_fixture, RestingNull::RateMatched, seed).spikes_by_tick,
+                exp_r
+            );
+
+            // ActivityMatched naive reference
+            let mut rng_a =
+                Rng::new(seed ^ 0xA011_5EED_0000_0001 ^ RestingNull::ActivityMatched as u64);
+            let mut exp_a = vec![Vec::new(); ticks];
+            for (tick, spikes) in dense_fixture.spikes_by_tick.iter().enumerate() {
+                while exp_a[tick].len() < spikes.len().min(dense_fixture.n_cells) {
+                    let cell = rng_a.gen_index(dense_fixture.n_cells) as CellId;
+                    if !exp_a[tick].contains(&cell) {
+                        exp_a[tick].push(cell);
+                    }
+                }
+            }
+            for s in &mut exp_a {
+                s.sort_unstable();
+                s.dedup();
+            }
+            assert_eq!(
+                matched_null(&dense_fixture, RestingNull::ActivityMatched, seed).spikes_by_tick,
+                exp_a
+            );
+        }
     }
 }

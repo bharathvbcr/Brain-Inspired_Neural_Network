@@ -15,15 +15,14 @@ use rayon::prelude::*;
 
 use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
 use binn_lab::timestamp::{iso8601_utc, unix_seconds};
-use binn_learn::shd_attention::{
-    attention_forward_presented, AttentionConfig, AttentionParams, AttentionProbe, ReadoutVariant,
-};
+use binn_learn::shd_attention::{AttentionConfig, AttentionParams, AttentionProbe, ReadoutVariant};
 use binn_learn::shd_matched_arms::ArmAdam;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
 use binn_learn::{
-    load_epoch_orders, one_cycle_lr, shd_matched_loss_and_gradient_arm,
-    shd_matched_loss_and_gradient_arm_tau, MatchedArm, MatchedShdSample, PortableRng,
-    ShdArmGradient, ShdArmWeightLayout, ShdArmWeights, ShdMatchedWeights,
+    load_epoch_orders, one_cycle_lr, shd_matched_forward_arm_tau,
+    shd_matched_loss_and_gradient_arm, shd_matched_loss_only_and_gradient_arm_tau_with_workspace,
+    MatchedArm, MatchedShdSample, PortableRng, ShdArmGradient, ShdArmWeightLayout, ShdArmWeights,
+    ShdArmWorkspace, ShdMatchedWeights,
 };
 
 fn main() -> ExitCode {
@@ -425,9 +424,16 @@ fn temporal_sensitivity(args: &[String]) -> Result<(), String> {
     let mut rate_rel_l1 = vec![0.0_f64; arms];
     let mut prediction_changed = vec![0_usize; arms];
     let mut counted = 0_usize;
+    let layout = ShdArmWeightLayout::prepare(&weights);
 
     for (index, base) in framed.iter().enumerate() {
-        let intact = shd_matched_loss_and_gradient_arm(&weights, base)?.0;
+        let intact = shd_matched_forward_arm_tau(
+            &weights,
+            &layout,
+            base,
+            binn_learn::MATCHED_PHYSICAL_TAU_MS,
+        )?
+        .0;
         for (slot, condition) in conditions.into_iter().enumerate() {
             let (
                 audit,
@@ -453,7 +459,13 @@ fn temporal_sensitivity(args: &[String]) -> Result<(), String> {
                 temporal_seed.wrapping_add(index as u64),
             )?;
             audit.merge(&audit_one);
-            let shifted = shd_matched_loss_and_gradient_arm(&weights, &moved)?.0;
+            let shifted = shd_matched_forward_arm_tau(
+                &weights,
+                &layout,
+                &moved,
+                binn_learn::MATCHED_PHYSICAL_TAU_MS,
+            )?
+            .0;
 
             let differing = intact
                 .spikes
@@ -713,8 +725,8 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     // that did not ask.
     let probe_epochs = optional_epoch_list(args, "--probe-epochs", epochs)?;
     let probe_out = optional_path(args, "--probe-out")?;
-    let probe_max_samples = optional_usize(args, "--probe-max-samples")?
-        .unwrap_or(DEFAULT_PROBE_SAMPLES);
+    let probe_max_samples =
+        optional_usize(args, "--probe-max-samples")?.unwrap_or(DEFAULT_PROBE_SAMPLES);
     match (probe_epochs.is_empty(), &probe_out) {
         (true, None) => {}
         (false, Some(_)) => {}
@@ -1454,10 +1466,9 @@ fn probe_readout(
     limit: usize,
     tau_m: f32,
 ) -> Result<AttentionProbe, String> {
-    let params = weights
-        .attn
-        .as_ref()
-        .ok_or_else(|| "probe asked for an arm with no attention block".to_string())?;
+    if weights.attn.is_none() {
+        return Err("probe asked for an arm with no attention block".to_string());
+    }
     let layout = ShdArmWeightLayout::prepare(weights);
     let probed = &samples[..limit.min(samples.len())];
     let mut total = AttentionProbe::default();
@@ -1465,14 +1476,9 @@ fn probe_readout(
         let computed: Vec<Result<AttentionProbe, String>> = chunk
             .par_iter()
             .map(|sample| {
-                let (forward, _) =
-                    shd_matched_loss_and_gradient_arm_tau(weights, &layout, sample, 1.0, tau_m)?;
-                let cache = attention_forward_presented(
-                    params,
-                    &forward.spikes,
-                    sample.frames.len(),
-                    sample.hidden_time_permutation.as_deref(),
-                )?;
+                let (_, cache) = shd_matched_forward_arm_tau(weights, &layout, sample, tau_m)?;
+                let cache = cache
+                    .ok_or_else(|| "probe asked for an arm with no attention block".to_string())?;
                 Ok(AttentionProbe::observe(&cache))
             })
             .collect();
@@ -1557,15 +1563,15 @@ fn ordered_sample_gradients(
 ) -> Vec<Result<(f32, ShdArmGradient), String>> {
     indices
         .par_iter()
-        .map(|&index| {
-            shd_matched_loss_and_gradient_arm_tau(
+        .map_init(ShdArmWorkspace::default, |workspace, &index| {
+            shd_matched_loss_only_and_gradient_arm_tau_with_workspace(
                 weights,
                 weight_layout,
                 &train[index],
                 surrogate_scale,
                 tau_m,
+                workspace,
             )
-            .map(|(forward, sample_gradient)| (forward.loss, sample_gradient))
         })
         .collect()
 }
@@ -1626,17 +1632,12 @@ fn evaluate(
         let computed: Vec<SampleEval> = chunk
             .par_iter()
             .map(|sample| {
-                shd_matched_loss_and_gradient_arm_tau(
-                    weights,
-                    &weight_layout,
-                    sample,
-                    1.0,
-                    tau_m,
+                shd_matched_forward_arm_tau(weights, &weight_layout, sample, tau_m).map(
+                    |(forward, _)| {
+                        let finite = forward.logits.iter().all(|value| value.is_finite());
+                        (forward.prediction, forward.rates, finite)
+                    },
                 )
-                .map(|(forward, _)| {
-                    let finite = forward.logits.iter().all(|value| value.is_finite());
-                    (forward.prediction, forward.rates, finite)
-                })
             })
             .collect();
         for (sample, outcome) in chunk.iter().zip(computed) {
@@ -2162,7 +2163,8 @@ mod tests {
             Vec::new(),
         )
         .expect("arm");
-        let clean = evaluate(&healthy, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS).expect("evaluate");
+        let clean =
+            evaluate(&healthy, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS).expect("evaluate");
         assert_eq!(
             clean.non_finite_forward, 0,
             "the healthy fixture already overflows; it cannot show the defect"
@@ -2213,7 +2215,8 @@ mod tests {
         );
         let overflowing = ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
 
-        let poisoned = evaluate(&overflowing, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS).expect("evaluate");
+        let poisoned = evaluate(&overflowing, &samples, binn_learn::MATCHED_PHYSICAL_TAU_MS)
+            .expect("evaluate");
         // The fixture's own precondition: if the units stop firing, the
         // read-out sum shrinks back inside f32 and the assertion below would
         // pass or fail for a reason that has nothing to do with the guard.
@@ -2385,27 +2388,59 @@ mod tests {
         let orders = directory.join("o.bin");
 
         init(&owned(&[
-            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
-            "--seed", "5170001", "--epochs", "3", "--n-train", "24",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--arm", "ff+fixed+attn", "--attn-dim", "4", "--attn-layers", "2",
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "3",
+            "--n-train",
+            "24",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            "ff+fixed+attn",
+            "--attn-dim",
+            "4",
+            "--attn-layers",
+            "2",
         ]))
         .unwrap();
 
         let run = |out: &Path, probe: Option<&Path>| {
             let mut args = owned(&[
-                "--train-events", train.to_str().unwrap(),
-                "--test-events", test.to_str().unwrap(),
-                "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
-                "--epochs", "3",
-                "--weights", weights.to_str().unwrap(),
-                "--orders", orders.to_str().unwrap(),
-                "--out", out.to_str().unwrap(),
-                "--arm", "ff+fixed+attn",
+                "--train-events",
+                train.to_str().unwrap(),
+                "--test-events",
+                test.to_str().unwrap(),
+                "--contract",
+                "published-2ms",
+                "--geometry",
+                "adjacent-sum-5",
+                "--epochs",
+                "3",
+                "--weights",
+                weights.to_str().unwrap(),
+                "--orders",
+                orders.to_str().unwrap(),
+                "--out",
+                out.to_str().unwrap(),
+                "--arm",
+                "ff+fixed+attn",
             ]);
             if let Some(path) = probe {
-                args.extend(owned(&["--probe-epochs", "1,3", "--probe-out", path.to_str().unwrap()]));
+                args.extend(owned(&[
+                    "--probe-epochs",
+                    "1,3",
+                    "--probe-out",
+                    path.to_str().unwrap(),
+                ]));
                 args.extend(owned(&["--probe-max-samples", "8"]));
             }
             train_cell(&args).unwrap();
@@ -2446,30 +2481,55 @@ mod tests {
         let weights = directory.join("w.bin");
         let orders = directory.join("o.bin");
         init(&owned(&[
-            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
-            "--seed", "5170001", "--epochs", "2", "--n-train", "12",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "2",
+            "--n-train",
+            "12",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]))
         .unwrap();
 
         let base = owned(&[
-            "--train-events", train.to_str().unwrap(),
-            "--test-events", test.to_str().unwrap(),
-            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
-            "--epochs", "2",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--out", directory.join("cell.json").to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--train-events",
+            train.to_str().unwrap(),
+            "--test-events",
+            test.to_str().unwrap(),
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--epochs",
+            "2",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--out",
+            directory.join("cell.json").to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]);
 
         // No attention block to diagnose.
         let mut with_probe = base.clone();
         with_probe.extend(owned(&[
-            "--probe-epochs", "1",
-            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+            "--probe-epochs",
+            "1",
+            "--probe-out",
+            directory.join("p.jsonl").to_str().unwrap(),
         ]));
         let error = train_cell(&with_probe).expect_err("ff+alif has no read-out to probe");
         assert!(error.contains("no attention block"), "{error}");
@@ -2477,8 +2537,10 @@ mod tests {
         // An epoch the run never reaches.
         let mut past_the_end = base.clone();
         past_the_end.extend(owned(&[
-            "--probe-epochs", "1,9",
-            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+            "--probe-epochs",
+            "1,9",
+            "--probe-out",
+            directory.join("p.jsonl").to_str().unwrap(),
         ]));
         let error = train_cell(&past_the_end).expect_err("epoch 9 of a 2-epoch cell");
         assert!(error.contains("outside the 1..=2"), "{error}");
@@ -2486,10 +2548,14 @@ mod tests {
         // Half a request.
         let mut half = base.clone();
         half.extend(owned(&["--probe-epochs", "1"]));
-        assert!(train_cell(&half).is_err(), "--probe-epochs without --probe-out");
+        assert!(
+            train_cell(&half).is_err(),
+            "--probe-epochs without --probe-out"
+        );
         let mut other_half = base;
         other_half.extend(owned(&[
-            "--probe-out", directory.join("p.jsonl").to_str().unwrap(),
+            "--probe-out",
+            directory.join("p.jsonl").to_str().unwrap(),
         ]));
         assert!(
             train_cell(&other_half).is_err(),
@@ -2527,26 +2593,51 @@ mod tests {
         let orders = directory.join("o.bin");
         // 20 of the 30 survive the split: speakers 0 and 1.
         init(&owned(&[
-            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
-            "--seed", "5170001", "--epochs", "2", "--n-train", "20",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "2",
+            "--n-train",
+            "20",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]))
         .unwrap();
 
         let out = directory.join("cell.json");
         train_cell(&owned(&[
-            "--train-events", train.to_str().unwrap(),
-            "--test-events", test.to_str().unwrap(),
-            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
-            "--epochs", "2",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--out", out.to_str().unwrap(),
-            "--arm", "ff+alif",
-            "--train-speakers", sidecar.to_str().unwrap(),
-            "--val-speakers", "2",
+            "--train-events",
+            train.to_str().unwrap(),
+            "--test-events",
+            test.to_str().unwrap(),
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--epochs",
+            "2",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
+            "--train-speakers",
+            sidecar.to_str().unwrap(),
+            "--val-speakers",
+            "2",
         ]))
         .unwrap();
         let cell = fs::read_to_string(&out).unwrap();
@@ -2570,28 +2661,54 @@ mod tests {
         let weights = directory.join("w.bin");
         let orders = directory.join("o.bin");
         init(&owned(&[
-            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
-            "--seed", "5170001", "--epochs", "2", "--n-train", "20",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "2",
+            "--n-train",
+            "20",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]))
         .unwrap();
         let out = directory.join("cell.json");
         train_cell(&owned(&[
-            "--train-events", train.to_str().unwrap(),
-            "--test-events", test.to_str().unwrap(),
-            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
-            "--epochs", "2",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--out", out.to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--train-events",
+            train.to_str().unwrap(),
+            "--test-events",
+            test.to_str().unwrap(),
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--epochs",
+            "2",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]))
         .unwrap();
         let cell = fs::read_to_string(&out).unwrap();
         for absent in ["n_val", "val_accuracy", "val_speakers"] {
-            assert!(!cell.contains(absent), "{absent} leaked into an unsplit cell: {cell}");
+            assert!(
+                !cell.contains(absent),
+                "{absent} leaked into an unsplit cell: {cell}"
+            );
         }
     }
 
@@ -2620,22 +2737,45 @@ mod tests {
         let weights = directory.join("w.bin");
         let orders = directory.join("o.bin");
         init(&owned(&[
-            "--n-inputs", "140", "--hidden", "8", "--classes", "4",
-            "--seed", "5170001", "--epochs", "2", "--n-train", "10",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "2",
+            "--n-train",
+            "10",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]))
         .unwrap();
         let base = owned(&[
-            "--train-events", train.to_str().unwrap(),
-            "--test-events", test.to_str().unwrap(),
-            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
-            "--epochs", "2",
-            "--weights", weights.to_str().unwrap(),
-            "--orders", orders.to_str().unwrap(),
-            "--out", directory.join("cell.json").to_str().unwrap(),
-            "--arm", "ff+alif",
+            "--train-events",
+            train.to_str().unwrap(),
+            "--test-events",
+            test.to_str().unwrap(),
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--epochs",
+            "2",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--out",
+            directory.join("cell.json").to_str().unwrap(),
+            "--arm",
+            "ff+alif",
         ]);
         let with = |extra: &[&str]| {
             let mut args = base.clone();
@@ -2643,16 +2783,31 @@ mod tests {
             train_cell(&args)
         };
 
-        let error = with(&["--train-speakers", short.to_str().unwrap(), "--val-speakers", "1"])
-            .expect_err("a 12-entry sidecar against a 20-sample cache");
+        let error = with(&[
+            "--train-speakers",
+            short.to_str().unwrap(),
+            "--val-speakers",
+            "1",
+        ])
+        .expect_err("a 12-entry sidecar against a 20-sample cache");
         assert!(error.contains("positional"), "{error}");
 
-        let error = with(&["--train-speakers", sidecar.to_str().unwrap(), "--val-speakers", "9"])
-            .expect_err("speaker 9 has no trials");
+        let error = with(&[
+            "--train-speakers",
+            sidecar.to_str().unwrap(),
+            "--val-speakers",
+            "9",
+        ])
+        .expect_err("speaker 9 has no trials");
         assert!(error.contains("no trials"), "{error}");
 
-        let error = with(&["--train-speakers", sidecar.to_str().unwrap(), "--val-speakers", "0,1"])
-            .expect_err("holding out every speaker");
+        let error = with(&[
+            "--train-speakers",
+            sidecar.to_str().unwrap(),
+            "--val-speakers",
+            "0,1",
+        ])
+        .expect_err("holding out every speaker");
         assert!(error.contains("nothing to train on"), "{error}");
 
         assert!(

@@ -128,10 +128,26 @@ fn efficiency_refuses_without_override_flag() {
 /// config. `--mech` takes only `--config-hash`, so it is given a real preset:
 /// an unknown hash exits for a different reason and would test nothing here.
 const MOVED_RUNS: &[(&str, &[&str], &str)] = &[
-    ("matched-arch", &["--matched-arch", "--max-lag", "3"], "results/c1_match.md"),
-    ("matched-dfa", &["--matched-dfa", "--max-lag", "3"], "results/c1_dfa.md"),
-    ("matched-rl", &["--matched-rl", "--matched-forward", "recurrent"], "results/c1_rl.md"),
-    ("eventprop", &["--eventprop", "--matched-forward", "recurrent"], "results/c1_eventprop.md"),
+    (
+        "matched-arch",
+        &["--matched-arch", "--max-lag", "3"],
+        "results/c1_match.md",
+    ),
+    (
+        "matched-dfa",
+        &["--matched-dfa", "--max-lag", "3"],
+        "results/c1_dfa.md",
+    ),
+    (
+        "matched-rl",
+        &["--matched-rl", "--matched-forward", "recurrent"],
+        "results/c1_rl.md",
+    ),
+    (
+        "eventprop",
+        &["--eventprop", "--matched-forward", "recurrent"],
+        "results/c1_eventprop.md",
+    ),
     (
         "mech",
         &["--mech", "--config-hash", "c1-mech-adfc5d6fd9e48e02"],
@@ -167,7 +183,11 @@ fn the_refusal_costs_nothing_because_it_precedes_the_run() {
     // the whole suite first. `--matched-arch` scientific is twenty seeds.
     let start = std::time::Instant::now();
     let out = bin("c1")
-        .args(["--matched-arch", "--config-hash", "c1-match-6f6000f148f7d30c"])
+        .args([
+            "--matched-arch",
+            "--config-hash",
+            "c1-match-6f6000f148f7d30c",
+        ])
         .output()
         .expect("spawn c1");
     assert_eq!(out.status.code(), Some(2));
@@ -197,7 +217,10 @@ fn an_explicit_out_is_honoured_and_the_guard_stays_quiet() {
         "a moved config WITH --out must run: {}",
         String::from_utf8_lossy(&out.stderr)
     );
-    assert!(path.is_file(), "the report was not written to the given path");
+    assert!(
+        path.is_file(),
+        "the report was not written to the given path"
+    );
     let body = std::fs::read_to_string(&path).expect("read report");
     assert!(
         body.contains("c1-match-"),

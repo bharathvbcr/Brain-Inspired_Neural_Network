@@ -16,3 +16,8 @@ criterion = { workspace = true }
 name = "kwta"
 path = "benches/kwta.rs"
 harness = false
+
+[[bench]]
+name = "wiring_and_multi_area"
+path = "benches/wiring_and_multi_area.rs"
+harness = false

@@ -120,10 +120,35 @@ impl MultiAreaLearner {
         );
         assert!(rpe.is_finite(), "rpe must be finite");
 
+        let zero_pre_can_skip = self.eta.is_finite()
+            && self.lambda.to_bits() == 0
+            && post_activity.iter().all(|v| v.is_finite());
+        let eta_rpe = self.eta * rpe;
+
         for row in 0..conn.nrows() {
             let start = conn.row_ptr[row] as usize;
             let end = conn.row_ptr[row + 1] as usize;
             let x_pre = pre_activity[row];
+            if zero_pre_can_skip && x_pre.to_bits() == 0 {
+                for edge in start..end {
+                    let w = weights[edge];
+                    if feedback_b[edge].is_finite()
+                        && w.is_finite()
+                        && w.to_bits() != (-0.0f32).to_bits()
+                    {
+                        continue;
+                    }
+                    let col = conn.col[edge] as usize;
+                    let a_post = if col < post_activity.len() {
+                        post_activity[col]
+                    } else {
+                        0.0
+                    };
+                    let credit = eta_rpe * feedback_b[edge] * x_pre * a_post;
+                    weights[edge] += credit - self.lambda * weights[edge];
+                }
+                continue;
+            }
             for edge in start..end {
                 let col = conn.col[edge] as usize;
                 let a_post = if col < post_activity.len() {
@@ -131,7 +156,7 @@ impl MultiAreaLearner {
                 } else {
                     0.0
                 };
-                let credit = self.eta * rpe * feedback_b[edge] * x_pre * a_post;
+                let credit = eta_rpe * feedback_b[edge] * x_pre * a_post;
                 weights[edge] += credit - self.lambda * weights[edge];
             }
         }
@@ -226,5 +251,45 @@ mod tests {
         // Out-of-range winners are ignored rather than panicking.
         let act2 = winners_to_activity(&[10, 99], 32, 4);
         assert_eq!(act2, vec![0.0; 4]);
+    }
+
+    #[test]
+    fn silent_row_fast_path_is_ieee754_bit_identical() {
+        let adj = vec![vec![0, 1, 2], vec![0, 2], vec![1]];
+        let csr = Csr::from_adjacency(&adj);
+        let init_weights = vec![0.5f32, -0.0, 0.0, -0.25, 0.75, 0.125];
+        let feedback_b = vec![0.8f32, -0.4, 0.2, -0.9, 0.5, -0.1];
+        let pre_activity = vec![0.0f32, -0.0, 1.0];
+        let post_activity = vec![1.0f32, -0.0, 0.5];
+
+        for lambda in [0.0f32, 0.02] {
+            for rpe in [0.75f32, -0.75] {
+                let mut fast_w = init_weights.clone();
+                let mut ref_w = init_weights.clone();
+                let mut lnr = MultiAreaLearner::new(0.05, 0.01, lambda, 20.0, 42);
+                lnr.update_inter_area_weights(
+                    &csr,
+                    &mut fast_w,
+                    &feedback_b,
+                    rpe,
+                    &pre_activity,
+                    &post_activity,
+                );
+                for row in 0..csr.nrows() {
+                    let start = csr.row_ptr[row] as usize;
+                    let end = csr.row_ptr[row + 1] as usize;
+                    let x_pre = pre_activity[row];
+                    for edge in start..end {
+                        let col = csr.col[edge] as usize;
+                        let a_post = post_activity.get(col).copied().unwrap_or(0.0);
+                        let credit = lnr.eta * rpe * feedback_b[edge] * x_pre * a_post;
+                        ref_w[edge] += credit - lnr.lambda * ref_w[edge];
+                    }
+                }
+                let fast_bits: Vec<u32> = fast_w.iter().map(|w| w.to_bits()).collect();
+                let ref_bits: Vec<u32> = ref_w.iter().map(|w| w.to_bits()).collect();
+                assert_eq!(fast_bits, ref_bits);
+            }
+        }
     }
 }

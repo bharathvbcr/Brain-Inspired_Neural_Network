@@ -71,34 +71,38 @@ struct Entry {
 /// popped event (or `0` when the queue is empty). This matches the event-driven
 /// engine, which only schedules at or after the current simulation time.
 pub struct TimingWheel {
-    levels: Vec<Vec<VecDeque<Entry>>>,
+    /// Flat `LEVELS * SLOTS` bucket table indexed by `(level << SLOT_BITS) | slot`.
+    levels: Box<[VecDeque<Entry>]>,
+    /// Minimum `at` per bucket (`u64::MAX` when empty), so `scan_earliest`
+    /// reads dense `Tick` words for occupied slots instead of walking all
+    /// `N` queued entries on every tick transition.
+    slot_min: Box<[[Tick; SLOTS]; LEVELS]>,
     /// Cursor: no remaining event has `at < now`.
     now: Tick,
     len: usize,
     /// Cached minimum scheduled tick (append-only buckets are not sorted).
     earliest: Option<Tick>,
     /// Occupancy bitmask: bit `s` of `occupied[level][s / 64]` is set iff
-    /// `levels[level][s]` is non-empty.
+    /// `levels[(level << SLOT_BITS) | s]` is non-empty.
     ///
     /// # Why this exists
     ///
     /// [`Self::scan_earliest`] used to walk all `LEVELS * SLOTS = 2048`
-    /// `VecDeque` headers on every call. A `VecDeque` header is 32 bytes, so
-    /// that was ~64 KB of pointer-chased traffic *per tick*, whether the queue
-    /// held one event or a million — which contradicts the engine's premise
-    /// that work scales with events rather than with the idle population.
-    ///
-    /// With the mask, `scan_earliest` visits only non-empty buckets, found by
-    /// `trailing_zeros` over 32 `u64` words. It computes the same minimum over
-    /// the same set of entries, so results are bit-identical.
+    /// `VecDeque` headers and every queued entry on every tick transition. With
+    /// `occupied` + `slot_min`, `scan_earliest` visits only non-empty slot
+    /// minimums, found by `trailing_zeros` over 32 `u64` words. It computes the
+    /// exact same minimum over the same set of entries, so results are
+    /// bit-identical.
     ///
     /// # Invariant
     ///
-    /// `bit(level, slot) == !levels[level][slot].is_empty()`, maintained at the
-    /// three — and only three — sites that mutate `levels` after construction:
-    /// `schedule` (push_back), `pop_earliest` (pop_front), and `cascade`
-    /// (`mem::take`). [`Self::debug_assert_occupancy`] checks it; the proptests
-    /// call it after every operation.
+    /// `bit(level, slot) == !bucket(level, slot).is_empty()` and
+    /// `slot_min[level][slot] == bucket.iter().map(|e| e.at).min().unwrap_or(u64::MAX)`,
+    /// maintained at the four sites that mutate `levels` after construction:
+    /// `schedule` (`push_back`), `pop_earliest` / `drain_earliest_into`
+    /// (`pop_front`), `cascade` (`mem::take`), and `clear`.
+    /// [`Self::assert_occupancy_invariant`] checks both; the proptests call it
+    /// after every operation.
     occupied: [[u64; SLOTS / 64]; LEVELS],
 }
 
@@ -111,16 +115,52 @@ impl Default for TimingWheel {
 impl TimingWheel {
     /// Empty wheel at tick 0.
     pub fn new() -> Self {
-        let levels = (0..LEVELS)
-            .map(|_| (0..SLOTS).map(|_| VecDeque::new()).collect())
-            .collect();
+        let levels = (0..LEVELS * SLOTS)
+            .map(|_| VecDeque::new())
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let slot_min = vec![[u64::MAX; SLOTS]; LEVELS]
+            .try_into()
+            .unwrap_or_else(|_| unreachable!("exact LEVELS length"));
         Self {
             levels,
+            slot_min,
             now: 0,
             len: 0,
             earliest: None,
             occupied: [[0; SLOTS / 64]; LEVELS],
         }
+    }
+
+    #[inline]
+    const fn bucket_idx(level: usize, slot: usize) -> usize {
+        (level << (SLOT_BITS as usize)) | slot
+    }
+
+    /// Reset the wheel to empty at tick 0 while retaining bucket allocations.
+    pub fn clear(&mut self) {
+        if self.len != 0 {
+            // Mutation site 4 of 4: clear only occupied buckets, retaining
+            // their internal ring-buffer capacities across trials.
+            for level in 0..LEVELS {
+                for word_idx in 0..SLOTS / 64 {
+                    let mut word = self.occupied[level][word_idx];
+                    if word == 0 {
+                        continue;
+                    }
+                    while word != 0 {
+                        let slot = (word_idx << 6) + word.trailing_zeros() as usize;
+                        word &= word - 1;
+                        self.levels[Self::bucket_idx(level, slot)].clear();
+                        self.slot_min[level][slot] = u64::MAX;
+                    }
+                    self.occupied[level][word_idx] = 0;
+                }
+            }
+            self.len = 0;
+        }
+        self.now = 0;
+        self.earliest = None;
     }
 
     /// Set the occupancy bit for `(level, slot)`.
@@ -135,26 +175,49 @@ impl TimingWheel {
         self.occupied[level][slot >> 6] &= !(1u64 << (slot & 63));
     }
 
-    /// Whether `levels[level][slot]` is recorded as non-empty.
+    /// Whether `levels[bucket_idx(level, slot)]` is recorded as non-empty.
     #[inline]
     fn slot_occupied(&self, level: usize, slot: usize) -> bool {
         self.occupied[level][slot >> 6] & (1u64 << (slot & 63)) != 0
     }
 
-    /// Assert the occupancy mask agrees with the actual buckets.
+    /// Update occupancy and `slot_min` for `(0, slot)` after popping front entries.
+    #[inline]
+    fn refresh_level0_after_pop(&mut self, slot: usize, popped_at: Tick) {
+        let bucket = &self.levels[slot];
+        if bucket.is_empty() {
+            self.mark_empty(0, slot);
+            self.slot_min[0][slot] = u64::MAX;
+        } else if let Some(front) = bucket.front() {
+            if front.at == popped_at {
+                self.slot_min[0][slot] = front.at;
+            } else {
+                self.slot_min[0][slot] =
+                    bucket.iter().map(|e| e.at).min().expect("non-empty bucket");
+            }
+        }
+    }
+
+    /// Assert the occupancy mask and `slot_min` agree with the actual buckets.
     ///
-    /// Test-only and deliberately O(LEVELS * SLOTS): it is the check the mask
-    /// exists to avoid, so it must not run on the hot path. Mask drift would
-    /// make `scan_earliest` silently miss events — a wrong simulation rather
-    /// than a crash — so the proptests call this after every single operation.
+    /// Test-only and deliberately O(LEVELS * SLOTS + N): it is the check the
+    /// mask and `slot_min` exist to avoid, so it must not run on the hot path.
+    /// Drift would make `scan_earliest` silently miss or misorder events, so
+    /// the proptests call this after every single operation.
     #[cfg(test)]
     fn assert_occupancy_invariant(&self) {
         for level in 0..LEVELS {
             for slot in 0..SLOTS {
+                let bucket = &self.levels[Self::bucket_idx(level, slot)];
                 assert_eq!(
                     self.slot_occupied(level, slot),
-                    !self.levels[level][slot].is_empty(),
+                    !bucket.is_empty(),
                     "occupancy mask drifted at level {level} slot {slot}"
+                );
+                let expected_min = bucket.iter().map(|e| e.at).min().unwrap_or(u64::MAX);
+                assert_eq!(
+                    self.slot_min[level][slot], expected_min,
+                    "slot_min drifted at level {level} slot {slot}"
                 );
             }
         }
@@ -204,6 +267,52 @@ impl TimingWheel {
         });
     }
 
+    /// Schedule a batch of events that all share the same delivery tick `at`.
+    ///
+    /// Resolves `(level, slot)` and updates occupancy / `slot_min` / `earliest`
+    /// once for the entire batch while preserving exact FIFO insertion order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `at < self.now()` (even when `events` is empty).
+    pub fn insert_batch_at(&mut self, at: Tick, events: impl IntoIterator<Item = Event>) {
+        let delta = at.checked_sub(self.now).unwrap_or_else(|| {
+            panic!(
+                "TimingWheel::insert requires at >= now (at={at}, now={})",
+                self.now
+            )
+        });
+        let level = level_for(delta);
+        let shift = (level as u32) * SLOT_BITS;
+        let slot = ((at >> shift) as usize) & (SLOTS - 1);
+        let idx = Self::bucket_idx(level, slot);
+        let iter = events.into_iter();
+        let (lower, _) = iter.size_hint();
+        let was_empty = self.levels[idx].is_empty();
+        if lower > 0 {
+            self.levels[idx].reserve(lower);
+        }
+        let mut added = 0usize;
+        for event in iter {
+            self.levels[idx].push_back(Entry { at, event });
+            added += 1;
+        }
+        // Mutation site 1b of 4 for the occupancy and slot_min invariants.
+        if added > 0 {
+            if was_empty {
+                self.mark_occupied(level, slot);
+                self.slot_min[level][slot] = at;
+            } else if at < self.slot_min[level][slot] {
+                self.slot_min[level][slot] = at;
+            }
+            self.len += added;
+            self.earliest = Some(match self.earliest {
+                Some(e) => e.min(at),
+                None => at,
+            });
+        }
+    }
+
     /// Remove and return the earliest event, or `None` if empty.
     ///
     /// Equal-`Tick` events are returned in insertion order.
@@ -214,36 +323,70 @@ impl TimingWheel {
 
         loop {
             let slot = (self.now & SLOT_MASK) as usize;
-            let bucket = &mut self.levels[0][slot];
+            let front_at = self.levels[slot].front().map(|e| e.at);
 
-            if let Some(front) = bucket.front() {
-                if front.at == self.now {
-                    let entry = bucket.pop_front().expect("front existed");
-                    // Mutation site 3 of 3. Captured while `bucket` is still
-                    // borrowed; applied below once the borrow has ended.
-                    let bucket_now_empty = bucket.is_empty();
-                    if bucket_now_empty {
-                        self.mark_empty(0, slot);
-                    }
+            if let Some(at) = front_at {
+                if at == self.now {
+                    let entry = self.levels[slot].pop_front().expect("front existed");
+                    // Mutation site 3 of 4.
+                    self.refresh_level0_after_pop(slot, entry.at);
                     self.len -= 1;
                     if self.len == 0 {
                         self.now = 0;
                         self.earliest = None;
-                    } else {
+                    } else if self.slot_min[0][slot] != entry.at {
                         // Same-tick FIFO: remaining events at `now` stay in this
-                        // level-0 bucket. Otherwise refresh the earliest cache.
-                        let still_same_tick = self.levels[0][slot]
-                            .front()
-                            .is_some_and(|e| e.at == entry.at);
-                        if !still_same_tick {
-                            self.earliest = self.scan_earliest();
-                        }
+                        // level-0 bucket. Refresh earliest only once `now` drains.
+                        self.earliest = self.scan_earliest();
                     }
                     return Some((entry.at, entry.event));
-                } else if front.at < self.now {
-                    unreachable!("missed event at {} while now={}", front.at, self.now);
+                } else if at < self.now {
+                    unreachable!("missed event at {} while now={}", at, self.now);
                 }
                 // Same low bits, later revolution — leave for later.
+            }
+
+            self.advance_cursor();
+        }
+    }
+
+    /// Drain every event at the current earliest tick into `out` in
+    /// deterministic FIFO order without allocating a new `Vec` per tick.
+    pub fn drain_earliest_into(&mut self, out: &mut Vec<Event>) -> Option<Tick> {
+        out.clear();
+        if self.len == 0 {
+            return None;
+        }
+
+        loop {
+            let slot = (self.now & SLOT_MASK) as usize;
+            let front_at = self.levels[slot].front().map(|e| e.at);
+
+            if let Some(tick) = front_at {
+                if tick == self.now {
+                    let bucket = &mut self.levels[slot];
+                    while let Some(front) = bucket.front() {
+                        if front.at != tick {
+                            break;
+                        }
+                        let popped = bucket.pop_front().expect("checked non-empty front");
+                        out.push(popped.event);
+                    }
+                    let drained = out.len();
+                    debug_assert!(drained > 0);
+                    // Mutation site 3 of 4 (batch variant).
+                    self.refresh_level0_after_pop(slot, tick);
+                    self.len -= drained;
+                    if self.len == 0 {
+                        self.now = 0;
+                        self.earliest = None;
+                    } else {
+                        self.earliest = self.scan_earliest();
+                    }
+                    return Some(tick);
+                } else if tick < self.now {
+                    unreachable!("missed event at {} while now={}", tick, self.now);
+                }
             }
 
             self.advance_cursor();
@@ -253,13 +396,8 @@ impl TimingWheel {
     /// Drain every event at the current earliest tick in deterministic FIFO
     /// order. This is the delta bucket consumed by U18 parallel stepping.
     pub fn pop_earliest_batch(&mut self) -> Option<(Tick, Vec<Event>)> {
-        let (tick, first) = self.pop_earliest()?;
-        let mut events = vec![first];
-        while self.peek_earliest_tick() == Some(tick) {
-            let (same_tick, event) = self.pop_earliest().expect("earliest tick existed");
-            debug_assert_eq!(same_tick, tick);
-            events.push(event);
-        }
+        let mut events = Vec::new();
+        let tick = self.drain_earliest_into(&mut events)?;
         Some((tick, events))
     }
 
@@ -284,36 +422,42 @@ impl TimingWheel {
         let level = level_for(delta);
         let shift = (level as u32) * SLOT_BITS;
         let slot = ((entry.at >> shift) as usize) & (SLOTS - 1);
-        self.levels[level][slot].push_back(entry);
-        // Mutation site 1 of 3 for the occupancy invariant.
-        self.mark_occupied(level, slot);
+        let idx = Self::bucket_idx(level, slot);
+        let at = entry.at;
+        let was_empty = self.levels[idx].is_empty();
+        self.levels[idx].push_back(entry);
+        // Mutation site 1 of 4 for the occupancy and slot_min invariants.
+        if was_empty {
+            self.mark_occupied(level, slot);
+            self.slot_min[level][slot] = at;
+        } else if at < self.slot_min[level][slot] {
+            self.slot_min[level][slot] = at;
+        }
     }
 
     /// Minimum scheduled tick over all remaining entries (used when the cached
     /// min is drained).
     ///
-    /// Visits only non-empty buckets, located via the occupancy mask. The set
-    /// of entries examined — and therefore the returned minimum — is identical
-    /// to the previous implementation, which walked all 2048 bucket headers
-    /// unconditionally.
+    /// Visits only non-empty slot minimums via `occupied` + `slot_min` (`<= 32`
+    /// `u64` mask words), avoiding an O(N) walk over every queued entry.
     fn scan_earliest(&self) -> Option<Tick> {
-        let mut best: Option<Tick> = None;
+        let mut best = u64::MAX;
+        let mut any = false;
         for level in 0..LEVELS {
             for word_idx in 0..SLOTS / 64 {
                 let mut word = self.occupied[level][word_idx];
                 while word != 0 {
-                    let slot = word_idx * 64 + word.trailing_zeros() as usize;
-                    word &= word - 1; // clear lowest set bit
-                    for entry in &self.levels[level][slot] {
-                        best = Some(match best {
-                            Some(b) => b.min(entry.at),
-                            None => entry.at,
-                        });
+                    let slot = (word_idx << 6) + word.trailing_zeros() as usize;
+                    word &= word - 1;
+                    any = true;
+                    let m = self.slot_min[level][slot];
+                    if m < best {
+                        best = m;
                     }
                 }
             }
         }
-        best
+        any.then_some(best)
     }
 
     /// Brute-force reference for [`Self::scan_earliest`], used by tests to prove
@@ -322,7 +466,6 @@ impl TimingWheel {
     fn scan_earliest_naive(&self) -> Option<Tick> {
         self.levels
             .iter()
-            .flat_map(|level| level.iter())
             .flat_map(|bucket| bucket.iter())
             .map(|entry| entry.at)
             .min()
@@ -402,16 +545,23 @@ impl TimingWheel {
     }
 
     fn next_occupied_level0(&self, from_slot: usize) -> Option<usize> {
+        if from_slot >= SLOTS {
+            return None;
+        }
         let base_now = self.now & !SLOT_MASK;
-        for slot in from_slot..SLOTS {
-            // Mask check first: skips the `VecDeque` header deref for empty
-            // slots, which is the whole cost of this loop in a sparse wheel.
-            if !self.slot_occupied(0, slot) {
-                continue;
+        let start_word = from_slot >> 6;
+        let start_bit = from_slot & 63;
+        for word_idx in start_word..(SLOTS / 64) {
+            let mut word = self.occupied[0][word_idx];
+            if word_idx == start_word {
+                word &= !0u64 << start_bit;
             }
-            let at = base_now + slot as u64;
-            if self.levels[0][slot].front().is_some_and(|e| e.at == at) {
-                return Some(slot);
+            while word != 0 {
+                let slot = (word_idx << 6) + word.trailing_zeros() as usize;
+                word &= word - 1;
+                if self.slot_min[0][slot] == base_now + slot as u64 {
+                    return Some(slot);
+                }
             }
         }
         None
@@ -425,12 +575,16 @@ impl TimingWheel {
         let shift = (level as u32) * SLOT_BITS;
         let slot = ((self.now >> shift) as usize) & (SLOTS - 1);
 
-        let entries = std::mem::take(&mut self.levels[level][slot]);
-        // Mutation site 2 of 3: `take` leaves the bucket empty. `schedule`
-        // re-marks each entry's new (level, slot) below.
-        self.mark_empty(level, slot);
-        for entry in entries {
-            self.schedule(entry);
+        if self.slot_occupied(level, slot) {
+            let idx = Self::bucket_idx(level, slot);
+            let entries = std::mem::take(&mut self.levels[idx]);
+            // Mutation site 2 of 4: `take` leaves the bucket empty. `schedule`
+            // re-marks each entry's new (level, slot) and `slot_min` below.
+            self.mark_empty(level, slot);
+            self.slot_min[level][slot] = u64::MAX;
+            for entry in entries {
+                self.schedule(entry);
+            }
         }
 
         // When this level's slot wrapped to 0, pull from the next coarser level.
@@ -677,7 +831,10 @@ mod tests {
     /// to wall time, which is the weaker, load-sensitive measurement above.
     #[test]
     fn insert_throughput_no_quadratic_cliff() {
-        #[cfg(all(any(target_os = "linux", target_os = "macos"), target_pointer_width = "64"))]
+        #[cfg(all(
+            any(target_os = "linux", target_os = "macos"),
+            target_pointer_width = "64"
+        ))]
         mod clock {
             #[repr(C)]
             struct Timespec {
@@ -695,14 +852,20 @@ mod tests {
 
             /// Calling thread's CPU time in ns, or `None` if the clock fails.
             pub fn thread_cpu_ns() -> Option<u128> {
-                let mut ts = Timespec { tv_sec: 0, tv_nsec: 0 };
-                // SAFETY: `ts` is a valid, writable `struct timespec` (two
-                // 64-bit fields on every cfg-gated target) for the call.
+                let mut ts = Timespec {
+                    tv_sec: 0,
+                    tv_nsec: 0,
+                };
+                // SAFETY: `ts` is a valid, writable `struct timespec` (two 64-bit
+                // SAFETY: fields on every cfg-gated target) satisfying the FFI invariant.
                 let rc = unsafe { clock_gettime(CLOCK_THREAD_CPUTIME_ID, &mut ts) };
                 (rc == 0).then(|| ts.tv_sec as u128 * 1_000_000_000 + ts.tv_nsec as u128)
             }
         }
-        #[cfg(not(all(any(target_os = "linux", target_os = "macos"), target_pointer_width = "64")))]
+        #[cfg(not(all(
+            any(target_os = "linux", target_os = "macos"),
+            target_pointer_width = "64"
+        )))]
         mod clock {
             pub const SOURCE: &str = "wall time (fallback)";
             pub fn thread_cpu_ns() -> Option<u128> {
@@ -950,6 +1113,71 @@ mod tests {
                 (5_000_000_000, 4)
             ]
         );
+    }
+
+    #[test]
+    fn clear_resets_state_and_retains_bucket_capacity() {
+        let mut wheel = TimingWheel::new();
+        for i in 0..64u64 {
+            wheel.insert(10, Event::new(i));
+        }
+        wheel.insert(500, Event::new(99));
+        wheel.insert(100_000, Event::new(100));
+        let cap_before = wheel.levels[10].capacity();
+        assert!(cap_before >= 64);
+
+        wheel.clear();
+        wheel.assert_occupancy_invariant();
+        assert!(wheel.is_empty());
+        assert_eq!(wheel.now(), 0);
+        assert_eq!(wheel.peek_earliest_tick(), None);
+        assert!(
+            wheel.levels[10].capacity() >= cap_before,
+            "clear() must retain VecDeque capacity across resets"
+        );
+
+        wheel.insert(3, Event::new(7));
+        wheel.insert(3, Event::new(8));
+        wheel.insert(260, Event::new(9));
+        let mut batch = Vec::new();
+        assert_eq!(wheel.drain_earliest_into(&mut batch), Some(3));
+        assert_eq!(batch, vec![Event::new(7), Event::new(8)]);
+        wheel.assert_occupancy_invariant();
+        assert_eq!(wheel.pop_earliest(), Some((260, Event::new(9))));
+        wheel.assert_occupancy_invariant();
+    }
+
+    #[test]
+    fn insert_batch_at_matches_individual_inserts_and_preserves_invariants() {
+        let mut batched = TimingWheel::new();
+        let mut scalar = TimingWheel::new();
+
+        // Empty batch is a no-op that leaves earliest/occupancy untouched.
+        batched.insert_batch_at(10, std::iter::empty());
+        assert!(batched.is_empty());
+        assert_eq!(batched.peek_earliest_tick(), None);
+        batched.assert_occupancy_invariant();
+
+        for &(at, count, base_id) in &[
+            (5u64, 6usize, 100u64),
+            (300, 9, 200),
+            (5, 4, 300),
+            (70_000, 5, 400),
+        ] {
+            batched.insert_batch_at(at, (0..count).map(|k| Event::new(base_id + k as u64)));
+            for k in 0..count {
+                scalar.insert(at, Event::new(base_id + k as u64));
+            }
+            batched.assert_occupancy_invariant();
+            assert_eq!(batched.len(), scalar.len());
+            assert_eq!(batched.peek_earliest_tick(), scalar.peek_earliest_tick());
+        }
+
+        while let Some(expected) = scalar.pop_earliest() {
+            assert_eq!(batched.pop_earliest(), Some(expected));
+            batched.assert_occupancy_invariant();
+        }
+        assert_eq!(batched.pop_earliest(), None);
     }
 
     proptest! {

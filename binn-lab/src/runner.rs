@@ -1496,6 +1496,12 @@ fn run_spiking_condition(
         )
     };
     boost_readout_incoming(&mut eng, readout_0, readout_1, readout_boost);
+    let readout_edges: Vec<usize> = eng
+        .conn
+        .edges()
+        .filter(|&(_, post)| post == readout_0 || post == readout_1)
+        .filter_map(|(pre, post)| edge_index(&eng.conn, pre, post))
+        .collect();
 
     let mut area = Area::new(n_in as CellId..(n_in + n_hidden) as CellId, config.k_wta);
     let mut learner = ThreeFactor::new(config.eta, config.lambda, config.tau_e);
@@ -1712,7 +1718,7 @@ fn run_spiking_condition(
                 });
             }
             t_cursor = eng.time() + 20;
-            if let Some(w) = mean_readout_weight(&eng, readout_0, readout_1) {
+            if let Some(w) = mean_readout_weight_indexed(&eng.edge_w, &readout_edges) {
                 weight_steps.push(global_step as f64);
                 weight_trace.push(w as f64);
             }
@@ -2074,11 +2080,20 @@ fn run_trial(
 ) -> (bool, SparsitySample, TrialWork) {
     // True temporal input: encode every frame (no peak collapse).
     let frame_stride = enc.max_delay().saturating_add(1);
-    let hidden_cells: Vec<CellId> = area.cells.clone().collect();
-    let saved_thresholds: Vec<f32> = hidden_cells
-        .iter()
-        .map(|&cell| eng.cell(cell).theta)
-        .collect();
+    let hidden_range = area.cells.clone();
+    let saved_thresholds: Option<Vec<f32>> = if hidden_range
+        .clone()
+        .all(|cell| eng.cell(cell).theta.to_bits() == binn_engine::THETA_REST.to_bits())
+    {
+        None
+    } else {
+        Some(
+            hidden_range
+                .clone()
+                .map(|cell| eng.cell(cell).theta)
+                .collect(),
+        )
+    };
 
     let (scores, active_cells, selection_until) = if use_project {
         // Assembly-Calculus scientific path: `project` force-fires the input
@@ -2099,9 +2114,9 @@ fn run_trial(
         C1_PROJECT_INVOKE_COUNT.fetch_add(1, Ordering::Relaxed);
         let winners_asm = project(eng, &src, area);
         let active_cells = winners_asm.members;
-        let scores: Vec<(CellId, f32)> = hidden_cells
-            .iter()
-            .map(|&cell| (cell, eng.last_step_charge(cell)))
+        let scores: Vec<(CellId, f32)> = hidden_range
+            .clone()
+            .map(|cell| (cell, eng.last_step_charge(cell)))
             .filter(|(_, v)| v.is_finite() && *v > 0.0)
             .collect();
         let selection_until = eng.time();
@@ -2109,7 +2124,7 @@ fn run_trial(
     } else {
         // Canonical / isolation / spike paths mute or keep finite θ then score.
         if !natural_spiking {
-            for &cell in &hidden_cells {
+            for cell in hidden_range.clone() {
                 eng.cell_mut(cell).theta = f32::INFINITY;
             }
         }
@@ -2137,9 +2152,9 @@ fn run_trial(
             // Calibrated natural-spiking: LIF reset zeroes residual membrane of
             // cells that actually spiked, so membrane-score k-WTA collapses.
             // Score integrate-window spike counts (tie-break: residual v).
-            let mut counts = vec![0u32; hidden_cells.len()];
-            let hidden_lo = *hidden_cells.first().unwrap_or(&0);
-            let hidden_hi = hidden_cells.last().copied().unwrap_or(0) + 1;
+            let mut counts = vec![0u32; hidden_range.len()];
+            let hidden_lo = hidden_range.start;
+            let hidden_hi = hidden_range.end;
             for sp in eng.spikes().as_slice() {
                 if sp.t > t0
                     && sp.t <= selection_until
@@ -2153,10 +2168,10 @@ fn run_trial(
                 }
             }
             let any_spikes = counts.iter().any(|&c| c > 0);
-            hidden_cells
-                .iter()
+            hidden_range
+                .clone()
                 .enumerate()
-                .map(|(i, &cell)| {
+                .map(|(i, cell)| {
                     eng.cell_mut(cell).advance_to(selection_until);
                     let v = eng.cell(cell).v;
                     let score = if any_spikes {
@@ -2171,13 +2186,13 @@ fn run_trial(
                 .collect()
         } else {
             // Membrane-state k-WTA: score Cell::v at decision time (preserves timing).
-            hidden_cells
-                .iter()
-                .map(|&cell| {
+            hidden_range
+                .clone()
+                .filter_map(|cell| {
                     eng.cell_mut(cell).advance_to(selection_until);
-                    (cell, eng.cell(cell).v)
+                    let v = eng.cell(cell).v;
+                    (v.is_finite() && v > 0.0).then_some((cell, v))
                 })
-                .filter(|(_, v)| v.is_finite() && *v > 0.0)
                 .collect()
         };
         let active_cells = if let Some(temp) = soft_wta_temp {
@@ -2220,7 +2235,7 @@ fn run_trial(
         }
     }
 
-    for &cell in &hidden_cells {
+    for cell in hidden_range.clone() {
         eng.cell_mut(cell).v = 0.0;
     }
     let winner_at = selection_until
@@ -2421,13 +2436,19 @@ fn run_trial(
 
     if trial_isolation {
         // Protocol v5 / c1-iso: C3-style full dynamic reset + clear STDP pairing.
-        reset_c1_dynamic_state(eng, &hidden_cells, &saved_thresholds);
+        reset_c1_dynamic_state_range(eng, hidden_range, saved_thresholds.as_deref());
         learner.reset_pairing_state();
-    } else {
+    } else if let Some(ref saved) = saved_thresholds {
         // Canonical protocol v2: soma v + theta only (H2 incomplete reset).
-        for (&cell, &theta) in hidden_cells.iter().zip(saved_thresholds.iter()) {
+        for (cell, &theta) in hidden_range.zip(saved.iter()) {
             let hidden = eng.cell_mut(cell);
             hidden.theta = theta;
+            hidden.v = 0.0;
+        }
+    } else {
+        for cell in hidden_range {
+            let hidden = eng.cell_mut(cell);
+            hidden.theta = binn_engine::THETA_REST;
             hidden.v = 0.0;
         }
     }
@@ -2515,14 +2536,28 @@ pub(crate) fn build_sparse_assembly(
         }
     }
     for h in hidden {
+        let row = &mut rows[h as usize];
         for &ro in &[readout_0, readout_1] {
-            if !rows[h as usize].contains(&ro) && rng.next_f32() < 0.5 {
-                rows[h as usize].push(ro);
+            if let Err(pos) = row.binary_search(&ro) {
+                if rng.next_f32() < 0.5 {
+                    row.insert(pos, ro);
+                }
             }
         }
     }
-    for &ro in &[readout_0, readout_1] {
-        if !(0..n_cells).any(|pre| rows[pre].contains(&ro)) {
+    let mut has_ro0 = false;
+    let mut has_ro1 = false;
+    for (pre, row) in rows.iter().enumerate() {
+        if pre >= n_in && pre < n_in + n_hidden {
+            has_ro0 |= row.binary_search(&readout_0).is_ok();
+            has_ro1 |= row.binary_search(&readout_1).is_ok();
+        } else {
+            has_ro0 |= row.contains(&readout_0);
+            has_ro1 |= row.contains(&readout_1);
+        }
+    }
+    for (ro, has_ro) in [(readout_0, has_ro0), (readout_1, has_ro1)] {
+        if !has_ro {
             // Wire from a hidden cell so the decision window can deliver charge
             // (input→readout edges fire too early and leave a dead zero-charge arm).
             let h = n_in + rng.gen_index(n_hidden.max(1));
@@ -2714,23 +2749,15 @@ fn shuffle_edges(edges: &mut [(usize, u32)], rng: &mut Rng) {
     }
 }
 
-fn mean_readout_weight(eng: &Engine, readout_0: CellId, readout_1: CellId) -> Option<f32> {
+fn mean_readout_weight_indexed(edge_w: &[f32], readout_edges: &[usize]) -> Option<f32> {
+    if readout_edges.is_empty() {
+        return None;
+    }
     let mut sum = 0.0f32;
-    let mut n = 0usize;
-    for (pre, post) in eng.conn.edges() {
-        if post != readout_0 && post != readout_1 {
-            continue;
-        }
-        if let Some(e) = edge_index(&eng.conn, pre, post) {
-            sum += eng.edge_w[e];
-            n += 1;
-        }
+    for &e in readout_edges {
+        sum += edge_w[e];
     }
-    if n == 0 {
-        None
-    } else {
-        Some(sum / n as f32)
-    }
+    Some(sum / readout_edges.len() as f32)
 }
 
 fn projection_nnz(conn: &Csr, src_start: u32, src_end: u32, dst_start: u32, dst_end: u32) -> u64 {
@@ -2892,9 +2919,7 @@ pub fn std_error(values: &[f32]) -> f32 {
 }
 
 pub(crate) fn clear_eligibility(eng: &mut Engine) {
-    for syn in eng.syn.as_mut_slice() {
-        syn.eligibility = 0.0;
-    }
+    eng.syn.zero_eligibilities();
 }
 
 /// Soft class-1 policy from dual-readout charges (live C1 `ReinforceFeedback`).
@@ -2926,6 +2951,30 @@ pub(crate) fn reset_c1_dynamic_state(
     }
     for (&cell, &theta) in hidden_cells.iter().zip(saved_thresholds.iter()) {
         eng.cell_mut(cell).theta = theta;
+    }
+}
+
+fn reset_c1_dynamic_state_range(
+    eng: &mut Engine,
+    hidden_range: std::ops::Range<CellId>,
+    saved_thresholds: Option<&[f32]>,
+) {
+    let now = eng.time();
+    let n = eng.num_cells();
+    for i in 0..n {
+        let cell = eng.cell_mut(i as CellId);
+        cell.v = 0.0;
+        cell.v_dend = [0.0; K];
+        cell.last = now;
+    }
+    if let Some(saved) = saved_thresholds {
+        for (cell, &theta) in hidden_range.zip(saved.iter()) {
+            eng.cell_mut(cell).theta = theta;
+        }
+    } else {
+        for cell in hidden_range {
+            eng.cell_mut(cell).theta = binn_engine::THETA_REST;
+        }
     }
 }
 
@@ -2985,16 +3034,10 @@ pub(crate) fn boost_readout_incoming(
     if (boost - 1.0).abs() < 1e-6 {
         return;
     }
-    let conn = eng.conn.clone();
-    for pre in 0..conn.nrows() {
-        let start = conn.row_ptr[pre] as usize;
-        let end = conn.row_ptr[pre + 1] as usize;
-        for (i, &post) in conn.col[start..end].iter().enumerate() {
-            if post == readout_0 || post == readout_1 {
-                let idx = start + i;
-                eng.edge_w[idx] *= boost;
-                eng.syn.as_mut_slice()[idx].weight = eng.edge_w[idx];
-            }
+    for (idx, &post) in eng.conn.col.iter().enumerate() {
+        if post == readout_0 || post == readout_1 {
+            eng.edge_w[idx] *= boost;
+            eng.syn.set_weight_keeping_delay(idx, eng.edge_w[idx]);
         }
     }
 }

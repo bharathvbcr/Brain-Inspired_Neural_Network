@@ -3,6 +3,50 @@
 use binn_core::Rng;
 use binn_engine::CellId;
 
+#[inline]
+fn cmp_score_desc_id_asc(a: &(CellId, f32), b: &(CellId, f32)) -> std::cmp::Ordering {
+    match b.1.partial_cmp(&a.1) {
+        Some(ord) => ord.then_with(|| a.0.cmp(&b.0)),
+        None => a.0.cmp(&b.0),
+    }
+}
+
+#[inline]
+fn contains_winner(winners: &[CellId], sorted: bool, id: CellId) -> bool {
+    if sorted {
+        winners.binary_search(&id).is_ok()
+    } else {
+        winners.contains(&id)
+    }
+}
+
+fn k_wta_in_place_finite(items: &mut Vec<(CellId, f32)>, k: usize) -> Vec<CellId> {
+    if k == 0 || items.is_empty() {
+        items.clear();
+        return Vec::new();
+    }
+
+    let take = k.min(items.len());
+    if take < items.len() {
+        items.select_nth_unstable_by(take, cmp_score_desc_id_asc);
+        items.truncate(take);
+    }
+    // Deterministic emission order.
+    items.sort_unstable_by_key(|(id, _)| *id);
+    items.iter().map(|&(id, _)| id).collect()
+}
+
+/// Select up to `k` winners in-place from a mutable `(cell, score)` scratch
+/// buffer, avoiding an intermediate `Vec<(CellId, f32)>` allocation.
+pub fn k_wta_in_place(items: &mut Vec<(CellId, f32)>, k: usize) -> Vec<CellId> {
+    if k == 0 || items.is_empty() {
+        items.clear();
+        return Vec::new();
+    }
+    items.retain(|&(_, s)| s.is_finite());
+    k_wta_in_place_finite(items, k)
+}
+
 /// Select up to `k` winners from `(cell, score)` pairs.
 ///
 /// Uses `select_nth_unstable_by` (average O(n)) then sorts winners by cell id
@@ -15,29 +59,13 @@ pub fn k_wta(scores: &[(CellId, f32)], k: usize) -> Vec<CellId> {
         return Vec::new();
     }
 
-    let mut items: Vec<(CellId, f32)> = scores
-        .iter()
-        .copied()
-        .filter(|(_, s)| s.is_finite())
-        .collect();
-    if items.is_empty() {
-        return Vec::new();
+    let mut items = Vec::with_capacity(scores.len());
+    for &(id, s) in scores {
+        if s.is_finite() {
+            items.push((id, s));
+        }
     }
-
-    let take = k.min(items.len());
-    // Highest score first; lower CellId wins ties. Treat NaN as already filtered.
-    let cmp = |a: &(CellId, f32), b: &(CellId, f32)| match b.1.partial_cmp(&a.1) {
-        Some(ord) => ord.then_with(|| a.0.cmp(&b.0)),
-        None => a.0.cmp(&b.0),
-    };
-
-    if take < items.len() {
-        items.select_nth_unstable_by(take, cmp);
-        items.truncate(take);
-    }
-    // Deterministic emission order.
-    items.sort_unstable_by_key(|(id, _)| *id);
-    items.into_iter().map(|(id, _)| id).collect()
+    k_wta_in_place_finite(&mut items, k)
 }
 
 /// Score every cell in `[start, end)` with `score_fn`, then run [`k_wta`].
@@ -47,13 +75,19 @@ pub fn k_wta_range(
     k: usize,
     mut score_fn: impl FnMut(CellId) -> f32,
 ) -> Vec<CellId> {
+    if k == 0 || start >= end {
+        return Vec::new();
+    }
     let mut scores = Vec::with_capacity((end - start) as usize);
     let mut id = start;
     while id < end {
-        scores.push((id, score_fn(id)));
+        let s = score_fn(id);
+        if s.is_finite() {
+            scores.push((id, s));
+        }
         id += 1;
     }
-    k_wta(&scores, k)
+    k_wta_in_place_finite(&mut scores, k)
 }
 
 /// Soft/relaxed k-WTA: sample up to `k` distinct winners with probability
@@ -79,12 +113,13 @@ pub fn soft_k_wta(scores: &[(CellId, f32)], k: usize, temperature: f32, seed: u6
     let take = k.min(pool.len());
     let mut rng = Rng::new(seed ^ 0x50F7_A7A0_0001);
     let mut winners = Vec::with_capacity(take);
+    let mut weights = Vec::with_capacity(pool.len());
     for _ in 0..take {
         let max_s = pool
             .iter()
             .map(|(_, s)| *s)
             .fold(f32::NEG_INFINITY, f32::max);
-        let mut weights = Vec::with_capacity(pool.len());
+        weights.clear();
         let mut total = 0.0f32;
         for (_, s) in &pool {
             let w = ((s - max_s) / temperature).exp().max(0.0);
@@ -137,7 +172,11 @@ pub fn k_wta_straight_through(
 
     if !temperature.is_finite() || temperature <= 0.0 {
         for &(id, _) in scores {
-            let w = if hard_winners.contains(&id) { 1.0 } else { 0.0 };
+            let w = if hard_winners.binary_search(&id).is_ok() {
+                1.0
+            } else {
+                0.0
+            };
             soft_weights.push((id, w));
         }
         return (hard_winners, soft_weights);
@@ -170,7 +209,11 @@ pub fn k_wta_straight_through(
         // Degenerate case fallback
         soft_weights.clear();
         for &(id, _) in scores {
-            let w = if hard_winners.contains(&id) { 1.0 } else { 0.0 };
+            let w = if hard_winners.binary_search(&id).is_ok() {
+                1.0
+            } else {
+                0.0
+            };
             soft_weights.push((id, w));
         }
     }
@@ -190,24 +233,64 @@ pub fn k_wta_straight_through(
 /// Takes the winner set rather than recomputing it, so it is equally valid for
 /// hard [`k_wta`] and for [`soft_k_wta`], whose winners are not the top `k`.
 pub fn boundary_below(scores: &[(CellId, f32)], winners: &[CellId]) -> f32 {
-    scores
-        .iter()
-        .filter(|(id, s)| s.is_finite() && !winners.contains(id))
-        .map(|(_, s)| *s)
-        .fold(f32::NEG_INFINITY, f32::max)
+    if scores.is_empty() {
+        return f32::NEG_INFINITY;
+    }
+    let sorted = winners.is_sorted();
+    let mut best = f32::NEG_INFINITY;
+    for &(id, s) in scores {
+        if s.is_finite()
+            && (s > best || (s == 0.0 && best == 0.0 && !s.is_sign_negative()))
+            && !contains_winner(winners, sorted, id)
+        {
+            best = s;
+        }
+    }
+    best
 }
 
 /// k-WTA that also returns the margin boundary potential.
 ///
-/// Returns `(winners, v_boundary)` where `v_boundary` is the highest score that
-/// did not win (`f32::NEG_INFINITY` when nothing lost). The boundary itself is
-/// computed by [`boundary_below`], which is the canonical owner of that
-/// definition and is what the live C1 counterfactual arm calls directly — it
-/// already holds its winners and must not re-run the selection to get them.
+/// Returns `(winners, v_boundary)` matching `(k_wta(scores, k), boundary_below(scores, &winners))`
+/// in a single partition pass, where `v_boundary` is the highest finite score
+/// among cells not in `winners` (`f32::NEG_INFINITY` when nothing lost).
+/// Call [`boundary_below`] directly when winners are already known (such as in
+/// the live C1 counterfactual arm or after [`soft_k_wta`]).
 pub fn k_wta_with_margin(scores: &[(CellId, f32)], k: usize) -> (Vec<CellId>, f32) {
-    let winners = k_wta(scores, k);
-    let v_boundary = boundary_below(scores, &winners);
-    (winners, v_boundary)
+    if k == 0 || scores.is_empty() {
+        return (Vec::new(), boundary_below(scores, &[]));
+    }
+
+    let mut items: Vec<(CellId, f32)> = scores
+        .iter()
+        .copied()
+        .filter(|(_, s)| s.is_finite())
+        .collect();
+    if items.is_empty() {
+        return (Vec::new(), f32::NEG_INFINITY);
+    }
+
+    let take = k.min(items.len());
+    if take == items.len() {
+        items.sort_unstable_by_key(|(id, _)| *id);
+        let winners = items.into_iter().map(|(id, _)| id).collect();
+        return (winners, f32::NEG_INFINITY);
+    }
+
+    items.select_nth_unstable_by(take, cmp_score_desc_id_asc);
+    let (win_slice, lose_slice) = items.split_at_mut(take);
+    win_slice.sort_unstable_by_key(|(id, _)| *id);
+    let winners: Vec<CellId> = win_slice.iter().map(|&(id, _)| id).collect();
+
+    let mut best = f32::NEG_INFINITY;
+    for &(id, s) in lose_slice.iter() {
+        if (s > best || (s == 0.0 && best == 0.0 && !s.is_sign_negative()))
+            && winners.binary_search(&id).is_err()
+        {
+            best = s;
+        }
+    }
+    (winners, best)
 }
 
 /// Temperature annealer for Soft-to-Hard WTA schedule.
@@ -348,5 +431,73 @@ mod tests {
         // k >= len: boundary is -inf
         let (_, v_inf) = k_wta_with_margin(&scores, 5);
         assert_eq!(v_inf, f32::NEG_INFINITY);
+    }
+
+    #[test]
+    fn wta_margin_and_boundary_match_naive_across_edge_cases() {
+        let naive_boundary = |scores: &[(CellId, f32)], winners: &[CellId]| -> f32 {
+            scores
+                .iter()
+                .filter(|(id, s)| s.is_finite() && !winners.contains(id))
+                .map(|(_, s)| *s)
+                .fold(f32::NEG_INFINITY, f32::max)
+        };
+
+        let cases: &[&[(CellId, f32)]] = &[
+            &[],
+            &[(0, f32::NAN), (1, f32::INFINITY), (2, f32::NEG_INFINITY)],
+            &[(0, -0.0), (1, 0.0), (2, 1.0)],
+            &[(0, 0.0), (1, -0.0), (2, 1.0)],
+            // Duplicate CellIds and ties.
+            &[(0, 5.0), (0, 3.5), (1, 2.0), (2, 2.0), (3, -1.0)],
+            &[(4, 1.0), (1, 5.0), (2, 3.0), (1, 4.5), (3, f32::NAN)],
+        ];
+
+        let mut soft_entries_checked = 0usize;
+        for scores in cases {
+            for k in 0..=scores.len() + 1 {
+                let expected_w = k_wta(scores, k);
+                let mut scratch = scores.to_vec();
+                assert_eq!(
+                    k_wta_in_place(&mut scratch, k),
+                    expected_w,
+                    "k_wta_in_place mismatch for k={k}"
+                );
+                let expected_b = naive_boundary(scores, &expected_w);
+                let (got_w, got_b) = k_wta_with_margin(scores, k);
+                assert_eq!(got_w, expected_w, "winners mismatch for k={k}");
+                assert_eq!(
+                    got_b.to_bits(),
+                    expected_b.to_bits(),
+                    "boundary bits mismatch for k={k}: got={got_b:?} expected={expected_b:?}"
+                );
+
+                // Also verify unsorted custom winner lists in `boundary_below`.
+                let mut rev_w = expected_w.clone();
+                rev_w.reverse();
+                assert_eq!(
+                    boundary_below(scores, &rev_w).to_bits(),
+                    naive_boundary(scores, &rev_w).to_bits()
+                );
+
+                // Verify zero/degenerate temperature straight-through matches `.contains()`.
+                let (st_w, st_soft) = k_wta_straight_through(scores, k, 0.0);
+                assert_eq!(st_w, expected_w);
+                assert_eq!(st_soft.len(), scores.len());
+                for i in 0..scores.len() {
+                    let id = scores[i].0;
+                    let (sid, sw) = st_soft[i];
+                    assert_eq!(id, sid);
+                    let exp_sw = if expected_w.contains(&id) {
+                        1.0f32
+                    } else {
+                        0.0f32
+                    };
+                    assert_eq!(sw.to_bits(), exp_sw.to_bits());
+                    soft_entries_checked += 1;
+                }
+            }
+        }
+        assert!(soft_entries_checked > 0);
     }
 }

@@ -143,21 +143,45 @@ impl ShdArch {
         let h = self.hidden;
         let n_in = self.n_in;
         let t_len = self.t;
+        assert!(frames.len() >= t_len * n_in);
         let theta = THETA_REST;
         let mut u = vec![0.0f32; h];
         let mut rates = vec![0.0f32; h];
+        let win_finite = self.win.iter().all(|w| w.is_finite());
+        let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
         // Keep last membrane for optional diagnostics; eligibility rebuilt in train.
         for t in 0..t_len {
-            for i in 0..h {
-                let mut cur = 0.0f32;
-                let base = t * n_in;
-                for j in 0..n_in {
-                    cur += self.win[i * n_in + j] * frames[base + j];
+            let base = t * n_in;
+            let frame = &frames[base..base + n_in];
+            if win_finite {
+                active.clear();
+                for (j, &f) in frame.iter().enumerate() {
+                    if f != 0.0 {
+                        active.push((j, f));
+                    }
                 }
-                let ui = self.alpha * u[i] + cur;
-                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
-                u[i] = if spike > 0.5 { V_RESET } else { ui };
-                rates[i] += spike;
+                for i in 0..h {
+                    let mut cur = 0.0f32;
+                    let row = &self.win[i * n_in..(i + 1) * n_in];
+                    for &(j, f) in &active {
+                        cur += row[j] * f;
+                    }
+                    let ui = self.alpha * u[i] + cur;
+                    let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                    u[i] = if spike > 0.5 { V_RESET } else { ui };
+                    rates[i] += spike;
+                }
+            } else {
+                for i in 0..h {
+                    let mut cur = 0.0f32;
+                    for j in 0..n_in {
+                        cur += self.win[i * n_in + j] * frame[j];
+                    }
+                    let ui = self.alpha * u[i] + cur;
+                    let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                    u[i] = if spike > 0.5 { V_RESET } else { ui };
+                    rates[i] += spike;
+                }
             }
         }
         let mut logits = self.bout.clone();
@@ -708,9 +732,11 @@ impl ShdSuperSpikeCeiling {
         }
 
         let mut du_next = vec![0.0f32; h];
+        let mut du = vec![0.0f32; h];
+        let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
         for t in (0..t_len).rev() {
-            let mut du = vec![0.0f32; h];
             let base = t * n_in;
+            let frame = &ex.frames[base..base + n_in];
             for i in 0..h {
                 let s_t = cache.s[i * t_len + t];
                 let u_t = cache.u[i * t_len + t];
@@ -718,11 +744,29 @@ impl ShdSuperSpikeCeiling {
                 let surr = surrogate(u_t - theta, beta);
                 // Hard reset: spiked steps do not propagate membrane adjoint.
                 du[i] = ds * surr + alpha * du_next[i] * (1.0 - s_t);
-                for j in 0..n_in {
-                    dwin[i * n_in + j] += du[i] * ex.frames[base + j];
+            }
+            if du.iter().all(|v| v.is_finite()) {
+                active.clear();
+                for (j, &f) in frame.iter().enumerate() {
+                    if f != 0.0 {
+                        active.push((j, f));
+                    }
+                }
+                for i in 0..h {
+                    let dui = du[i];
+                    let row = &mut dwin[i * n_in..(i + 1) * n_in];
+                    for &(j, f) in &active {
+                        row[j] += dui * f;
+                    }
+                }
+            } else {
+                for i in 0..h {
+                    for j in 0..n_in {
+                        dwin[i * n_in + j] += du[i] * frame[j];
+                    }
                 }
             }
-            du_next = du;
+            std::mem::swap(&mut du_next, &mut du);
         }
 
         for (w, dw) in self.arch.win.iter_mut().zip(dwin.iter()) {
@@ -750,24 +794,50 @@ fn forward_bptt_cache(arch: &ShdArch, frames: &[f32]) -> BpttCache {
     let h = arch.hidden;
     let n_in = arch.n_in;
     let t_len = arch.t;
+    assert!(frames.len() >= t_len * n_in);
     let theta = THETA_REST;
     let mut u_mem = vec![0.0f32; h];
     let mut u = vec![0.0f32; h * t_len];
     let mut s = vec![0.0f32; h * t_len];
     let mut rates = vec![0.0f32; h];
+    let win_finite = arch.win.iter().all(|w| w.is_finite());
+    let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
     for t in 0..t_len {
         let base = t * n_in;
-        for i in 0..h {
-            let mut cur = 0.0f32;
-            for j in 0..n_in {
-                cur += arch.win[i * n_in + j] * frames[base + j];
+        let frame = &frames[base..base + n_in];
+        if win_finite {
+            active.clear();
+            for (j, &f) in frame.iter().enumerate() {
+                if f != 0.0 {
+                    active.push((j, f));
+                }
             }
-            let ui = arch.alpha * u_mem[i] + cur;
-            let spike = if ui >= theta { 1.0f32 } else { 0.0 };
-            u[i * t_len + t] = ui;
-            s[i * t_len + t] = spike;
-            u_mem[i] = if spike > 0.5 { V_RESET } else { ui };
-            rates[i] += spike;
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                let row = &arch.win[i * n_in..(i + 1) * n_in];
+                for &(j, f) in &active {
+                    cur += row[j] * f;
+                }
+                let ui = arch.alpha * u_mem[i] + cur;
+                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                u[i * t_len + t] = ui;
+                s[i * t_len + t] = spike;
+                u_mem[i] = if spike > 0.5 { V_RESET } else { ui };
+                rates[i] += spike;
+            }
+        } else {
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                for j in 0..n_in {
+                    cur += arch.win[i * n_in + j] * frame[j];
+                }
+                let ui = arch.alpha * u_mem[i] + cur;
+                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                u[i * t_len + t] = ui;
+                s[i * t_len + t] = spike;
+                u_mem[i] = if spike > 0.5 { V_RESET } else { ui };
+                rates[i] += spike;
+            }
         }
     }
     let mut logits = arch.bout.clone();
@@ -791,25 +861,116 @@ fn forward_with_elig(arch: &ShdArch, frames: &[f32]) -> (Vec<f32>, Vec<f32>, Vec
     let h = arch.hidden;
     let n_in = arch.n_in;
     let t_len = arch.t;
+    assert!(frames.len() >= t_len * n_in);
     let theta = THETA_REST;
     let mut u = vec![0.0f32; h];
     let mut rates = vec![0.0f32; h];
     let mut e_in = vec![0.0f32; h * n_in];
-    for t in 0..t_len {
-        for i in 0..h {
-            let mut cur = 0.0f32;
+    let frame_slice = &frames[..t_len * n_in];
+    let clean_sparse = arch.win.iter().all(|w| w.is_finite())
+        && arch.alpha.is_finite()
+        && !arch.alpha.is_sign_negative()
+        && arch.beta.is_finite()
+        && arch.beta > 0.0
+        && frame_slice
+            .iter()
+            .all(|f| f.is_finite() && !f.is_sign_negative());
+
+    if clean_sparse {
+        let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
+        let mut surr_log = vec![0.0f32; t_len * h];
+        let mut surr_clean = true;
+        for t in 0..t_len {
             let base = t * n_in;
-            for j in 0..n_in {
-                cur += arch.win[i * n_in + j] * frames[base + j];
+            let frame = &frame_slice[base..base + n_in];
+            active.clear();
+            for (j, &f) in frame.iter().enumerate() {
+                if f != 0.0 {
+                    active.push((j, f));
+                }
             }
-            let ui = arch.alpha * u[i] + cur;
-            let surr = surrogate(ui - theta, arch.beta);
-            let spike = if ui >= theta { 1.0f32 } else { 0.0 };
-            u[i] = if spike > 0.5 { V_RESET } else { ui };
-            rates[i] += spike;
+            let surr_t = &mut surr_log[t * h..(t + 1) * h];
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                let row = &arch.win[i * n_in..(i + 1) * n_in];
+                for &(j, f) in &active {
+                    cur += row[j] * f;
+                }
+                let ui = arch.alpha * u[i] + cur;
+                let sg = surrogate(ui - theta, arch.beta);
+                if !sg.is_finite() || sg.is_sign_negative() {
+                    surr_clean = false;
+                }
+                surr_t[i] = sg;
+                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                u[i] = if spike > 0.5 { V_RESET } else { ui };
+                rates[i] += spike;
+            }
+        }
+        if surr_clean {
+            let mut acc = vec![0.0f32; h];
             for j in 0..n_in {
-                let idx = i * n_in + j;
-                e_in[idx] = arch.alpha * e_in[idx] + surr * frames[base + j];
+                let mut first_active = None;
+                for t in 0..t_len {
+                    if frame_slice[t * n_in + j] != 0.0 {
+                        first_active = Some(t);
+                        break;
+                    }
+                }
+                let Some(t0) = first_active else {
+                    continue;
+                };
+                let f0 = frame_slice[t0 * n_in + j];
+                let s0 = &surr_log[t0 * h..(t0 + 1) * h];
+                for (a, &sg) in acc.iter_mut().zip(s0) {
+                    *a = sg * f0;
+                }
+                for t in (t0 + 1)..t_len {
+                    let f = frame_slice[t * n_in + j];
+                    if f == 0.0 {
+                        for a in &mut acc {
+                            *a *= arch.alpha;
+                        }
+                    } else {
+                        let st = &surr_log[t * h..(t + 1) * h];
+                        for (a, &sg) in acc.iter_mut().zip(st) {
+                            *a = arch.alpha * *a + sg * f;
+                        }
+                    }
+                }
+                for (i, &a) in acc.iter().enumerate() {
+                    e_in[i * n_in + j] = a;
+                }
+            }
+        } else {
+            for t in 0..t_len {
+                let base = t * n_in;
+                let st = &surr_log[t * h..(t + 1) * h];
+                for (i, &sg) in st.iter().enumerate() {
+                    for j in 0..n_in {
+                        let idx = i * n_in + j;
+                        e_in[idx] = arch.alpha * e_in[idx] + sg * frame_slice[base + j];
+                    }
+                }
+            }
+        }
+    } else {
+        for t in 0..t_len {
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                let base = t * n_in;
+                for j in 0..n_in {
+                    cur += arch.win[i * n_in + j] * frames[base + j];
+                }
+                let ui = arch.alpha * u[i] + cur;
+                let surr = surrogate(ui - theta, arch.beta);
+                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                u[i] = if spike > 0.5 { V_RESET } else { ui };
+                rates[i] += spike;
+                for j in 0..n_in {
+                    let idx = i * n_in + j;
+                    e_in[idx] = arch.alpha * e_in[idx] + surr * frames[base + j];
+                }
             }
         }
     }
@@ -1471,5 +1632,104 @@ mod tests {
                 ModulatorScale::ratio(&a, &b)
             );
         }
+    }
+
+    fn dense_forward_with_elig_reference(
+        arch: &ShdArch,
+        frames: &[f32],
+    ) -> (Vec<f32>, Vec<f32>, Vec<f32>) {
+        let h = arch.hidden;
+        let n_in = arch.n_in;
+        let t_len = arch.t;
+        let theta = THETA_REST;
+        let mut u = vec![0.0f32; h];
+        let mut rates = vec![0.0f32; h];
+        let mut e_in = vec![0.0f32; h * n_in];
+        for t in 0..t_len {
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                let base = t * n_in;
+                for j in 0..n_in {
+                    cur += arch.win[i * n_in + j] * frames[base + j];
+                }
+                let ui = arch.alpha * u[i] + cur;
+                let surr = surrogate(ui - theta, arch.beta);
+                let spike = if ui >= theta { 1.0f32 } else { 0.0 };
+                u[i] = if spike > 0.5 { V_RESET } else { ui };
+                rates[i] += spike;
+                for j in 0..n_in {
+                    let idx = i * n_in + j;
+                    e_in[idx] = arch.alpha * e_in[idx] + surr * frames[base + j];
+                }
+            }
+        }
+        let mut logits = arch.bout.clone();
+        for c in 0..arch.n_classes {
+            let mut z = logits[c];
+            for i in 0..h {
+                z += arch.wout[c * h + i] * rates[i];
+            }
+            logits[c] = z;
+        }
+        (rates, e_in, logits)
+    }
+
+    #[test]
+    fn sparse_frame_scans_are_bit_identical_to_dense_reference() {
+        let n_in = 32;
+        let t_len = 16;
+        let arch = ShdArch::new(n_in, t_len, 5, 24, 5.0, 0xABCD_1234);
+
+        let mut sparse = toy_data(4, n_in, t_len, 5, 77);
+        let mut signed = sparse[0].clone();
+        signed.frames[0] = -0.0;
+        signed.frames[5] = -1.25;
+        let mut non_finite = sparse[1].clone();
+        non_finite.frames[9] = f32::NAN;
+        sparse.push(signed);
+        sparse.push(non_finite);
+        assert_eq!(sparse.len(), 6);
+
+        let mut checked = 0usize;
+        for (case_idx, ex) in sparse.iter().enumerate() {
+            checked += 1;
+            let (r_ref, e_ref, l_ref) = dense_forward_with_elig_reference(&arch, &ex.frames);
+            let (r_opt, e_opt, l_opt) = forward_with_elig(&arch, &ex.frames);
+            assert_eq!(
+                r_opt.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                r_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "rates mismatch on case {case_idx}"
+            );
+            assert_eq!(
+                e_opt.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                e_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "e_in mismatch on case {case_idx}"
+            );
+            assert_eq!(
+                l_opt.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                l_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "logits mismatch on case {case_idx}"
+            );
+
+            let (r_fwd, l_fwd, _) = arch.forward(&ex.frames);
+            assert_eq!(
+                r_fwd.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                r_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "arch.forward rates mismatch on case {case_idx}"
+            );
+            assert_eq!(
+                l_fwd.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                l_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "arch.forward logits mismatch on case {case_idx}"
+            );
+
+            let cache = forward_bptt_cache(&arch, &ex.frames);
+            assert_eq!(
+                cache.rates.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                r_ref.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                "bptt cache rates mismatch on case {case_idx}"
+            );
+        }
+        assert_eq!(checked, 6);
     }
 }

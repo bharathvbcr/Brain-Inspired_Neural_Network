@@ -2,7 +2,7 @@
 
 # Record index
 
-371 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
+373 documents. **15 are retired** — withdrawn or superseded — and are listed here rather than removed, because a withdrawal that leaves no trace is indistinguishable from a claim that was never made.
 
 | section | live | retired |
 |---|---:|---:|
@@ -30,7 +30,7 @@
 | Claim registers | 0 | 1 |
 | Reproduction | 1 | 0 |
 | Experiment reports (generated) | 116 | 3 |
-| Other | 31 | 0 |
+| Other | 33 | 0 |
 
 ## Retired documents
 
@@ -568,6 +568,7 @@ Read these only through the document that retired them.
 
 | date | document | title |
 |---|---|---|
+| 2026-11-02 | [PERF_AUDIT_2026-11-02_WAVES_1_3.md](PERF_AUDIT_2026-11-02_WAVES_1_3.md) | Performance Audit & Benchmark Report: Waves 1–4 Optimizations |
 | 2026-09-29 | [METHODS_TABLES_2026-09-29.md](METHODS_TABLES_2026-09-29.md) | Methods tables: SHD attention read-out (2026-09-29) |
 | 2026-09-29 | [DID_INTERVALS_2026-09-29.md](DID_INTERVALS_2026-09-29.md) | Bootstrap intervals on the gain and the difference-in-differences |
 | 2026-09-29 | [DID_FAMILYWISE_2026-09-29.md](DID_FAMILYWISE_2026-09-29.md) | Bonferroni-corrected intervals over the paper's 42 contrasts |
@@ -576,6 +577,7 @@ Read these only through the document that retired them.
 | 2026-08-02 | [PERF_AUDIT_2026-08-02.md](PERF_AUDIT_2026-08-02.md) | Performance audit — hot path, 2026-08-02 |
 | 2026-07-25 | [MOVING_FORWARD_2026-07-25.md](MOVING_FORWARD_2026-07-25.md) | Moving forward — 2026-07-25 |
 | 2026-07-25 | [GAPFIX_2026-07-25.md](GAPFIX_2026-07-25.md) | BINN overnight gap fixes — 2026-07-25 |
+| — | [WEIGHT_SPACE_PROGRAMMING.md](WEIGHT_SPACE_PROGRAMMING.md) | Weight-Space Programming on Event-Driven Neuromorphic Substrates |
 | — | [VENUE_FORMATTING.md](VENUE_FORMATTING.md) | Venue formatting notes |
 | — | [V147_POST_STOP_QUARANTINE.md](V147_POST_STOP_QUARANTINE.md) | v147 post-stop quarantine |
 | — | [U-NEG_protocol_v2.md](U-NEG_protocol_v2.md) | U-NEG — scoped negative note (protocol v2) |

@@ -29,12 +29,26 @@ pub fn reinforce_term(reward: f32, action: f32, policy: f32) -> f32 {
 pub trait CreditSignal {
     /// Credit assigned to synapses whose postsynaptic endpoint is `post`.
     fn for_post(&self, post: CellId) -> f32;
+
+    /// Whether every `for_post` return value is guaranteed finite (never `NaN`/`±Inf`).
+    ///
+    /// Conservative default is `false` so custom implementations preserve exact
+    /// IEEE-754 `0.0 * NaN`/`0.0 * Inf` semantics unless they prove finiteness.
+    #[inline]
+    fn is_guaranteed_finite(&self) -> bool {
+        false
+    }
 }
 
 impl CreditSignal for Modulators {
     #[inline]
     fn for_post(&self, _post: CellId) -> f32 {
         self.scalar()
+    }
+
+    #[inline]
+    fn is_guaranteed_finite(&self) -> bool {
+        self.scalar().is_finite()
     }
 }
 
@@ -94,6 +108,11 @@ impl CreditSignal for PostSynapticCredit {
     #[inline]
     fn for_post(&self, post: CellId) -> f32 {
         self.values.get(post as usize).copied().unwrap_or(0.0)
+    }
+
+    #[inline]
+    fn is_guaranteed_finite(&self) -> bool {
+        true
     }
 }
 

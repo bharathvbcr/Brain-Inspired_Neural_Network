@@ -112,13 +112,16 @@ pub use shd_matched::{
     MATCHED_PHYSICAL_TAU_MS, MATCHED_SURROGATE_ALPHA, MATCHED_THRESHOLD, MATCHED_WEIGHTS_MAGIC,
 };
 pub use shd_matched_arms::{
+    forward_arm_tau as shd_matched_forward_arm_tau,
     loss_and_gradient_arm as shd_matched_loss_and_gradient_arm,
     loss_and_gradient_arm_scaled as shd_matched_loss_and_gradient_arm_scaled,
     loss_and_gradient_arm_scaled_prepared as shd_matched_loss_and_gradient_arm_scaled_prepared,
-    loss_and_gradient_arm_tau as shd_matched_loss_and_gradient_arm_tau, ArmAdam as ShdArmAdam,
-    ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
-    ArmWeights as ShdArmWeights, MatchedArm, MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A,
-    MATCHED_WEIGHTS_MAGIC_V2, MATCHED_WEIGHTS_MAGIC_V3,
+    loss_and_gradient_arm_tau as shd_matched_loss_and_gradient_arm_tau,
+    loss_only_and_gradient_arm_tau_with_workspace as shd_matched_loss_only_and_gradient_arm_tau_with_workspace,
+    ArmAdam as ShdArmAdam, ArmGradient as ShdArmGradient, ArmWeightLayout as ShdArmWeightLayout,
+    ArmWeights as ShdArmWeights, ArmWorkspace as ShdArmWorkspace, MatchedArm,
+    MATCHED_DEFAULT_BETA_A, MATCHED_DEFAULT_TAU_A, MATCHED_WEIGHTS_MAGIC_V2,
+    MATCHED_WEIGHTS_MAGIC_V3,
 };
 pub use shd_temporal::{
     apply_temporal, OperatorInvariants, RetentionRule, TemporalAudit, TemporalCondition,

@@ -12,8 +12,6 @@
 //! remains the primary throughput lever; chunked scan is only a partial
 //! parallel-in-time assist for the linear dynamics.
 
-use rayon::prelude::*;
-
 /// Default chunk length for the parallel scan (elements per chunk).
 pub const DEFAULT_CHUNK_SIZE: usize = 256;
 
@@ -87,90 +85,20 @@ where
 
 /// Chunked inclusive scan with an explicit `chunk_size` (primarily for tests).
 ///
-/// Same contract as [`assoc_scan`]: left-fold exact, parallel across chunks,
-/// **no** parallelism across spike resets.
+/// Same contract as [`assoc_scan`]: left-fold exact, **no** parallelism across
+/// spike resets.
 ///
-/// Offsets at chunk boundaries are computed with a sequential left-fold (so
-/// parenthesization matches [`assoc_scan_sequential`] bit-for-bit; reassociating
-/// pre-folded chunk totals would drift in `f32`). Chunk bodies then run in
-/// parallel from those offsets.
+/// Because bit-identical `f32` replay (`--config-hash`) forbids reassociating
+/// pre-folded chunk totals, computing exact boundary prefixes already evaluates
+/// every left-fold state sequentially (`xs[0..n]`); recording those states in
+/// a single sequential pass avoids a redundant second pass and Rayon fork-join
+/// overhead while remaining bit-identical to [`assoc_scan_sequential`].
 pub fn assoc_scan_chunked<F>(xs: &[State], chunk_size: usize, combine: F) -> Vec<State>
 where
     F: Fn(State, State) -> State + Sync,
 {
     assert!(chunk_size > 0, "chunk_size must be > 0");
-    let n = xs.len();
-    if n == 0 {
-        return Vec::new();
-    }
-    // Small inputs: sequential left-fold (exact, no thread overhead).
-    if n <= chunk_size {
-        return assoc_scan_sequential(xs, combine);
-    }
-
-    let n_chunks = n.div_ceil(chunk_size);
-
-    // Phase 1 — sequential left-fold, recording the inclusive prefix at each
-    // chunk boundary. `offsets[c]` = left-fold(xs[0 .. c * chunk_size]), i.e.
-    // the sequential scan value just before chunk `c` begins.
-    // Using element-wise left-fold (not reassociated chunk totals) keeps f32
-    // results identical to a pure sequential scan.
-    let mut offsets = vec![State::identity(); n_chunks];
-    let mut acc = xs[0];
-    // `chunk_size` is a runtime parameter, so `i % chunk_size` and
-    // `i / chunk_size` were emitting a hardware integer division *per element*
-    // in this loop — ~20-40 cycles each on arm64, and uncancellable by the
-    // compiler since the divisor is not a compile-time constant. That division
-    // dominated the loop body, which is otherwise one `combine` call.
-    //
-    // A running counter gives the same boundaries with a compare and an add.
-    // `combine` is applied to exactly the same elements in exactly the same
-    // order, so the f32 results are bit-identical.
-    let mut since_boundary = 1usize;
-    let mut chunk_idx = 0usize;
-    // Indexing is deliberate: see the comment above. An iterator rewrite would
-    // reassociate `combine`, and bit-identical f32 output is what the
-    // `--config-hash` replay property rests on.
-    #[allow(clippy::needless_range_loop)]
-    for i in 1..n {
-        // At the top of iteration `i`, `since_boundary == i - last_boundary`,
-        // so this fires exactly when `i % chunk_size == 0`.
-        if since_boundary == chunk_size {
-            chunk_idx += 1;
-            offsets[chunk_idx] = acc;
-            since_boundary = 0;
-        }
-        acc = combine(acc, xs[i]);
-        since_boundary += 1;
-    }
-
-    // Phase 2 — left-fold each chunk from its offset (parallel across chunks).
-    let mut out = vec![State::identity(); n];
-    out.par_chunks_mut(chunk_size)
-        .zip(offsets.par_iter().copied())
-        .enumerate()
-        .for_each(|(c, (chunk_out, offset))| {
-            let start = c * chunk_size;
-            let end = (start + chunk_size).min(n);
-            let len = end - start;
-            // Chunk 0: start from xs[0] directly (avoid identity⊕x, which can
-            // perturb signed zeros / ulps). Later chunks: continue from the
-            // exact sequential prefix at the boundary.
-            let mut acc = if c == 0 {
-                let first = xs[start];
-                chunk_out[0] = first;
-                first
-            } else {
-                offset
-            };
-            let begin = if c == 0 { 1 } else { 0 };
-            for i in begin..len {
-                acc = combine(acc, xs[start + i]);
-                chunk_out[i] = acc;
-            }
-        });
-
-    out
+    assoc_scan_sequential(xs, combine)
 }
 
 /// Sequential inclusive left-fold scan (reference for parity tests).
@@ -178,16 +106,16 @@ pub fn assoc_scan_sequential<F>(xs: &[State], combine: F) -> Vec<State>
 where
     F: Fn(State, State) -> State,
 {
-    if xs.is_empty() {
+    let mut iter = xs.iter().copied();
+    let Some(mut acc) = iter.next() else {
         return Vec::new();
-    }
+    };
     let mut out = Vec::with_capacity(xs.len());
-    let mut acc = xs[0];
     out.push(acc);
-    for &x in &xs[1..] {
+    out.extend(iter.map(|x| {
         acc = combine(acc, x);
-        out.push(acc);
-    }
+        acc
+    }));
     out
 }
 
@@ -294,5 +222,11 @@ mod tests {
         // Allow a tiny ulp gap for the algebraic property itself.
         assert!((left.a - right.a).abs() <= 1e-5);
         assert!((left.b - right.b).abs() <= 1e-5);
+    }
+
+    #[test]
+    #[should_panic(expected = "chunk_size must be > 0")]
+    fn chunked_rejects_zero_chunk_size() {
+        let _ = assoc_scan_chunked(&[State::identity()], 0, combine);
     }
 }

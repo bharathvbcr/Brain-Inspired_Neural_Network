@@ -191,6 +191,37 @@ impl ThreeFactor {
         self.ensure_cells(n);
         let elig = Eligibility::new(self.tau_e);
 
+        if self.pending_candidates.is_empty() {
+            let (spike_log, conn, conn_rev, syn) = engine.spikes_and_topology_with_syn_mut();
+            let spikes = spike_log.as_slice();
+            if self.spike_cursor > spikes.len() {
+                self.spike_cursor = 0;
+            }
+            let tail = &spikes[self.spike_cursor..];
+            self.spike_cursor = spikes.len();
+            if tail.windows(2).all(|w| w[0].t <= w[1].t) {
+                for sp in tail {
+                    apply_spike_stdp(
+                        syn,
+                        conn,
+                        conn_rev,
+                        &mut self.last_spike,
+                        &elig,
+                        sp.cell,
+                        sp.t,
+                    );
+                }
+                return;
+            }
+            let mut new_spikes: Vec<(CellId, Tick)> =
+                tail.iter().map(|sp| (sp.cell, sp.t)).collect();
+            new_spikes.sort_by_key(|&(_, t)| t);
+            for (cell, t) in new_spikes {
+                apply_spike_stdp(syn, conn, conn_rev, &mut self.last_spike, &elig, cell, t);
+            }
+            return;
+        }
+
         let spikes = engine.spikes().as_slice();
         if self.spike_cursor > spikes.len() {
             self.spike_cursor = 0;
@@ -203,36 +234,7 @@ impl ThreeFactor {
             .collect();
         new_spikes.sort_by_key(|&(_, t)| t);
         self.spike_cursor = spikes.len();
-        // Topology is immutable for the duration of this loop, so borrow it
-        // rather than deep-cloning it.
-        //
-        // This previously read `engine.conn.clone()` / `engine.conn_rev.clone()`.
-        // That copied the entire CSR *and* CSC — roughly `3·nnz + nrows + 2·ncols`
-        // u32s across 5 heap allocations — on every plasticity step, purely to
-        // dodge a borrow conflict with `engine.syn.as_mut_slice()` below. At
-        // nnz ≈ 2.5e6 that is ~30 MB of memcpy per step, which on M5 Pro memory
-        // bandwidth is on the order of a millisecond of pure waste per step.
-        //
-        // `syn`, `conn` and `conn_rev` are separate public fields of `Engine`, so
-        // NLL accepts the disjoint borrows: `conn`/`conn_rev` shared, `syn` unique.
-        // No numerics change — same values, same order, same iteration.
-        let conn = &engine.conn;
-        let conn_rev = &engine.conn_rev;
-
-        if self.pending_candidates.is_empty() {
-            for (cell, t) in new_spikes {
-                apply_spike_stdp(
-                    engine.syn.as_mut_slice(),
-                    conn,
-                    conn_rev,
-                    &mut self.last_spike,
-                    &elig,
-                    cell,
-                    t,
-                );
-            }
-            return;
-        }
+        let (_, conn, conn_rev, syn) = engine.spikes_and_topology_with_syn_mut();
 
         // Near-miss deposits are interleaved into the same chronological stream
         // rather than appended after it. `Eligibility::decay_to` rewinds a
@@ -257,25 +259,9 @@ impl ThreeFactor {
 
         for (t, is_candidate, cell, scale) in events {
             if is_candidate == 0 {
-                apply_spike_stdp(
-                    engine.syn.as_mut_slice(),
-                    conn,
-                    conn_rev,
-                    &mut self.last_spike,
-                    &elig,
-                    cell,
-                    t,
-                );
+                apply_spike_stdp(syn, conn, conn_rev, &mut self.last_spike, &elig, cell, t);
             } else {
-                apply_candidate_stdp(
-                    engine.syn.as_mut_slice(),
-                    conn_rev,
-                    &self.last_spike,
-                    &elig,
-                    cell,
-                    t,
-                    scale,
-                );
+                apply_candidate_stdp(syn, conn_rev, &self.last_spike, &elig, cell, t, scale);
             }
         }
         self.pending_candidates.clear();
@@ -284,11 +270,63 @@ impl ThreeFactor {
     fn apply_weights<S: CreditSignal>(&self, engine: &mut Engine, signal: &S, now: Tick) -> u64 {
         let elig = Eligibility::new(self.tau_e);
         let posts = &engine.conn.col;
-        let syns = engine.syn.as_mut_slice();
-        assert_eq!(syns.len(), engine.edge_w.len());
-        assert_eq!(posts.len(), syns.len());
-        let n = syns.len() as u64;
-        for (i, syn) in syns.iter_mut().enumerate() {
+        let edge_w = &mut engine.edge_w;
+        assert_eq!(engine.syn.len(), edge_w.len());
+        assert_eq!(posts.len(), edge_w.len());
+        let n = edge_w.len() as u64;
+        let zero_elig_noop =
+            self.eta.is_finite() && (!self.use_modulator || signal.is_guaranteed_finite());
+
+        if zero_elig_noop && engine.syn.can_sparse_apply_weights() {
+            engine.syn.apply_dirty_elig_weights(now, |i, syn| {
+                elig.decay_to(syn, now);
+                let e = if self.use_eligibility {
+                    syn.eligibility
+                } else {
+                    0.0
+                };
+                if e.to_bits() == 0
+                    && syn.weight.is_finite()
+                    && syn.weight.to_bits() != (-0.0f32).to_bits()
+                {
+                    if edge_w[i].to_bits() != syn.weight.to_bits() {
+                        edge_w[i] = syn.weight;
+                    }
+                    return;
+                }
+                let decay_term = if e.abs() > 1e-8 {
+                    self.lambda * syn.weight
+                } else {
+                    0.0
+                };
+                let gate = if self.use_modulator {
+                    signal.for_post(posts[i])
+                } else {
+                    0.0
+                };
+                let dw = self.eta * e * gate - decay_term;
+                syn.weight += dw;
+                if edge_w[i].to_bits() != syn.weight.to_bits() {
+                    edge_w[i] = syn.weight;
+                }
+            });
+            return n;
+        }
+
+        engine.syn.apply_all_weights(|i, syn| {
+            if zero_elig_noop
+                && syn.eligibility.to_bits() == 0
+                && syn.weight.is_finite()
+                && syn.weight.to_bits() != (-0.0f32).to_bits()
+            {
+                if syn.last_elig_update != now {
+                    syn.last_elig_update = now;
+                }
+                if edge_w[i].to_bits() != syn.weight.to_bits() {
+                    edge_w[i] = syn.weight;
+                }
+                return;
+            }
             // Decay to weight-apply time from last STDP/touch.
             elig.decay_to(syn, now);
             let e = if self.use_eligibility {
@@ -296,6 +334,16 @@ impl ThreeFactor {
             } else {
                 0.0
             };
+            if zero_elig_noop
+                && e.to_bits() == 0
+                && syn.weight.is_finite()
+                && syn.weight.to_bits() != (-0.0f32).to_bits()
+            {
+                if edge_w[i].to_bits() != syn.weight.to_bits() {
+                    edge_w[i] = syn.weight;
+                }
+                return;
+            }
             // Decay only synapses with nonzero eligibility so idle readout edges
             // are not bled to zero between sparse credit events (BUILD_AUDIT_v10 A3).
             let decay_term = if e.abs() > 1e-8 {
@@ -310,8 +358,10 @@ impl ThreeFactor {
             };
             let dw = self.eta * e * gate - decay_term;
             syn.weight += dw;
-            engine.edge_w[i] = syn.weight;
-        }
+            if edge_w[i].to_bits() != syn.weight.to_bits() {
+                edge_w[i] = syn.weight;
+            }
+        });
         n
     }
 
@@ -352,7 +402,7 @@ impl Learner for ThreeFactor {
 
 #[allow(clippy::needless_range_loop)]
 fn apply_spike_stdp(
-    syns: &mut [binn_engine::Synapse],
+    syns: &mut binn_engine::Synapses,
     conn: &Csr,
     conn_rev: &Csc,
     last_spike: &mut [Option<Tick>],
@@ -363,15 +413,48 @@ fn apply_spike_stdp(
     let c = cell as usize;
     assert!(c < last_spike.len());
 
+    if syns.is_all_elig_dirty() {
+        let items = syns.as_mut_slice_for_all_dirty_elig();
+        if c < conn.nrows() {
+            let start = conn.row_ptr[c] as usize;
+            let end = conn.row_ptr[c + 1] as usize;
+            for e in start..end {
+                let post = conn.col[e] as usize;
+                let syn = &mut items[e];
+                elig.decay_to(syn, t);
+                if let Some(t_post) = last_spike[post] {
+                    syn.eligibility += eligibility::stdp(t_post as f32 - t as f32);
+                }
+            }
+        }
+        if c < conn_rev.ncols() {
+            for (pre, edge) in conn_rev.incoming(c) {
+                let syn = &mut items[edge as usize];
+                elig.decay_to(syn, t);
+                if let Some(t_pre) = last_spike[pre as usize] {
+                    syn.eligibility += eligibility::stdp(t as f32 - t_pre as f32);
+                }
+            }
+        }
+        last_spike[c] = Some(t);
+        return;
+    }
+
     // Presynaptic spike: STDP on outgoing CSR edges (pre → post).
     if c < conn.nrows() {
         let start = conn.row_ptr[c] as usize;
         let end = conn.row_ptr[c + 1] as usize;
         for e in start..end {
             let post = conn.col[e] as usize;
-            elig.decay_to(&mut syns[e], t);
             if let Some(t_post) = last_spike[post] {
-                syns[e].eligibility += eligibility::stdp(t_post as f32 - t as f32);
+                let syn = syns.touch_elig(e);
+                elig.decay_to(syn, t);
+                syn.eligibility += eligibility::stdp(t_post as f32 - t as f32);
+            } else if syns.is_elig_dirty(e) {
+                let syn = syns.touch_elig(e);
+                elig.decay_to(syn, t);
+            } else {
+                syns.stamp_clean_elig_time(e, t);
             }
         }
     }
@@ -380,9 +463,15 @@ fn apply_spike_stdp(
     if c < conn_rev.ncols() {
         for (pre, edge) in conn_rev.incoming(c) {
             let e = edge as usize;
-            elig.decay_to(&mut syns[e], t);
             if let Some(t_pre) = last_spike[pre as usize] {
-                syns[e].eligibility += eligibility::stdp(t as f32 - t_pre as f32);
+                let syn = syns.touch_elig(e);
+                elig.decay_to(syn, t);
+                syn.eligibility += eligibility::stdp(t as f32 - t_pre as f32);
+            } else if syns.is_elig_dirty(e) {
+                let syn = syns.touch_elig(e);
+                elig.decay_to(syn, t);
+            } else {
+                syns.stamp_clean_elig_time(e, t);
             }
         }
     }
@@ -408,7 +497,7 @@ fn apply_spike_stdp(
 /// arrived, which ones would have been responsible had this cell won?
 #[allow(clippy::needless_range_loop)]
 fn apply_candidate_stdp(
-    syns: &mut [binn_engine::Synapse],
+    syns: &mut binn_engine::Synapses,
     conn_rev: &Csc,
     last_spike: &[Option<Tick>],
     elig: &Eligibility,
@@ -421,11 +510,28 @@ fn apply_candidate_stdp(
     if c >= conn_rev.ncols() {
         return;
     }
+    if syns.is_all_elig_dirty() {
+        let items = syns.as_mut_slice_for_all_dirty_elig();
+        for (pre, edge) in conn_rev.incoming(c) {
+            let syn = &mut items[edge as usize];
+            elig.decay_to(syn, t);
+            if let Some(t_pre) = last_spike[pre as usize] {
+                syn.eligibility += scale * eligibility::stdp(t as f32 - t_pre as f32);
+            }
+        }
+        return;
+    }
     for (pre, edge) in conn_rev.incoming(c) {
         let e = edge as usize;
-        elig.decay_to(&mut syns[e], t);
         if let Some(t_pre) = last_spike[pre as usize] {
-            syns[e].eligibility += scale * eligibility::stdp(t as f32 - t_pre as f32);
+            let syn = syns.touch_elig(e);
+            elig.decay_to(syn, t);
+            syn.eligibility += scale * eligibility::stdp(t as f32 - t_pre as f32);
+        } else if syns.is_elig_dirty(e) {
+            let syn = syns.touch_elig(e);
+            elig.decay_to(syn, t);
+        } else {
+            syns.stamp_clean_elig_time(e, t);
         }
     }
 }
@@ -1035,5 +1141,117 @@ mod tests {
             dw0.abs(),
             dw1.abs()
         );
+    }
+
+    #[test]
+    fn apply_weights_zero_elig_skip_is_ieee754_bit_identical() {
+        use crate::credit::PostSynapticCredit;
+        use binn_core::Csr;
+
+        let build_engine = || {
+            let mut eng = Engine::with_cells(5);
+            let row_ptr = vec![0u32, 2, 4, 5, 5, 5];
+            let col = vec![3u32, 4, 3, 4, 4];
+            let conn = Csr::from_parts(row_ptr, col).expect("valid CSR");
+            eng.set_connectivity(conn, vec![0.25, 0.0, -0.0, -0.5, 1.25]);
+            let syns = eng.syn.as_mut_slice_keeping_delays();
+            syns[0].eligibility = 0.0;
+            syns[0].last_elig_update = 3;
+            syns[1].eligibility = 0.0;
+            syns[1].last_elig_update = 25;
+            syns[2].eligibility = 0.0;
+            syns[2].last_elig_update = 7;
+            syns[3].eligibility = -0.0;
+            syns[3].last_elig_update = 9;
+            syns[4].eligibility = 0.75;
+            syns[4].last_elig_update = 12;
+            eng.step_until(25);
+            eng
+        };
+
+        let reference_apply =
+            |eng: &mut Engine, learner: &ThreeFactor, sig: &dyn CreditSignal, now: Tick| {
+                let elig = Eligibility::new(learner.tau_e);
+                let posts = &eng.conn.col;
+                let syns = eng.syn.as_mut_slice();
+                for (i, syn) in syns.iter_mut().enumerate() {
+                    elig.decay_to(syn, now);
+                    let e = if learner.use_eligibility {
+                        syn.eligibility
+                    } else {
+                        0.0
+                    };
+                    let decay_term = if e.abs() > 1e-8 {
+                        learner.lambda * syn.weight
+                    } else {
+                        0.0
+                    };
+                    let gate = if learner.use_modulator {
+                        sig.for_post(posts[i])
+                    } else {
+                        0.0
+                    };
+                    let dw = learner.eta * e * gate - decay_term;
+                    syn.weight += dw;
+                    if eng.edge_w[i].to_bits() != syn.weight.to_bits() {
+                        eng.edge_w[i] = syn.weight;
+                    }
+                }
+            };
+
+        let mut psc = PostSynapticCredit::zeros(5);
+        psc.set(3, -0.4);
+        psc.set(4, 0.6);
+        let weight_bits =
+            |eng: &Engine| -> Vec<u32> { eng.edge_w.iter().map(|w| w.to_bits()).collect() };
+        let elig_bits = |eng: &Engine| -> Vec<u32> {
+            eng.syn
+                .as_slice()
+                .iter()
+                .map(|s| s.eligibility.to_bits())
+                .collect()
+        };
+
+        for learner in [
+            ThreeFactor::new(0.2, 0.05, 30.0),
+            ThreeFactor::new(-0.2, 0.05, 30.0),
+            ThreeFactor::new(0.2, 0.05, 30.0).without_eligibility(),
+            ThreeFactor::new(0.2, 0.05, 30.0).without_modulator(),
+        ] {
+            let mut fast = build_engine();
+            let mut slow = build_engine();
+            assert_eq!(fast.syn.uniform_delay(), Some(1));
+            learner.apply_weights(&mut fast, &psc, 25);
+            reference_apply(&mut slow, &learner, &psc, 25);
+            assert_eq!(
+                fast.syn.uniform_delay(),
+                Some(1),
+                "ThreeFactor::apply_weights must preserve delay cache"
+            );
+            assert_eq!(weight_bits(&fast), weight_bits(&slow));
+            assert_eq!(elig_bits(&fast), elig_bits(&slow));
+            let fast_ticks: Vec<Tick> = fast
+                .syn
+                .as_slice()
+                .iter()
+                .map(|s| s.last_elig_update)
+                .collect();
+            let slow_ticks: Vec<Tick> = slow
+                .syn
+                .as_slice()
+                .iter()
+                .map(|s| s.last_elig_update)
+                .collect();
+            assert_eq!(fast_ticks, slow_ticks);
+        }
+
+        // Non-finite modulator must still propagate NaN through 0.0 * NaN rather than skipping.
+        let nan_mod = Modulators::reward(f32::NAN);
+        let learner = ThreeFactor::new(0.2, 0.0, 30.0);
+        let mut fast_nan = build_engine();
+        let mut slow_nan = build_engine();
+        learner.apply_weights(&mut fast_nan, &nan_mod, 25);
+        reference_apply(&mut slow_nan, &learner, &nan_mod, 25);
+        assert!(fast_nan.edge_w[0].is_nan() && slow_nan.edge_w[0].is_nan());
     }
 }

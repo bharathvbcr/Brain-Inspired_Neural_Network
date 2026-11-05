@@ -43,7 +43,7 @@ pub fn stdp(dt: f32) -> f32 {
 #[inline]
 pub fn decay(e: f32, dt: f32, tau_e: f32) -> f32 {
     debug_assert!(tau_e > 0.0, "tau_e must be positive");
-    if dt <= 0.0 {
+    if dt <= 0.0 || (e == 0.0 && dt.is_finite() && tau_e > 0.0 && tau_e.is_finite()) {
         return e;
     }
     e * (-dt / tau_e).exp()
@@ -376,5 +376,76 @@ mod tests {
         // Above threshold: STDP added
         e.add_stdp_gated(&mut syn, 10, 15, 0.9);
         assert!(syn.eligibility > 0.0);
+    }
+
+    #[test]
+    fn zero_eligibility_fast_path_is_ieee754_bit_exact() {
+        let e_vals = [
+            0.0f32,
+            -0.0f32,
+            1e-38,
+            -1e-38,
+            0.5,
+            -0.5,
+            f32::NAN,
+            f32::INFINITY,
+        ];
+        let dts = [
+            -1.0f32,
+            -0.0,
+            0.0,
+            1e-6,
+            1.0,
+            50.0,
+            1e6,
+            1e38,
+            f32::INFINITY,
+            f32::NAN,
+        ];
+        let taus = [1e-6f32, 10.0, 1e6, f32::INFINITY, f32::NAN];
+
+        for &e in &e_vals {
+            for &dt in &dts {
+                for &tau in &taus {
+                    // `debug_assert!(tau_e > 0.0)` holds for positive/infinite taus; skip NaN
+                    // under debug assertions while still checking positive + infinite bounds.
+                    if cfg!(debug_assertions) && (tau.is_nan() || tau <= 0.0) {
+                        continue;
+                    }
+                    let reference = if dt <= 0.0 { e } else { e * (-dt / tau).exp() };
+                    let got = decay(e, dt, tau);
+                    if reference.is_nan() {
+                        assert!(
+                            got.is_nan(),
+                            "expected NaN for e={e:?} dt={dt:?} tau={tau:?}"
+                        );
+                    } else {
+                        assert_eq!(
+                            got.to_bits(),
+                            reference.to_bits(),
+                            "bit mismatch for e={e:?} dt={dt:?} tau={tau:?}"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Verify `decay_to` still advances `last_elig_update` when `eligibility == 0.0`
+        // (required by `PruningStrategy::Age`).
+        let elig = Eligibility::new(25.0);
+        let mut syn = Synapse::new(0.4, 1);
+        syn.eligibility = -0.0;
+        syn.last_elig_update = 3;
+        elig.decay_to(&mut syn, 42);
+        assert_eq!(syn.eligibility.to_bits(), (-0.0f32).to_bits());
+        assert_eq!(syn.last_elig_update, 42);
+
+        let dual = DualEligibility::new(10.0, 100.0, 0.5);
+        let mut dsyn = Synapse::new(0.4, 1);
+        dsyn.last_elig_update = 5;
+        dual.decay_to(&mut dsyn, 99);
+        assert_eq!(dsyn.eligibility.to_bits(), 0.0f32.to_bits());
+        assert_eq!(dsyn.elig_slow.to_bits(), 0.0f32.to_bits());
+        assert_eq!(dsyn.last_elig_update, 99);
     }
 }

@@ -297,14 +297,17 @@ fn main() {
                     backend: arm,
                     batch_size: 1024,
                 });
+                let op = backend
+                    .prepare_sparse(&csr, &weights)
+                    .expect("valid sparse plan");
                 // Warm-up so the first arm does not absorb allocation costs.
                 let mut y = vec![0.0f32; n];
-                backend.spmv(&csr, &weights, &x, &mut y);
+                op.spmv(&x, &mut y).expect("resident SpMV warmup");
 
                 let mut y = vec![0.0f32; n];
                 let start = Instant::now();
                 for _ in 0..iterations {
-                    backend.spmv(&csr, &weights, &x, &mut y);
+                    op.spmv(&x, &mut y).expect("resident SpMV");
                 }
                 let ms = start.elapsed().as_secs_f64() * 1000.0 / iterations as f64;
                 println!("N = {n:5}: {} = {ms:.3} ms/iter", backend.label());

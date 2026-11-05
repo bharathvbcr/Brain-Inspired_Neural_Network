@@ -142,55 +142,96 @@ impl Cell {
         let dtf = dt as f32;
 
         // Dendrites: exact independent LIF toward tonic branch current.
-        let decay_d = (-dtf / self.tau_d).exp();
-        let mut sum_i = 0.0f32;
-        let mut sum_dev0 = 0.0f32;
-        for i in 0..K {
-            let i_branch = self.branches[i];
-            let vd0 = self.v_dend[i];
-            sum_i += i_branch;
-            sum_dev0 += vd0 - i_branch;
-            self.v_dend[i] = i_branch + (vd0 - i_branch) * decay_d;
-        }
+        // When all four branches and dendritic voltages hold exact `+0.0` (with
+        // finite positive `tau_d`), every compartment stays at `+0.0` and
+        // `decay_d` is unused downstream as well (`sum_dev0 == 0.0`).
+        let dend_all_pos_zero = (self.v_dend[0].to_bits()
+            | self.v_dend[1].to_bits()
+            | self.v_dend[2].to_bits()
+            | self.v_dend[3].to_bits()
+            | self.branches[0].to_bits()
+            | self.branches[1].to_bits()
+            | self.branches[2].to_bits()
+            | self.branches[3].to_bits())
+            == 0
+            && self.tau_d.is_finite()
+            && self.tau_d > 0.0;
+
+        let (decay_d, sum_i, sum_dev0) = if dend_all_pos_zero {
+            (0.0f32, 0.0f32, 0.0f32)
+        } else {
+            let decay_d = (-dtf / self.tau_d).exp();
+            let mut sum_i = 0.0f32;
+            let mut sum_dev0 = 0.0f32;
+            for i in 0..K {
+                let i_branch = self.branches[i];
+                let vd0 = self.v_dend[i];
+                sum_i += i_branch;
+                sum_dev0 += vd0 - i_branch;
+                self.v_dend[i] = i_branch + (vd0 - i_branch) * decay_d;
+            }
+            (decay_d, sum_i, sum_dev0)
+        };
 
         // Soma: τ_m v' = −v + Σ g_c (v_d − v) = −(1 + K g_c) v + g_c Σ v_d(t)
         let g = self.g_c;
         if g == 0.0 {
-            let decay_s = (-dtf / self.tau_m).exp();
-            self.v *= decay_s;
+            if !(self.v.to_bits() == 0 && self.tau_m.is_finite() && self.tau_m > 0.0) {
+                let decay_s = (-dtf / self.tau_m).exp();
+                self.v *= decay_s;
+            }
         } else {
             let k_g = (K as f32) * g;
             let alpha = (1.0 + k_g) / self.tau_m;
             let scale = g / self.tau_m;
-            // v_d[i](s) = I[i] + (vd0[i]−I[i]) e^{−s/τ_d}
-            // v' = −α v + scale · (Σ I + Σ(vd0−I) e^{−s/τ_d})
-            let v0 = self.v;
-            let e_a = (-alpha * dtf).exp();
-            let particular_const = if alpha.abs() < 1e-12 {
-                scale * sum_i * dtf
-            } else {
-                scale * sum_i * (1.0 - e_a) / alpha
-            };
-            let particular_exp = if sum_dev0.abs() < 1e-20 {
-                0.0
-            } else {
-                let inv_td = 1.0 / self.tau_d;
-                let diff = alpha - inv_td;
-                let integral = if diff.abs() < 1e-7 {
-                    // α ≈ 1/τ_d: ∫_0^dt e^{−α(dt−s)} e^{−s/τ_d} ds = dt · e^{−α dt}
-                    dtf * e_a
+            if !(dend_all_pos_zero
+                && self.v.to_bits() == 0
+                && self.tau_m.is_finite()
+                && self.tau_m > 0.0
+                && g.is_finite()
+                && g >= 0.0
+                && alpha.is_finite()
+                && scale.is_finite())
+            {
+                // v_d[i](s) = I[i] + (vd0[i]−I[i]) e^{−s/τ_d}
+                // v' = −α v + scale · (Σ I + Σ(vd0−I) e^{−s/τ_d})
+                let v0 = self.v;
+                let e_a = (-alpha * dtf).exp();
+                let particular_const = if alpha.abs() < 1e-12 {
+                    scale * sum_i * dtf
                 } else {
-                    // (e^{−dt/τ_d} − e^{−α dt}) / (α − 1/τ_d)
-                    (decay_d - e_a) / diff
+                    scale * sum_i * (1.0 - e_a) / alpha
                 };
-                scale * sum_dev0 * integral
-            };
-            self.v = e_a * v0 + particular_const + particular_exp;
+                let particular_exp = if sum_dev0.abs() < 1e-20 {
+                    0.0
+                } else {
+                    let inv_td = 1.0 / self.tau_d;
+                    let diff = alpha - inv_td;
+                    let integral = if diff.abs() < 1e-7 {
+                        // α ≈ 1/τ_d: ∫_0^dt e^{−α(dt−s)} e^{−s/τ_d} ds = dt · e^{−α dt}
+                        dtf * e_a
+                    } else {
+                        // (e^{−dt/τ_d} − e^{−α dt}) / (α − 1/τ_d)
+                        (decay_d - e_a) / diff
+                    };
+                    scale * sum_dev0 * integral
+                };
+                self.v = e_a * v0 + particular_const + particular_exp;
+            }
         }
 
-        // Adaptive threshold relaxes toward rest.
-        let decay_th = (-dtf / TAU_THETA).exp();
-        self.theta = THETA_REST + (self.theta - THETA_REST) * decay_th;
+        // Adaptive threshold relaxes toward rest (`THETA_REST + 0.0 * decay_th == THETA_REST`
+        // bit-identically for every `dt >= 1` because `dtf` is finite positive).
+        if self.theta != THETA_REST {
+            if self.theta.to_bits() == f32::INFINITY.to_bits() && dtf <= 2000.0 {
+                // For 0 < dtf <= 2000.0, (-dtf / TAU_THETA).exp() >= exp(-100) > 0.0 is
+                // strictly positive and finite, so THETA_REST + (+INF - THETA_REST) * decay_th
+                // evaluates to +INF bit-identically without calling expf on muted silent cells.
+            } else {
+                let decay_th = (-dtf / TAU_THETA).exp();
+                self.theta = THETA_REST + (self.theta - THETA_REST) * decay_th;
+            }
+        }
 
         self.last = t;
     }
@@ -232,6 +273,24 @@ impl Cell {
         self.theta = THETA_REST;
         self.branches = [0.0; K];
         self.last = 0;
+    }
+
+    /// True iff every dynamic state field already holds the exact IEEE-754 bit
+    /// pattern written by [`Self::reset`].
+    #[inline]
+    pub fn is_at_rest(&self) -> bool {
+        self.v.to_bits() == V_RESET.to_bits()
+            && (self.v_dend[0].to_bits()
+                | self.v_dend[1].to_bits()
+                | self.v_dend[2].to_bits()
+                | self.v_dend[3].to_bits()
+                | self.branches[0].to_bits()
+                | self.branches[1].to_bits()
+                | self.branches[2].to_bits()
+                | self.branches[3].to_bits())
+                == 0
+            && self.theta.to_bits() == THETA_REST.to_bits()
+            && self.last == 0
     }
 
     /// Nonlinear sub-compartment dendritic coincidence score.
@@ -495,5 +554,109 @@ mod tests {
         assert!(!c.branch_plateau(0));
         assert!(c.branch_plateau(1));
         assert!(!c.branch_plateau(99)); // out of bounds check
+    }
+
+    fn advance_to_unshortcircuited_reference(cell: &mut Cell, t: Tick) {
+        let dt = t - cell.last;
+        if dt == 0 {
+            return;
+        }
+        let dtf = dt as f32;
+        let decay_d = (-dtf / cell.tau_d).exp();
+        let mut sum_i = 0.0f32;
+        let mut sum_dev0 = 0.0f32;
+        for i in 0..K {
+            let i_branch = cell.branches[i];
+            let vd0 = cell.v_dend[i];
+            sum_i += i_branch;
+            sum_dev0 += vd0 - i_branch;
+            cell.v_dend[i] = i_branch + (vd0 - i_branch) * decay_d;
+        }
+        let g = cell.g_c;
+        if g == 0.0 {
+            let decay_s = (-dtf / cell.tau_m).exp();
+            cell.v *= decay_s;
+        } else {
+            let k_g = (K as f32) * g;
+            let alpha = (1.0 + k_g) / cell.tau_m;
+            let scale = g / cell.tau_m;
+            let v0 = cell.v;
+            let e_a = (-alpha * dtf).exp();
+            let particular_const = if alpha.abs() < 1e-12 {
+                scale * sum_i * dtf
+            } else {
+                scale * sum_i * (1.0 - e_a) / alpha
+            };
+            let particular_exp = if sum_dev0.abs() < 1e-20 {
+                0.0
+            } else {
+                let inv_td = 1.0 / cell.tau_d;
+                let diff = alpha - inv_td;
+                let integral = if diff.abs() < 1e-7 {
+                    dtf * e_a
+                } else {
+                    (decay_d - e_a) / diff
+                };
+                scale * sum_dev0 * integral
+            };
+            cell.v = e_a * v0 + particular_const + particular_exp;
+        }
+        let decay_th = (-dtf / TAU_THETA).exp();
+        cell.theta = THETA_REST + (cell.theta - THETA_REST) * decay_th;
+        cell.last = t;
+    }
+
+    #[test]
+    fn advance_to_fast_paths_are_ieee754_bit_identical() {
+        let mut templates = Vec::new();
+        // 1. Full resting cell.
+        templates.push(Cell::new(DEFAULT_TAU_M));
+        // 2. Negative-zero edge cases on v, v_dend, and branches.
+        let mut neg_zero = Cell::new(DEFAULT_TAU_M);
+        neg_zero.v = -0.0;
+        neg_zero.v_dend[2] = -0.0;
+        neg_zero.branches[1] = -0.0;
+        templates.push(neg_zero);
+        // 3. Sub-threshold active cell with theta == THETA_REST.
+        let mut sub_th = Cell::new(DEFAULT_TAU_M);
+        sub_th.v = 0.42;
+        sub_th.v_dend = [0.2, 0.0, 0.5, 0.1];
+        templates.push(sub_th);
+        // 4. Post-spike refractory cell (v == 0, theta > THETA_REST, active dendrites).
+        let mut post_spk = Cell::new(DEFAULT_TAU_M);
+        post_spk.theta = THETA_REST + DELTA_THETA;
+        post_spk.v_dend[0] = 0.65;
+        templates.push(post_spk);
+        // 5. Uncoupled resting & active cells (g_c == 0.0).
+        let mut uncoupled = Cell::new(DEFAULT_TAU_M);
+        uncoupled.g_c = 0.0;
+        templates.push(uncoupled);
+
+        let dts = [1u64, 2, 17, 500, 100_000];
+        let mut checked = 0usize;
+        for base in &templates {
+            for &dt in &dts {
+                let mut got = base.clone();
+                let mut exp = base.clone();
+                got.advance_to(dt);
+                advance_to_unshortcircuited_reference(&mut exp, dt);
+                assert_eq!(got.v.to_bits(), exp.v.to_bits(), "v mismatch at dt={dt}");
+                assert_eq!(
+                    got.theta.to_bits(),
+                    exp.theta.to_bits(),
+                    "theta mismatch at dt={dt}"
+                );
+                for b in 0..K {
+                    assert_eq!(
+                        got.v_dend[b].to_bits(),
+                        exp.v_dend[b].to_bits(),
+                        "v_dend[{b}] mismatch at dt={dt}"
+                    );
+                }
+                assert_eq!(got.last, exp.last);
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, templates.len() * dts.len());
     }
 }

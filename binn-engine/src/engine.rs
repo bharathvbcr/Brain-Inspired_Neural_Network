@@ -25,6 +25,35 @@ pub struct EngineWorkCounters {
     pub cell_updates: u64,
 }
 
+/// Decoded event entry for reusable partitioned-stepping scratch buffers.
+#[derive(Clone, Copy, Default)]
+struct DecodedEvent {
+    ordinal: usize,
+    amount: f32,
+    branch: u8,
+    forced: bool,
+    fired: bool,
+}
+
+/// Reusable scratch buffers for [`Engine::step_until_partitioned_threshold`] so
+/// neither thin nor wide ticks allocate per-tick maps or per-cell event vectors.
+#[derive(Default)]
+struct PartitionScratch {
+    batch_events: Vec<Event>,
+    cell_to_active: Vec<u32>,
+    active_cells: Vec<CellId>,
+    bucket_counts: Vec<usize>,
+    bucket_offsets: Vec<usize>,
+    bucket_cursors: Vec<usize>,
+    raw_decoded: Vec<(u32, DecodedEvent)>,
+    grouped_events: Vec<DecodedEvent>,
+    part_counts: Vec<usize>,
+    part_offsets: Vec<usize>,
+    ordered_active: Vec<u32>,
+    active_rank: Vec<u32>,
+    fired: Vec<(usize, CellId)>,
+}
+
 /// Event-driven substrate engine.
 pub struct Engine {
     cells: Vec<Cell>,
@@ -46,6 +75,18 @@ pub struct Engine {
     spikes: SpikeLog,
     /// Charge delivered to each cell during the most recent bounded step.
     last_step_charge: Vec<f32>,
+    /// Cells whose `last_step_charge` became non-zero during the current step,
+    /// so resetting `last_step_charge` is O(D) instead of an O(n) memset.
+    dirty_charge_cells: Vec<CellId>,
+    /// Cells touched since the last [`Self::reset_state`] (`O(D)` lazy reset).
+    dirty_cells: Vec<CellId>,
+    /// Deduplication flags (`0` = guaranteed at rest, `1` = queued in `dirty_cells`).
+    cell_dirty: Vec<u8>,
+    /// Armed lazily on the first [`Self::reset_state`] so one-shot engines pay
+    /// zero `cell_dirty` allocation or per-delivery dirty-list overhead.
+    dirty_cells_armed: bool,
+    /// Reusable partitioned-step scratch buffers.
+    scratch: PartitionScratch,
     /// Cumulative work counters since construction / [`Self::reset_work`].
     work: EngineWorkCounters,
 }
@@ -69,6 +110,11 @@ impl Engine {
             t: 0,
             spikes: SpikeLog::new(),
             last_step_charge: Vec::new(),
+            dirty_charge_cells: Vec::new(),
+            dirty_cells: Vec::new(),
+            cell_dirty: Vec::new(),
+            dirty_cells_armed: false,
+            scratch: PartitionScratch::default(),
             work: EngineWorkCounters::default(),
         }
     }
@@ -128,17 +174,13 @@ impl Engine {
         assert!(edge < self.edge_w.len(), "edge index out of range");
         assert!(delta.is_finite(), "weight delta must be finite");
         self.edge_w[edge] += delta;
-        self.syn.get_mut(edge).expect("aligned synapse").weight = self.edge_w[edge];
+        self.syn.set_weight_keeping_delay(edge, self.edge_w[edge]);
     }
 
     /// Largest installed synaptic delay, or zero when disconnected.
+    #[inline]
     pub fn max_synaptic_delay(&self) -> Tick {
-        self.syn
-            .as_slice()
-            .iter()
-            .map(|syn| syn.delay)
-            .max()
-            .unwrap_or(0)
+        self.syn.max_delay()
     }
 
     /// Close a bounded externally inhibited cycle and discard later activity.
@@ -146,7 +188,35 @@ impl Engine {
     /// Assembly projection uses this after its measurement window. General
     /// simulations should normally retain pending events and not call it.
     pub fn close_inhibited_cycle(&mut self) {
-        self.queue = TimingWheel::new();
+        self.queue.clear();
+    }
+
+    #[inline]
+    fn clear_last_step_charge(&mut self) {
+        if self.dirty_charge_cells.len() > self.last_step_charge.len() / 2 {
+            self.last_step_charge.fill(0.0);
+            self.dirty_charge_cells.clear();
+        } else {
+            for cell in self.dirty_charge_cells.drain(..) {
+                self.last_step_charge[cell as usize] = 0.0;
+            }
+        }
+    }
+
+    #[inline]
+    fn add_step_charge(&mut self, cell: CellId, amount: f32) {
+        let next = self.last_step_charge[cell as usize] + amount;
+        self.set_step_charge(cell, next);
+    }
+
+    #[inline]
+    fn set_step_charge(&mut self, cell: CellId, next: f32) {
+        let slot = &mut self.last_step_charge[cell as usize];
+        let prev = *slot;
+        *slot = next;
+        if prev.to_bits() == 0 && next.to_bits() != 0 {
+            self.dirty_charge_cells.push(cell);
+        }
     }
 
     /// Current simulation time.
@@ -173,17 +243,37 @@ impl Engine {
         &self.cells[id as usize]
     }
 
+    #[inline]
+    fn mark_cell_dirty(&mut self, cell: CellId) {
+        if !self.dirty_cells_armed {
+            return;
+        }
+        let flag = &mut self.cell_dirty[cell as usize];
+        if *flag == 0 {
+            *flag = 1;
+            self.dirty_cells.push(cell);
+        }
+    }
+
     /// Mutably borrow cell `id` (does not advance time).
     #[inline]
     pub fn cell_mut(&mut self, id: CellId) -> &mut Cell {
+        self.mark_cell_dirty(id);
         &mut self.cells[id as usize]
     }
 
     /// Append a cell; returns its id.
     pub fn push_cell(&mut self, cell: Cell) -> CellId {
         let id = self.cells.len() as CellId;
+        let dirty = !cell.is_at_rest();
         self.cells.push(cell);
         self.last_step_charge.push(0.0);
+        if self.dirty_cells_armed {
+            self.cell_dirty.push(u8::from(dirty));
+            if dirty {
+                self.dirty_cells.push(id);
+            }
+        }
         id
     }
 
@@ -238,7 +328,7 @@ impl Engine {
         );
 
         let mut produced = SpikeLog::new();
-        self.last_step_charge.fill(0.0);
+        self.clear_last_step_charge();
 
         while self
             .queue
@@ -303,125 +393,195 @@ impl Engine {
             "partition plan must cover every cell"
         );
 
-        #[derive(Clone, Copy)]
-        struct Decoded {
-            ordinal: usize,
-            branch: u8,
-            amount: f32,
-            forced: bool,
-        }
-        struct CellJob {
+        struct ParallelCellJob<'a> {
             cell_id: CellId,
-            partition: usize,
             cell: Cell,
-            events: Vec<Decoded>,
+            events: &'a mut [DecodedEvent],
             charge: f32,
-            fired_ordinals: Vec<usize>,
         }
 
         let mut produced = SpikeLog::new();
         let mut profile = ParallelismProfile::default();
-        self.last_step_charge.fill(0.0);
+        self.clear_last_step_charge();
+
+        let mut scratch = std::mem::take(&mut self.scratch);
+        if scratch.cell_to_active.len() < self.cells.len() {
+            scratch.cell_to_active.resize(self.cells.len(), u32::MAX);
+        }
+
         while self
             .queue
             .peek_earliest_tick()
             .is_some_and(|tick| tick <= until)
         {
-            let (tick, events) = self
+            let tick = self
                 .queue
-                .pop_earliest_batch()
+                .drain_earliest_into(&mut scratch.batch_events)
                 .expect("earliest delta bucket existed");
             self.t = tick;
-            let n_events = events.len();
-            let mut grouped: std::collections::BTreeMap<CellId, Vec<Decoded>> =
-                std::collections::BTreeMap::new();
-            for (ordinal, event) in events.into_iter().enumerate() {
+            let n_events = scratch.batch_events.len();
+
+            // Common sparse case: single-event tick below parallel threshold.
+            if n_events == 1 && 1 < parallel_threshold {
+                profile.record_bucket(1, 1);
+                let (cell, branch, amount, forced) = decode_event(scratch.batch_events[0]);
+                self.work.cell_updates = self.work.cell_updates.saturating_add(1);
+                if !forced {
+                    self.work.synaptic_deliveries = self.work.synaptic_deliveries.saturating_add(1);
+                }
+                self.deliver(cell, branch, amount, forced, tick, &mut produced);
+                continue;
+            }
+
+            scratch.active_cells.clear();
+            scratch.bucket_counts.clear();
+            scratch.raw_decoded.clear();
+            scratch.fired.clear();
+
+            for (ordinal, &event) in scratch.batch_events.iter().enumerate() {
                 let (cell, branch, amount, forced) = decode_event(event);
-                grouped.entry(cell).or_default().push(Decoded {
-                    ordinal,
-                    branch,
-                    amount,
-                    forced,
-                });
+                let slot = &mut scratch.cell_to_active[cell as usize];
+                let bucket = if *slot == u32::MAX {
+                    let b = scratch.active_cells.len() as u32;
+                    *slot = b;
+                    scratch.active_cells.push(cell);
+                    scratch.bucket_counts.push(1);
+                    b
+                } else {
+                    let b = *slot;
+                    scratch.bucket_counts[b as usize] += 1;
+                    b
+                };
+                scratch.raw_decoded.push((
+                    bucket,
+                    DecodedEvent {
+                        ordinal,
+                        amount,
+                        branch,
+                        forced,
+                        fired: false,
+                    },
+                ));
                 self.work.cell_updates = self.work.cell_updates.saturating_add(1);
                 if !forced {
                     self.work.synaptic_deliveries = self.work.synaptic_deliveries.saturating_add(1);
                 }
             }
-            let distinct = grouped.len();
+            if self.dirty_cells_armed
+                && self.dirty_cells.capacity() < self.dirty_cells.len() + scratch.active_cells.len()
+            {
+                self.dirty_cells.reserve(scratch.active_cells.len());
+            }
+            if self.dirty_cells_armed {
+                for &cell in &scratch.active_cells {
+                    scratch.cell_to_active[cell as usize] = u32::MAX;
+                    self.mark_cell_dirty(cell);
+                }
+            } else {
+                for &cell in &scratch.active_cells {
+                    scratch.cell_to_active[cell as usize] = u32::MAX;
+                }
+            }
+
+            let distinct = scratch.active_cells.len();
             // Profile uses the production threshold so headroom stays comparable.
             profile.record_bucket(distinct, n_events);
 
-            let mut fired = Vec::new();
             if distinct < parallel_threshold {
-                // Thin tick: integrate in place (no clone / rayon).
-                // Split the borrow once so `cells` and `last_step_charge` can be
-                // held simultaneously. Previously the `&mut self.cells[..]`
-                // index sat *inside* the per-event loop — re-running a
-                // bounds-checked index `E` times per tick instead of `D` — only
-                // because `self.last_step_charge` is also touched while `cell`
-                // is borrowed. Same arithmetic, same order.
-                let cells = &mut self.cells;
-                let charge = &mut self.last_step_charge;
-                for (cell_id, cell_events) in grouped {
-                    let cell = &mut cells[cell_id as usize];
-                    // Hoisted out of the event loop: `advance_to` early-returns
-                    // when `dt == 0`, so the repeated calls were cheap, but they
-                    // are also plainly redundant — every event here shares one
-                    // `tick`.
-                    cell.advance_to(tick);
-                    for event in &cell_events {
-                        let did_fire = if event.forced {
+                // Thin multi-event tick: integrate directly in ordinal order.
+                // Each cell's state and `last_step_charge` slot are disjoint from
+                // every other cell's, `advance_to(tick)` is idempotent on equal
+                // ticks (`dt == 0` early-returns), and `fired` lands in strictly
+                // increasing `ordinal` order with zero sorting.
+                for &(bucket, event) in &scratch.raw_decoded {
+                    let cell_id = scratch.active_cells[bucket as usize];
+                    let did_fire = {
+                        let cell = &mut self.cells[cell_id as usize];
+                        cell.advance_to(tick);
+                        if event.forced {
                             cell.v = cell.theta;
                             cell.try_fire()
                         } else {
-                            charge[cell_id as usize] += event.amount;
-                            cell.deposit(event.branch, event.amount)
-                        };
-                        if did_fire {
-                            fired.push((event.ordinal, cell_id));
+                            let res = cell.deposit(event.branch, event.amount);
+                            self.add_step_charge(cell_id, event.amount);
+                            res
                         }
+                    };
+                    if did_fire {
+                        scratch.fired.push((event.ordinal, cell_id));
                     }
                 }
             } else {
-                let mut jobs: Vec<CellJob> = grouped
-                    .into_iter()
-                    .map(|(cell_id, events)| CellJob {
+                // O(D + P) counting sort by partition for Rayon locality.
+                let n_parts = plan.n_partitions().max(1);
+                scratch.part_counts.clear();
+                scratch.part_counts.resize(n_parts, 0);
+                for &cell_id in &scratch.active_cells {
+                    let p = plan.owner(cell_id).min(n_parts - 1);
+                    scratch.part_counts[p] += 1;
+                }
+                scratch.part_offsets.clear();
+                scratch.part_offsets.reserve(n_parts + 1);
+                let mut sum_p = 0usize;
+                for &cnt in &scratch.part_counts {
+                    scratch.part_offsets.push(sum_p);
+                    sum_p += cnt;
+                }
+                scratch.part_offsets.push(sum_p);
+
+                scratch.ordered_active.resize(distinct, 0);
+                scratch.active_rank.resize(distinct, 0);
+                for (orig_b, &cell_id) in scratch.active_cells.iter().enumerate() {
+                    let p = plan.owner(cell_id).min(n_parts - 1);
+                    let rank = scratch.part_offsets[p];
+                    scratch.part_offsets[p] = rank + 1;
+                    scratch.ordered_active[rank] = orig_b as u32;
+                    scratch.active_rank[orig_b] = rank as u32;
+                }
+
+                // Prefix offsets in partition-sorted active order and scatter
+                // `raw_decoded` into contiguous per-cell spans of `grouped_events`.
+                scratch.bucket_offsets.clear();
+                scratch.bucket_offsets.reserve(distinct + 1);
+                let mut ev_off = 0usize;
+                for &orig_b in &scratch.ordered_active[..distinct] {
+                    scratch.bucket_offsets.push(ev_off);
+                    ev_off += scratch.bucket_counts[orig_b as usize];
+                }
+                scratch.bucket_offsets.push(ev_off);
+                scratch.bucket_cursors.clear();
+                scratch
+                    .bucket_cursors
+                    .extend_from_slice(&scratch.bucket_offsets[..distinct]);
+
+                scratch
+                    .grouped_events
+                    .resize(n_events, DecodedEvent::default());
+                for &(orig_b, ev) in &scratch.raw_decoded {
+                    let rank = scratch.active_rank[orig_b as usize] as usize;
+                    let dst = scratch.bucket_cursors[rank];
+                    scratch.bucket_cursors[rank] = dst + 1;
+                    scratch.grouped_events[dst] = ev;
+                }
+
+                let mut jobs = Vec::with_capacity(distinct);
+                let mut rem = &mut scratch.grouped_events[..n_events];
+                for &orig_b in &scratch.ordered_active[..distinct] {
+                    let len = scratch.bucket_counts[orig_b as usize];
+                    let (events_slice, rest) = rem.split_at_mut(len);
+                    rem = rest;
+                    let cell_id = scratch.active_cells[orig_b as usize];
+                    jobs.push(ParallelCellJob {
                         cell_id,
-                        partition: plan.owner(cell_id),
                         cell: self.cells[cell_id as usize].clone(),
-                        events,
-                        charge: 0.0,
-                        fired_ordinals: Vec::new(),
-                    })
-                    .collect();
-                // `sort_by_key` is a *stable* sort: driftsort allocates a
-                // temporary of up to `jobs.len() / 2` elements, and `CellJob` is
-                // ~128 bytes. There is exactly one job per cell, so the key
-                // `(partition, cell_id)` is unique and stability buys nothing —
-                // no two elements ever compare equal, so the resulting order is
-                // identical either way.
-                //
-                // The sort itself only exists for rayon partition locality: the
-                // parallel closure below touches only per-job state, write-back
-                // touches disjoint cells, and `fired` is re-sorted by unique
-                // `ordinal` afterwards. A counting sort over `n_partitions`
-                // (typically 4) would make this O(D) — see
-                // results/PERF_AUDIT_2026-08-02.md §6.
-                jobs.sort_unstable_by_key(|job| (job.partition, job.cell_id));
+                        events: events_slice,
+                        charge: self.last_step_charge[cell_id as usize],
+                    });
+                }
+
                 jobs.par_iter_mut().for_each(|job| {
-                    // Hoisted out of the event loop, as in the thin path above.
-                    //
-                    // Equivalence argument: `advance_to` writes `self.last = t`
-                    // only on a non-zero `dt` (cell.rs:195) and early-returns
-                    // when `dt == 0` (cell.rs:139). The only other write to
-                    // `last` is `Cell::reset` (cell.rs:234), which neither
-                    // `deposit` nor `try_fire` calls. So after the first call at
-                    // `tick`, every later call at the same `tick` was already an
-                    // exact no-op. `job.events` is never empty — `grouped` only
-                    // creates an entry by pushing to it.
                     job.cell.advance_to(tick);
-                    for event in &job.events {
+                    for event in job.events.iter_mut() {
                         let did_fire = if event.forced {
                             job.cell.v = job.cell.theta;
                             job.cell.try_fire()
@@ -430,28 +590,31 @@ impl Engine {
                             job.cell.deposit(event.branch, event.amount)
                         };
                         if did_fire {
-                            job.fired_ordinals.push(event.ordinal);
+                            event.fired = true;
                         }
                     }
                 });
+
                 for job in jobs {
                     self.cells[job.cell_id as usize] = job.cell;
-                    self.last_step_charge[job.cell_id as usize] += job.charge;
-                    fired.extend(
-                        job.fired_ordinals
-                            .into_iter()
-                            .map(|ordinal| (ordinal, job.cell_id)),
-                    );
+                    self.set_step_charge(job.cell_id, job.charge);
+                    for ev in job.events {
+                        if ev.fired {
+                            scratch.fired.push((ev.ordinal, job.cell_id));
+                        }
+                    }
                 }
+                scratch.fired.sort_unstable_by_key(|&(ordinal, _)| ordinal);
             }
-            fired.sort_unstable_by_key(|&(ordinal, _)| ordinal);
-            for (_, cell) in fired {
+
+            for &(_, cell) in &scratch.fired {
                 self.work.source_spikes = self.work.source_spikes.saturating_add(1);
                 self.spikes.push(tick, cell);
                 produced.push(tick, cell);
                 self.schedule_fan_out(cell, tick);
             }
         }
+        self.scratch = scratch;
         self.t = until;
         (produced, profile)
     }
@@ -460,6 +623,14 @@ impl Engine {
     #[inline]
     pub fn spikes(&self) -> &SpikeLog {
         &self.spikes
+    }
+
+    /// Split-borrow the immutable spike log and connectivity matrices alongside
+    /// mutable synapse storage so L5 plasticity (`ThreeFactor::absorb_spikes`)
+    /// can walk chronological engine spikes with zero intermediate `Vec` copies.
+    #[inline]
+    pub fn spikes_and_topology_with_syn_mut(&mut self) -> (&SpikeLog, &Csr, &Csc, &mut Synapses) {
+        (&self.spikes, &self.conn, &self.conn_rev, &mut self.syn)
     }
 
     /// Cumulative work counters (source spikes, deliveries, cell updates).
@@ -476,12 +647,32 @@ impl Engine {
 
     /// Completely reset all cell states, clear event queue and spike log, and reset tick to 0.
     pub fn reset_state(&mut self) {
-        for c in &mut self.cells {
-            c.reset();
+        if !self.dirty_cells_armed {
+            for c in &mut self.cells {
+                c.reset();
+            }
+            self.cell_dirty.clear();
+            self.cell_dirty.resize(self.cells.len(), 0);
+            self.dirty_cells.clear();
+            self.dirty_cells.reserve(self.cells.len().min(1_024));
+            self.dirty_cells_armed = true;
+        } else if self.dirty_cells.len() > self.cells.len() / 2 {
+            for c in &mut self.cells {
+                c.reset();
+            }
+            for id in self.dirty_cells.drain(..) {
+                self.cell_dirty[id as usize] = 0;
+            }
+        } else {
+            for id in self.dirty_cells.drain(..) {
+                let idx = id as usize;
+                self.cell_dirty[idx] = 0;
+                self.cells[idx].reset();
+            }
         }
-        self.queue = TimingWheel::new();
+        self.queue.clear();
         self.spikes.clear();
-        self.last_step_charge.fill(0.0);
+        self.clear_last_step_charge();
         self.t = 0;
     }
 
@@ -500,6 +691,7 @@ impl Engine {
         at: Tick,
         produced: &mut SpikeLog,
     ) {
+        self.mark_cell_dirty(cell);
         let fired = {
             let c = &mut self.cells[cell as usize];
             c.advance_to(at);
@@ -507,8 +699,9 @@ impl Engine {
                 c.v = c.theta;
                 c.try_fire()
             } else {
-                self.last_step_charge[cell as usize] += amount;
-                c.deposit(branch, amount)
+                let res = c.deposit(branch, amount);
+                self.add_step_charge(cell, amount);
+                res
             }
         };
 
@@ -544,15 +737,53 @@ impl Engine {
         // too would let this loop stream two dense arrays. Left for a measured
         // pass, see results/PERF_AUDIT_2026-08-02.md §5.
         let cols = &self.conn.col[start..end];
-        let syns = &self.syn.as_slice()[start..end];
-        for (offset, (&post, syn)) in cols.iter().zip(syns.iter()).enumerate() {
-            if syn.weight == 0.0 {
-                continue;
+        if let Some(d) = self.syn.uniform_delay() {
+            let delivery_at = at.checked_add(d).expect("synaptic delay overflow");
+            if self.syn.is_edge_w_synced() && self.edge_w.len() == self.syn.len() {
+                let weights = &self.edge_w[start..end];
+                debug_assert!(
+                    weights
+                        .iter()
+                        .zip(&self.syn.as_slice()[start..end])
+                        .all(|(w, s)| w.to_bits() == s.weight.to_bits()),
+                    "Engine::edge_w diverged from Synapses while marked synced"
+                );
+                self.queue.insert_batch_at(
+                    delivery_at,
+                    cols.iter()
+                        .zip(weights.iter())
+                        .enumerate()
+                        .filter(|&(_, (_, &weight))| weight != 0.0)
+                        .map(|(offset, (&post, &weight))| {
+                            let branch = ((start + offset) % K) as u8;
+                            encode_event(post, branch, weight, false)
+                        }),
+                );
+            } else {
+                let syns = &self.syn.as_slice()[start..end];
+                self.queue.insert_batch_at(
+                    delivery_at,
+                    cols.iter()
+                        .zip(syns.iter())
+                        .enumerate()
+                        .filter(|&(_, (_, syn))| syn.weight != 0.0)
+                        .map(|(offset, (&post, syn))| {
+                            let branch = ((start + offset) % K) as u8;
+                            encode_event(post, branch, syn.weight, false)
+                        }),
+                );
             }
-            let delivery_at = at.checked_add(syn.delay).expect("synaptic delay overflow");
-            let branch = ((start + offset) % K) as u8;
-            self.queue
-                .insert(delivery_at, encode_event(post, branch, syn.weight, false));
+        } else {
+            let syns = &self.syn.as_slice()[start..end];
+            for (offset, (&post, syn)) in cols.iter().zip(syns.iter()).enumerate() {
+                if syn.weight == 0.0 {
+                    continue;
+                }
+                let delivery_at = at.checked_add(syn.delay).expect("synaptic delay overflow");
+                let branch = ((start + offset) % K) as u8;
+                self.queue
+                    .insert(delivery_at, encode_event(post, branch, syn.weight, false));
+            }
         }
     }
 }
@@ -746,5 +977,171 @@ mod tests {
         assert_eq!(profile.parallel_ticks, 1);
         assert_eq!(profile.max_width, n);
         assert!(profile.width_headroom() >= 1.0 - 1e-12);
+    }
+
+    #[test]
+    fn mixed_thin_wide_and_cancelling_charges_match_sequential_bit_exact() {
+        use crate::parallel::PartitionPlan;
+
+        let n = 24usize;
+        let rows: Vec<Vec<u32>> = (0..n)
+            .map(|r| vec![((r + 1) % n) as u32, ((r + 5) % n) as u32])
+            .collect();
+        let conn = Csr::from_adjacency(&rows);
+        let weights = vec![0.35_f32; conn.nnz()];
+        let plan = PartitionPlan::degree_balanced(&conn, 4);
+
+        let mut seq = Engine::with_cells(n);
+        seq.set_connectivity(conn.clone(), weights.clone());
+        let mut par_adapt = Engine::with_cells(n);
+        par_adapt.set_connectivity(conn.clone(), weights.clone());
+        let mut par_always = Engine::with_cells(n);
+        par_always.set_connectivity(conn, weights);
+
+        let mut rng = Rng::new(0xE176_17E5_2026);
+        for round in 0..3u64 {
+            let base = round * 20;
+            // Cancelling deposits (+0.5 then -0.5) followed by +0.25 on same cell.
+            for eng in [&mut seq, &mut par_adapt, &mut par_always] {
+                eng.inject_weighted(3, 0, base + 1, 0.5);
+                eng.inject_weighted(3, 0, base + 1, -0.5);
+                eng.inject_weighted(3, 1, base + 2, 0.25);
+            }
+            // Interleaved multi-event thin tick (base + 4) and wide burst (base + 6).
+            for i in 0..5usize {
+                let c = (i % 3) as CellId;
+                let w = 0.4 + 0.1 * (i as f32);
+                for eng in [&mut seq, &mut par_adapt, &mut par_always] {
+                    eng.inject_weighted(c, (i % K) as u8, base + 4, w);
+                }
+            }
+            for i in 0..18usize {
+                let c = ((i * 7) % n) as CellId;
+                let w = 0.6 + 0.05 * ((i % 4) as f32);
+                for eng in [&mut seq, &mut par_adapt, &mut par_always] {
+                    if i % 5 == 0 {
+                        eng.force_spike(c, base + 6);
+                    } else {
+                        eng.inject_weighted(c, (i % K) as u8, base + 6, w);
+                    }
+                }
+            }
+            let _ = rng.next_f32();
+
+            let until = base + 15;
+            let s_out = seq.step_until(until);
+            let a_out = par_adapt.step_until_partitioned(until, &plan);
+            let (w_out, _) = par_always.step_until_partitioned_threshold(until, &plan, 1);
+            assert_eq!(a_out, s_out);
+            assert_eq!(w_out, s_out);
+            assert_eq!(par_adapt.work(), seq.work());
+            assert_eq!(par_always.work(), seq.work());
+            for c in 0..n as CellId {
+                assert_eq!(
+                    par_adapt.last_step_charge(c).to_bits(),
+                    seq.last_step_charge(c).to_bits()
+                );
+                assert_eq!(
+                    par_always.last_step_charge(c).to_bits(),
+                    seq.last_step_charge(c).to_bits()
+                );
+                assert_eq!(par_adapt.cell(c).v.to_bits(), seq.cell(c).v.to_bits());
+                assert_eq!(par_always.cell(c).v.to_bits(), seq.cell(c).v.to_bits());
+            }
+        }
+
+        // Empty step must clear all previously dirty charges to exact +0.0.
+        let _ = seq.step_until(100);
+        let _ = par_adapt.step_until_partitioned(100, &plan);
+        for c in 0..n as CellId {
+            assert_eq!(seq.last_step_charge(c).to_bits(), 0);
+            assert_eq!(par_adapt.last_step_charge(c).to_bits(), 0);
+        }
+    }
+
+    #[test]
+    fn lazy_reset_state_and_batched_fan_out_match_eager_reset_bit_for_bit() {
+        let n = 64usize;
+        let adj: Vec<Vec<u32>> = (0..n)
+            .map(|r| {
+                let mut v: Vec<u32> = (1..=6).map(|k| ((r + k * 5) % n) as u32).collect();
+                v.sort_unstable();
+                v.dedup();
+                v
+            })
+            .collect();
+        let conn = Csr::from_adjacency(&adj);
+        let weights: Vec<f32> = (0..conn.nnz())
+            .map(|i| {
+                if i % 7 == 0 {
+                    0.0
+                } else {
+                    0.45 + 0.1 * ((i % 4) as f32)
+                }
+            })
+            .collect();
+
+        let mut eng = Engine::with_cells(n);
+        let mut custom = Cell::new(15.0);
+        custom.v = -0.0;
+        let extra = eng.push_cell(custom);
+        assert_eq!(extra as usize, n);
+        // Re-align connectivity to n+1 cells.
+        let mut adj_ext = adj;
+        adj_ext.push(vec![0, 1]);
+        let conn_ext = Csr::from_adjacency(&adj_ext);
+        let mut w_ext = weights;
+        w_ext.extend_from_slice(&[0.8, 0.6]);
+        eng.set_connectivity(conn_ext.clone(), w_ext.clone());
+
+        // Trial 1: sparse touches (< 50% dirty) + cell_mut with -0.0.
+        eng.cell_mut(3).v_dend[2] = -0.0;
+        eng.force_spike(0, 2);
+        let log1 = eng.step_until(8);
+        assert!(!log1.is_empty());
+        eng.reset_state();
+        for id in 0..=n as CellId {
+            assert!(
+                eng.cell(id).is_at_rest(),
+                "cell {id} not cleanly reset after sparse trial"
+            );
+        }
+        assert!((eng.cell(extra).tau_m - 15.0).abs() <= 1e-6);
+
+        // Trial 2: dense touches (> 50% dirty) via partitioned stepping + unsynced Synapses.
+        let plan = PartitionPlan::degree_balanced(&conn_ext, 4);
+        eng.syn.as_mut_slice_keeping_delays()[0].eligibility = 0.5;
+        assert!(!eng.syn.is_edge_w_synced());
+        for c in 0..40u32 {
+            eng.inject_weighted(c, (c as usize % K) as u8, 1, 1.1);
+        }
+        let _ = eng.step_until_partitioned(10, &plan);
+        eng.reset_state();
+        for id in 0..=n as CellId {
+            assert!(
+                eng.cell(id).is_at_rest(),
+                "cell {id} not cleanly reset after dense trial"
+            );
+        }
+
+        // Trial 3: re-synced edge_w must produce bit-identical spikes to fresh engine.
+        eng.syn.mark_edge_w_synced();
+        let mut fresh = Engine::with_cells(n);
+        let mut fresh_custom = Cell::new(15.0);
+        fresh_custom.reset();
+        fresh.push_cell(fresh_custom);
+        fresh.set_connectivity(conn_ext, w_ext);
+
+        for target in [&mut eng, &mut fresh] {
+            target.force_spike(0, 1);
+            target.inject_weighted(extra, 1, 2, 1.25);
+        }
+        let got = eng.step_until(12);
+        let exp = fresh.step_until(12);
+        assert_eq!(got, exp);
+        for id in 0..=n as CellId {
+            assert_eq!(eng.cell(id).v.to_bits(), fresh.cell(id).v.to_bits());
+            assert_eq!(eng.cell(id).theta.to_bits(), fresh.cell(id).theta.to_bits());
+        }
     }
 }

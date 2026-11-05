@@ -190,6 +190,12 @@ The central thesis was that compartmental LIF cells, sparse $k$-WTA assemblies, 
 4. **Sleep-Provenance Consolidation (`U21` / `binn-learn::consolidation`):**
    - Standard FIFO replay (`exact-replay`) and naive label-free replay (`offline-local-consolidation`) suffer catastrophic forgetting (`0.8000` mean forgetting, `0.2000` final mean accuracy across 10 scientific seeds in [`results/u21_consolidation.md`](results/u21_consolidation.md)).
    - Pairing dual-store fast/slow weights with decoupled coordinate-wise erase/write gating (`DecoupledConsolidationGate`), homeostatic dormancy threshold renewal (`HomeostaticRenewal`), and bipartite episodic provenance (`ProvenanceTable` in `SleepConsolidationLearner` and `SpikingSleepConsolidator`) eliminates forgetting (**`0.0000` mean forgetting, `1.0000` final mean accuracy** across 10 seeds) without disclosing labels during offline sleep, while supporting exact surgical episode/task revocation.
+5. **Weight-Space Programming & Direct Synaptic Synthesis ([`results/WEIGHT_SPACE_PROGRAMMING.md`](results/WEIGHT_SPACE_PROGRAMMING.md)):**
+   - Extending Weight-Space Programming (Takehi, Teoh, Zhang, & Khattab, MIT CSAIL, 2026) to event-driven neuromorphic graphs reveals the structural weight-space failure modes of local learning and demonstrates zero-gradient rescues:
+     - **Full-corpus audit (`0/150` on-disk `.weights` are trained) & recurrent BPTT:** contracting recurrent weights ($0.25\times$, Frobenius ball $\|W_{\text{rec}}\|_F \le 3.0$) reduces exploding gradient norms by **`7.8e13×`** ($4.52 \times 10^{25} \to 5.79 \times 10^{11}$).
+     - **Finite-threshold natural spiking (`c1-spike-s`):** programming a 4-cell 2-hop recurrent coincidence motif ($0.401\%$ of CSR edges) elevates 20-seed accuracy from **`0.4700` to `0.9887`** under finite $\theta = 1.0$ and live recurrence while keeping activity sparsity at $0.01562$.
+     - **Compositional depth (`C3 v2`):** intra-checkpoint layer averaging fails at $D \ge 4$, whereas tiling a locally learned $D = 1$ block ($0$ gradients) extends the compositional horizon from **`D* = 3` to `D* = 8`** at **`1.0000` accuracy**.
+     - **Continual forgetting (`C2`):** local plasticity drives $100\%$ ($37/37$) of afferent synapses negative; phase-boundary weight locking cuts forgetting **`5.1×`** ($0.8948 \to 0.1760$, 0 replay buffer). In 20-class `SHD`, row homeostasis wakes silent LIF units ($0.0500 \to 0.0861$), while 0-data Frobenius rescaling rescues Wave 26 attention saturation ($0.0043 \to 2.6614$ entropy).
 
 ---
 
@@ -237,6 +243,7 @@ graph BT
 | **G3 (C2 Continual)** | **FAIL** | Local forgetting 0.8948 vs replay baseline 0.2725 | Plasticity alone does not prevent catastrophic forgetting without replay |
 | **G4 (R2 Scaling)** | **NO-GO** | Degrading curve (slope −0.1924 vs ln(#areas)) | Area composition does not compound accuracy without hierarchy |
 | **SHD Attention Readout** | **0.8320 (12/12 $\ge$ 0.80)** | Waves 1–29, $n=12$ at the anchor, 0 voided | Headline **0.8320** (+0.1258 over rate readout; **0.8332**/+0.1275 at $n=32$). Mechanism is **temporal order** (+0.1337 shuffle drop at $n=12$, **+0.1347 in 32/32**), and it **runs through position** (−0.0752), **has a timescale** ($\tau_{1/2}$ = **261 ms**) and **does not run through spike counts** — destroying 90% of spikes leaves the advantage intact and in fact **grows** it (DiD **−0.0467**, 11/12, wave 29 on Apple libm) |
+| **Weight-Space Programming** | **DIAGNOSTIC & SURGERY** | [`WEIGHT_SPACE_PROGRAMMING.md`](results/WEIGHT_SPACE_PROGRAMMING.md) | Direct weight-space synthesis & repair across C1 ($0.47 \to 0.99$), C2 ($0.89 \to 0.18$ forgetting), C3 ($D^* = 3 \to 8$), and SHD/Attention |
 
 ---
 
@@ -299,7 +306,23 @@ cargo run --release -p binn-lab --bin r2 -- --enable-r2 --out results/r2_scaling
 
 ---
 
-## 8. Offline Viewer & Figures
+## 8. Performance & Systems Benchmarks (Waves 1–4)
+
+All simulation, plasticity, and GPU substrate hot paths undergo continuous profiling and 5-round interleaved ABBA benchmarking (`pre -> post -> post -> pre -> pre -> post...`) against verified bit-exact baselines on the reference host (Apple M5 Pro, 64 GB unified memory). See [`results/PERF_AUDIT_2026-11-02_WAVES_1_3.md`](results/PERF_AUDIT_2026-11-02_WAVES_1_3.md) for full Wave 1–4 audit provenance.
+
+| Target Subsystem | Metric / Workload | Pre-Optimization | Post-Wave-4 | Speedup (Min-of-5) | Memory / Invariant Impact |
+|---|---|---:|---:|---:|---|
+| **End-to-End Simulation** | `c1 --micro` ($N=10\text{k}$ cells, $2.57\text{M}$ syn) | $844.0\text{ ms}$ (pre-W1)<br>$260.0\text{ ms}$ (pre-W4) | **$104.3\text{ ms}$** ($92.4\text{ ms}$ cond) | **$\sim 8.1\times$ cumulative**<br>($2.49\times\text{–}2.67\times$ Wave 4) | $185.4\text{ MB}$ RSS (**$-8.4\text{ MB}$ vs pre-W3**); 100% bit-exact JSON replay |
+| **Lazy Engine Reset** | `Engine::reset_state` ($N=10\text{k}$, 64 dirty) | $10.23\text{ }\mu\text{s}$ | **$0.113\text{ }\mu\text{s}$** | **$90.57\times$** ($93.45\times$ med) | Lazy-armed `O(D)` dirty-cell tracking; zero one-shot engine allocs |
+| **SHD ALIF Training** | `ShdAlifArm` FF / Rec ($700\times 128, T=100$) | $178.6\text{ ms}$ / $299.1\text{ ms}$ | **$4.06\text{ ms}$ / $29.3\text{ ms}$** | **$43.96\times$ / $10.22\times$** | Factored 1D eligibility traces + active-channel sparse scans |
+| **Metal Multi-Tick GPU** | 64-tick recurrent SpMV+LIF ($N=4\text{k}..16\text{k}$) | $38.0\text{ ms}$ / $54.5\text{ ms}$ | **$1.08\text{ ms}$ / $2.88\text{ ms}$** | **$35.25\times$ / $18.93\times$** | 1 `MTLComputeCommandEncoder` + 1 `MTLCommandBuffer` (`uploads=1, syncs=1`) |
+| **SHD e-prop / Eval** | 700-ch e-prop kernel / `temporal-sensitivity` | $102.6\text{ ms}$ / $1,205.9\text{ ms}$ | **$11.8\text{ ms}$ / $507.0\text{ ms}$** | **$8.72\times$ / $2.38\times$** | Channel-major active-sparse scans + forward-only matched-arm eval |
+| **Metal Single-Pass LIF** | Fused packed-spike + LIF ($N=50\text{k}$) | $3.48\text{ ms}$ | **$0.90\text{ ms}$** | **$3.88\times$** ($1.21\times$ med) | Single-pass `fused_spikes_lif` eliminates intermediate current DRAM pass |
+| **Synaptic Delay Query** | `Engine::max_synaptic_delay` (500k syn) | $153.1\text{ }\mu\text{s}$ | **$0.25\text{ ns}$** | **$\sim 606,000\times$** | $O(1)$ atomic delay caching; eliminates $7.4\text{ GB}$ DRAM reads/run |
+
+---
+
+## 9. Offline Viewer & Figures
 
 ```bash
 # Export trace from C1 run to JSONL
@@ -315,7 +338,7 @@ cargo run --locked --release -p binn-lab --features plots --bin paper-figures --
 
 ---
 
-## 9. Global Architectural Constraints (CI Enforced)
+## 10. Global Architectural Constraints (CI Enforced)
 
 All code adheres to strict global constraints verified by `.github/workflows/ci.yml` and `scripts/gc_checks.sh`:
 
@@ -331,7 +354,7 @@ All code adheres to strict global constraints verified by `.github/workflows/ci.
 
 ---
 
-## 10. Documentation Index
+## 11. Documentation Index
 
 Root holds five documents; everything else lives under `results/`,
 `hybrid-results/`, or `docs/`.
@@ -346,6 +369,9 @@ Root holds five documents; everything else lives under `results/`,
 
 **Record** — [`results/INDEX.md`](results/INDEX.md) is generated by `scripts/build_results_index.py` and is the entry point. Read a retired document only through the document that retired it; the index says which.
 
+- [`results/PERF_AUDIT_2026-11-02_WAVES_1_3.md`](results/PERF_AUDIT_2026-11-02_WAVES_1_3.md) — 5-round interleaved ABBA performance audit across Waves 1–4 ($\sim 8.1\times$ process / $9.1\times$ condition cumulative end-to-end acceleration, $10\times\text{–}44\times$ SHD mega-kernels, $19\times\text{–}35\times$ multi-tick Metal GPU fusion, $\sim 606,000\times$ delay query speedup)
+- [`results/WEIGHT_SPACE_PROGRAMMING.md`](results/WEIGHT_SPACE_PROGRAMMING.md) — weight-space reading and zero-gradient surgery analysis
+- [`results/POST_G2_BUILD.md`](results/POST_G2_BUILD.md) — post-G2 engineering build and verified units (U14–U25)
 - [`results/PAPER_DRAFT.md`](results/PAPER_DRAFT.md) — paper prose draft
 - [`results/PAPER_GAPS_2026-08-29.md`](results/PAPER_GAPS_2026-08-29.md) — what stands between the package and submission
 - [`results/TODO_2026-08-07_OPEN_WORK.md`](results/TODO_2026-08-07_OPEN_WORK.md) — open work, by blocking order; §9 holds external reading and candidate experiments

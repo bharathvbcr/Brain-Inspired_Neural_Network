@@ -320,7 +320,10 @@ mod tests {
                 for t in 0..TEMPORAL_ORDER_T {
                     frames[t * TEMPORAL_ORDER_N_IN] = (e * 1000 + t) as f32;
                 }
-                TemporalOrderExample { frames, label: e as u32 }
+                TemporalOrderExample {
+                    frames,
+                    label: e as u32,
+                }
             })
             .collect()
     }
@@ -342,7 +345,10 @@ mod tests {
         let moved = (0..32u64)
             .filter(|&seed| time_shuffle(&quartet, seed) != quartet)
             .count();
-        assert_eq!(moved, 32, "time_shuffle left its input unchanged at some seed");
+        assert_eq!(
+            moved, 32,
+            "time_shuffle left its input unchanged at some seed"
+        );
     }
 
     #[test]
@@ -374,9 +380,14 @@ mod tests {
         for seed in 0..8u64 {
             let shuffled = time_shuffle(&labelled_quartet(), seed);
             let first = recovered_permutation(&shuffled[0], 0);
-            for e in 1..TEMPORAL_ORDER_N_CLASSES {
+            for (e, item) in shuffled
+                .iter()
+                .enumerate()
+                .take(TEMPORAL_ORDER_N_CLASSES)
+                .skip(1)
+            {
                 assert_eq!(
-                    recovered_permutation(&shuffled[e], e),
+                    recovered_permutation(item, e),
                     first,
                     "seed {seed}: example {e} was permuted differently from example 0"
                 );
@@ -393,7 +404,10 @@ mod tests {
         let differing = (1..32u64)
             .filter(|&seed| recovered_permutation(&time_shuffle(&quartet, seed)[0], 0) != baseline)
             .count();
-        assert!(differing >= 30, "only {differing} of 31 seeds gave a different permutation");
+        assert!(
+            differing >= 30,
+            "only {differing} of 31 seeds gave a different permutation"
+        );
     }
 
     #[test]

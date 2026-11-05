@@ -227,7 +227,7 @@ impl SparseTerminalModel {
         for (edge, &delta) in deltas.iter().enumerate() {
             let updated = (self.engine.edge_w[edge] + delta).clamp(-8.0, 8.0);
             self.engine.edge_w[edge] = updated;
-            self.engine.syn.as_mut_slice()[edge].weight = updated;
+            self.engine.syn.set_weight_keeping_delay(edge, updated);
         }
     }
 }

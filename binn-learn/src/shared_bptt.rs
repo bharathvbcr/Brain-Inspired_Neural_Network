@@ -104,7 +104,15 @@ impl SharedGradients {
     }
 
     pub fn flat(&self) -> Vec<f32> {
-        let mut out = Vec::new();
+        let len: usize = self
+            .layer_weights
+            .iter()
+            .zip(&self.layer_bias)
+            .map(|(w, b)| w.len() + b.len())
+            .sum::<usize>()
+            + self.readout.len()
+            + self.readout_bias.len();
+        let mut out = Vec::with_capacity(len);
         for (weights, bias) in self.layer_weights.iter().zip(&self.layer_bias) {
             out.extend(weights);
             out.extend(bias);
@@ -112,6 +120,16 @@ impl SharedGradients {
         out.extend(&self.readout);
         out.extend(&self.readout_bias);
         out
+    }
+
+    fn iter_values(&self) -> impl Iterator<Item = f32> + '_ {
+        self.layer_weights
+            .iter()
+            .zip(&self.layer_bias)
+            .flat_map(|(weights, bias)| weights.iter().chain(bias.iter()))
+            .chain(self.readout.iter())
+            .chain(self.readout_bias.iter())
+            .copied()
     }
 
     /// The gradient's global L2 norm, widened to f64 **only on overflow**.
@@ -144,18 +162,18 @@ impl SharedGradients {
     /// representable norm **bit-identical** and replaces only the ones that were
     /// already wrong. A norm genuinely above `f32::MAX` still returns infinity.
     pub fn global_norm(&self) -> f32 {
-        let flat = self.flat();
-        let sum = flat.iter().map(|value| value * value).sum::<f32>();
+        let mut sum = 0.0f32;
+        for value in self.iter_values() {
+            sum += value * value;
+        }
         if sum.is_finite() {
             return sum.sqrt();
         }
-        let wide: f64 = flat
-            .iter()
-            .map(|value| {
-                let value = f64::from(*value);
-                value * value
-            })
-            .sum();
+        let mut wide = 0.0f64;
+        for value in self.iter_values() {
+            let value = f64::from(value);
+            wide += value * value;
+        }
         wide.sqrt() as f32
     }
 
@@ -552,11 +570,16 @@ impl SharedTemporalNet {
     }
 
     pub fn parameter_count(&self) -> usize {
-        self.parameter_values().len()
+        self.layers
+            .iter()
+            .map(|layer| layer.weights.len() + layer.bias.len())
+            .sum::<usize>()
+            + self.readout.len()
+            + self.readout_bias.len()
     }
 
     pub fn parameter_values(&self) -> Vec<f32> {
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(self.parameter_count());
         for layer in &self.layers {
             values.extend(&layer.weights);
             values.extend(&layer.bias);
@@ -594,19 +617,17 @@ impl SharedTemporalNet {
 
     pub fn parameter_fingerprint(&self) -> u64 {
         let mut hash = 0xcbf2_9ce4_8422_2325u64;
-        for value in self.parameter_values() {
+        for layer in &self.layers {
+            for &value in layer.weights.iter().chain(&layer.bias) {
+                hash ^= value.to_bits() as u64;
+                hash = hash.wrapping_mul(0x100_0000_01b3);
+            }
+        }
+        for &value in self.readout.iter().chain(&self.readout_bias) {
             hash ^= value.to_bits() as u64;
             hash = hash.wrapping_mul(0x100_0000_01b3);
         }
         hash
-    }
-
-    fn apply_flat_step(&mut self, step: &[f32]) {
-        assert_eq!(step.len(), self.parameter_count());
-        let values = self.parameter_values();
-        for (index, (&value, &delta)) in values.iter().zip(step).enumerate() {
-            self.set_parameter(index, value + delta);
-        }
     }
 
     fn validate_example(&self, example: &DenseTemporalExample) {
@@ -660,34 +681,64 @@ impl Adam {
         gradients: &SharedGradients,
     ) -> Result<StepDiagnostics, NonFiniteGradient> {
         let (clipped, unclipped_global_norm, clipped_global_norm) = clip_gradients(gradients)?;
-        let flat = clipped.flat();
         self.step += 1;
-        let mut applied = vec![0.0f32; flat.len()];
         let bias1 = 1.0 - ADAM_BETA1.powi(self.step as i32);
         let bias2 = 1.0 - ADAM_BETA2.powi(self.step as i32);
-        for index in 0..flat.len() {
-            self.moment1[index] =
-                ADAM_BETA1 * self.moment1[index] + (1.0 - ADAM_BETA1) * flat[index];
-            self.moment2[index] =
-                ADAM_BETA2 * self.moment2[index] + (1.0 - ADAM_BETA2) * flat[index] * flat[index];
-            let m_hat = self.moment1[index] / bias1;
-            let v_hat = self.moment2[index] / bias2;
-            applied[index] = -ADAM_LR * m_hat / (v_hat.sqrt() + ADAM_EPS);
-        }
 
         let mut layer_gradient_rms = Vec::with_capacity(model.layers.len());
         let mut layer_step_rms = Vec::with_capacity(model.layers.len());
-        let mut cursor = 0usize;
-        for layer in &model.layers {
+        let mut index = 0usize;
+        for ((layer, grad_w), grad_b) in model
+            .layers
+            .iter_mut()
+            .zip(&clipped.layer_weights)
+            .zip(&clipped.layer_bias)
+        {
             let length = layer.weights.len() + layer.bias.len();
-            layer_gradient_rms.push(rms(&flat[cursor..cursor + length]));
-            layer_step_rms.push(rms(&applied[cursor..cursor + length]));
-            cursor += length;
+            let mut grad_sq = 0.0f32;
+            let mut step_sq = 0.0f32;
+            for (param, &g) in layer
+                .weights
+                .iter_mut()
+                .chain(layer.bias.iter_mut())
+                .zip(grad_w.iter().chain(grad_b.iter()))
+            {
+                self.moment1[index] = ADAM_BETA1 * self.moment1[index] + (1.0 - ADAM_BETA1) * g;
+                self.moment2[index] = ADAM_BETA2 * self.moment2[index] + (1.0 - ADAM_BETA2) * g * g;
+                let m_hat = self.moment1[index] / bias1;
+                let v_hat = self.moment2[index] / bias2;
+                let applied = -ADAM_LR * m_hat / (v_hat.sqrt() + ADAM_EPS);
+                grad_sq += g * g;
+                step_sq += applied * applied;
+                *param += applied;
+                index += 1;
+            }
+            layer_gradient_rms.push(rms_from_sq_sum(grad_sq, length));
+            layer_step_rms.push(rms_from_sq_sum(step_sq, length));
         }
+
         let readout_length = model.readout.len() + model.readout_bias.len();
-        let readout_gradient_rms = rms(&flat[cursor..cursor + readout_length]);
-        let readout_step_rms = rms(&applied[cursor..cursor + readout_length]);
-        model.apply_flat_step(&applied);
+        let mut grad_sq = 0.0f32;
+        let mut step_sq = 0.0f32;
+        for (param, &g) in model
+            .readout
+            .iter_mut()
+            .chain(model.readout_bias.iter_mut())
+            .zip(clipped.readout.iter().chain(clipped.readout_bias.iter()))
+        {
+            self.moment1[index] = ADAM_BETA1 * self.moment1[index] + (1.0 - ADAM_BETA1) * g;
+            self.moment2[index] = ADAM_BETA2 * self.moment2[index] + (1.0 - ADAM_BETA2) * g * g;
+            let m_hat = self.moment1[index] / bias1;
+            let v_hat = self.moment2[index] / bias2;
+            let applied = -ADAM_LR * m_hat / (v_hat.sqrt() + ADAM_EPS);
+            grad_sq += g * g;
+            step_sq += applied * applied;
+            *param += applied;
+            index += 1;
+        }
+        let readout_gradient_rms = rms_from_sq_sum(grad_sq, readout_length);
+        let readout_step_rms = rms_from_sq_sum(step_sq, readout_length);
+
         Ok(StepDiagnostics {
             unclipped_global_norm,
             clipped_global_norm,
@@ -733,21 +784,49 @@ fn apply_sgd_step(
     lr: f32,
 ) -> Result<StepDiagnostics, NonFiniteGradient> {
     let (clipped, unclipped_global_norm, clipped_global_norm) = clip_gradients(gradients)?;
-    let flat = clipped.flat();
-    let applied: Vec<f32> = flat.iter().map(|gradient| -lr * gradient).collect();
     let mut layer_gradient_rms = Vec::with_capacity(model.layers.len());
     let mut layer_step_rms = Vec::with_capacity(model.layers.len());
-    let mut cursor = 0usize;
-    for layer in &model.layers {
+    for ((layer, grad_w), grad_b) in model
+        .layers
+        .iter_mut()
+        .zip(&clipped.layer_weights)
+        .zip(&clipped.layer_bias)
+    {
         let length = layer.weights.len() + layer.bias.len();
-        layer_gradient_rms.push(rms(&flat[cursor..cursor + length]));
-        layer_step_rms.push(rms(&applied[cursor..cursor + length]));
-        cursor += length;
+        let mut grad_sq = 0.0f32;
+        let mut step_sq = 0.0f32;
+        for (param, &g) in layer
+            .weights
+            .iter_mut()
+            .chain(layer.bias.iter_mut())
+            .zip(grad_w.iter().chain(grad_b.iter()))
+        {
+            let applied = -lr * g;
+            grad_sq += g * g;
+            step_sq += applied * applied;
+            *param += applied;
+        }
+        layer_gradient_rms.push(rms_from_sq_sum(grad_sq, length));
+        layer_step_rms.push(rms_from_sq_sum(step_sq, length));
     }
+
     let readout_length = model.readout.len() + model.readout_bias.len();
-    let readout_gradient_rms = rms(&flat[cursor..cursor + readout_length]);
-    let readout_step_rms = rms(&applied[cursor..cursor + readout_length]);
-    model.apply_flat_step(&applied);
+    let mut grad_sq = 0.0f32;
+    let mut step_sq = 0.0f32;
+    for (param, &g) in model
+        .readout
+        .iter_mut()
+        .chain(model.readout_bias.iter_mut())
+        .zip(clipped.readout.iter().chain(clipped.readout_bias.iter()))
+    {
+        let applied = -lr * g;
+        grad_sq += g * g;
+        step_sq += applied * applied;
+        *param += applied;
+    }
+    let readout_gradient_rms = rms_from_sq_sum(grad_sq, readout_length);
+    let readout_step_rms = rms_from_sq_sum(step_sq, readout_length);
+
     Ok(StepDiagnostics {
         unclipped_global_norm,
         clipped_global_norm,
@@ -1007,11 +1086,12 @@ fn argmax(values: &[f32]) -> usize {
         .unwrap_or(0)
 }
 
-fn rms(values: &[f32]) -> f32 {
-    if values.is_empty() {
+#[inline]
+fn rms_from_sq_sum(sq_sum: f32, len: usize) -> f32 {
+    if len == 0 {
         0.0
     } else {
-        (values.iter().map(|value| value * value).sum::<f32>() / values.len() as f32).sqrt()
+        (sq_sum / len as f32).sqrt()
     }
 }
 
@@ -1481,5 +1561,71 @@ mod tests {
             rate += spike / timesteps as f32;
         }
         rate
+    }
+
+    #[test]
+    fn streaming_adam_sgd_and_norm_are_bit_identical_to_flat_reference() {
+        let mut m_opt = SharedTemporalNet::new(3, 4, 3, &[5, 4], 0.8, 0.5, 2.0, 77);
+        let mut m_ref = m_opt.clone();
+        let mut adam_opt = Adam::new(&m_opt);
+        let mut adam_ref = adam_opt.clone();
+
+        for label in [0u32, 1, 2, 0] {
+            let ex = example(label);
+            let (_, grads) = m_opt.loss_and_gradients(&ex);
+            let d_opt = adam_opt.update(&mut m_opt, &grads).unwrap();
+
+            let (clipped, unclipped, clipped_norm) = clip_gradients(&grads).unwrap();
+            let flat = clipped.flat();
+            adam_ref.step += 1;
+            let mut applied = vec![0.0f32; flat.len()];
+            let bias1 = 1.0 - ADAM_BETA1.powi(adam_ref.step as i32);
+            let bias2 = 1.0 - ADAM_BETA2.powi(adam_ref.step as i32);
+            for idx in 0..flat.len() {
+                adam_ref.moment1[idx] =
+                    ADAM_BETA1 * adam_ref.moment1[idx] + (1.0 - ADAM_BETA1) * flat[idx];
+                adam_ref.moment2[idx] =
+                    ADAM_BETA2 * adam_ref.moment2[idx] + (1.0 - ADAM_BETA2) * flat[idx] * flat[idx];
+                let m_hat = adam_ref.moment1[idx] / bias1;
+                let v_hat = adam_ref.moment2[idx] / bias2;
+                applied[idx] = -ADAM_LR * m_hat / (v_hat.sqrt() + ADAM_EPS);
+            }
+            let vals = m_ref.parameter_values();
+            for (idx, (&v, &delta)) in vals.iter().zip(&applied).enumerate() {
+                m_ref.set_parameter(idx, v + delta);
+            }
+
+            assert_eq!(d_opt.unclipped_global_norm.to_bits(), unclipped.to_bits());
+            assert_eq!(d_opt.clipped_global_norm.to_bits(), clipped_norm.to_bits());
+            assert_eq!(m_opt.parameter_fingerprint(), m_ref.parameter_fingerprint());
+            assert_eq!(
+                m_opt
+                    .parameter_values()
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                m_ref
+                    .parameter_values()
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        let mut sgd_opt = SharedTemporalNet::new(3, 4, 3, &[5, 4], 0.8, 0.5, 2.0, 91);
+        let mut sgd_ref = sgd_opt.clone();
+        let (_, grads) = sgd_opt.loss_and_gradients(&example(1));
+        let d_sgd = apply_sgd_step(&mut sgd_opt, &grads, 0.05).unwrap();
+        let (clipped, _, _) = clip_gradients(&grads).unwrap();
+        let flat = clipped.flat();
+        let vals = sgd_ref.parameter_values();
+        for (idx, (&v, &g)) in vals.iter().zip(&flat).enumerate() {
+            sgd_ref.set_parameter(idx, v + (-0.05 * g));
+        }
+        assert!(d_sgd.readout_step_rms.is_finite());
+        assert_eq!(
+            sgd_opt.parameter_fingerprint(),
+            sgd_ref.parameter_fingerprint()
+        );
     }
 }

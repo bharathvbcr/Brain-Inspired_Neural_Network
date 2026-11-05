@@ -69,14 +69,39 @@ impl Assembly {
     }
 }
 
+#[inline]
+fn is_strictly_sorted(xs: &[CellId]) -> bool {
+    xs.windows(2).all(|w| w[0] < w[1])
+}
+
 /// `|A ∩ B|`.
 pub fn overlap_count(a: &Assembly, b: &Assembly) -> usize {
     let (small, large) = if a.len() <= b.len() { (a, b) } else { (b, a) };
-    small
-        .members
-        .iter()
-        .filter(|id| large.contains(**id))
-        .count()
+    let sm = &small.members;
+    let lg = &large.members;
+    if sm.is_empty() {
+        return 0;
+    }
+    if lg.len() <= sm.len().saturating_mul(4) && is_strictly_sorted(sm) && is_strictly_sorted(lg) {
+        let mut i = 0usize;
+        let mut j = 0usize;
+        let mut count = 0usize;
+        while i < sm.len() && j < lg.len() {
+            let x = sm[i];
+            let y = lg[j];
+            if x == y {
+                count += 1;
+                i += 1;
+                j += 1;
+            } else if x < y {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+        return count;
+    }
+    sm.iter().filter(|id| large.contains(**id)).count()
 }
 
 /// Assembly overlap `|A ∩ B| / k` with `k = max(|A|, |B|)` (0 when both empty).
@@ -89,4 +114,33 @@ pub fn overlap(a: &Assembly, b: &Assembly) -> f32 {
         return 0.0;
     }
     overlap_count(a, b) as f32 / k as f32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlap_count_merge_matches_binary_search_across_skew_ratios() {
+        let balanced_a = Assembly::from_members((0..128u32).map(|i| i * 3).collect());
+        let balanced_b = Assembly::from_members((0..128u32).map(|i| i * 4).collect());
+        let expected_bal = balanced_a
+            .members
+            .iter()
+            .filter(|id| balanced_b.contains(**id))
+            .count();
+        assert_eq!(overlap_count(&balanced_a, &balanced_b), expected_bal);
+        assert_eq!(overlap_count(&balanced_b, &balanced_a), expected_bal);
+
+        // Skewed (>4x): exercises the binary-search branch symmetrically.
+        let tiny = Assembly::from_members(vec![0, 12, 99, 381]);
+        let expected_skew = tiny
+            .members
+            .iter()
+            .filter(|id| balanced_a.contains(**id))
+            .count();
+        assert_eq!(overlap_count(&tiny, &balanced_a), expected_skew);
+        assert_eq!(overlap_count(&balanced_a, &tiny), expected_skew);
+        assert_eq!(overlap_count(&Assembly::new(), &balanced_a), 0);
+    }
 }

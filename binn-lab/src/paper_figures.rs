@@ -4060,7 +4060,11 @@ mod tests {
     fn every_emitted_figure_is_in_the_one_list() {
         let stems: Vec<&str> = all_figures().map(|(stem, _, _)| stem).collect();
         assert_eq!(stems.len(), PAPER_FIGURES.len() + OTHER_FIGURES.len());
-        for stem in ["figS_substrate", "fig4_transfer_ladder", "graphical_abstract"] {
+        for stem in [
+            "figS_substrate",
+            "fig4_transfer_ladder",
+            "graphical_abstract",
+        ] {
             assert!(stems.contains(&stem), "{stem}");
         }
     }

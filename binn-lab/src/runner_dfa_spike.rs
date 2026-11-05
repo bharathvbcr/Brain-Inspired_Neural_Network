@@ -600,7 +600,7 @@ fn apply_weight_updates(engine: &mut Engine, updates: &[f32]) -> u64 {
         }
         let weight = (engine.edge_w[edge] + delta).clamp(-8.0, 8.0);
         engine.edge_w[edge] = weight;
-        engine.syn.as_mut_slice()[edge].weight = weight;
+        engine.syn.set_weight_keeping_delay(edge, weight);
         changed = changed.saturating_add(1);
     }
     changed

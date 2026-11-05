@@ -739,17 +739,11 @@ fn boost_readouts(eng: &mut Engine, readout0: CellId, n_classes: usize, boost: f
     if (boost - 1.0).abs() < 1e-6 {
         return;
     }
-    let conn = eng.conn.clone();
     let readout_end = readout0 + n_classes as CellId;
-    for pre in 0..conn.nrows() {
-        let start = conn.row_ptr[pre] as usize;
-        let end = conn.row_ptr[pre + 1] as usize;
-        for (i, &post) in conn.col[start..end].iter().enumerate() {
-            if (readout0..readout_end).contains(&post) {
-                let idx = start + i;
-                eng.edge_w[idx] *= boost;
-                eng.syn.as_mut_slice()[idx].weight = eng.edge_w[idx];
-            }
+    for (idx, &post) in eng.conn.col.iter().enumerate() {
+        if (readout0..readout_end).contains(&post) {
+            eng.edge_w[idx] *= boost;
+            eng.syn.set_weight_keeping_delay(idx, eng.edge_w[idx]);
         }
     }
 }
@@ -810,16 +804,35 @@ fn build_multiclass_sparse(
         }
     }
     for h in hidden {
+        let row = &mut rows[h as usize];
         for c in 0..n_classes {
             let ro = readout0 + c as CellId;
-            if !rows[h as usize].contains(&ro) && rng.next_f32() < 0.55 {
-                rows[h as usize].push(ro);
+            if let Err(pos) = row.binary_search(&ro) {
+                if rng.next_f32() < 0.55 {
+                    row.insert(pos, ro);
+                }
             }
         }
     }
-    for c in 0..n_classes {
-        let ro = readout0 + c as CellId;
-        if !(0..n_cells).any(|pre| rows[pre].contains(&ro)) {
+    let mut has_readout = vec![false; n_classes];
+    for (pre, row) in rows.iter().enumerate() {
+        if pre >= n_in && pre < n_in + n_hidden {
+            for (c, seen) in has_readout.iter_mut().enumerate() {
+                if !*seen && row.binary_search(&(readout0 + c as CellId)).is_ok() {
+                    *seen = true;
+                }
+            }
+        } else {
+            for (c, seen) in has_readout.iter_mut().enumerate() {
+                if !*seen && row.contains(&(readout0 + c as CellId)) {
+                    *seen = true;
+                }
+            }
+        }
+    }
+    for (c, seen) in has_readout.into_iter().enumerate() {
+        if !seen {
+            let ro = readout0 + c as CellId;
             let h = n_in + rng.gen_index(n_hidden.max(1));
             rows[h].push(ro);
         }

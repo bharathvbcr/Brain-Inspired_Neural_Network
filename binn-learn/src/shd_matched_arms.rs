@@ -29,8 +29,8 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use crate::shd_attention::{
-    attention_forward_presented, attention_gradient, attention_logits, AttentionConfig,
-    AttentionGradient, AttentionParams, ReadoutVariant,
+    attention_forward_presented, attention_gradient, attention_logits, AttentionCache,
+    AttentionConfig, AttentionGradient, AttentionParams, ReadoutVariant,
 };
 use crate::shd_matched::{
     surrogate_derivative_scaled, MatchedAdam, MatchedForward, MatchedGradient, MatchedShdSample,
@@ -649,13 +649,50 @@ pub fn loss_and_gradient_arm_scaled_prepared(
 /// (`AMENDMENT_2026-08-05_SURROGATE_GAIN_FOR_RECURRENT.md`): a ladder over it
 /// runs the same initialisation at several values, and putting it in the file
 /// would mean a different weight file per rung and no way to pair them.
-pub fn loss_and_gradient_arm_tau(
+/// Reusable per-worker scratch buffers for [`loss_only_and_gradient_arm_tau_with_workspace`],
+/// avoiding ~1.5 MB+ of per-sample heap allocations and deallocations across parallel batches.
+#[derive(Clone, Debug, Default)]
+pub struct ArmWorkspace {
+    membrane: Vec<f32>,
+    spikes: Vec<f32>,
+    thresholds: Vec<f32>,
+    previous_spike_log: Vec<f32>,
+    previous_u: Vec<f32>,
+    previous_s: Vec<f32>,
+    adaptation: Vec<f32>,
+    current: Vec<f32>,
+    active_previous: Vec<usize>,
+    rates: Vec<f32>,
+    logits: Vec<f32>,
+    direct_spike: Vec<f32>,
+    du_next: Vec<f32>,
+    da_next: Vec<f32>,
+    du: Vec<f32>,
+    da: Vec<f32>,
+    grad_w_in_t: Vec<f32>,
+    ds_all: Vec<f32>,
+    ds_combined: Vec<f32>,
+}
+
+impl ArmWorkspace {
+    #[inline]
+    fn reset_zeroed(buf: &mut Vec<f32>, len: usize) {
+        buf.clear();
+        buf.resize(len, 0.0);
+    }
+}
+
+/// Forward-only evaluation and probing pass for all eight [`MatchedArm`] variants.
+///
+/// Computes exact bit-identical [`MatchedForward`] outputs and the optional
+/// [`AttentionCache`] without allocating backward traces (`thresholds`,
+/// `previous_spike_log`, `grad_w_in_t`) or executing BPTT / attention backward.
+pub fn forward_arm_tau(
     weights: &ArmWeights,
     layout: &ArmWeightLayout,
     sample: &MatchedShdSample,
-    surrogate_scale: f32,
     tau_m: f32,
-) -> Result<(MatchedForward, ArmGradient), String> {
+) -> Result<(MatchedForward, Option<AttentionCache>), String> {
     if !(tau_m.is_finite() && tau_m > 0.0) {
         return Err(format!(
             "membrane tau must be finite and positive, got {tau_m}"
@@ -678,83 +715,15 @@ pub fn loss_and_gradient_arm_tau(
 
     let mut membrane = vec![0.0_f32; t_steps * hidden];
     let mut spikes = vec![0.0_f32; t_steps * hidden];
-    // Both of these are `t_steps * hidden` — 1 MB each at the anchor — and both
-    // are dead for `ff+fixed`: `thresholds` is the constant `MATCHED_THRESHOLD`
-    // unless the arm adapts, and `previous_spike_log` is only ever read by the
-    // recurrent backward. Allocating and filling them per sample was pure
-    // memory traffic. Values consumed downstream are unchanged.
-    let mut thresholds = if arm.adaptive {
-        vec![MATCHED_THRESHOLD; t_steps * hidden]
-    } else {
-        Vec::new()
-    };
-    let mut previous_spike_log = if arm.recurrent {
-        vec![0.0_f32; t_steps * hidden]
-    } else {
-        Vec::new()
-    };
     let mut previous_u = vec![0.0_f32; hidden];
     let mut previous_s = vec![0.0_f32; hidden];
     let mut adaptation = vec![0.0_f32; hidden];
-
-    // Input-drive fast path, non-recurrent arms only.
-    //
-    // `w_in` is `[hidden, n_inputs]`, so the drive `w_in[h * n_inputs + channel]`
-    // gathers scattered elements out of a different row for every hidden unit —
-    // one strided sweep of the whole matrix per timestep, which is what makes
-    // this loop memory-bound rather than compute-bound. Transposing to
-    // `[n_inputs, hidden]` turns each event into a contiguous `hidden`-length
-    // AXPY that vectorises.
-    //
-    // This is a layout change and nothing else: every `current[h]` receives the
-    // same addends in the same order (decay first, then events in frame order),
-    // and the lanes are independent accumulator chains, so the result is
-    // bit-identical. rustc does not enable fast-math, so no reassociation is
-    // introduced. Gate F against the recorded cells is the binding check —
-    // per the 2026-08-02 amendment, fixture-level parity alone is not evidence
-    // of bit-identity at training density.
-    //
-    // Recurrent arms now take the same split-and-transpose path. This was
-    // forbidden while the recurrent drive read the live `previous_s` — splitting
-    // the loop would have changed which timestep unit `j` contributed — and is
-    // safe now that it reads the `previous_spike_log` snapshot. Measured at
-    // h128, the recurrent arms were 21x slower than feed-forward before this.
-    //
-    // Per hidden unit the addends still arrive in exactly the original order:
-    // decay, then the frame's events in frame order, then the recurrent term in
-    // ascending `j`. No reassociation, so this is bit-identical, and
-    // `every_arm_forward_and_backward_is_bit_pinned` is the binding check.
     let w_in_t = &layout.w_in_t;
-    // `w_rec` is `[hidden, hidden]` indexed `[h * hidden + j]`, so the drive for
-    // a fixed `j` gathers a column. Transposing once per sample turns the inner
-    // loop into a contiguous AXPY over `h`; at h512 that is one transpose
-    // against every timestep of strided access — a few hundred at a 2 ms frame
-    // (366 for test sample 0).
     let w_rec_t = &layout.w_rec_t;
     let mut current = vec![0.0_f32; hidden];
-    // Indices of units that spiked at `t-1`. Spikes are exactly 0.0 or 1.0, and
-    // adding `w * 0.0` is an exact no-op here, so skipping silent units is
-    // bit-identical rather than merely close. Firing is sparse, so this is where
-    // most of the recurrent saving comes from.
-    //
-    // The exactness rests on the accumulator never holding `-0.0`, the one value
-    // for which `x + 0.0 != x`. It cannot:
-    //   * it starts at `alpha * previous_u[h] * (1 - previous_s[h])`, and
-    //     `previous_u` is zero-initialised to `+0.0`;
-    //   * when `previous_s[h] == 1.0` the trailing factor is `0.0`, so the
-    //     product is `-0.0` only if `previous_u[h]` were negative — but spiking
-    //     requires `u >= MATCHED_THRESHOLD`, and that constant is `1.0`, strictly
-    //     positive (adaptation only raises it). So `previous_u[h] > 0` there;
-    //   * a sum reaches `-0.0` only from `-0.0 + -0.0`; exact cancellation
-    //     `a + (-a)` gives `+0.0` under round-to-nearest.
-    // `sparse_recurrent_skip_requires_a_positive_threshold` pins the one premise
-    // of that argument which lives outside this file.
     let mut active_previous: Vec<usize> = Vec::with_capacity(hidden);
 
     for (t, frame) in sample.frames.iter().enumerate() {
-        if arm.recurrent {
-            previous_spike_log[t * hidden..(t + 1) * hidden].copy_from_slice(&previous_s);
-        }
         if arm.adaptive {
             for h in 0..hidden {
                 adaptation[h] = rho * adaptation[h] + previous_s[h];
@@ -770,68 +739,50 @@ pub fn loss_and_gradient_arm_tau(
             }
         }
         if arm.recurrent {
-            // The drive must read the previous timestep's spikes, which is
-            // what the `previous_spike_log` snapshot taken above holds.
-            //
-            // Before the fix, this read the live `previous_s` from inside a
-            // single fused `h` loop, where `previous_s[h]` was overwritten at
-            // the end of each iteration — so units `j < h` contributed the
-            // *current* timestep's spike while `j > h` correctly contributed
-            // the previous one. That aliasing made the forward compute
-            // something other than `sum_j w_rec[h,j] * s_j(t-1)`, putting it
-            // at odds with both its own backward and `arms.py:139`. See
-            // `DEFECT_2026-08-03_RECURRENT_ARM_FORWARD_BACKWARD_MISMATCH.md`.
-            // Splitting the loop is what makes the aliasing structurally
-            // impossible rather than merely absent.
             active_previous.clear();
-            for j in 0..hidden {
-                if previous_spike_log[t * hidden + j] != 0.0 {
+            for (j, &sp) in previous_s.iter().enumerate() {
+                if sp != 0.0 {
                     active_previous.push(j);
                 }
             }
             for &j in &active_previous {
-                let spike = previous_spike_log[t * hidden + j];
+                let spike = previous_s[j];
                 let column = &w_rec_t[j * hidden..(j + 1) * hidden];
                 for h in 0..hidden {
                     current[h] += column[h] * spike;
                 }
             }
         }
-        for h in 0..hidden {
-            let threshold = if arm.adaptive {
-                MATCHED_THRESHOLD + beta_a * adaptation[h]
-            } else {
-                MATCHED_THRESHOLD
-            };
-            let spike = f32::from(current[h] >= threshold);
-            membrane[t * hidden + h] = current[h];
-            spikes[t * hidden + h] = spike;
-            if arm.adaptive {
-                thresholds[t * hidden + h] = threshold;
+        let mem_t = &mut membrane[t * hidden..(t + 1) * hidden];
+        let spk_t = &mut spikes[t * hidden..(t + 1) * hidden];
+        if arm.adaptive {
+            for h in 0..hidden {
+                let threshold = MATCHED_THRESHOLD + beta_a * adaptation[h];
+                let spike = f32::from(current[h] >= threshold);
+                mem_t[h] = current[h];
+                spk_t[h] = spike;
+                previous_u[h] = current[h];
+                previous_s[h] = spike;
             }
-            previous_u[h] = current[h];
-            previous_s[h] = spike;
+        } else {
+            for h in 0..hidden {
+                let spike = f32::from(current[h] >= MATCHED_THRESHOLD);
+                mem_t[h] = current[h];
+                spk_t[h] = spike;
+                previous_u[h] = current[h];
+                previous_s[h] = spike;
+            }
         }
     }
 
     let inv_t = 1.0 / t_steps as f32;
     let mut rates = vec![0.0_f32; hidden];
     for t in 0..t_steps {
+        let spk_t = &spikes[t * hidden..(t + 1) * hidden];
         for h in 0..hidden {
-            rates[h] += spikes[t * hidden + h] * inv_t;
+            rates[h] += spk_t[h] * inv_t;
         }
     }
-    // Time-axis attention read-out. Runs on the completed spike train, adds to
-    // the logits, and leaves the spiking forward untouched — at `w_a = 0` the
-    // arm is numerically its own non-attention counterpart.
-    //
-    // `hidden_time_permutation` is the `hidden-shuffled` control and is read
-    // **only here**. The membrane loop above has already finished, so the
-    // substrate a shuffled cell trains on is bit-identical to its intact
-    // twin's; and `rates` above was accumulated from the unpermuted buffer, so
-    // the rate read-out's contribution is bit-identical too. Both are the
-    // manipulation's own predictions rather than exemptions from it — see
-    // `attention_forward_presented`.
     let attention_cache = match &weights.attn {
         Some(params) => Some(attention_forward_presented(
             params,
@@ -858,24 +809,254 @@ pub fn loss_and_gradient_arm_tau(
         }
     }
     let prediction = argmax(&logits);
-    let mut probabilities = softmax(&logits);
+    let probabilities = softmax(&logits);
+    let loss = -probabilities[sample.label as usize].max(1e-30).ln();
+
+    Ok((
+        MatchedForward {
+            membrane,
+            spikes,
+            rates,
+            logits,
+            loss,
+            prediction,
+        },
+        attention_cache,
+    ))
+}
+
+/// [`loss_and_gradient_arm_tau`] reusing `workspace` and returning `(loss, gradient)`
+/// without materialising per-sample `MatchedForward` vectors for training batches.
+pub fn loss_only_and_gradient_arm_tau_with_workspace(
+    weights: &ArmWeights,
+    layout: &ArmWeightLayout,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+    tau_m: f32,
+    workspace: &mut ArmWorkspace,
+) -> Result<(f32, ArmGradient), String> {
+    let (loss, _prediction, gradient) = run_loss_and_gradient_with_workspace(
+        weights,
+        layout,
+        sample,
+        surrogate_scale,
+        tau_m,
+        workspace,
+    )?;
+    Ok((loss, gradient))
+}
+
+pub fn loss_and_gradient_arm_tau(
+    weights: &ArmWeights,
+    layout: &ArmWeightLayout,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+    tau_m: f32,
+) -> Result<(MatchedForward, ArmGradient), String> {
+    let mut workspace = ArmWorkspace::default();
+    let (loss, prediction, gradient) = run_loss_and_gradient_with_workspace(
+        weights,
+        layout,
+        sample,
+        surrogate_scale,
+        tau_m,
+        &mut workspace,
+    )?;
+    Ok((
+        MatchedForward {
+            membrane: std::mem::take(&mut workspace.membrane),
+            spikes: std::mem::take(&mut workspace.spikes),
+            rates: std::mem::take(&mut workspace.rates),
+            logits: std::mem::take(&mut workspace.logits),
+            loss,
+            prediction,
+        },
+        gradient,
+    ))
+}
+
+fn run_loss_and_gradient_with_workspace(
+    weights: &ArmWeights,
+    layout: &ArmWeightLayout,
+    sample: &MatchedShdSample,
+    surrogate_scale: f32,
+    tau_m: f32,
+    workspace: &mut ArmWorkspace,
+) -> Result<(f32, usize, ArmGradient), String> {
+    if !(tau_m.is_finite() && tau_m > 0.0) {
+        return Err(format!(
+            "membrane tau must be finite and positive, got {tau_m}"
+        ));
+    }
+    let base = &weights.base;
+    let arm = weights.arm;
+    if sample.n_inputs != base.n_inputs {
+        return Err("sample/model input mismatch".into());
+    }
+    if sample.label as usize >= base.n_classes || sample.frames.is_empty() {
+        return Err("invalid label or empty framed sample".into());
+    }
+    layout.check_compatible(weights)?;
+    let t_steps = sample.frames.len();
+    let hidden = base.hidden;
+    let alpha = (-sample.dt_ms / tau_m).exp();
+    let rho = (-1.0_f32 / weights.tau_a).exp();
+    let beta_a = weights.beta_a;
+
+    ArmWorkspace::reset_zeroed(&mut workspace.membrane, t_steps * hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.spikes, t_steps * hidden);
+    // Both of these are `t_steps * hidden` — 1 MB each at the anchor — and both
+    // are dead for `ff+fixed`: `thresholds` is the constant `MATCHED_THRESHOLD`
+    // unless the arm adapts, and `previous_spike_log` is only ever read by the
+    // recurrent backward.
+    if arm.adaptive {
+        workspace.thresholds.clear();
+        workspace
+            .thresholds
+            .resize(t_steps * hidden, MATCHED_THRESHOLD);
+    } else {
+        workspace.thresholds.clear();
+    }
+    if arm.recurrent {
+        ArmWorkspace::reset_zeroed(&mut workspace.previous_spike_log, t_steps * hidden);
+    } else {
+        workspace.previous_spike_log.clear();
+    }
+    ArmWorkspace::reset_zeroed(&mut workspace.previous_u, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.previous_s, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.adaptation, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.current, hidden);
+    workspace.active_previous.clear();
+    workspace.active_previous.reserve(hidden);
+
+    let membrane = &mut workspace.membrane;
+    let spikes = &mut workspace.spikes;
+    let thresholds = &mut workspace.thresholds;
+    let previous_spike_log = &mut workspace.previous_spike_log;
+    let previous_u = &mut workspace.previous_u;
+    let previous_s = &mut workspace.previous_s;
+    let adaptation = &mut workspace.adaptation;
+    let current = &mut workspace.current;
+    let active_previous = &mut workspace.active_previous;
+
+    let w_in_t = &layout.w_in_t;
+    let w_rec_t = &layout.w_rec_t;
+
+    for (t, frame) in sample.frames.iter().enumerate() {
+        if arm.recurrent {
+            previous_spike_log[t * hidden..(t + 1) * hidden].copy_from_slice(previous_s);
+        }
+        if arm.adaptive {
+            for h in 0..hidden {
+                adaptation[h] = rho * adaptation[h] + previous_s[h];
+            }
+        }
+        for h in 0..hidden {
+            current[h] = alpha * previous_u[h] * (1.0 - previous_s[h]);
+        }
+        for &(channel, count) in frame {
+            let column = &w_in_t[channel * hidden..(channel + 1) * hidden];
+            for h in 0..hidden {
+                current[h] += column[h] * count;
+            }
+        }
+        if arm.recurrent {
+            // The drive must read the previous timestep's spikes, which is
+            // what the `previous_spike_log` snapshot taken above holds.
+            //
+            // See `DEFECT_2026-08-03_RECURRENT_ARM_FORWARD_BACKWARD_MISMATCH.md`.
+            active_previous.clear();
+            let prev_t = &previous_spike_log[t * hidden..(t + 1) * hidden];
+            for (j, &sp) in prev_t.iter().enumerate() {
+                if sp != 0.0 {
+                    active_previous.push(j);
+                }
+            }
+            for &j in active_previous.iter() {
+                let spike = prev_t[j];
+                let column = &w_rec_t[j * hidden..(j + 1) * hidden];
+                for h in 0..hidden {
+                    current[h] += column[h] * spike;
+                }
+            }
+        }
+        let mem_t = &mut membrane[t * hidden..(t + 1) * hidden];
+        let spk_t = &mut spikes[t * hidden..(t + 1) * hidden];
+        if arm.adaptive {
+            let thr_t = &mut thresholds[t * hidden..(t + 1) * hidden];
+            for h in 0..hidden {
+                let threshold = MATCHED_THRESHOLD + beta_a * adaptation[h];
+                let spike = f32::from(current[h] >= threshold);
+                mem_t[h] = current[h];
+                spk_t[h] = spike;
+                thr_t[h] = threshold;
+                previous_u[h] = current[h];
+                previous_s[h] = spike;
+            }
+        } else {
+            for h in 0..hidden {
+                let spike = f32::from(current[h] >= MATCHED_THRESHOLD);
+                mem_t[h] = current[h];
+                spk_t[h] = spike;
+                previous_u[h] = current[h];
+                previous_s[h] = spike;
+            }
+        }
+    }
+
+    let inv_t = 1.0 / t_steps as f32;
+    ArmWorkspace::reset_zeroed(&mut workspace.rates, hidden);
+    let rates = &mut workspace.rates;
+    for t in 0..t_steps {
+        let spk_t = &spikes[t * hidden..(t + 1) * hidden];
+        for h in 0..hidden {
+            rates[h] += spk_t[h] * inv_t;
+        }
+    }
+    let attention_cache = match &weights.attn {
+        Some(params) => Some(attention_forward_presented(
+            params,
+            spikes,
+            t_steps,
+            sample.hidden_time_permutation.as_deref(),
+        )?),
+        None => None,
+    };
+
+    workspace.logits.clear();
+    workspace.logits.extend_from_slice(&base.b_out);
+    let logits = &mut workspace.logits;
+    for (class, logit) in logits.iter_mut().enumerate() {
+        let row = class * hidden;
+        for (h, rate) in rates.iter().enumerate() {
+            *logit += base.w_out[row + h] * rate;
+        }
+    }
+    if let (Some(params), Some(cache)) = (&weights.attn, &attention_cache) {
+        for (logit, delta) in logits
+            .iter_mut()
+            .zip(attention_logits(params, cache.pooled()))
+        {
+            *logit += delta;
+        }
+    }
+    let prediction = argmax(logits);
+    let mut probabilities = softmax(logits);
     let loss = -probabilities[sample.label as usize].max(1e-30).ln();
     probabilities[sample.label as usize] -= 1.0;
 
     let mut gradient = ArmGradient::zeros_like(weights);
     gradient.base.b_out.copy_from_slice(&probabilities);
-    // `ds_attn[t, h]` is the term that makes credit timestep-specific. Without
-    // it every timestep receives the identical `direct_spike[h]`, which is why
-    // the rate-only arms cannot learn *when* a unit should fire.
     let ds_attn = match (&weights.attn, &attention_cache) {
         (Some(params), Some(cache)) => {
-            let (attention, ds_attn) = attention_gradient(params, cache, &spikes, &probabilities)?;
+            let (attention, ds_attn) = attention_gradient(params, cache, spikes, &probabilities)?;
             gradient.attn = Some(attention);
             ds_attn
         }
         _ => Vec::new(),
     };
-    let mut direct_spike = vec![0.0_f32; hidden];
+    ArmWorkspace::reset_zeroed(&mut workspace.direct_spike, hidden);
+    let direct_spike = &mut workspace.direct_spike;
     for (class, probability) in probabilities.iter().copied().enumerate() {
         let row = class * hidden;
         for h in 0..hidden {
@@ -884,37 +1065,30 @@ pub fn loss_and_gradient_arm_tau(
         }
     }
 
-    let mut du_next = vec![0.0_f32; hidden];
-    let mut da_next = vec![0.0_f32; hidden];
-    let mut du = vec![0.0_f32; hidden];
-    let mut da = vec![0.0_f32; hidden];
-    // Same transposition on the backward side. The original scatter
-    // `gradient.base.w_in[h * n_inputs + channel] += du[h] * count` is a
-    // read-modify-write into a different row per hidden unit; accumulating into
-    // `[n_inputs, hidden]` makes it a contiguous AXPY. For any fixed
-    // `(h, channel)` the addends still arrive in the same order — reverse `t`,
-    // then frame order within a timestep — so the fold back to canonical layout
-    // below reproduces the original array exactly.
-    let mut grad_w_in_t = vec![0.0_f32; base.n_inputs * hidden];
-    let mut ds_all = vec![0.0_f32; hidden];
-    let mut ds_combined = if arm.attention {
-        vec![0.0_f32; hidden]
+    ArmWorkspace::reset_zeroed(&mut workspace.du_next, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.da_next, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.du, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.da, hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.grad_w_in_t, base.n_inputs * hidden);
+    ArmWorkspace::reset_zeroed(&mut workspace.ds_all, hidden);
+    if arm.attention {
+        ArmWorkspace::reset_zeroed(&mut workspace.ds_combined, hidden);
     } else {
-        Vec::new()
-    };
+        workspace.ds_combined.clear();
+    }
+
+    let du_next = &mut workspace.du_next;
+    let da_next = &mut workspace.da_next;
+    let du = &mut workspace.du;
+    let da = &mut workspace.da;
+    let grad_w_in_t = &mut workspace.grad_w_in_t;
+    let ds_all = &mut workspace.ds_all;
+    let ds_combined = &mut workspace.ds_combined;
 
     for t in (0..t_steps).rev() {
         let frame = &sample.frames[t];
         if arm.recurrent {
-            ds_all.copy_from_slice(&direct_spike);
-            // `ds[h] += sum_j du_next[j] * w_rec[j * hidden + h]` gathers column
-            // `h` across rows when written with `h` outermost — the same strided
-            // pattern the input drive had. Hoisting `j` outside makes each step a
-            // contiguous AXPY along a single row of `w_rec`, and for any fixed
-            // `h` the addends still arrive in ascending `j`, so the sum is
-            // unchanged term for term.
-            //
-            // No sparsity is available here: `du_next` is dense.
+            ds_all.copy_from_slice(direct_spike);
             #[allow(clippy::needless_range_loop)]
             for j in 0..hidden {
                 let backward_drive = du_next[j];
@@ -924,52 +1098,32 @@ pub fn loss_and_gradient_arm_tau(
                 }
             }
         }
-        // Feed-forward arms read `direct_spike` straight through; only the
-        // recurrent arms need the staged `ds_all`. Select the slice once per
-        // timestep rather than testing `arm.recurrent` inside the `h` loop —
-        // the value is constant for the whole call, and evaluating it per
-        // `(timestep, hidden unit)` stopped this loop vectorising.
-        //
-        // Both mistakes here cost the feed-forward arms measurably, on the path
-        // that carries all 216 recorded cells: first staging `direct_spike`
-        // through `ds_all` for every arm (+9.5% over the 13-cell Gate F suite,
-        // 291.4 s -> 319.0 s), then leaving the branch in the inner loop
-        // (+7%, against a 1.4% same-binary spread).
-        let base_ds: &[f32] = if arm.recurrent {
-            &ds_all
-        } else {
-            &direct_spike
-        };
-        // Staged into a scratch buffer rather than added inside the `h` loop.
-        // Two reasons, both load bearing: the inner loop stays branch-free for
-        // the four base arms, and no `+ 0.0` is executed on the recorded path —
-        // `x + 0.0` turns `-0.0` into `+0.0`, which
-        // `every_arm_forward_and_backward_is_bit_pinned` hashes and would have
-        // reported as a kernel change.
+        let base_ds: &[f32] = if arm.recurrent { ds_all } else { direct_spike };
         let ds_source: &[f32] = if arm.attention {
+            let ds_attn_t = &ds_attn[t * hidden..(t + 1) * hidden];
             for h in 0..hidden {
-                ds_combined[h] = base_ds[h] + ds_attn[t * hidden + h];
+                ds_combined[h] = base_ds[h] + ds_attn_t[h];
             }
-            &ds_combined
+            ds_combined
         } else {
             base_ds
         };
-        for h in 0..hidden {
-            let index = t * hidden + h;
-            let mut ds = ds_source[h];
-            if arm.adaptive {
-                ds += da_next[h];
-            }
-            let threshold_at = if arm.adaptive {
-                thresholds[index]
-            } else {
-                MATCHED_THRESHOLD
-            };
-            let gated =
-                ds * surrogate_derivative_scaled(membrane[index] - threshold_at, surrogate_scale);
-            du[h] = gated + alpha * (1.0 - spikes[index]) * du_next[h];
-            if arm.adaptive {
+        let mem_t = &membrane[t * hidden..(t + 1) * hidden];
+        let spk_t = &spikes[t * hidden..(t + 1) * hidden];
+        if arm.adaptive {
+            let thr_t = &thresholds[t * hidden..(t + 1) * hidden];
+            for h in 0..hidden {
+                let ds = ds_source[h] + da_next[h];
+                let gated = ds * surrogate_derivative_scaled(mem_t[h] - thr_t[h], surrogate_scale);
+                du[h] = gated + alpha * (1.0 - spk_t[h]) * du_next[h];
                 da[h] = -beta_a * gated + rho * da_next[h];
+            }
+        } else {
+            for h in 0..hidden {
+                let ds = ds_source[h];
+                let gated =
+                    ds * surrogate_derivative_scaled(mem_t[h] - MATCHED_THRESHOLD, surrogate_scale);
+                du[h] = gated + alpha * (1.0 - spk_t[h]) * du_next[h];
             }
         }
         for &(channel, count) in frame {
@@ -979,29 +1133,25 @@ pub fn loss_and_gradient_arm_tau(
             }
         }
         if arm.recurrent {
-            // Sparse for the same reason as the forward drive: this accumulates
-            // `du[h] * s_j(t-1)`, and a silent `j` contributes an exact zero to
-            // an accumulator that starts at `+0.0` and never reaches `-0.0`.
             active_previous.clear();
-            for j in 0..hidden {
-                if previous_spike_log[t * hidden + j] != 0.0 {
+            let prev_t = &previous_spike_log[t * hidden..(t + 1) * hidden];
+            for (j, &sp) in prev_t.iter().enumerate() {
+                if sp != 0.0 {
                     active_previous.push(j);
                 }
             }
-            // Indexed on purpose: `h` selects a row of `w_rec` as well as an
-            // element of `du`, and the addend order fixes the f32 result.
             #[allow(clippy::needless_range_loop)]
             for h in 0..hidden {
                 let rec_row = h * hidden;
                 let unit_drive = du[h];
-                for &j in &active_previous {
-                    gradient.w_rec[rec_row + j] += unit_drive * previous_spike_log[t * hidden + j];
+                for &j in active_previous.iter() {
+                    gradient.w_rec[rec_row + j] += unit_drive * prev_t[j];
                 }
             }
         }
-        du_next.copy_from_slice(&du);
+        du_next.copy_from_slice(du);
         if arm.adaptive {
-            da_next.copy_from_slice(&da);
+            da_next.copy_from_slice(da);
         }
     }
 
@@ -1019,17 +1169,7 @@ pub fn loss_and_gradient_arm_tau(
         }
     }
 
-    Ok((
-        MatchedForward {
-            membrane,
-            spikes,
-            rates,
-            logits,
-            loss,
-            prediction,
-        },
-        gradient,
-    ))
+    Ok((loss, prediction, gradient))
 }
 
 /// `[rows, cols]` row-major to `[cols, rows]` row-major.
@@ -2586,6 +2726,138 @@ mod tests {
                 loss_and_gradient_arm_tau(&weights, &layout, &sample, 1.0, tau_m).is_err(),
                 "tau {tau_m} was accepted"
             );
+            assert!(
+                forward_arm_tau(&weights, &layout, &sample, tau_m).is_err(),
+                "forward_arm_tau accepted degenerate tau {tau_m}"
+            );
         }
+    }
+
+    #[test]
+    fn forward_only_and_workspace_paths_are_bit_identical_for_all_eight_arms() {
+        let mut ws = ArmWorkspace::default();
+        let arms: Vec<MatchedArm> = MatchedArm::ALL
+            .into_iter()
+            .chain(MatchedArm::ALL_ATTENTION)
+            .collect();
+        assert_eq!(arms.len(), 8);
+        let mut runs_checked = 0usize;
+        for arm in arms {
+            let (base_sample, base_weights) = dense_fixture(MatchedArm {
+                attention: false,
+                ..arm
+            });
+            let weights = if arm.attention {
+                ArmWeights::new_attentive(
+                    base_weights.base.clone(),
+                    arm,
+                    base_weights.w_rec.clone(),
+                    attention_params(base_weights.base.hidden, base_weights.base.n_classes),
+                )
+                .unwrap()
+            } else {
+                base_weights
+            };
+            let layout = ArmWeightLayout::prepare(&weights);
+
+            let mut shorter = base_sample.clone();
+            shorter.frames.truncate(9);
+            let mut longer = base_sample.clone();
+            longer
+                .frames
+                .extend_from_slice(&base_sample.frames[..7.min(base_sample.frames.len())]);
+
+            for sample in [&longer, &shorter, &base_sample] {
+                let (ref_fwd, ref_grad) =
+                    loss_and_gradient_arm_tau(&weights, &layout, sample, 0.7, 9.5).unwrap();
+                let (only_fwd, attn_cache) =
+                    forward_arm_tau(&weights, &layout, sample, 9.5).unwrap();
+                let (ws_loss, ws_grad) = loss_only_and_gradient_arm_tau_with_workspace(
+                    &weights, &layout, sample, 0.7, 9.5, &mut ws,
+                )
+                .unwrap();
+
+                assert_eq!(attn_cache.is_some(), arm.attention);
+                assert_eq!(only_fwd.prediction, ref_fwd.prediction);
+                assert_eq!(only_fwd.loss.to_bits(), ref_fwd.loss.to_bits());
+                assert_eq!(ws_loss.to_bits(), ref_fwd.loss.to_bits());
+                assert_eq!(
+                    only_fwd
+                        .membrane
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    ref_fwd
+                        .membrane
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(
+                    only_fwd
+                        .spikes
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    ref_fwd
+                        .spikes
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(
+                    only_fwd
+                        .rates
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    ref_fwd
+                        .rates
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(
+                    only_fwd
+                        .logits
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    ref_fwd
+                        .logits
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(
+                    ws_grad
+                        .base
+                        .w_in
+                        .iter()
+                        .chain(&ws_grad.base.w_out)
+                        .chain(&ws_grad.base.b_out)
+                        .chain(&ws_grad.w_rec)
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    ref_grad
+                        .base
+                        .w_in
+                        .iter()
+                        .chain(&ref_grad.base.w_out)
+                        .chain(&ref_grad.base.b_out)
+                        .chain(&ref_grad.w_rec)
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                );
+                if let (Some(wa), Some(ra)) = (&ws_grad.attn, &ref_grad.attn) {
+                    assert_eq!(
+                        wa.iter_all().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                        ra.iter_all().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                    );
+                }
+                runs_checked += 1;
+            }
+        }
+        assert_eq!(runs_checked, 24);
     }
 }

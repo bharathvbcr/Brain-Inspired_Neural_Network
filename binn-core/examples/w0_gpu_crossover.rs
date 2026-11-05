@@ -39,18 +39,8 @@ fn ms_per_iter(total: Duration, iters: usize) -> f64 {
     total.as_secs_f64() * 1000.0 / iters as f64
 }
 
-fn time_cpu(cpu: &SpmvBackend, csr: &Csr, weights: &[f32], x: &[f32], n: usize, iters: usize) -> f64 {
-    let mut y = vec![0.0f32; n];
-    let start = Instant::now();
-    for _ in 0..iters {
-        y.fill(0.0);
-        cpu.spmv(csr, weights, x, &mut y);
-    }
-    ms_per_iter(start.elapsed(), iters)
-}
-
-fn time_gpu_per_tick(
-    gpu: &SpmvBackend,
+fn time_cpu(
+    cpu: &SpmvBackend,
     csr: &Csr,
     weights: &[f32],
     x: &[f32],
@@ -61,18 +51,29 @@ fn time_gpu_per_tick(
     let start = Instant::now();
     for _ in 0..iters {
         y.fill(0.0);
-        gpu.spmv(csr, weights, x, &mut y);
+        cpu.spmv(csr, weights, x, &mut y);
+    }
+    ms_per_iter(start.elapsed(), iters)
+}
+
+fn time_gpu_per_tick(op: &sparsl::SparseOp, x: &[f32], n: usize, iters: usize) -> f64 {
+    let mut y = vec![0.0f32; n];
+    let start = Instant::now();
+    for _ in 0..iters {
+        y.fill(0.0);
+        op.spmv(x, &mut y).expect("spmv");
     }
     ms_per_iter(start.elapsed(), iters)
 }
 
 fn time_gpu_resident(op: &sparsl::SparseOp, x: &[f32], n: usize, iters: usize) -> f64 {
+    let zeros = vec![0.0f32; n];
     let mut y = vec![0.0f32; n];
     op.write_x(x).expect("write_x");
     op.write_y(&y).expect("write_y");
     let start = Instant::now();
     for _ in 0..iters {
-        op.write_y(&vec![0.0f32; n]).expect("zero y");
+        op.write_y(&zeros).expect("zero y");
         op.spmv_resident().expect("spmv_resident");
     }
     op.sync_y(&mut y).expect("sync_y");
@@ -149,12 +150,12 @@ fn main() {
 
         let _ = time_cpu(&cpu, &csr, &weights, &x, n, RAMP);
         let _ = time_gpu_resident(&op, &x, n, RAMP);
-        let _ = time_gpu_per_tick(&gpu, &csr, &weights, &x, n, RAMP);
+        let _ = time_gpu_per_tick(&op, &x, n, RAMP);
 
         let cpu_a = time_cpu(&cpu, &csr, &weights, &x, n, iters);
         let res_a = time_gpu_resident(&op, &x, n, iters);
-        let tick_a = time_gpu_per_tick(&gpu, &csr, &weights, &x, n, iters);
-        let tick_b = time_gpu_per_tick(&gpu, &csr, &weights, &x, n, iters);
+        let tick_a = time_gpu_per_tick(&op, &x, n, iters);
+        let tick_b = time_gpu_per_tick(&op, &x, n, iters);
         let res_b = time_gpu_resident(&op, &x, n, iters);
         let cpu_b = time_cpu(&cpu, &csr, &weights, &x, n, iters);
 

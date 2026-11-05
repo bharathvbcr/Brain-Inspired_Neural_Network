@@ -348,7 +348,7 @@ impl HybridLearner {
         let delta = self.predict_delta(features)?;
         let updated = (engine.edge_w[edge] + delta).clamp(-8.0, 8.0);
         engine.edge_w[edge] = updated;
-        engine.syn.as_mut_slice()[edge].weight = updated;
+        engine.syn.set_weight_keeping_delay(edge, updated);
         Ok(delta)
     }
 

@@ -203,6 +203,7 @@ pub struct ShdAlifArch {
 }
 
 /// Per-example forward products needed by every update rule.
+#[cfg(test)]
 struct AlifForward {
     /// `hidden × n_in`
     e_in: Vec<f32>,
@@ -218,7 +219,40 @@ struct AlifForward {
     activity: f32,
 }
 
+/// Reusable scratch buffers for [`ShdAlifArch::forward_into`] and [`ShdAlifArm::step`],
+/// eliminating per-example heap allocations across multi-epoch training and evaluation.
+#[derive(Clone, Debug, Default)]
+struct AlifWorkspace {
+    u: Vec<f32>,
+    a: Vec<f32>,
+    s_prev: Vec<f32>,
+    s_now: Vec<f32>,
+    surr: Vec<f32>,
+    eps_v_in: Vec<f32>,
+    eps_a_in: Vec<f32>,
+    eps_v_rec: Vec<f32>,
+    eps_a_rec: Vec<f32>,
+    e_in: Vec<f32>,
+    e_rec: Vec<f32>,
+    features: Vec<f32>,
+    logits: Vec<f32>,
+    active: Vec<(usize, f32)>,
+    spike_log: Vec<f32>,
+    wout_snapshot: Vec<f32>,
+    probs: Vec<f32>,
+    mods: Vec<f32>,
+}
+
+impl AlifWorkspace {
+    #[inline]
+    fn clear_zeroed(buf: &mut Vec<f32>, len: usize) {
+        buf.clear();
+        buf.resize(len, 0.0);
+    }
+}
+
 /// Advance the two-state surrogate ALIF eligibility for one synapse.
+#[cfg(test)]
 #[inline]
 fn alif_eligibility_step(
     epsilon_v: &mut f32,
@@ -403,8 +437,24 @@ impl ShdAlifArch {
     /// Forward pass with eligibility accumulation.
     ///
     /// Input frames are scanned sparsely: SHD is a spike raster, so the active
-    /// channel list per timestep is far shorter than `n_in`.
+    /// channel list per timestep is far shorter than `n_in`. Presynaptic voltage
+    /// eligibility traces (`eps_v_in`, `eps_v_rec`) depend only on presynaptic
+    /// activity and `alpha`, so they are factored into 1-D `[n_in]` and `[h]`
+    /// state vectors rather than duplicated across `h` postsynaptic rows.
+    #[cfg(test)]
     fn forward(&self, frames: &[f32], want_elig: bool) -> AlifForward {
+        let mut ws = AlifWorkspace::default();
+        let activity = self.forward_into(frames, want_elig, &mut ws);
+        AlifForward {
+            e_in: ws.e_in,
+            e_rec: ws.e_rec,
+            logits: ws.logits,
+            features: ws.features,
+            activity,
+        }
+    }
+
+    fn forward_into(&self, frames: &[f32], want_elig: bool, ws: &mut AlifWorkspace) -> f32 {
         let h = self.hidden;
         let n_in = self.n_in;
         let t_len = self.t;
@@ -421,164 +471,200 @@ impl ShdAlifArch {
             t_len * n_in
         );
 
-        let mut u = vec![0.0f32; h];
-        let mut a = vec![0.0f32; h];
-        let mut s_prev = vec![0.0f32; h];
-        let mut s_now = vec![0.0f32; h];
-        let mut rates = vec![0.0f32; h];
-        let mut surr = vec![0.0f32; h];
+        AlifWorkspace::clear_zeroed(&mut ws.u, h);
+        AlifWorkspace::clear_zeroed(&mut ws.a, h);
+        AlifWorkspace::clear_zeroed(&mut ws.s_prev, h);
+        AlifWorkspace::clear_zeroed(&mut ws.s_now, h);
+        AlifWorkspace::clear_zeroed(&mut ws.features, h);
+        AlifWorkspace::clear_zeroed(&mut ws.surr, h);
 
-        let mut e_in = if want_elig {
-            vec![0.0f32; h * n_in]
+        if want_elig {
+            AlifWorkspace::clear_zeroed(&mut ws.e_in, h * n_in);
+            AlifWorkspace::clear_zeroed(&mut ws.eps_v_in, n_in);
+            if self.adaptive {
+                AlifWorkspace::clear_zeroed(&mut ws.eps_a_in, h * n_in);
+            } else {
+                ws.eps_a_in.clear();
+            }
+            if self.recurrent {
+                AlifWorkspace::clear_zeroed(&mut ws.e_rec, h * h);
+                AlifWorkspace::clear_zeroed(&mut ws.eps_v_rec, h);
+                if self.adaptive {
+                    AlifWorkspace::clear_zeroed(&mut ws.eps_a_rec, h * h);
+                } else {
+                    ws.eps_a_rec.clear();
+                }
+            } else {
+                ws.e_rec.clear();
+                ws.eps_v_rec.clear();
+                ws.eps_a_rec.clear();
+            }
         } else {
-            Vec::new()
-        };
-        let mut epsilon_v_in = if want_elig {
-            vec![0.0f32; h * n_in]
-        } else {
-            Vec::new()
-        };
-        let mut epsilon_a_in = if want_elig {
-            vec![0.0f32; h * n_in]
-        } else {
-            Vec::new()
-        };
-        let mut e_rec = if want_elig && self.recurrent {
-            vec![0.0f32; h * h]
-        } else {
-            Vec::new()
-        };
-        let mut epsilon_v_rec = if want_elig && self.recurrent {
-            vec![0.0f32; h * h]
-        } else {
-            Vec::new()
-        };
-        let mut epsilon_a_rec = if want_elig && self.recurrent {
-            vec![0.0f32; h * h]
-        } else {
-            Vec::new()
-        };
+            ws.e_in.clear();
+            ws.e_rec.clear();
+            ws.eps_v_in.clear();
+            ws.eps_a_in.clear();
+            ws.eps_v_rec.clear();
+            ws.eps_a_rec.clear();
+        }
 
-        let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
+        ws.active.clear();
         let mut total_spikes = 0.0f32;
         // Only materialised when a frozen block is attached; the base arms keep
-        // their existing memory profile exactly.
-        let mut spike_log: Option<Vec<f32>> =
-            self.attn.as_ref().map(|_| Vec::with_capacity(t_len * h));
+        // their existing memory profile.
+        ws.spike_log.clear();
+        if self.attn.is_some() {
+            ws.spike_log.reserve(t_len * h);
+        }
 
         for t in 0..t_len {
             let base = t * n_in;
-            active.clear();
-            for j in 0..n_in {
-                let v = frames[base + j];
+            let frame = &frames[base..base + n_in];
+            ws.active.clear();
+            for (j, &v) in frame.iter().enumerate() {
                 if v != 0.0 {
-                    active.push((j, v));
+                    ws.active.push((j, v));
                 }
             }
 
             for i in 0..h {
                 let mut cur = 0.0f32;
                 let row = i * n_in;
-                for &(j, v) in &active {
-                    cur += self.win[row + j] * v;
+                let win_row = &self.win[row..row + n_in];
+                for &(j, v) in &ws.active {
+                    cur += win_row[j] * v;
                 }
                 if self.recurrent {
                     let rrow = i * h;
+                    let wrec_row = &self.wrec[rrow..rrow + h];
                     for k in 0..h {
-                        let sp = s_prev[k];
+                        let sp = ws.s_prev[k];
                         if sp != 0.0 {
-                            cur += self.wrec[rrow + k] * sp;
+                            cur += wrec_row[k] * sp;
                         }
                     }
                 }
 
-                let ui = self.alpha * u[i] + cur;
+                let ui = self.alpha * ws.u[i] + cur;
                 let theta_i = if self.adaptive {
-                    THETA_REST + self.beta_a * a[i]
+                    THETA_REST + self.beta_a * ws.a[i]
                 } else {
                     THETA_REST
                 };
                 let sg = self.surrogate(ui - theta_i);
-                surr[i] = sg;
+                ws.surr[i] = sg;
                 let spike = if ui >= theta_i { 1.0f32 } else { 0.0 };
-                u[i] = if spike > 0.5 { V_RESET } else { ui };
+                ws.u[i] = if spike > 0.5 { V_RESET } else { ui };
                 if self.adaptive {
-                    a[i] = self.rho * a[i] + spike;
+                    ws.a[i] = self.rho * ws.a[i] + spike;
                 }
-                s_now[i] = spike;
-                rates[i] += spike;
+                ws.s_now[i] = spike;
+                ws.features[i] += spike;
                 total_spikes += spike;
             }
 
-            if let Some(log) = spike_log.as_mut() {
-                log.extend_from_slice(&s_now);
+            if self.attn.is_some() {
+                ws.spike_log.extend_from_slice(&ws.s_now);
             }
 
             if want_elig {
-                for i in 0..h {
-                    let sg = surr[i];
-                    let row = i * n_in;
-                    for j in 0..n_in {
-                        let pre = frames[base + j];
-                        e_in[row + j] = alif_eligibility_step(
-                            &mut epsilon_v_in[row + j],
-                            &mut epsilon_a_in[row + j],
-                            pre,
-                            sg,
-                            self.alpha,
-                            self.rho,
-                            self.beta_a,
-                            self.adaptive,
-                        );
+                for (ev, &pre) in ws.eps_v_in.iter_mut().zip(frame) {
+                    *ev = self.alpha * *ev + pre;
+                }
+                if self.recurrent {
+                    for (ev, &pre) in ws.eps_v_rec.iter_mut().zip(&ws.s_prev) {
+                        *ev = self.alpha * *ev + pre;
                     }
-                    if self.recurrent {
-                        let rrow = i * h;
-                        for k in 0..h {
-                            e_rec[rrow + k] = alif_eligibility_step(
-                                &mut epsilon_v_rec[rrow + k],
-                                &mut epsilon_a_rec[rrow + k],
-                                s_prev[k],
-                                sg,
-                                self.alpha,
-                                self.rho,
-                                self.beta_a,
-                                self.adaptive,
-                            );
+                }
+                if self.adaptive {
+                    let is_last = t + 1 == t_len;
+                    for i in 0..h {
+                        let sg = ws.surr[i];
+                        let decay_a = self.rho - sg * self.beta_a;
+                        let row = i * n_in;
+                        let eps_a_row = &mut ws.eps_a_in[row..row + n_in];
+                        if is_last {
+                            let e_in_row = &mut ws.e_in[row..row + n_in];
+                            for ((e_out, ea), &ev) in e_in_row
+                                .iter_mut()
+                                .zip(eps_a_row.iter_mut())
+                                .zip(&ws.eps_v_in)
+                            {
+                                let next_ea = sg * ev + decay_a * *ea;
+                                *ea = next_ea;
+                                *e_out = sg * (ev - self.beta_a * next_ea);
+                            }
+                        } else {
+                            for (ea, &ev) in eps_a_row.iter_mut().zip(&ws.eps_v_in) {
+                                *ea = sg * ev + decay_a * *ea;
+                            }
+                        }
+                        if self.recurrent {
+                            let rrow = i * h;
+                            let eps_a_rrow = &mut ws.eps_a_rec[rrow..rrow + h];
+                            if is_last {
+                                let e_rec_rrow = &mut ws.e_rec[rrow..rrow + h];
+                                for ((e_out, ea), &ev) in e_rec_rrow
+                                    .iter_mut()
+                                    .zip(eps_a_rrow.iter_mut())
+                                    .zip(&ws.eps_v_rec)
+                                {
+                                    let next_ea = sg * ev + decay_a * *ea;
+                                    *ea = next_ea;
+                                    *e_out = sg * (ev - self.beta_a * next_ea);
+                                }
+                            } else {
+                                for (ea, &ev) in eps_a_rrow.iter_mut().zip(&ws.eps_v_rec) {
+                                    *ea = sg * ev + decay_a * *ea;
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            s_prev.copy_from_slice(&s_now);
+            ws.s_prev.copy_from_slice(&ws.s_now);
+        }
+
+        if want_elig && !self.adaptive && t_len > 0 {
+            for i in 0..h {
+                let sg = ws.surr[i];
+                let row = i * n_in;
+                for (e_out, &ev) in ws.e_in[row..row + n_in].iter_mut().zip(&ws.eps_v_in) {
+                    *e_out = sg * ev;
+                }
+                if self.recurrent {
+                    let rrow = i * h;
+                    for (e_out, &ev) in ws.e_rec[rrow..rrow + h].iter_mut().zip(&ws.eps_v_rec) {
+                        *e_out = sg * ev;
+                    }
+                }
+            }
         }
 
         // `features` is `rates` alone unless a frozen block is attached, in
         // which case its pooled output is appended. The block reads the spike
         // train and returns; no gradient of any kind flows back into it.
-        let mut features = rates;
-        if let (Some(params), Some(log)) = (self.attn.as_ref(), spike_log.as_ref()) {
-            let cache = attention_forward(params, log, t_len).expect("frozen attention forward");
-            features.extend_from_slice(cache.pooled());
+        if let Some(params) = self.attn.as_ref() {
+            let cache =
+                attention_forward(params, &ws.spike_log, t_len).expect("frozen attention forward");
+            ws.features.extend_from_slice(cache.pooled());
         }
-        debug_assert_eq!(features.len(), self.feature_len);
+        debug_assert_eq!(ws.features.len(), self.feature_len);
 
         let f = self.feature_len;
-        let mut logits = self.bout.clone();
+        ws.logits.clear();
+        ws.logits.extend_from_slice(&self.bout);
         for c in 0..self.n_classes {
-            let mut z = logits[c];
+            let mut z = ws.logits[c];
+            let wout_row = &self.wout[c * f..(c + 1) * f];
             for i in 0..f {
-                z += self.wout[c * f + i] * features[i];
+                z += wout_row[i] * ws.features[i];
             }
-            logits[c] = z;
+            ws.logits[c] = z;
         }
 
-        AlifForward {
-            e_in,
-            e_rec,
-            logits,
-            features,
-            activity: total_spikes / (h as f32 * t_len as f32),
-        }
+        total_spikes / (h as f32 * t_len as f32)
     }
 
     pub fn evaluate(&self, test: &[ShdExample]) -> (f32, f32) {
@@ -588,10 +674,12 @@ impl ShdAlifArch {
 
     /// Per-example predictions for paired confirmatory statistics.
     pub fn predictions(&self, test: &[ShdExample]) -> Vec<u32> {
+        let mut ws = AlifWorkspace::default();
         test.iter()
             .map(|ex| {
-                let forward = self.forward(&ex.frames, false);
-                softmax(&forward.logits)
+                self.forward_into(&ex.frames, false, &mut ws);
+                softmax_into(&ws.logits, &mut ws.probs);
+                ws.probs
                     .iter()
                     .enumerate()
                     .max_by(|left, right| left.1.total_cmp(right.1))
@@ -615,21 +703,22 @@ impl ShdAlifArch {
         let mut loss_sum = 0.0f32;
         let mut activity_sum = 0.0f32;
         let mut pred_counts = vec![0usize; self.n_classes];
+        let mut ws = AlifWorkspace::default();
 
         for ex in test {
-            let fwd = self.forward(&ex.frames, false);
-            activity_sum += fwd.activity;
-            let p = softmax(&fwd.logits);
+            let activity = self.forward_into(&ex.frames, false, &mut ws);
+            activity_sum += activity;
+            softmax_into(&ws.logits, &mut ws.probs);
             let mut pred = 0usize;
             let mut best = f32::NEG_INFINITY;
-            for (i, &pi) in p.iter().enumerate() {
+            for (i, &pi) in ws.probs.iter().enumerate() {
                 if pi > best {
                     best = pi;
                     pred = i;
                 }
             }
             pred_counts[pred] += 1;
-            loss_sum += -p[ex.label as usize].max(1e-12).ln();
+            loss_sum += -ws.probs[ex.label as usize].max(1e-12).ln();
             if pred == ex.label as usize {
                 correct += 1;
             }
@@ -732,6 +821,7 @@ pub struct ShdAlifArm {
     /// Mean hidden activity over the last training epoch (sparsity disclosure).
     last_activity: f32,
     rng: Rng,
+    workspace: AlifWorkspace,
 }
 
 impl ShdAlifArm {
@@ -751,6 +841,7 @@ impl ShdAlifArm {
             modulator: ModulatorScale::new(),
             last_activity: 0.0,
             rng: Rng::new(seed ^ 0xA11F_B10A_0000_00F1),
+            workspace: AlifWorkspace::default(),
         }
     }
 
@@ -836,89 +927,100 @@ impl ShdAlifArm {
 
     /// One example. Returns the mean hidden activity for this example.
     fn step(&mut self, ex: &ShdExample) -> f32 {
-        let fwd = self.arch.forward(&ex.frames, true);
+        let activity = self
+            .arch
+            .forward_into(&ex.frames, true, &mut self.workspace);
         let h = self.arch.hidden;
         let n_in = self.arch.n_in;
         let c = self.arch.n_classes;
         let y = ex.label as usize;
 
         // Hidden modulator, per rule. All three are built at comparable scale.
-        let mods: Vec<f32> = match self.rule {
+        match self.rule {
             ShdAlifRule::Dfa | ShdAlifRule::EpropCeiling => {
-                let probs = softmax(&fwd.logits);
-                let mut delta = probs;
+                softmax_into(&self.workspace.logits, &mut self.workspace.probs);
+                let delta = &mut self.workspace.probs;
                 delta[y] -= 1.0; // dL/dz
 
                 // Snapshot the transport matrix BEFORE the readout update.
-                let wout_snapshot = self.arch.wout.clone();
+                if matches!(self.rule, ShdAlifRule::EpropCeiling) {
+                    self.workspace.wout_snapshot.clear();
+                    self.workspace
+                        .wout_snapshot
+                        .extend_from_slice(&self.arch.wout);
+                }
 
                 // The read-out is one layer with a local error signal, so
                 // widening it changes nothing about the locality of the rule -
                 // the extra columns are just more presynaptic features.
                 let f = self.arch.feature_len;
-                for k in 0..c {
-                    let dk = delta[k];
-                    for i in 0..f {
-                        self.arch.wout[k * f + i] -= self.lr * dk * fwd.features[i];
+                for (k, &dk) in delta.iter().enumerate() {
+                    let wout_row = &mut self.arch.wout[k * f..(k + 1) * f];
+                    for (w, &feat) in wout_row.iter_mut().zip(&self.workspace.features[..f]) {
+                        *w -= self.lr * dk * feat;
                     }
                     self.arch.bout[k] -= self.lr * dk;
                 }
 
-                let mut projected: Vec<f32> = (0..h)
-                    .map(|i| {
-                        let mut m = 0.0f32;
-                        for k in 0..c {
-                            let src = match self.rule {
-                                // Hidden units occupy the first `h` columns, so
-                                // transport reads `k * f + i`, not `k * h + i`.
-                                // The frozen block's columns are deliberately
-                                // *not* transported: nothing may carry credit
-                                // back through it.
-                                ShdAlifRule::EpropCeiling => wout_snapshot[k * f + i],
-                                _ => self.feedback[i * c + k],
-                            };
-                            m += src * (-delta[k]);
-                        }
-                        m
-                    })
-                    .collect();
-                normalize_hidden_modulator(&mut projected, &delta, h);
-                projected
+                self.workspace.mods.clear();
+                self.workspace.mods.reserve(h);
+                for i in 0..h {
+                    let mut m = 0.0f32;
+                    for (k, &dk) in delta.iter().enumerate() {
+                        let src = match self.rule {
+                            // Hidden units occupy the first `h` columns, so
+                            // transport reads `k * f + i`, not `k * h + i`.
+                            // The frozen block's columns are deliberately
+                            // *not* transported: nothing may carry credit
+                            // back through it.
+                            ShdAlifRule::EpropCeiling => self.workspace.wout_snapshot[k * f + i],
+                            _ => self.feedback[i * c + k],
+                        };
+                        m += src * (-dk);
+                    }
+                    self.workspace.mods.push(m);
+                }
+                normalize_hidden_modulator(&mut self.workspace.mods, delta, h);
             }
             ShdAlifRule::BroadcastPm1 => {
-                let probs = softmax(&fwd.logits);
-                let action = sample_categorical(&probs, &mut self.rng);
+                softmax_into(&self.workspace.logits, &mut self.workspace.probs);
+                let probs = &self.workspace.probs;
+                let action = sample_categorical(probs, &mut self.rng);
                 let reward = if action == y { 1.0f32 } else { -1.0 };
                 let adv = 1.0 - probs[action];
-                for k in 0..c {
+                let f = self.arch.feature_len;
+                for (k, &pk) in probs.iter().enumerate() {
                     let indicator = if k == action { 1.0f32 } else { 0.0 };
-                    let g = reward * (indicator - probs[k]);
-                    for i in 0..self.arch.feature_len {
-                        self.arch.wout[k * self.arch.feature_len + i] +=
-                            self.lr * g * fwd.features[i];
+                    let g = reward * (indicator - pk);
+                    let wout_row = &mut self.arch.wout[k * f..(k + 1) * f];
+                    for (w, &feat) in wout_row.iter_mut().zip(&self.workspace.features[..f]) {
+                        *w += self.lr * g * feat;
                     }
                     self.arch.bout[k] += self.lr * g;
                 }
                 // Scale the scalar broadcast so its magnitude is comparable to
                 // the graded arms rather than arbitrarily larger.
                 let scalar = reward * adv * shd_out_scale(h);
-                vec![scalar; h]
+                self.workspace.mods.clear();
+                self.workspace.mods.resize(h, scalar);
             }
-        };
+        }
 
-        self.modulator.observe(&mods);
+        self.modulator.observe(&self.workspace.mods);
 
         // Hidden plasticity: local eligibility × per-unit modulator.
         for i in 0..h {
-            let m = mods[i];
+            let m = self.workspace.mods[i];
             if m == 0.0 {
                 continue;
             }
             let row = i * n_in;
-            for j in 0..n_in {
-                let e = fwd.e_in[row + j];
+            for (w, &e) in self.arch.win[row..row + n_in]
+                .iter_mut()
+                .zip(&self.workspace.e_in[row..row + n_in])
+            {
                 if e != 0.0 {
-                    self.arch.win[row + j] += self.lr * m * e;
+                    *w += self.lr * m * e;
                 }
             }
             if self.arch.recurrent {
@@ -927,7 +1029,7 @@ impl ShdAlifArm {
                     if i == k {
                         continue; // keep the diagonal pinned at zero
                     }
-                    let e = fwd.e_rec[rrow + k];
+                    let e = self.workspace.e_rec[rrow + k];
                     if e != 0.0 {
                         self.arch.wrec[rrow + k] += self.lr * m * e;
                     }
@@ -935,7 +1037,7 @@ impl ShdAlifArm {
             }
         }
 
-        fwd.activity
+        activity
     }
 }
 
@@ -962,11 +1064,14 @@ pub fn shuffle_labels(train: &[ShdExample], seed: u64) -> Vec<ShdExample> {
     out
 }
 
-fn softmax(logits: &[f32]) -> Vec<f32> {
-    let m = logits.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-    let ex: Vec<f32> = logits.iter().map(|z| (z - m).exp()).collect();
-    let s: f32 = ex.iter().sum::<f32>().max(1e-12);
-    ex.iter().map(|e| e / s).collect()
+fn softmax_into(logits: &[f32], out: &mut Vec<f32>) {
+    out.clear();
+    let m = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    out.extend(logits.iter().map(|z| (z - m).exp()));
+    let s: f32 = out.iter().sum::<f32>().max(1e-12);
+    for e in out.iter_mut() {
+        *e /= s;
+    }
 }
 
 fn sample_categorical(probs: &[f32], rng: &mut Rng) -> usize {
@@ -1630,5 +1735,197 @@ mod tests {
              the pipeline has a leak",
             r.accuracy
         );
+    }
+
+    fn forward_per_synapse_reference(arch: &ShdAlifArch, frames: &[f32]) -> AlifForward {
+        let h = arch.hidden;
+        let n_in = arch.n_in;
+        let t_len = arch.t;
+        let mut u = vec![0.0f32; h];
+        let mut a = vec![0.0f32; h];
+        let mut s_prev = vec![0.0f32; h];
+        let mut s_now = vec![0.0f32; h];
+        let mut rates = vec![0.0f32; h];
+        let mut surr = vec![0.0f32; h];
+        let mut e_in = vec![0.0f32; h * n_in];
+        let mut epsilon_v_in = vec![0.0f32; h * n_in];
+        let mut epsilon_a_in = vec![0.0f32; h * n_in];
+        let mut e_rec = if arch.recurrent {
+            vec![0.0f32; h * h]
+        } else {
+            Vec::new()
+        };
+        let mut epsilon_v_rec = if arch.recurrent {
+            vec![0.0f32; h * h]
+        } else {
+            Vec::new()
+        };
+        let mut epsilon_a_rec = if arch.recurrent {
+            vec![0.0f32; h * h]
+        } else {
+            Vec::new()
+        };
+        let mut active: Vec<(usize, f32)> = Vec::with_capacity(64);
+        let mut total_spikes = 0.0f32;
+        let mut spike_log: Option<Vec<f32>> =
+            arch.attn.as_ref().map(|_| Vec::with_capacity(t_len * h));
+
+        for t in 0..t_len {
+            let base = t * n_in;
+            active.clear();
+            for j in 0..n_in {
+                let v = frames[base + j];
+                if v != 0.0 {
+                    active.push((j, v));
+                }
+            }
+            for i in 0..h {
+                let mut cur = 0.0f32;
+                let row = i * n_in;
+                for &(j, v) in &active {
+                    cur += arch.win[row + j] * v;
+                }
+                if arch.recurrent {
+                    let rrow = i * h;
+                    for k in 0..h {
+                        let sp = s_prev[k];
+                        if sp != 0.0 {
+                            cur += arch.wrec[rrow + k] * sp;
+                        }
+                    }
+                }
+                let ui = arch.alpha * u[i] + cur;
+                let theta_i = if arch.adaptive {
+                    THETA_REST + arch.beta_a * a[i]
+                } else {
+                    THETA_REST
+                };
+                let sg = arch.surrogate(ui - theta_i);
+                surr[i] = sg;
+                let spike = if ui >= theta_i { 1.0f32 } else { 0.0 };
+                u[i] = if spike > 0.5 { V_RESET } else { ui };
+                if arch.adaptive {
+                    a[i] = arch.rho * a[i] + spike;
+                }
+                s_now[i] = spike;
+                rates[i] += spike;
+                total_spikes += spike;
+            }
+            if let Some(log) = spike_log.as_mut() {
+                log.extend_from_slice(&s_now);
+            }
+            for i in 0..h {
+                let sg = surr[i];
+                let row = i * n_in;
+                for j in 0..n_in {
+                    let pre = frames[base + j];
+                    e_in[row + j] = alif_eligibility_step(
+                        &mut epsilon_v_in[row + j],
+                        &mut epsilon_a_in[row + j],
+                        pre,
+                        sg,
+                        arch.alpha,
+                        arch.rho,
+                        arch.beta_a,
+                        arch.adaptive,
+                    );
+                }
+                if arch.recurrent {
+                    let rrow = i * h;
+                    for k in 0..h {
+                        e_rec[rrow + k] = alif_eligibility_step(
+                            &mut epsilon_v_rec[rrow + k],
+                            &mut epsilon_a_rec[rrow + k],
+                            s_prev[k],
+                            sg,
+                            arch.alpha,
+                            arch.rho,
+                            arch.beta_a,
+                            arch.adaptive,
+                        );
+                    }
+                }
+            }
+            s_prev.copy_from_slice(&s_now);
+        }
+        let mut features = rates;
+        if let (Some(params), Some(log)) = (arch.attn.as_ref(), spike_log.as_ref()) {
+            let cache = attention_forward(params, log, t_len).expect("frozen attention forward");
+            features.extend_from_slice(cache.pooled());
+        }
+        let f = arch.feature_len;
+        let mut logits = arch.bout.clone();
+        for c in 0..arch.n_classes {
+            let mut z = logits[c];
+            for i in 0..f {
+                z += arch.wout[c * f + i] * features[i];
+            }
+            logits[c] = z;
+        }
+        AlifForward {
+            e_in,
+            e_rec,
+            logits,
+            features,
+            activity: total_spikes / (h as f32 * t_len as f32),
+        }
+    }
+
+    #[test]
+    fn factored_eligibility_and_workspace_are_bit_identical_to_per_synapse_step() {
+        let examples = toy(6, 16, 14, 4, 91);
+        assert_eq!(examples.len(), 6);
+        let mut runs_checked = 0usize;
+        for &rec in &[false, true] {
+            for &ad in &[false, true] {
+                for attn in [None, Some(AttentionConfig::new(8, 1).unwrap())] {
+                    let c = cfg(20, 4)
+                        .with_recurrent(rec)
+                        .with_adaptive(ad)
+                        .with_frozen_attention(attn);
+                    let arch = ShdAlifArch::new(&examples[0], &c, 77);
+                    let mut ws = AlifWorkspace::default();
+                    for ex in &examples {
+                        runs_checked += 1;
+                        let ref_fwd = forward_per_synapse_reference(&arch, &ex.frames);
+                        let act = arch.forward_into(&ex.frames, true, &mut ws);
+                        assert_eq!(act.to_bits(), ref_fwd.activity.to_bits());
+                        assert_eq!(
+                            ws.e_in.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            ref_fwd.e_in.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            "e_in mismatch at rec={rec} ad={ad}"
+                        );
+                        assert_eq!(
+                            ws.e_rec.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            ref_fwd
+                                .e_rec
+                                .iter()
+                                .map(|v| v.to_bits())
+                                .collect::<Vec<_>>(),
+                            "e_rec mismatch at rec={rec} ad={ad}"
+                        );
+                        assert_eq!(
+                            ws.logits.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            ref_fwd
+                                .logits
+                                .iter()
+                                .map(|v| v.to_bits())
+                                .collect::<Vec<_>>(),
+                            "logits mismatch at rec={rec} ad={ad}"
+                        );
+                        assert_eq!(
+                            ws.features.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                            ref_fwd
+                                .features
+                                .iter()
+                                .map(|v| v.to_bits())
+                                .collect::<Vec<_>>(),
+                            "features mismatch at rec={rec} ad={ad}"
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(runs_checked, 8 * 6);
     }
 }

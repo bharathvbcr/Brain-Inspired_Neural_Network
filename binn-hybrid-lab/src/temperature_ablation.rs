@@ -996,7 +996,10 @@ mod tests {
         // from `suite()[0]`. That is a property of the design, so it is
         // asserted rather than left to whoever edits the list next.
         let suite = AblationVariant::suite();
-        assert!(suite.len() >= 3, "an ablation needs a baseline and variants");
+        assert!(
+            suite.len() >= 3,
+            "an ablation needs a baseline and variants"
+        );
         let baseline = &suite[0];
         let mut moved: std::collections::BTreeSet<&str> = Default::default();
         for variant in &suite[1..] {

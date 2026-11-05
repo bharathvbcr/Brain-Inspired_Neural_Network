@@ -712,17 +712,15 @@ impl SleepConsolidationLearner {
 
     /// Surgically revokes an episode from consolidated slow weights.
     pub fn revoke_episode(&mut self, episode_id: u64) -> RevocationSummary {
-        let summary =
-            self.provenance
-                .revoke_episode(episode_id, &mut self.slow_weights, self.n_features);
-        summary
+        self.provenance
+            .revoke_episode(episode_id, &mut self.slow_weights, self.n_features)
     }
 
     /// Surgically revokes an entire task/class from consolidated slow weights and resets its fast trace.
     pub fn revoke_task(&mut self, task_id: usize) -> RevocationSummary {
-        let summary =
-            self.provenance
-                .revoke_task(task_id, &mut self.slow_weights, self.n_features);
+        let summary = self
+            .provenance
+            .revoke_task(task_id, &mut self.slow_weights, self.n_features);
         if task_id < self.n_classes {
             let row = task_id * self.n_features;
             for i in 0..self.n_features {
@@ -804,7 +802,7 @@ impl SpikingSleepConsolidator {
 
         let elig_decay = Eligibility::new(learner.tau_e);
         let posts = &engine.conn.col;
-        let syns = engine.syn.as_mut_slice();
+        let syns = engine.syn.as_mut_slice_keeping_delays();
         let num_syns = syns.len();
         let assembly_hash = (task_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ now;
         let mut active_synapses = Vec::new();
@@ -848,6 +846,7 @@ impl SpikingSleepConsolidator {
             }
         }
         let _ = num_syns;
+        engine.syn.mark_edge_w_synced();
         SpikingEpisodicTrace {
             episode_id: ep_id,
             task_id,
@@ -865,7 +864,7 @@ impl SpikingSleepConsolidator {
         traces: &[SpikingEpisodicTrace],
     ) -> usize {
         let mut updates = 0usize;
-        let syns = engine.syn.as_mut_slice();
+        let syns = engine.syn.as_mut_slice_keeping_delays();
         let num_syns = syns.len();
         for trace in traces {
             let sleep_ep_id = self.next_episode_id;
@@ -908,6 +907,7 @@ impl SpikingSleepConsolidator {
                 }
             }
         }
+        engine.syn.mark_edge_w_synced();
         updates
     }
 
@@ -921,9 +921,15 @@ impl SpikingSleepConsolidator {
         let summary = self
             .provenance
             .revoke_episode(episode_id, &mut engine.edge_w, num_syns);
-        for (syn, &w) in engine.syn.as_mut_slice().iter_mut().zip(&engine.edge_w) {
+        for (syn, &w) in engine
+            .syn
+            .as_mut_slice_keeping_delays()
+            .iter_mut()
+            .zip(&engine.edge_w)
+        {
             syn.weight = w;
         }
+        engine.syn.mark_edge_w_synced();
         summary
     }
 
@@ -937,9 +943,15 @@ impl SpikingSleepConsolidator {
         let summary = self
             .provenance
             .revoke_task(task_id, &mut engine.edge_w, num_syns);
-        for (syn, &w) in engine.syn.as_mut_slice().iter_mut().zip(&engine.edge_w) {
+        for (syn, &w) in engine
+            .syn
+            .as_mut_slice_keeping_delays()
+            .iter_mut()
+            .zip(&engine.edge_w)
+        {
             syn.weight = w;
         }
+        engine.syn.mark_edge_w_synced();
         summary
     }
 }
@@ -1090,10 +1102,7 @@ mod tests {
                 .map(|s| make_example(class, s, ReplaySource::Test))
                 .collect();
             let acc = learner.accuracy(&probes);
-            assert!(
-                acc >= 0.95,
-                "class {class} retention collapsed to {acc}"
-            );
+            assert!(acc >= 0.95, "class {class} retention collapsed to {acc}");
         }
 
         // Verify 100% provenance attribution accuracy
@@ -1153,7 +1162,10 @@ mod tests {
         let trace_t0 = consolidator.capture_wake_episode(&mut eng, &mut tf, &credit_t0, 0);
         assert!(!trace_t0.active_synapses.is_empty());
         let w_0_2_after_t0 = eng.edge_w[0];
-        assert!(w_0_2_after_t0 > initial_w[0], "Task 0 edge 0->2 should potentiate");
+        assert!(
+            w_0_2_after_t0 > initial_w[0],
+            "Task 0 edge 0->2 should potentiate"
+        );
 
         // Task 1 wake trial: pre (0, 1) fire at t=40,41; post cell 3 fires at t=48
         tf.reset_pairing_state();
@@ -1175,7 +1187,10 @@ mod tests {
             w_0_2_after_t0.to_bits(),
             "Task 1 wake must not overwrite Task 0 synapse 0->2"
         );
-        assert!(eng.edge_w[1] > initial_w[1], "Task 1 edge 0->3 should potentiate");
+        assert!(
+            eng.edge_w[1] > initial_w[1],
+            "Task 1 edge 0->3 should potentiate"
+        );
 
         // Offline Sleep replay of both compressed traces
         let sleep_updates =

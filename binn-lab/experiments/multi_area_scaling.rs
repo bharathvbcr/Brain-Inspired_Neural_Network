@@ -456,13 +456,16 @@ fn main() {
                     backend: arm,
                     batch_size: 1024,
                 });
+                let op = backend
+                    .prepare_sparse(&csr, &weights)
+                    .expect("valid sparse plan");
                 let mut y = vec![0.0f32; total_cells];
-                backend.spmv(&csr, &weights, &x, &mut y);
+                op.spmv(&x, &mut y).expect("resident SpMV warmup");
 
                 let mut y = vec![0.0f32; total_cells];
                 let start = Instant::now();
                 for _ in 0..iterations {
-                    backend.spmv(&csr, &weights, &x, &mut y);
+                    op.spmv(&x, &mut y).expect("resident SpMV");
                 }
                 let ms = start.elapsed().as_secs_f64() * 1000.0 / iterations as f64;
                 println!(

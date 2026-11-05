@@ -50,7 +50,11 @@ fn census() -> Vec<(&'static str, usize, usize)> {
         ("MatchConfig", MatchConfig::known_presets().len(), 1),
         ("DfaMatchConfig", DfaMatchConfig::known_presets().len(), 1),
         ("RlMatchConfig", RlMatchConfig::known_presets().len(), 1),
-        ("EventPropMatchConfig", EventPropMatchConfig::known_presets().len(), 1),
+        (
+            "EventPropMatchConfig",
+            EventPropMatchConfig::known_presets().len(),
+            1,
+        ),
         ("DfaSpikeConfig", DfaSpikeConfig::known_presets().len(), 1),
         ("EpropTrueConfig", EpropTrueConfig::known_presets().len(), 1),
     ]

@@ -73,12 +73,15 @@ pub fn prune(
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.cmp(&b))
         }),
-        PruningStrategy::Age => candidates.sort_by_key(|&i| {
-            (
-                engine.syn.get(i).expect("aligned synapse").last_elig_update,
-                i,
-            )
-        }),
+        PruningStrategy::Age => {
+            engine.syn.flush_elig_floor_tick();
+            candidates.sort_by_key(|&i| {
+                (
+                    engine.syn.get(i).expect("aligned synapse").last_elig_update,
+                    i,
+                )
+            });
+        }
         PruningStrategy::Eligibility => candidates.sort_by(|&a, &b| {
             let ea = engine
                 .syn
@@ -107,9 +110,8 @@ pub fn prune(
 
     for &index in candidates.iter().take(requested) {
         engine.edge_w[index] = 0.0;
-        let synapse = engine.syn.get_mut(index).expect("aligned synapse");
-        synapse.weight = 0.0;
-        synapse.eligibility = 0.0;
+        engine.syn.set_weight_keeping_delay(index, 0.0);
+        engine.syn.touch_elig(index).eligibility = 0.0;
     }
     let active_after = active_before - requested;
     PruneReport {
