@@ -1314,51 +1314,69 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
                          sorted(stems))
 
-    @staticmethod
-    def _table_stems(source):
+    def _table_stems(self, source):
         """Every stem in every table `all_figures()` chains, parsed strictly.
 
         On 2026-11-08 this test failed on five stems although neither stem list
         was stale: the generator had moved its five non-typeset figures out of
         literal `write_pair` calls into a second table, `OTHER_FIGURES`, whose
-        rows use the bare height `H` where this extractor demanded an `H_` prefix, and
-        the extractor read only `PAPER_FIGURES`. The Rust generator owns the
-        stem list; this follows it, in three ways that stop the next table
+        rows use the bare height `H` where this extractor demanded an `H_`
+        prefix, and the extractor read only `PAPER_FIGURES`. The Rust generator
+        owns the stem list; this follows it, in ways that stop the next table
         change doing the same silently.
 
-        * The tables read are those named in `all_figures()`'s body, not a
-          hard-coded pair, so a third table is read the day it is chained.
+        * Rust comments (`//`, `/* */`, which cover doc comments) are removed
+          first, string literals left alone, so a row commented out, a chain
+          commented out or a stray word in a comment is not read as code.
+        * The tables read are those `all_figures()`'s body names (`NAME.` or
+          `(NAME)`), not a hard-coded pair, so a third table is read the day it
+          is chained. A named table with no declaration is an error.
         * Each table declares its length, `[(&str, Draw, u32); N]`. The parsed
           row count must equal N, so a row the row pattern cannot parse (a
           height written `H * 2`, a new name shape) fails here instead of
           dropping its stem from the set.
-        * `generate_all` must iterate `all_figures()`, else the chained tables
-          are not what is written and reading them proves nothing.
+        * `generate_all` must contain `for (..) in all_figures()`, else the
+          chained tables are not what is written and reading them proves
+          nothing.
 
-        Rows are `("stem", draw_fn, H),` or `..., H_CONST),`, with whitespace
-        (rustfmt wraps the long figM row over several lines) and an optional
-        trailing comma.
+        Failures go through `self.fail`, not `assert`, which `python -O`
+        removes. Rows are `("stem", draw_fn, H),` or `..., H_CONST),`, with
+        whitespace (rustfmt wraps the long figM row over several lines) and an
+        optional trailing comma.
         """
+        source = re.sub(
+            r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
+            lambda m: m.group(0) if m.group(0).startswith('"') else " ",
+            source, flags=re.S)
         body = re.search(r"fn all_figures\(\)[^{]*\{(.*?)\n\}", source, re.S)
-        assert body, "all_figures() was not found in paper_figures.rs"
-        tables = re.findall(r"\b([A-Z][A-Z0-9_]*)\b", body.group(1))
-        assert tables, f"all_figures() names no table: {body.group(1)!r}"
+        if not body:
+            self.fail("all_figures() was not found in paper_figures.rs")
+        tables = re.findall(r"\b([A-Z][A-Z0-9_]*)\s*(?:\.|\))", body.group(1))
+        if not tables:
+            self.fail(f"all_figures() names no table: {body.group(1)!r}")
         generate = re.search(r"fn generate_all\(.*?\n\}", source, re.S)
-        assert generate and "all_figures()" in generate.group(0), \
-            "generate_all no longer iterates all_figures()"
-        row = re.compile(r'\(\s*"(\w+)",\s*draw_\w+,\s*H(?:_\w+)?,?\s*\)')
+        if not (generate and re.search(r"\bfor\s*\(.*?\)\s*in\s+all_figures\(\)",
+                                       generate.group(0))):
+            self.fail("generate_all no longer iterates all_figures()")
+        row = re.compile(r'\(\s*"(\w+)"\s*,\s*draw_\w+\s*,\s*H(?:_\w+)?\s*,?\s*\)')
         stems, counts = set(), {}
         for name in tables:
-            m = re.search(rf"const {name}: \[\(&str, Draw, u32\); (\d+)\] = \[(.*?)\n\];",
-                          source, re.S)
-            assert m, f"all_figures() chains {name}, which was not parsed"
+            m = re.search(
+                rf"const {name}\s*:\s*\[\(\s*&(?:'static\s+)?str\s*,\s*Draw\s*,"
+                rf"\s*u32\s*\)\s*;\s*(\d+)\s*\]\s*=\s*\[(.*?)\];",
+                source, re.S)
+            if not m:
+                self.fail(f"all_figures() chains {name}, which has no "
+                          f"`const {name}: [(&str, Draw, u32); N]` declaration")
             rows = row.findall(m.group(2))
-            assert len(rows) == int(m.group(1)), (
-                f"{name} declares {m.group(1)} rows but {len(rows)} parsed: "
-                f"{rows}; a row has a shape the pattern does not read")
+            if len(rows) != int(m.group(1)):
+                self.fail(f"{name} declares {m.group(1)} rows but {len(rows)} "
+                          f"parsed: {rows}; a row has a shape the pattern does "
+                          f"not read")
             counts[name] = len(rows)
             stems |= set(rows)
-        assert counts.get("PAPER_FIGURES") == 7, counts  # the seven typeset figures
+        if counts.get("PAPER_FIGURES") != 7:  # the seven typeset figures
+            self.fail(f"PAPER_FIGURES should hold 7 rows: {counts}")
         return stems
 
     def test_figure_4_is_the_resolution_ladder_here_too(self):
