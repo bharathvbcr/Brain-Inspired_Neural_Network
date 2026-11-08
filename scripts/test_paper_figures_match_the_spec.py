@@ -1304,19 +1304,62 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         Asserted here rather than in the map test, so a stem added to the
         generator and to neither list cannot slip through both."""
         source = SOURCE.read_text()
+        # Stems written by a literal `write_pair(out_dir, "stem")` call, outside
+        # any table. Kept because it guards exactly that: a stem added by hand
+        # beside the tables. It matches nothing while `generate_all` is table
+        # driven, which is the intended state.
         stems = set(re.findall(r'write_pair(?:_sized)?\(\s*out_dir,\s*"([\w]+)"',
                                source))
-        # The seven manuscript figures are written from one table,
-        # `PAPER_FIGURES`, so that the legibility tests and the generator read
-        # the same list. Its rows are `("stem", draw_fn, H_CONST),`, which
-        # rustfmt spreads over several lines when the stem is long.
-        table = source[source.index("const PAPER_FIGURES"):]
-        table = table[:table.index("];")]
-        rows = re.findall(r'\(\s*"(\w+)",\s*draw_\w+,\s*H_\w+,?\s*\)', table)
-        self.assertEqual(len(rows), 7, rows)
-        stems |= set(rows)
+        stems |= self._table_stems(source)
         self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
                          sorted(stems))
+
+    @staticmethod
+    def _table_stems(source):
+        """Every stem in every table `all_figures()` chains, parsed strictly.
+
+        On 2026-11-08 this test failed on five stems although neither stem list
+        was stale: the generator had moved its five non-typeset figures out of
+        literal `write_pair` calls into a second table, `OTHER_FIGURES`, whose
+        rows use the bare height `H` where this extractor demanded an `H_` prefix, and
+        the extractor read only `PAPER_FIGURES`. The Rust generator owns the
+        stem list; this follows it, in three ways that stop the next table
+        change doing the same silently.
+
+        * The tables read are those named in `all_figures()`'s body, not a
+          hard-coded pair, so a third table is read the day it is chained.
+        * Each table declares its length, `[(&str, Draw, u32); N]`. The parsed
+          row count must equal N, so a row the row pattern cannot parse (a
+          height written `H * 2`, a new name shape) fails here instead of
+          dropping its stem from the set.
+        * `generate_all` must iterate `all_figures()`, else the chained tables
+          are not what is written and reading them proves nothing.
+
+        Rows are `("stem", draw_fn, H),` or `..., H_CONST),`, with whitespace
+        (rustfmt wraps the long figM row over several lines) and an optional
+        trailing comma.
+        """
+        body = re.search(r"fn all_figures\(\)[^{]*\{(.*?)\n\}", source, re.S)
+        assert body, "all_figures() was not found in paper_figures.rs"
+        tables = re.findall(r"\b([A-Z][A-Z0-9_]*)\b", body.group(1))
+        assert tables, f"all_figures() names no table: {body.group(1)!r}"
+        generate = re.search(r"fn generate_all\(.*?\n\}", source, re.S)
+        assert generate and "all_figures()" in generate.group(0), \
+            "generate_all no longer iterates all_figures()"
+        row = re.compile(r'\(\s*"(\w+)",\s*draw_\w+,\s*H(?:_\w+)?,?\s*\)')
+        stems, counts = set(), {}
+        for name in tables:
+            m = re.search(rf"const {name}: \[\(&str, Draw, u32\); (\d+)\] = \[(.*?)\n\];",
+                          source, re.S)
+            assert m, f"all_figures() chains {name}, which was not parsed"
+            rows = row.findall(m.group(2))
+            assert len(rows) == int(m.group(1)), (
+                f"{name} declares {m.group(1)} rows but {len(rows)} parsed: "
+                f"{rows}; a row has a shape the pattern does not read")
+            counts[name] = len(rows)
+            stems |= set(rows)
+        assert counts.get("PAPER_FIGURES") == 7, counts  # the seven typeset figures
+        return stems
 
     def test_figure_4_is_the_resolution_ladder_here_too(self):
         """The spec and the draft both call it that; the skeleton called it the
