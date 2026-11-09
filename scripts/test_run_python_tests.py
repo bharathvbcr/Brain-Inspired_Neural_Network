@@ -432,5 +432,64 @@ class RecordChecksTest(RunnerBase):
         self.assertNotIn(str(self.tmp / "old"), r.stdout.split("\n")[0])
 
 
+def first_dead_statement(source: str, filename: str = "<test>"):
+    """The first top-level statement that follows a module-level main guard.
+
+    Returns `(guard_line, dead_line)` or None. The gate runs each file as a
+    script, and `unittest.main()` (or a hand-rolled runner's `sys.exit`) ends
+    the process, so anything after the guard is collected by `-m unittest
+    discover` but never run by the gate.
+    """
+    import ast
+
+    body = ast.parse(source, filename).body
+    for index, node in enumerate(body):
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        if (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "__name__"
+            and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.Eq)
+            and len(test.comparators) == 1
+            and isinstance(test.comparators[0], ast.Constant)
+            and test.comparators[0].value == "__main__"
+            and index + 1 < len(body)
+        ):
+            return node.lineno, body[index + 1].lineno
+    return None
+
+
+class MainGuardIsLastTests(unittest.TestCase):
+    """Nothing may follow `if __name__ == "__main__":` in a test file.
+
+    The gate runs every `scripts/test_*.py` as a script, so a TestCase defined
+    after the guard is never run by it. Covers hand-rolled runners too.
+    """
+
+    def test_every_test_file_ends_with_its_main_guard(self):
+        offenders = []
+        for path in sorted(HERE.glob("test_*.py")):
+            hit = first_dead_statement(path.read_text(encoding="utf-8"), str(path))
+            if hit:
+                guard, dead = hit
+                offenders.append(
+                    f"{path.name}: statement at line {dead} follows the "
+                    f"`if __name__ == \"__main__\":` guard at line {guard} and "
+                    "never runs under the gate; move the guard to the end of the file"
+                )
+        self.assertEqual(offenders, [], "\n".join(offenders))
+
+    def test_the_detector_flags_code_after_the_guard_and_only_that(self):
+        dead = 'if __name__ == "__main__":\n    pass\n\nclass T: pass\n'
+        self.assertEqual(first_dead_statement(dead), (1, 4))
+        self.assertIsNone(first_dead_statement('class T: pass\nif __name__ == "__main__":\n    pass\n'))
+        self.assertIsNone(first_dead_statement("class T: pass\n"))
+        # A guard written the other way round, or an unrelated `if`, is not one.
+        self.assertIsNone(first_dead_statement('if x == "__main__":\n    pass\nx = 1\n'))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
