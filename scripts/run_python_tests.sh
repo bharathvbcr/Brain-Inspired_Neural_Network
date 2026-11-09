@@ -132,7 +132,9 @@ trap 'rm -rf "$WORK"' EXIT
 # `timeout`, perl is on every machine this runs on. A descendant that calls
 # setsid itself escapes the group; that is not defended against.
 bounded() {
-  perl -e '
+  # Unbuffered, so stdout and stderr interleave in the order they happened and
+  # unittest's summary is the last summary-shaped line, not one a test printed.
+  PYTHONUNBUFFERED=1 perl -e '
     use POSIX ":sys_wait_h";
     my ($limit, $out, @cmd) = @ARGV;
     my $pid = fork();
@@ -174,10 +176,11 @@ missing_dep() {
 # Proof that tests ran, from the whole output in $1. Prints "Ran N tests" (with
 # ", K skipped" when K > 0) or "N/N passed" and returns 0; returns 1 when nothing
 # ran or all were skipped. The one proof both the system and the venv run use.
-# The whole output, not its tail: stdout redirected to a file is block-buffered
-# and flushes at exit, after unittest's summary on stderr, so a test that prints
-# pushes the summary arbitrarily far from the end. The last unittest summary
-# wins, and its skip count comes from the first `OK` line after it.
+# The whole output, not its tail: a test that prints can push the summary far
+# from the end. `bounded` runs Python unbuffered, so the output is in time order
+# and the last unittest summary is the real one. Its verdict is the first `OK`
+# or `FAILED` line after it; a `FAILED` (possible at exit 0 with
+# `unittest.main(exit=False)`) or no verdict at all is not a pass.
 evidence() {
   local summary n skipped
   summary="$(awk '
@@ -187,10 +190,12 @@ evidence() {
       if (match($0, /skipped=[0-9]+/)) k = substr($0, RSTART + 8, RLENGTH - 8)
       want = 0
     }
-    END { if (n != "") print n, (k == "" ? 0 : k) }' "$1")"
+    want && /^FAILED( |$)/ { k = "failed"; want = 0 }
+    END { if (n != "") print n, (k == "" ? "none" : k) }' "$1")"
   if [ -n "$summary" ]; then
     n="${summary% *}"
     skipped="${summary#* }"
+    case "$skipped" in failed|none) return 1 ;; esac
     [ "$n" -gt 0 ] || return 1
     [ "$skipped" -lt "$n" ] || return 1
     echo "Ran $n test$([ "$n" -eq 1 ] || echo s)$([ "${skipped:-0}" -eq 0 ] || echo ", $skipped skipped")"

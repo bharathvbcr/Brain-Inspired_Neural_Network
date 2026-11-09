@@ -1321,16 +1321,28 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         """The generator's stem list and this class's STEMS must not drift.
         Asserted here rather than in the map test, so a stem added to the
         generator and to neither list cannot slip through both."""
-        source = SOURCE.read_text()
+        stems = self._generator_stems(SOURCE.read_text())
+        self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
+                         sorted(stems))
+
+    def _generator_stems(self, source):
+        """Every stem the generator writes: literal calls plus the tables."""
         # Stems written by a literal `write_pair(out_dir, "stem")` call, outside
         # any table. Kept because it guards exactly that: a stem added by hand
         # beside the tables. It matches nothing while `generate_all` is table
         # driven, which is the intended state.
         stems = set(re.findall(r'write_pair(?:_sized)?\(\s*out_dir,\s*"([\w]+)"',
-                               source))
-        stems |= self._table_stems(source)
-        self.assertEqual(stems, set(TheGeneratorOwnsTheArtworkTest.STEMS),
-                         sorted(stems))
+                               strip_rust_comments(source)))
+        return stems | self._table_stems(source)
+
+    def test_a_commented_out_write_pair_call_is_not_a_stem(self):
+        """A retired figure left as `// write_pair(out_dir, "x", …)` would
+        otherwise keep "x" in the generator's set and hide its removal."""
+        source = self.CHAR_LITERAL_FIXTURE.replace(
+            "    Ok(vec![])\n",
+            '    // write_pair(out_dir, "ghost", draw_ghost, H)?;\n    Ok(vec![])\n')
+        self.assertEqual(self._generator_stems(source),
+                         {f"p{i}" for i in range(1, 8)} | {"o1"})
 
     def _table_stems(self, source):
         """Every stem in every table `all_figures()` chains, parsed strictly.

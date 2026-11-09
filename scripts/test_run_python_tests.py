@@ -69,10 +69,19 @@ NOISY_AFTER_SUMMARY = PASSING.replace(
     "    def test_b(self): self.assertTrue(True)\n",
     "    def test_b(self): print('\\n'.join(f'FAIL: fixture text {i}' for i in range(30)))\n")
 H5PY_THEN_NOISY_AFTER_SUMMARY = "import h5py\n" + NOISY_AFTER_SUMMARY
+# A real failure that still exits 0: `unittest.main(exit=False)`.
+FAILED_EXIT_ZERO = PASSING.replace(
+    "    def test_b(self): self.assertTrue(True)\n",
+    "    def test_b(self): self.assertTrue(False)\n").replace(
+    "unittest.main()\n", "unittest.main(exit=False)\n")
 ALL_SKIPPED = H5PY_THEN_ALL_SKIPPED.replace("import h5py, unittest", "import unittest")
 # Imports cleanly, defines a TestCase with no tests: "Ran 0 tests", exit 5 on
 # 3.12+, exit 0 on older interpreters; either way not a pass.
 ZERO_TESTS = "import unittest\nclass T(unittest.TestCase): pass\nunittest.main()\n"
+# Every test skipped, but stdout carries a line shaped like a summary. Buffered,
+# it lands after the real one and becomes the "last summary".
+FAKE_SUMMARY_ALL_SKIPPED = ALL_SKIPPED.replace(
+    "unittest.main()\n", "print('Ran 3 tests in 0.010s')\nunittest.main()\n")
 # A real failure whose output merely CONTAINS the words of a missing import.
 H5PY_THEN_FAIL_QUOTING_IMPORT_ERROR = (
     "import h5py\n"
@@ -329,6 +338,20 @@ class RunnerTest(RunnerBase):
         r = self.run_gate(t, self.fake_venv("venv"))
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn(f"[ ok ] {t}  (Ran 2 tests; in venv)", r.stdout)
+
+    def test_a_printed_summary_line_cannot_stand_in_for_the_real_one(self):
+        t = self.add("test_fake.py", FAKE_SUMMARY_ALL_SKIPPED)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+
+    def test_a_failed_summary_is_not_a_pass_even_at_exit_zero(self):
+        t = self.add("test_failed0.py", FAILED_EXIT_ZERO)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
 
     def test_system_all_skipped_is_not_a_pass(self):
         t = self.add("test_skip.py", ALL_SKIPPED)

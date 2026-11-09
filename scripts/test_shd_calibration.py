@@ -321,6 +321,8 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
     PINNED_MODEL = (
         "results/shd_instrument_v4/reference-cache/SNN-delays/snn_delays.py"
     )
+    #: The modules the pinned config may lack outside `.venv-shd-cal`.
+    REFERENCE_DEPS = ("spikingjelly", "torch")
     #: Every mode `config.py` documents on its `model_type` line.
     MODEL_TYPES = ("snn_delays", "snn_delays_lr0", "snn")
 
@@ -353,14 +355,31 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
         try:
             exec(compile(source, "pinned_config", "exec"), namespace)  # noqa: S102
         except ModuleNotFoundError as e:
-            # The pinned config imports `spikingjelly` at module level, which
-            # only the calibration env carries. Any other failure propagates.
+            # The pinned config imports `spikingjelly` (which needs torch) at
+            # module level, and only the calibration env carries them. Any
+            # other missing module is a defect and propagates.
+            if (e.name or "").split(".")[0] not in self.REFERENCE_DEPS:
+                raise
             self.skipTest(
                 f"pinned config needs `{e.name}`, which this interpreter lacks; "
                 "the calibration setup installs it into `.venv-shd-cal` -- these "
                 "invariants are unverified until then."
             )
         return namespace["Config"]
+
+    def test_only_a_missing_reference_dependency_is_a_skip(self) -> None:
+        """A config whose import is broken for any other reason must fail, not
+        skip: a renamed or typo'd module is a defect, not a missing env."""
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / "best_config_SHD.py"
+            broken.write_text("import binn_no_such_module_xyz\nclass Config: pass\n")
+            probe = ReferenceKernelInvariantTests("test_the_kernel_construction_is_not_guarded_by_model_type")
+            probe.pinned = lambda relative: broken
+            try:
+                with self.assertRaises(ModuleNotFoundError):
+                    probe.config_with()
+            except unittest.SkipTest as skip:
+                self.fail(f"skipped on a module that is not a reference dependency: {skip}")
 
     def test_the_temporal_kernel_survives_every_model_type(self) -> None:
         """No documented mode removes the kernel."""
