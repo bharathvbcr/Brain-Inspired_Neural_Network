@@ -171,22 +171,33 @@ missing_dep() {
     | sed -E "s/^[^']*'([^'.]*).*/\\1/" | head -n 1
 }
 
-# Proof that tests ran, from the last lines of $1. Prints "Ran N tests" (with
+# Proof that tests ran, from the whole output in $1. Prints "Ran N tests" (with
 # ", K skipped" when K > 0) or "N/N passed" and returns 0; returns 1 when nothing
 # ran or all were skipped. The one proof both the system and the venv run use.
+# The whole output, not its tail: stdout redirected to a file is block-buffered
+# and flushes at exit, after unittest's summary on stderr, so a test that prints
+# pushes the summary arbitrarily far from the end. The last unittest summary
+# wins, and its skip count comes from the first `OK` line after it.
 evidence() {
-  local tail_text n skipped
-  tail_text="$(tail -n 12 "$1")"
-  n="$(printf '%s\n' "$tail_text" | sed -nE 's/^Ran ([0-9]+) tests? in .*/\1/p' | tail -n 1)"
-  if [ -n "$n" ]; then
+  local summary n skipped
+  summary="$(awk '
+    /^Ran [0-9]+ tests? in / { n = $2; k = ""; want = 1; next }
+    want && /^OK( |$)/ {
+      k = 0
+      if (match($0, /skipped=[0-9]+/)) k = substr($0, RSTART + 8, RLENGTH - 8)
+      want = 0
+    }
+    END { if (n != "") print n, (k == "" ? 0 : k) }' "$1")"
+  if [ -n "$summary" ]; then
+    n="${summary% *}"
+    skipped="${summary#* }"
     [ "$n" -gt 0 ] || return 1
-    skipped="$(printf '%s\n' "$tail_text" | sed -nE 's/^OK \(.*skipped=([0-9]+).*\)$/\1/p' | tail -n 1)"
-    [ -z "$skipped" ] || [ "$skipped" -lt "$n" ] || return 1
+    [ "$skipped" -lt "$n" ] || return 1
     echo "Ran $n test$([ "$n" -eq 1 ] || echo s)$([ "${skipped:-0}" -eq 0 ] || echo ", $skipped skipped")"
     return 0
   fi
   # A hand-rolled runner's "N/N passed" (BSD sed has no ERE backreference).
-  n="$(printf '%s\n' "$tail_text" | awk -F'[/ ]' '$1 ~ /^[0-9]+$/ && $1 == $2 && $3 == "passed" && NF == 3 { n = $1 } END { if (n != "") print n }')"
+  n="$(awk -F'[/ ]' '$1 ~ /^[0-9]+$/ && $1 == $2 && $3 == "passed" && NF == 3 { n = $1 } END { if (n != "") print n }' "$1")"
   if [ -n "$n" ] && [ "$n" -gt 0 ]; then
     echo "$n/$n passed"
     return 0

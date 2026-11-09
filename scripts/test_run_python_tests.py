@@ -62,6 +62,13 @@ PARTIAL_SKIP = (
     "unittest.main()\n"
 )
 H5PY_THEN_PARTIAL_SKIP = "import h5py\n" + PARTIAL_SKIP
+# Passes, but prints to stdout. Redirected to a file, stdout is block-buffered
+# and flushes at exit, after unittest's summary on stderr, so the summary is
+# not among the last lines of the output (scripts/test_paper_build.py does this).
+NOISY_AFTER_SUMMARY = PASSING.replace(
+    "    def test_b(self): self.assertTrue(True)\n",
+    "    def test_b(self): print('\\n'.join(f'FAIL: fixture text {i}' for i in range(30)))\n")
+H5PY_THEN_NOISY_AFTER_SUMMARY = "import h5py\n" + NOISY_AFTER_SUMMARY
 ALL_SKIPPED = H5PY_THEN_ALL_SKIPPED.replace("import h5py, unittest", "import unittest")
 # Imports cleanly, defines a TestCase with no tests: "Ran 0 tests", exit 5 on
 # 3.12+, exit 0 on older interpreters; either way not a pass.
@@ -310,6 +317,18 @@ class RunnerTest(RunnerBase):
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped)", r.stdout)
         self.assertIn("files with skipped tests: 1", r.stdout)
+
+    def test_system_proof_survives_stdout_flushed_after_the_summary(self):
+        t = self.add("test_noisy.py", NOISY_AFTER_SUMMARY)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests)", r.stdout)
+
+    def test_venv_proof_survives_stdout_flushed_after_the_summary(self):
+        t = self.add("test_needs.py", H5PY_THEN_NOISY_AFTER_SUMMARY)
+        r = self.run_gate(t, self.fake_venv("venv"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests; in venv)", r.stdout)
 
     def test_system_all_skipped_is_not_a_pass(self):
         t = self.add("test_skip.py", ALL_SKIPPED)
