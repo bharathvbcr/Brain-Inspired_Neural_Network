@@ -52,6 +52,20 @@ H5PY_THEN_ALL_SKIPPED = (
     "    def test_a(self): pass\n"
     "unittest.main()\n"
 )
+# Two tests, one skipped: ran and passed, but not everything ran.
+PARTIAL_SKIP = (
+    "import unittest\n"
+    "class T(unittest.TestCase):\n"
+    "    def test_a(self): self.assertTrue(True)\n"
+    "    @unittest.skip('x')\n"
+    "    def test_b(self): pass\n"
+    "unittest.main()\n"
+)
+H5PY_THEN_PARTIAL_SKIP = "import h5py\n" + PARTIAL_SKIP
+ALL_SKIPPED = H5PY_THEN_ALL_SKIPPED.replace("import h5py, unittest", "import unittest")
+# Imports cleanly, defines a TestCase with no tests: "Ran 0 tests", exit 5 on
+# 3.12+, exit 0 on older interpreters; either way not a pass.
+ZERO_TESTS = "import unittest\nclass T(unittest.TestCase): pass\nunittest.main()\n"
 # A real failure whose output merely CONTAINS the words of a missing import.
 H5PY_THEN_FAIL_QUOTING_IMPORT_ERROR = (
     "import h5py\n"
@@ -282,6 +296,50 @@ class RunnerTest(RunnerBase):
         r = self.run_gate(t, self.fake_venv("venv"))
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("[FAIL] scripts/test_needs.py", r.stdout)
+
+    def test_venv_partial_skip_is_reported_not_hidden(self):
+        t = self.add("test_needs.py", H5PY_THEN_PARTIAL_SKIP)
+        r = self.run_gate(t, self.fake_venv("venv"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped; in venv)", r.stdout)
+        self.assertIn("files with skipped tests: 1", r.stdout)
+
+    def test_system_partial_skip_is_reported_not_hidden(self):
+        t = self.add("test_part.py", PARTIAL_SKIP)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped)", r.stdout)
+        self.assertIn("files with skipped tests: 1", r.stdout)
+
+    def test_system_all_skipped_is_not_a_pass(self):
+        t = self.add("test_skip.py", ALL_SKIPPED)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+        self.assertIn("passed: 0   failed: 1", r.stdout)
+        self.assertNotIn("executed and passed", r.stdout)
+
+    def test_system_zero_tests_is_not_a_pass(self):
+        t = self.add("test_zero.py", ZERO_TESTS)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+        self.assertIn("passed: 0   failed: 1", r.stdout)
+
+    def test_system_exit_zero_with_no_output_is_not_a_pass(self):
+        t = self.add("test_silent.py", "pass\n")
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+
+    def test_system_unskipped_line_is_unchanged_and_summary_counts_zero(self):
+        t = self.add("test_plain.py", PASSING)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"  [ ok ] {t}  (Ran 2 tests)\n", r.stdout)
+        self.assertIn("files with skipped tests: 0", r.stdout)
 
     def test_a_single_test_is_counted(self):
         t = self.add("test_needs.py", "import h5py\n" + ONE_PASSING)
