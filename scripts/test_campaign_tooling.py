@@ -2772,10 +2772,6 @@ class ProvenanceGateTest(unittest.TestCase):
         self.assertEqual(len(failures), 2, failures)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class OperatorInvariantsMirrorTheBinary(unittest.TestCase):
     """`cell_validity.temporal_invariants` duplicates a Rust table.
 
@@ -3199,3 +3195,7 @@ class RunCellBuildsTheFlagsAWaveAsksFor(unittest.TestCase):
             self.assertEqual(train[train.index("--val-speakers") + 1], "6,7")
             self.assertTrue(
                 train[train.index("--train-speakers") + 1].endswith("train.speakers"))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

@@ -52,6 +52,20 @@ H5PY_THEN_ALL_SKIPPED = (
     "    def test_a(self): pass\n"
     "unittest.main()\n"
 )
+# Two tests, one skipped: ran and passed, but not everything ran.
+PARTIAL_SKIP = (
+    "import unittest\n"
+    "class T(unittest.TestCase):\n"
+    "    def test_a(self): self.assertTrue(True)\n"
+    "    @unittest.skip('x')\n"
+    "    def test_b(self): pass\n"
+    "unittest.main()\n"
+)
+H5PY_THEN_PARTIAL_SKIP = "import h5py\n" + PARTIAL_SKIP
+ALL_SKIPPED = H5PY_THEN_ALL_SKIPPED.replace("import h5py, unittest", "import unittest")
+# Imports cleanly, defines a TestCase with no tests: "Ran 0 tests", exit 5 on
+# 3.12+, exit 0 on older interpreters; either way not a pass.
+ZERO_TESTS = "import unittest\nclass T(unittest.TestCase): pass\nunittest.main()\n"
 # A real failure whose output merely CONTAINS the words of a missing import.
 H5PY_THEN_FAIL_QUOTING_IMPORT_ERROR = (
     "import h5py\n"
@@ -283,6 +297,50 @@ class RunnerTest(RunnerBase):
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn("[FAIL] scripts/test_needs.py", r.stdout)
 
+    def test_venv_partial_skip_is_reported_not_hidden(self):
+        t = self.add("test_needs.py", H5PY_THEN_PARTIAL_SKIP)
+        r = self.run_gate(t, self.fake_venv("venv"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped; in venv)", r.stdout)
+        self.assertIn("files with skipped tests: 1", r.stdout)
+
+    def test_system_partial_skip_is_reported_not_hidden(self):
+        t = self.add("test_part.py", PARTIAL_SKIP)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped)", r.stdout)
+        self.assertIn("files with skipped tests: 1", r.stdout)
+
+    def test_system_all_skipped_is_not_a_pass(self):
+        t = self.add("test_skip.py", ALL_SKIPPED)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+        self.assertIn("passed: 0   failed: 1", r.stdout)
+        self.assertNotIn("executed and passed", r.stdout)
+
+    def test_system_zero_tests_is_not_a_pass(self):
+        t = self.add("test_zero.py", ZERO_TESTS)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+        self.assertIn("passed: 0   failed: 1", r.stdout)
+
+    def test_system_exit_zero_with_no_output_is_not_a_pass(self):
+        t = self.add("test_silent.py", "pass\n")
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+
+    def test_system_unskipped_line_is_unchanged_and_summary_counts_zero(self):
+        t = self.add("test_plain.py", PASSING)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"  [ ok ] {t}  (Ran 2 tests)\n", r.stdout)
+        self.assertIn("files with skipped tests: 0", r.stdout)
+
     def test_a_single_test_is_counted(self):
         t = self.add("test_needs.py", "import h5py\n" + ONE_PASSING)
         r = self.run_gate(t, self.fake_venv("venv"))
@@ -372,6 +430,65 @@ class RecordChecksTest(RunnerBase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("record_checks: using ", r.stdout)
         self.assertNotIn(str(self.tmp / "old"), r.stdout.split("\n")[0])
+
+
+def first_dead_statement(source: str, filename: str = "<test>"):
+    """The first top-level statement that follows a module-level main guard.
+
+    Returns `(guard_line, dead_line)` or None. The gate runs each file as a
+    script, and `unittest.main()` (or a hand-rolled runner's `sys.exit`) ends
+    the process, so anything after the guard is collected by `-m unittest
+    discover` but never run by the gate.
+    """
+    import ast
+
+    body = ast.parse(source, filename).body
+    for index, node in enumerate(body):
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        if (
+            isinstance(test, ast.Compare)
+            and isinstance(test.left, ast.Name)
+            and test.left.id == "__name__"
+            and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.Eq)
+            and len(test.comparators) == 1
+            and isinstance(test.comparators[0], ast.Constant)
+            and test.comparators[0].value == "__main__"
+            and index + 1 < len(body)
+        ):
+            return node.lineno, body[index + 1].lineno
+    return None
+
+
+class MainGuardIsLastTests(unittest.TestCase):
+    """Nothing may follow `if __name__ == "__main__":` in a test file.
+
+    The gate runs every `scripts/test_*.py` as a script, so a TestCase defined
+    after the guard is never run by it. Covers hand-rolled runners too.
+    """
+
+    def test_every_test_file_ends_with_its_main_guard(self):
+        offenders = []
+        for path in sorted(HERE.glob("test_*.py")):
+            hit = first_dead_statement(path.read_text(encoding="utf-8"), str(path))
+            if hit:
+                guard, dead = hit
+                offenders.append(
+                    f"{path.name}: statement at line {dead} follows the "
+                    f"`if __name__ == \"__main__\":` guard at line {guard} and "
+                    "never runs under the gate; move the guard to the end of the file"
+                )
+        self.assertEqual(offenders, [], "\n".join(offenders))
+
+    def test_the_detector_flags_code_after_the_guard_and_only_that(self):
+        dead = 'if __name__ == "__main__":\n    pass\n\nclass T: pass\n'
+        self.assertEqual(first_dead_statement(dead), (1, 4))
+        self.assertIsNone(first_dead_statement('class T: pass\nif __name__ == "__main__":\n    pass\n'))
+        self.assertIsNone(first_dead_statement("class T: pass\n"))
+        # A guard written the other way round, or an unrelated `if`, is not one.
+        self.assertIsNone(first_dead_statement('if x == "__main__":\n    pass\nx = 1\n'))
 
 
 if __name__ == "__main__":

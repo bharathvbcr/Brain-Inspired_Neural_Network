@@ -109,9 +109,6 @@ class ProtocolTests(unittest.TestCase):
             parse_historical_validation_curve(log, expected_epochs=2)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class ReferenceFingerprintScopeTests(unittest.TestCase):
     """A fingerprint is only meaningful with the path set it was computed over.
@@ -353,7 +350,16 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
                 count, 1, f"could not override {key}; the config's shape changed"
             )
         namespace: dict = {}
-        exec(compile(source, "pinned_config", "exec"), namespace)  # noqa: S102
+        try:
+            exec(compile(source, "pinned_config", "exec"), namespace)  # noqa: S102
+        except ModuleNotFoundError as e:
+            # The pinned config imports `spikingjelly` at module level, which
+            # only the calibration env carries. Any other failure propagates.
+            self.skipTest(
+                f"pinned config needs `{e.name}`, which this interpreter lacks; "
+                "the calibration setup installs it into `.venv-shd-cal` -- these "
+                "invariants are unverified until then."
+            )
         return namespace["Config"]
 
     def test_the_temporal_kernel_survives_every_model_type(self) -> None:
@@ -414,3 +420,7 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
         self.assertEqual(
             observed[10], 25, f"the shipped kernel width moved: {observed}"
         )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -47,7 +47,9 @@
 #   no venv present                    -> could-not-run, never a pass
 #
 # Proof is `Ran N test(s)` with N > 0 and not every one skipped, or a
-# hand-rolled runner's `N/N passed` line with N > 0.
+# hand-rolled runner's `N/N passed` line with N > 0. The same proof gates the
+# system-python pass and the venv pass; a partly skipped file is `ok` but says
+# `Ran N tests, K skipped` and is counted in `files with skipped tests: M`.
 #
 # `NEEDS_OPTIONAL_DEPS_ENV` pins which tests are expected to need that
 # environment, i.e. fail on an optional dep under the system python. It is
@@ -169,8 +171,9 @@ missing_dep() {
     | sed -E "s/^[^']*'([^'.]*).*/\\1/" | head -n 1
 }
 
-# Proof that tests ran, from the last lines of $1. Prints "Ran N tests" /
-# "N/N passed" and returns 0; returns 1 when nothing ran or all were skipped.
+# Proof that tests ran, from the last lines of $1. Prints "Ran N tests" (with
+# ", K skipped" when K > 0) or "N/N passed" and returns 0; returns 1 when nothing
+# ran or all were skipped. The one proof both the system and the venv run use.
 evidence() {
   local tail_text n skipped
   tail_text="$(tail -n 12 "$1")"
@@ -179,7 +182,7 @@ evidence() {
     [ "$n" -gt 0 ] || return 1
     skipped="$(printf '%s\n' "$tail_text" | sed -nE 's/^OK \(.*skipped=([0-9]+).*\)$/\1/p' | tail -n 1)"
     [ -z "$skipped" ] || [ "$skipped" -lt "$n" ] || return 1
-    echo "Ran $n test$([ "$n" -eq 1 ] || echo s)"
+    echo "Ran $n test$([ "$n" -eq 1 ] || echo s)$([ "${skipped:-0}" -eq 0 ] || echo ", $skipped skipped")"
     return 0
   fi
   # A hand-rolled runner's "N/N passed" (BSD sed has no ERE backreference).
@@ -203,6 +206,7 @@ EOF
 }
 
 passed=0
+with_skips=0   # files that passed with some (not all) tests skipped
 failed=()
 unrunnable=()
 needs_env=()   # tests that failed on an optional dep under the system python
@@ -225,6 +229,23 @@ add_failed() {
 
 show_tail() { tail -n 25 "$1" | sed 's/^/        /'; }
 
+# judge_run FILE OUTFILE WHERE — FILE exited 0; count it as passed only on
+# evidence() proof. WHERE is "" for the system python, else "in <venv>". Returns
+# 0 when counted as passed, 1 when it was a pass that ran nothing (now FAIL).
+judge_run() {
+  local file="$1" outfile="$2" where="$3" proof
+  if proof="$(evidence "$outfile")"; then
+    passed=$((passed + 1))
+    case "$proof" in *" skipped") with_skips=$((with_skips + 1)) ;; esac
+    printf '  [ ok ] %s  (%s%s)\n' "$file" "$proof" "${where:+; $where}"
+    return 0
+  fi
+  add_failed "$file"
+  printf '  [FAIL] %s  (%sexit 0 but no proof any test ran, or all skipped)\n' "$file" "${where:+$where: }"
+  show_tail "$outfile"
+  return 1
+}
+
 venv_pythons=()
 while IFS= read -r candidate; do
   [ -n "$candidate" ] && [ -x "$candidate" ] && venv_pythons+=("$candidate")
@@ -237,9 +258,7 @@ for file in scripts/test_*.py; do
   bounded "$TEST_TIMEOUT" "$out" "$PYTHON" "$file"
   code=$?
   if [ "$code" -eq 0 ]; then
-    passed=$((passed + 1))
-    sys_passed+=("$file")
-    printf '  [ ok ] %s  (%s)\n' "$file" "$(grep -oE 'Ran [0-9]+ tests?' "$out" | tail -n 1)"
+    judge_run "$file" "$out" "" && sys_passed+=("$file")
     continue
   fi
   missing="$(missing_dep "$out")"
@@ -257,14 +276,7 @@ for file in scripts/test_*.py; do
     bounded "$VENV_TIMEOUT" "$out" "$venv_python" "$file"
     code=$?
     if [ "$code" -eq 0 ]; then
-      if proof="$(evidence "$out")"; then
-        passed=$((passed + 1))
-        printf '  [ ok ] %s  (%s; in %s)\n' "$file" "$proof" "$venv_name"
-      else
-        add_failed "$file"
-        printf '  [FAIL] %s  (in %s: exit 0 but no proof any test ran, or all skipped)\n' "$file" "$venv_name"
-        show_tail "$out"
-      fi
+      judge_run "$file" "$out" "in $venv_name"
       rescued=1
       break
     fi
@@ -287,6 +299,7 @@ done
 
 echo
 echo "passed: $passed   failed: ${#failed[@]}   could not run: ${#unrunnable[@]}"
+echo "files with skipped tests: $with_skips"
 
 # Both guards compare against what the SYSTEM python did (needs_env), not where
 # the test finally ran: the venv rescuing a test is not what makes a pin stale.
