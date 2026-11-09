@@ -27,6 +27,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "binn-lab/src/paper_figures.rs"
+
+# One left-to-right pass over Rust source: a string literal, a char literal, a
+# line comment or a block comment, whichever starts first. Char literals are
+# matched so that `'"'` is not read as the start of a string, which would shift
+# every later string boundary and leave comments looking like code. A lifetime
+# (`'a`, `'static`) has no closing quote after one character, so it is not a
+# char literal. Raw strings (`r"..."`, `r#"..."#`) are not modelled.
+_RUST_TOKENS = re.compile(
+    r'"(?:\\.|[^"\\])*"'
+    r"|'(?:\\(?:u\{[0-9a-fA-F]{1,6}\}|x[0-9a-fA-F]{2}|.)|[^'\\\n])'"
+    r"|//[^\n]*|/\*.*?\*/",
+    re.S)
+
+
+def strip_rust_comments(source: str) -> str:
+    """`source` with every comment replaced by a space; literals untouched."""
+    return _RUST_TOKENS.sub(
+        lambda m: m.group(0) if m.group(0)[0] in "\"'" else " ", source)
 SPEC = ROOT / "results/PAPER_FIGURE_SPEC.md"
 
 #: The block `PAPER_FIGURE_SPEC.md` records as superseded. None of these may
@@ -1326,8 +1344,9 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         change doing the same silently.
 
         * Rust comments (`//`, `/* */`, which cover doc comments) are removed
-          first, string literals left alone, so a row commented out, a chain
-          commented out or a stray word in a comment is not read as code.
+          first, string and char literals left alone (`strip_rust_comments`),
+          so a row commented out, a chain commented out or a stray word in a
+          comment is not read as code.
         * The tables read are those `all_figures()`'s body names (`NAME.` or
           `(NAME)`), not a hard-coded pair, so a third table is read the day it
           is chained. A named table with no declaration is an error.
@@ -1344,10 +1363,7 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         whitespace (rustfmt wraps the long figM row over several lines) and an
         optional trailing comma.
         """
-        source = re.sub(
-            r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/',
-            lambda m: m.group(0) if m.group(0).startswith('"') else " ",
-            source, flags=re.S)
+        source = strip_rust_comments(source)
         body = re.search(r"fn all_figures\(\)[^{]*\{(.*?)\n\}", source, re.S)
         if not body:
             self.fail("all_figures() was not found in paper_figures.rs")
@@ -1378,6 +1394,50 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         if counts.get("PAPER_FIGURES") != 7:  # the seven typeset figures
             self.fail(f"PAPER_FIGURES should hold 7 rows: {counts}")
         return stems
+
+    # A minimal generator: a char literal holding a double quote ahead of the
+    # tables (paper_figures.rs has one, `rest.find('"')`, though after them
+    # today), and a commented-out row inside PAPER_FIGURES.
+    CHAR_LITERAL_FIXTURE = (
+        "fn quote_at(rest: &str) -> usize { rest.find('\"').unwrap() }\n"
+        "fn escaped() -> char { '\\'' }\n\n"
+        "const PAPER_FIGURES: [(&'static str, Draw, u32); 7] = [\n"
+        + "".join(f'    ("p{i}", draw_p{i}, H_ONE),\n' for i in range(1, 4))
+        + '    // ("retired", draw_retired, H_ONE),\n'
+        + "".join(f'    ("p{i}", draw_p{i}, H_ONE),\n' for i in range(4, 8))
+        + "];\n\n"
+        "const OTHER_FIGURES: [(&str, Draw, u32); 1] = [\n"
+        '    ("o1", draw_o1, H),\n'
+        "];\n\n"
+        "fn all_figures() -> impl Iterator<Item = (&'static str, Draw, u32)> {\n"
+        "    PAPER_FIGURES.into_iter().chain(OTHER_FIGURES)\n"
+        "}\n\n"
+        "pub fn generate_all(out_dir: &Path) -> Result<Vec<PathBuf>, DrawErr> {\n"
+        "    for (stem, draw, h) in all_figures() {\n"
+        "        write_pair_sized(out_dir, stem, draw, h)?;\n"
+        "    }\n"
+        "    Ok(vec![])\n"
+        "}\n"
+    )
+
+    def test_a_char_literal_quote_does_not_flip_the_comment_stripper(self):
+        """`'"'` is a char, not the start of a string. Read as a string, it
+        shifts every later string boundary by one quote, so comments land
+        inside "strings" and survive: here the commented-out row is counted
+        and the extractor reports 8 rows for a table of 7."""
+        self.assertEqual(self._table_stems(self.CHAR_LITERAL_FIXTURE),
+                         {f"p{i}" for i in range(1, 8)} | {"o1"})
+
+    def test_the_stripper_keeps_code_strings_and_lifetimes(self):
+        stripped = strip_rust_comments(
+            "let a = '\"'; // gone\n"
+            "let b = '\\''; /* gone */ let c = \"// kept\";\n"
+            "fn f<'a>(x: &'a str) -> &'static str { \"it's\" } // gone\n")
+        self.assertNotIn("gone", stripped)
+        self.assertIn('"// kept"', stripped)
+        self.assertIn("&'a str", stripped)
+        self.assertIn("&'static str", stripped)
+        self.assertIn('"it\'s"', stripped)
 
     def test_figure_4_is_the_resolution_ladder_here_too(self):
         """The spec and the draft both call it that; the skeleton called it the
