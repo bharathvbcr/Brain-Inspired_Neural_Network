@@ -572,7 +572,7 @@ impl ArmGradient {
 
     pub fn all_finite(&self) -> bool {
         self.base.all_finite()
-            && self.w_rec.iter().all(|v| v.is_finite())
+            && crate::shd_matched::all_finite_slice(&self.w_rec)
             && self.attn.as_ref().is_none_or(AttentionGradient::all_finite)
     }
 }
@@ -1200,14 +1200,108 @@ fn transpose_blocked(src: &[f32], rows: usize, cols: usize, dst: &mut [f32]) {
     assert_eq!(dst.len(), rows * cols, "dst must be [cols, rows]");
     for row0 in (0..rows).step_by(TRANSPOSE_TILE) {
         let row1 = (row0 + TRANSPOSE_TILE).min(rows);
+        // The part of this tile that is a whole number of 4x4 blocks goes
+        // through `transpose_4x4`; the ragged right and bottom edges are moved
+        // one cell at a time.
+        let row4 = row0 + (row1 - row0) / 4 * 4;
         for col0 in (0..cols).step_by(TRANSPOSE_TILE) {
             let col1 = (col0 + TRANSPOSE_TILE).min(cols);
-            for row in row0..row1 {
-                let values = &src[row * cols + col0..row * cols + col1];
-                for (offset, &value) in values.iter().enumerate() {
-                    dst[(col0 + offset) * rows + row] = value;
+            let col4 = col0 + (col1 - col0) / 4 * 4;
+            for row in (row0..row4).step_by(4) {
+                for col in (col0..col4).step_by(4) {
+                    // Both slices start at the block's top-left cell and reach
+                    // at least its bottom-right one, because `row + 3 < rows`
+                    // and `col + 3 < cols`.
+                    transpose_4x4(
+                        &src[row * cols + col..],
+                        cols,
+                        &mut dst[col * rows + row..],
+                        rows,
+                    );
+                }
+                for col in col4..col1 {
+                    for r in row..row + 4 {
+                        dst[col * rows + r] = src[r * cols + col];
+                    }
                 }
             }
+            for row in row4..row1 {
+                for col in col0..col1 {
+                    dst[col * rows + row] = src[row * cols + col];
+                }
+            }
+        }
+    }
+}
+
+/// Move one 4x4 block: `dst[c * dst_stride + r] = src[r * src_stride + c]` for
+/// `r, c` in `0..4`. Both slices must reach the block's last cell.
+fn transpose_4x4(src: &[f32], src_stride: usize, dst: &mut [f32], dst_stride: usize) {
+    assert!(src.len() > 3 * src_stride + 3, "src must reach the block");
+    assert!(dst.len() > 3 * dst_stride + 3, "dst must reach the block");
+    #[cfg(target_arch = "aarch64")]
+    {
+        // SAFETY: NEON is a baseline feature of every aarch64 target, so the `neon` target feature this call requires is always present; the asserts above guarantee every 16-byte read of `src` and write of `dst` made by the callee is in bounds.
+        unsafe { neon_transpose::block_4x4(src.as_ptr(), src_stride, dst.as_mut_ptr(), dst_stride) };
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    for row in 0..4 {
+        for col in 0..4 {
+            dst[col * dst_stride + row] = src[row * src_stride + col];
+        }
+    }
+}
+
+/// The classic 4x4 transpose from two rounds of `trn`: pure lane shuffles, no
+/// arithmetic, so every bit pattern (signed zeros, NaN payloads) is preserved.
+#[cfg(target_arch = "aarch64")]
+mod neon_transpose {
+    use std::arch::aarch64::{
+        vld1q_f32, vreinterpretq_f32_f64, vreinterpretq_f64_f32, vst1q_f32, vtrn1q_f32,
+        vtrn1q_f64, vtrn2q_f32, vtrn2q_f64,
+    };
+
+    /// Reads rows `0..4` of four floats from `src` (`src_stride` floats apart)
+    /// and writes them as columns to `dst` (`dst_stride` floats apart).
+    ///
+    /// # Safety
+    ///
+    /// `src` must be valid for reads of `3 * src_stride + 4` floats and `dst`
+    /// valid for writes of `3 * dst_stride + 4` floats. Alignment is f32 only:
+    /// `vld1q_f32`/`vst1q_f32` accept any f32-aligned address.
+    #[target_feature(enable = "neon")]
+    // SAFETY: invariant - the caller upholds the `# Safety` contract above; this function performs only the loads and stores that contract covers.
+    pub(super) unsafe fn block_4x4(
+        src: *const f32,
+        src_stride: usize,
+        dst: *mut f32,
+        dst_stride: usize,
+    ) {
+        // SAFETY: each of the four loads reads 4 floats starting `k * src_stride` floats in for k in 0..4, all inside the `3 * src_stride + 4` floats the contract makes readable.
+        let (a, b, c, d) = unsafe {
+            (
+                vld1q_f32(src),
+                vld1q_f32(src.add(src_stride)),
+                vld1q_f32(src.add(2 * src_stride)),
+                vld1q_f32(src.add(3 * src_stride)),
+            )
+        };
+        let ab_even = vtrn1q_f32(a, b);
+        let ab_odd = vtrn2q_f32(a, b);
+        let cd_even = vtrn1q_f32(c, d);
+        let cd_odd = vtrn2q_f32(c, d);
+        let wide = vreinterpretq_f64_f32;
+        let narrow = vreinterpretq_f32_f64;
+        let out0 = narrow(vtrn1q_f64(wide(ab_even), wide(cd_even)));
+        let out1 = narrow(vtrn1q_f64(wide(ab_odd), wide(cd_odd)));
+        let out2 = narrow(vtrn2q_f64(wide(ab_even), wide(cd_even)));
+        let out3 = narrow(vtrn2q_f64(wide(ab_odd), wide(cd_odd)));
+        // SAFETY: each of the four stores writes 4 floats starting `k * dst_stride` floats in for k in 0..4, all inside the `3 * dst_stride + 4` floats the contract makes writable.
+        unsafe {
+            vst1q_f32(dst, out0);
+            vst1q_f32(dst.add(dst_stride), out1);
+            vst1q_f32(dst.add(2 * dst_stride), out2);
+            vst1q_f32(dst.add(3 * dst_stride), out3);
         }
     }
 }
@@ -3001,6 +3095,10 @@ mod tests {
         }
         let shapes = [
             (0, 0),
+            (4, 4),
+            (8, 12),
+            (20, 28),
+            (7, 9),
             (0, 5),
             (5, 0),
             (1, 1),
