@@ -733,7 +733,11 @@ pub fn forward_arm_tau(
             current[h] = alpha * previous_u[h] * (1.0 - previous_s[h]);
         }
         for &(channel, count) in frame {
-            axpy_into(&mut current, count, &w_in_t[channel * hidden..(channel + 1) * hidden]);
+            axpy_into(
+                &mut current,
+                count,
+                &w_in_t[channel * hidden..(channel + 1) * hidden],
+            );
         }
         if arm.recurrent {
             active_previous.clear();
@@ -952,7 +956,11 @@ fn run_loss_and_gradient_with_workspace(
             current[h] = alpha * previous_u[h] * (1.0 - previous_s[h]);
         }
         for &(channel, count) in frame {
-            axpy_into(current, count, &w_in_t[channel * hidden..(channel + 1) * hidden]);
+            axpy_into(
+                current,
+                count,
+                &w_in_t[channel * hidden..(channel + 1) * hidden],
+            );
         }
         if arm.recurrent {
             // The drive must read the previous timestep's spikes, which is
@@ -1242,7 +1250,9 @@ fn transpose_4x4(src: &[f32], src_stride: usize, dst: &mut [f32], dst_stride: us
     #[cfg(target_arch = "aarch64")]
     {
         // SAFETY: NEON is a baseline feature of every aarch64 target, so the `neon` target feature this call requires is always present; the asserts above guarantee every 16-byte read of `src` and write of `dst` made by the callee is in bounds.
-        unsafe { neon_transpose::block_4x4(src.as_ptr(), src_stride, dst.as_mut_ptr(), dst_stride) };
+        unsafe {
+            neon_transpose::block_4x4(src.as_ptr(), src_stride, dst.as_mut_ptr(), dst_stride)
+        };
     }
     #[cfg(not(target_arch = "aarch64"))]
     for row in 0..4 {
@@ -1257,8 +1267,8 @@ fn transpose_4x4(src: &[f32], src_stride: usize, dst: &mut [f32], dst_stride: us
 #[cfg(target_arch = "aarch64")]
 mod neon_transpose {
     use std::arch::aarch64::{
-        vld1q_f32, vreinterpretq_f32_f64, vreinterpretq_f64_f32, vst1q_f32, vtrn1q_f32,
-        vtrn1q_f64, vtrn2q_f32, vtrn2q_f64,
+        vld1q_f32, vreinterpretq_f32_f64, vreinterpretq_f64_f32, vst1q_f32, vtrn1q_f32, vtrn1q_f64,
+        vtrn2q_f32, vtrn2q_f64,
     };
 
     /// Reads rows `0..4` of four floats from `src` (`src_stride` floats apart)
@@ -3030,6 +3040,7 @@ mod tests {
     #[test]
     fn scalar_oracle_for_axpy_into() {
         let operands = axpy_operands();
+        let mut compared = 0_usize;
         for length in 0..=37 {
             for &scale in &operands {
                 let src: Vec<f32> = (0..length)
@@ -3049,9 +3060,12 @@ mod tests {
                         got[index].to_bits(),
                         want[index].to_bits(),
                     );
+                    compared += 1;
                 }
             }
         }
+        // Every element of every length under every scale: the loops ran.
+        assert_eq!(compared, operands.len() * (0..=37).sum::<usize>());
     }
 
     /// The failure this kernel must never have: a contraction into one fused
@@ -3115,6 +3129,7 @@ mod tests {
             (700, 24),
             (140, 130),
         ];
+        let mut compared = 0_usize;
         for (rows, cols) in shapes {
             let src: Vec<f32> = (0..rows * cols)
                 .map(|index| match index % 5 {
@@ -3137,7 +3152,10 @@ mod tests {
                 want_bits,
                 "shape {rows}x{cols} via transpose_rows_to_columns"
             );
+            compared += 1;
         }
+        // One comparison pair per shape: the loop ran over all of them.
+        assert_eq!(compared, shapes.len());
     }
 
     /// Scale is an operand, not a constant of the kernel: `-0.0` must flow
