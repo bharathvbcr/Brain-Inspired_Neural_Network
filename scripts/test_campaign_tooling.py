@@ -1866,6 +1866,14 @@ CORPUS_BASELINE = {
     #: any `shd-cal-cell*` schema anywhere under `results/`.
     "shd_instrument_v4":
         (835, 133, "bc0c4c474d2178e0"),
+    #: Landed 2026-11-10 with the train-cell kernel profile. These 19 files are
+    #: not campaign cells: one profiled cell (`head/`) and the ABBA timing runs
+    #: (`abba3/`, `abba4/`) of the same 2-epoch ff+fixed+attn d32/L4 cell, kept
+    #: so the cycle counts in its README can be recomputed. They match the scan
+    #: above only because they carry the cell schema. All 19 valid; a new key,
+    #: so no archived verdict moved (the v1-v4 entries are unchanged).
+    "train_cell_kernel_2026-11-10":
+        (19, 19, "c3c0531ac406d676"),
 }
 
 
