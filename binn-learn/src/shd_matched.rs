@@ -249,11 +249,80 @@ impl MatchedGradient {
     }
 
     pub fn all_finite(&self) -> bool {
-        self.w_in
-            .iter()
-            .chain(self.w_out.iter())
-            .chain(self.b_out.iter())
-            .all(|value| value.is_finite())
+        all_finite_slice(&self.w_in)
+            && all_finite_slice(&self.w_out)
+            && all_finite_slice(&self.b_out)
+    }
+}
+
+/// `values.iter().all(|value| value.is_finite())`.
+///
+/// The per-sample gradient finiteness check runs on the main thread over every
+/// entry (358k at h512) between two parallel phases, and the early-exit
+/// iterator compiled to one exponent test per element. Testing sixteen entries
+/// with a non-short-circuiting OR gives LLVM a loop it vectorises; the answer
+/// is the same boolean for every input, NaN and infinities included.
+pub(crate) fn all_finite_slice(values: &[f32]) -> bool {
+    let (blocks, remainder) = values.as_chunks::<16>();
+    for block in blocks {
+        let mut any_non_finite = false;
+        for value in block {
+            any_non_finite |= !value.is_finite();
+        }
+        if any_non_finite {
+            return false;
+        }
+    }
+    remainder.iter().all(|value| value.is_finite())
+}
+
+#[cfg(test)]
+mod finite_scan {
+    use super::all_finite_slice;
+
+    /// A single non-finite entry anywhere - first, last, inside a 16-block, in
+    /// the remainder, in a block boundary neighbour - must be found, for each
+    /// kind (NaN with either sign, both infinities); and a slice of extreme but
+    /// finite values must pass. Compared against the iterator it replaces.
+    #[test]
+    fn matches_the_iterator_at_every_length_and_position() {
+        let finite_extremes = [
+            0.0,
+            -0.0,
+            f32::MAX,
+            -f32::MAX,
+            f32::MIN_POSITIVE,
+            f32::from_bits(1),
+            -f32::from_bits(0x007f_ffff),
+            1.0,
+        ];
+        let poison = [
+            f32::NAN,
+            -f32::NAN,
+            f32::from_bits(0x7f80_0001),
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+        ];
+        for length in 0..=70 {
+            let clean: Vec<f32> = (0..length)
+                .map(|i| finite_extremes[i % finite_extremes.len()])
+                .collect();
+            assert!(all_finite_slice(&clean), "clean length {length}");
+            for position in 0..length {
+                for &bad in &poison {
+                    let mut dirty = clean.clone();
+                    dirty[position] = bad;
+                    let want = dirty.iter().all(|value| value.is_finite());
+                    assert!(!want);
+                    assert_eq!(
+                        all_finite_slice(&dirty),
+                        want,
+                        "length {length} position {position} value {:#010x}",
+                        bad.to_bits()
+                    );
+                }
+            }
+        }
     }
 }
 
