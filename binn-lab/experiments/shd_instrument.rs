@@ -319,13 +319,43 @@ fn init(args: &[String]) -> Result<(), String> {
 /// class label.
 type SampleEval = Result<(usize, Vec<f32>, bool), String>;
 
-/// How many samples are in flight at once inside a batch.
+/// How many samples are in flight at once for the evaluation and probe passes,
+/// and the floor for the training chunk.
 ///
-/// Bounds peak memory to this many per-sample gradients. Larger than any core
-/// count we run a single cell on, so it never limits parallelism; smaller than
-/// `batch_size`, so it bounds memory. Changing it cannot change any result —
-/// sub-chunks are consumed in batch order.
+/// Those passes keep only small per-sample results, so a fixed count is enough.
+/// Changing it cannot change any result — sub-chunks are consumed in order.
 const PARALLEL_CHUNK: usize = 64;
+
+/// Memory the in-flight per-sample training gradients may occupy.
+const GRADIENT_BUDGET_BYTES: usize = 256 << 20;
+
+/// Total number of `f32` values in one per-sample gradient.
+fn gradient_parameter_count(gradient: &ShdArmGradient) -> usize {
+    gradient.base.w_in.len()
+        + gradient.base.w_out.len()
+        + gradient.base.b_out.len()
+        + gradient.w_rec.len()
+        + gradient
+            .attn
+            .as_ref()
+            .map_or(0, |attn| attn.iter_all().count())
+}
+
+/// How many samples of a training batch are in flight at once.
+///
+/// The budget, not a fixed count, bounds peak memory: a chunk of 64 against an
+/// 18-thread pool leaves the last wave of every chunk part-empty while the main
+/// thread reduces alone, so a small gradient (h128 plus attention) is given the
+/// whole batch. At h1024 with a recurrent block one gradient is ~4 MB, the
+/// budget allows 64, and the floor keeps it there. This is a memory and
+/// scheduling knob only: the reduction consumes gradients in batch order for
+/// every value of it.
+fn training_chunk_len(gradient: &ShdArmGradient, batch_size: usize) -> usize {
+    let per_sample_bytes = (gradient_parameter_count(gradient) * 4).max(1);
+    (GRADIENT_BUDGET_BYTES / per_sample_bytes)
+        .min(batch_size)
+        .max(PARALLEL_CHUNK)
+}
 
 #[derive(Default)]
 struct TrainDiagnostics {
@@ -907,6 +937,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             // next batch. Previously each sample recopied/transposed the same
             // input matrix (and recurrent matrix when present).
             let weight_layout = ShdArmWeightLayout::prepare(&weights);
+            let chunk_len = training_chunk_len(&gradient, batch_size);
             // Per-sample forward/backward runs in parallel; the *accumulation*
             // stays strictly in batch order.
             //
@@ -922,64 +953,31 @@ fn train_cell(args: &[String]) -> Result<(), String> {
             // independence directly.
             //
             // Chunked rather than one `par_iter` over the whole batch so peak
-            // memory is bounded by `PARALLEL_CHUNK` gradients rather than by
-            // `batch_size` of them — at h1024 with a recurrent block a single
+            // memory is bounded by `GRADIENT_BUDGET_BYTES` rather than by
+            // `batch_size` gradients — at h1024 with a recurrent block a single
             // sample gradient is ~4 MB, and 256 of them live at once would be
-            // 1 GB per cell with several cells sharing a host. Chunking cannot
-            // perturb the result: sub-chunks are consumed in order too.
+            // 1 GB per cell with several cells sharing a host. The chunk is
+            // adaptive (`training_chunk_len`): a small gradient gets the whole
+            // batch so no wave runs part-empty, a large one stays at 64.
+            // Chunking cannot perturb the result: sub-chunks are consumed in
+            // order too.
             //
             // Only `loss` is carried out of the forward. Keeping the whole
             // `MatchedForward` would hold `membrane` and `spikes`
             // (`t_steps * hidden` each) alive for every in-flight sample.
-            for chunk in batch.chunks(PARALLEL_CHUNK) {
-                let computed = ordered_sample_gradients(
-                    &weights,
-                    &weight_layout,
-                    &train,
-                    chunk,
-                    surrogate_scale,
-                    tau_m,
-                );
-                for outcome in computed {
-                    let (loss, mut sample_gradient) = outcome?;
-                    diagnostics.loss_sum += f64::from(loss);
-                    diagnostics.samples += 1;
-                    if !loss.is_finite() || !sample_gradient.all_finite() {
-                        return Err(format!(
-                            "non-finite training value at optimizer step {global_step}"
-                        ));
-                    }
-                    // Per-sample clipping. Placed after the finite check and
-                    // before accumulation: scaling by `threshold / norm` cannot
-                    // rescue a gradient that already holds inf or NaN, so the
-                    // hard error stays as the last line of defence and this
-                    // bounds the growth that would otherwise reach it.
-                    if let Some(threshold) = clip_sample_grad_norm {
-                        match clip_by_global_norm(&mut sample_gradient, threshold) {
-                            ClipOutcome::Bound => diagnostics.clipped_samples += 1,
-                            ClipOutcome::Untouched => {}
-                            // Every entry is finite - checked above - but their
-                            // sum of squares overflowed. `threshold / inf` is
-                            // zero, so scaling here would silently delete the
-                            // sample from the batch and leave a cell that looks
-                            // trained. Refuse instead, and name the case.
-                            //
-                            // Deliberately not counted into a cell field: this
-                            // branch returns, so no cell is ever emitted and any
-                            // such field would be a constant zero masquerading
-                            // as evidence. The failure log is the record.
-                            ClipOutcome::NormOverflowed => {
-                                return Err(format!(
-                                    "sample gradient norm overflowed with all entries finite \
-                                     at optimizer step {global_step}; per-sample clipping \
-                                     cannot scale it and will not drop it"
-                                ))
-                            }
-                        }
-                    }
-                    gradient.add_assign(&sample_gradient);
-                }
-            }
+            accumulate_batch_gradient(
+                &weights,
+                &weight_layout,
+                &train,
+                batch,
+                chunk_len,
+                surrogate_scale,
+                tau_m,
+                clip_sample_grad_norm,
+                global_step,
+                &mut diagnostics,
+                &mut gradient,
+            )?;
             gradient.scale(1.0 / batch.len() as f32);
             let gradient_norm = gradient.l2_norm();
             // Global-norm gradient clipping. **Off unless `--clip-grad-norm` is
@@ -1549,6 +1547,71 @@ fn optional_epoch_list(args: &[String], flag: &str, epochs: usize) -> Result<Vec
     }
     chosen.sort_unstable();
     Ok(chosen)
+}
+
+/// Run one batch's per-sample forward/backward in sub-chunks of `chunk_len`
+/// samples and fold the gradients into `gradient` strictly in batch order.
+///
+/// `chunk_len` is a parameter so a test can pin that it is only a memory knob:
+/// sub-chunks are consumed in order, so no choice of it can change a bit.
+#[allow(clippy::too_many_arguments)]
+fn accumulate_batch_gradient(
+    weights: &ShdArmWeights,
+    weight_layout: &ShdArmWeightLayout,
+    train: &[MatchedShdSample],
+    batch: &[usize],
+    chunk_len: usize,
+    surrogate_scale: f32,
+    tau_m: f32,
+    clip_sample_grad_norm: Option<f64>,
+    global_step: usize,
+    diagnostics: &mut TrainDiagnostics,
+    gradient: &mut ShdArmGradient,
+) -> Result<(), String> {
+    for chunk in batch.chunks(chunk_len) {
+        let computed =
+            ordered_sample_gradients(weights, weight_layout, train, chunk, surrogate_scale, tau_m);
+        for outcome in computed {
+            let (loss, mut sample_gradient) = outcome?;
+            diagnostics.loss_sum += f64::from(loss);
+            diagnostics.samples += 1;
+            if !loss.is_finite() || !sample_gradient.all_finite() {
+                return Err(format!(
+                    "non-finite training value at optimizer step {global_step}"
+                ));
+            }
+            // Per-sample clipping. Placed after the finite check and
+            // before accumulation: scaling by `threshold / norm` cannot
+            // rescue a gradient that already holds inf or NaN, so the
+            // hard error stays as the last line of defence and this
+            // bounds the growth that would otherwise reach it.
+            if let Some(threshold) = clip_sample_grad_norm {
+                match clip_by_global_norm(&mut sample_gradient, threshold) {
+                    ClipOutcome::Bound => diagnostics.clipped_samples += 1,
+                    ClipOutcome::Untouched => {}
+                    // Every entry is finite - checked above - but their
+                    // sum of squares overflowed. `threshold / inf` is
+                    // zero, so scaling here would silently delete the
+                    // sample from the batch and leave a cell that looks
+                    // trained. Refuse instead, and name the case.
+                    //
+                    // Deliberately not counted into a cell field: this
+                    // branch returns, so no cell is ever emitted and any
+                    // such field would be a constant zero masquerading
+                    // as evidence. The failure log is the record.
+                    ClipOutcome::NormOverflowed => {
+                        return Err(format!(
+                            "sample gradient norm overflowed with all entries finite \
+                             at optimizer step {global_step}; per-sample clipping \
+                             cannot scale it and will not drop it"
+                        ))
+                    }
+                }
+            }
+            gradient.add_assign(&sample_gradient);
+        }
+    }
+    Ok(())
 }
 
 /// Compute independent sample gradients in parallel while preserving the
@@ -2316,6 +2379,103 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The training chunk length is a memory and scheduling knob only: the
+    /// batch reduction folds gradients in batch order for every value of it.
+    /// 64 and the whole batch are the two values the adaptive rule picks
+    /// between; 70 samples makes them differ (64 + 6 against 70), and 1 and 7
+    /// put the boundary everywhere else. Per-sample clipping is on so the
+    /// branch that rewrites each addend is covered too.
+    #[test]
+    fn training_reduction_is_bit_identical_for_every_chunk_length() {
+        let train: Vec<_> = (0..70).map(sample).collect();
+        let batch: Vec<_> = (0..train.len()).collect();
+
+        for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
+            let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+            let w_rec = if arm.recurrent {
+                (0..8 * 8)
+                    .map(|i| (((i % 13) as f32) - 6.0) * 1.3e-2)
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let weights = if arm.attention {
+                let config = AttentionConfig::new(32, 4).expect("attention config");
+                let attention =
+                    AttentionParams::deterministic(8, 4, config, 11).expect("attention parameters");
+                ShdArmWeights::new_attentive(base, arm, w_rec, attention).expect("attention arm")
+            } else {
+                ShdArmWeights::new(base, arm, w_rec).expect("arm")
+            };
+            let weight_layout = ShdArmWeightLayout::prepare(&weights);
+
+            let reduce = |chunk_len: usize| {
+                let mut diagnostics = TrainDiagnostics::default();
+                let mut gradient = ShdArmGradient::zeros_like(&weights);
+                accumulate_batch_gradient(
+                    &weights,
+                    &weight_layout,
+                    &train,
+                    &batch,
+                    chunk_len,
+                    1.0,
+                    binn_learn::MATCHED_PHYSICAL_TAU_MS,
+                    Some(1.0e-3),
+                    0,
+                    &mut diagnostics,
+                    &mut gradient,
+                )
+                .expect("batch gradient");
+                let mut bits = vec![diagnostics.loss_sum.to_bits() as u32];
+                bits.push((diagnostics.loss_sum.to_bits() >> 32) as u32);
+                bits.extend(
+                    gradient
+                        .base
+                        .w_in
+                        .iter()
+                        .chain(&gradient.base.w_out)
+                        .chain(&gradient.base.b_out)
+                        .chain(&gradient.w_rec)
+                        .map(|value| value.to_bits()),
+                );
+                if let Some(attention) = &gradient.attn {
+                    bits.extend(attention.iter_all().map(|value| value.to_bits()));
+                }
+                (bits, diagnostics.samples, diagnostics.clipped_samples)
+            };
+
+            let reference = reduce(PARALLEL_CHUNK);
+            assert!(
+                reference.0[2..]
+                    .iter()
+                    .any(|bits| *bits != 0 && *bits != 0x8000_0000),
+                "{}: fixture produced an all-zero gradient; the comparison is vacuous",
+                arm.label()
+            );
+            assert_eq!(reference.1, batch.len());
+            for chunk_len in [1, 7, batch.len(), 4096] {
+                assert_eq!(
+                    reference,
+                    reduce(chunk_len),
+                    "{}: chunk length {chunk_len} differs from {PARALLEL_CHUNK}",
+                    arm.label()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn training_chunk_is_adaptive_between_the_floor_and_the_batch() {
+        let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+        let weights = ShdArmWeights::new(base, MatchedArm::ALL[0], Vec::new()).expect("arm");
+        let small = ShdArmGradient::zeros_like(&weights);
+        assert_eq!(training_chunk_len(&small, 256), 256);
+        assert_eq!(training_chunk_len(&small, 10), PARALLEL_CHUNK);
+        let mut large = small.clone();
+        large.base.w_in = vec![0.0; GRADIENT_BUDGET_BYTES / 4];
+        assert_eq!(training_chunk_len(&large, 256), PARALLEL_CHUNK);
     }
 
     /// Write a minimal `SHDEVT1` event cache, matching

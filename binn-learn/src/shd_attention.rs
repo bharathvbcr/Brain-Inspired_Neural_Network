@@ -622,12 +622,160 @@ pub fn attention_logits(params: &AttentionParams, pooled: &[f32]) -> Vec<f32> {
         .collect()
 }
 
-/// Row-major `[rows, cols] * vector[cols]` into `out[rows]`, overwriting.
-fn apply_matrix(matrix: &[f32], input: &[f32], rows: usize, cols: usize, out: &mut [f32]) {
-    for row in 0..rows {
-        let weights = &matrix[row * cols..(row + 1) * cols];
-        out[row] = weights.iter().zip(input).map(|(w, x)| w * x).sum();
+/// `out[j] = sum_i x[i] * columns[i * n + j]`, summed over `i` in order from
+/// `-0.0` — for each `j` the same IEEE sequence as
+/// `x.iter().zip(column_j).map(|(a, b)| a * b).sum::<f32>()` (whose neutral
+/// element is negative zero): `acc = acc + (a * b)`, one multiply and one add,
+/// never fused. The loop is interchanged so the vector lanes run across the
+/// independent outputs `j`; no single sum is ever reassociated or split.
+///
+/// On aarch64 the outputs are register-blocked (16, then 4, then scalar): each
+/// block keeps its accumulators in registers across the whole `i` loop and
+/// stores once. Every other target runs [`dot_columns_scalar`] over all of `n`.
+fn dot_against_columns(x: &[f32], columns: &[f32], n: usize, out: &mut [f32]) {
+    assert_eq!(columns.len(), x.len() * n, "columns must be [x.len(), n]");
+    assert_eq!(out.len(), n, "out must hold one value per column");
+    #[cfg(target_arch = "aarch64")]
+    {
+        let mut start = 0;
+        while start + 16 <= n {
+            // SAFETY: NEON is a baseline feature of every aarch64 target, so the `neon` target feature this call requires is always present.
+            unsafe { neon::dot_block::<4>(x, columns, n, start, out) };
+            start += 16;
+        }
+        while start + 4 <= n {
+            // SAFETY: NEON is a baseline feature of every aarch64 target, so the `neon` target feature this call requires is always present.
+            unsafe { neon::dot_block::<1>(x, columns, n, start, out) };
+            start += 4;
+        }
+        dot_columns_scalar(x, columns, n, out, start);
     }
+    #[cfg(not(target_arch = "aarch64"))]
+    dot_columns_scalar(x, columns, n, out, 0);
+}
+
+/// [`dot_against_columns`] for the outputs `from..n` only, one `f32` at a time.
+/// The portable path, the NEON path's tail, and the oracle the NEON blocks are
+/// tested against.
+fn dot_columns_scalar(x: &[f32], columns: &[f32], n: usize, out: &mut [f32], from: usize) {
+    out[from..].fill(-0.0);
+    if n == 0 {
+        return;
+    }
+    for (&scale, row) in x.iter().zip(columns.chunks_exact(n)) {
+        for (accumulator, &item) in out[from..].iter_mut().zip(&row[from..]) {
+            *accumulator += scale * item;
+        }
+    }
+}
+
+/// `dst[i] = dst[i] + scale * src[i]`, one multiply and one add per element,
+/// never fused. Elementwise, so vectorising it reorders nothing. Call sites
+/// that wrote `src * scale` use it too: IEEE multiplication is commutative.
+fn axpy_rowwise(dst: &mut [f32], scale: f32, src: &[f32]) {
+    assert_eq!(dst.len(), src.len(), "axpy rows must be the same length");
+    #[cfg(target_arch = "aarch64")]
+    {
+        // SAFETY: NEON is a baseline feature of every aarch64 target, so the `neon` target feature this call requires is always present.
+        let done = unsafe { neon::axpy_blocks(dst, scale, src) };
+        axpy_scalar(&mut dst[done..], scale, &src[done..]);
+    }
+    #[cfg(not(target_arch = "aarch64"))]
+    axpy_scalar(dst, scale, src);
+}
+
+/// Scalar [`axpy_rowwise`]: the portable path, the NEON tail and the test oracle.
+fn axpy_scalar(dst: &mut [f32], scale: f32, src: &[f32]) {
+    for (accumulator, &item) in dst.iter_mut().zip(src) {
+        *accumulator += scale * item;
+    }
+}
+
+/// NEON bodies. `vmulq_f32` then `vaddq_f32` — two separate instructions,
+/// never `vfmaq_f32`/`vmlaq_f32` — so each lane performs exactly the multiply
+/// and add the scalar code does, and rounds after each.
+#[cfg(target_arch = "aarch64")]
+mod neon {
+    use std::arch::aarch64::{
+        float32x4_t, vaddq_f32, vdupq_n_f32, vld1q_f32, vmulq_f32, vst1q_f32,
+    };
+
+    #[inline(always)]
+    fn load4(src: &[f32]) -> float32x4_t {
+        let lanes: &[f32; 4] = src[..4].try_into().expect("four lanes");
+        // SAFETY: `lanes` is a live reference to exactly four contiguous f32, so the 16-byte read is in bounds; vld1q_f32 needs only f32 alignment, which a `&[f32; 4]` has.
+        unsafe { vld1q_f32(lanes.as_ptr()) }
+    }
+
+    #[inline(always)]
+    fn store4(dst: &mut [f32], value: float32x4_t) {
+        let lanes: &mut [f32; 4] = (&mut dst[..4]).try_into().expect("four lanes");
+        // SAFETY: `lanes` is a live exclusive reference to exactly four contiguous f32, so the 16-byte write is in bounds and unaliased; vst1q_f32 needs only f32 alignment, which a `&mut [f32; 4]` has.
+        unsafe { vst1q_f32(lanes.as_mut_ptr(), value) }
+    }
+
+    /// Outputs `start..start + 4 * V` of `dot_against_columns`, with `V`
+    /// accumulators initialised to `-0.0` and summed over `x` in order. The
+    /// caller guarantees `start + 4 * V <= n`; slicing panics otherwise.
+    #[target_feature(enable = "neon")]
+    pub(super) fn dot_block<const V: usize>(
+        x: &[f32],
+        columns: &[f32],
+        n: usize,
+        start: usize,
+        out: &mut [f32],
+    ) {
+        let mut accumulators = [vdupq_n_f32(-0.0); V];
+        for (&scale, row) in x.iter().zip(columns.chunks_exact(n)) {
+            let scale = vdupq_n_f32(scale);
+            let lanes = &row[start..start + 4 * V];
+            for (block, accumulator) in accumulators.iter_mut().enumerate() {
+                let product = vmulq_f32(scale, load4(&lanes[4 * block..]));
+                *accumulator = vaddq_f32(*accumulator, product);
+            }
+        }
+        for (block, accumulator) in accumulators.into_iter().enumerate() {
+            store4(&mut out[start + 4 * block..], accumulator);
+        }
+    }
+
+    /// Process the leading multiple of four elements of `dst += scale * src`
+    /// and return how many were done; the caller finishes the tail.
+    #[target_feature(enable = "neon")]
+    pub(super) fn axpy_blocks(dst: &mut [f32], scale: f32, src: &[f32]) -> usize {
+        let scale = vdupq_n_f32(scale);
+        let mut done = 0;
+        let (targets, _) = dst.as_chunks_mut::<4>();
+        let (sources, _) = src.as_chunks::<4>();
+        for (target, source) in targets.iter_mut().zip(sources) {
+            let updated = vaddq_f32(load4(target), vmulq_f32(scale, load4(source)));
+            store4(target, updated);
+            done += 4;
+        }
+        done
+    }
+}
+
+/// `dst[c * rows + r] = src[r * cols + c]`: row-major `[rows, cols]` to
+/// row-major `[cols, rows]`.
+fn transpose_into(src: &[f32], rows: usize, cols: usize, dst: &mut [f32]) {
+    assert_eq!(src.len(), rows * cols, "src must be [rows, cols]");
+    assert_eq!(dst.len(), rows * cols, "dst must be [cols, rows]");
+    if rows == 0 || cols == 0 {
+        return;
+    }
+    for (r, row) in src.chunks_exact(cols).enumerate() {
+        for (c, &value) in row.iter().enumerate() {
+            dst[c * rows + r] = value;
+        }
+    }
+}
+
+/// [`transpose_into`] into a fresh buffer.
+fn transposed(src: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut dst = vec![0.0_f32; rows * cols];
+    transpose_into(src, rows, cols, &mut dst);
+    dst
 }
 
 /// Forward pass of the attention read-out.
@@ -774,9 +922,7 @@ pub fn attention_forward_presented(
         }
         for &(h, spike) in &active {
             let embedding = &params.w_e[h * d..(h + 1) * d];
-            for (value, weight) in stream.iter_mut().zip(embedding) {
-                *value += *weight * spike;
-            }
+            axpy_rowwise(stream, spike, embedding);
         }
     }
 
@@ -795,11 +941,17 @@ pub fn attention_forward_presented(
         let mut q = vec![0.0_f32; t_steps * d];
         let mut k = vec![0.0_f32; t_steps * d];
         let mut v = vec![0.0_f32; t_steps * d];
+        let (w_q_columns, w_k_columns, w_v_columns, w_o_columns) = (
+            transposed(&block.w_q, d, d),
+            transposed(&block.w_k, d, d),
+            transposed(&block.w_v, d, d),
+            transposed(&block.w_o, d, d),
+        );
         for t in 0..t_steps {
             let stream = &input[t * d..(t + 1) * d];
-            apply_matrix(&block.w_q, stream, d, d, &mut q[t * d..(t + 1) * d]);
-            apply_matrix(&block.w_k, stream, d, d, &mut k[t * d..(t + 1) * d]);
-            apply_matrix(&block.w_v, stream, d, d, &mut v[t * d..(t + 1) * d]);
+            dot_against_columns(stream, &w_q_columns, d, &mut q[t * d..(t + 1) * d]);
+            dot_against_columns(stream, &w_k_columns, d, &mut k[t * d..(t + 1) * d]);
+            dot_against_columns(stream, &w_v_columns, d, &mut v[t * d..(t + 1) * d]);
         }
         // Normalise in place, keeping the divisor: the cache then holds exactly
         // what the score consumed, and the backward has the one extra number it
@@ -816,14 +968,14 @@ pub fn attention_forward_presented(
 
         let mut a = vec![0.0_f32; t_steps * t_steps];
         let mut c = vec![0.0_f32; t_steps * d];
+        let key_columns = transposed(&k, t_steps, d);
         for t in 0..t_steps {
             let query = &q[t * d..(t + 1) * d];
             let scores = &mut a[t * t_steps..(t + 1) * t_steps];
+            dot_against_columns(query, &key_columns, t_steps, scores);
             let mut maximum = f32::NEG_INFINITY;
-            for (other, score) in scores.iter_mut().enumerate() {
-                let key = &k[other * d..(other + 1) * d];
-                let dot: f32 = query.iter().zip(key).map(|(a, b)| a * b).sum();
-                *score = dot * score_scale;
+            for score in scores.iter_mut() {
+                *score *= score_scale;
                 if *score > maximum {
                     maximum = *score;
                 }
@@ -840,16 +992,14 @@ pub fn attention_forward_presented(
             let context = &mut c[t * d..(t + 1) * d];
             for (other, &weight) in scores.iter().enumerate() {
                 let value = &v[other * d..(other + 1) * d];
-                for (accumulator, item) in context.iter_mut().zip(value) {
-                    *accumulator += weight * item;
-                }
+                axpy_rowwise(context, weight, value);
             }
         }
 
         let mut next = input.clone();
         let mut projected = vec![0.0_f32; d];
         for t in 0..t_steps {
-            apply_matrix(&block.w_o, &c[t * d..(t + 1) * d], d, d, &mut projected);
+            dot_against_columns(&c[t * d..(t + 1) * d], &w_o_columns, d, &mut projected);
             for (value, delta) in next[t * d..(t + 1) * d].iter_mut().zip(&projected) {
                 *value += *delta;
             }
@@ -870,9 +1020,7 @@ pub fn attention_forward_presented(
     let final_stream = &z[layers];
     let mut pooled = vec![0.0_f32; d];
     for t in 0..t_steps {
-        for (accumulator, value) in pooled.iter_mut().zip(&final_stream[t * d..(t + 1) * d]) {
-            *accumulator += *value * inverse_t;
-        }
+        axpy_rowwise(&mut pooled, inverse_t, &final_stream[t * d..(t + 1) * d]);
     }
 
     Ok(AttentionCache {
@@ -964,10 +1112,10 @@ pub fn attention_gradient(
     for class in 0..params.n_classes {
         let error = d_logits[class];
         let row = class * d;
-        for index in 0..d {
-            gradient.w_a[row + index] = error * cache.pooled[index];
-            d_pooled[index] += params.w_a[row + index] * error;
+        for (slot, &item) in gradient.w_a[row..row + d].iter_mut().zip(&cache.pooled) {
+            *slot = error * item;
         }
+        axpy_rowwise(&mut d_pooled, error, &params.w_a[row..row + d]);
     }
 
     // Mean pooling spreads the read-out gradient evenly over timesteps. Every
@@ -1010,28 +1158,28 @@ pub fn attention_gradient(
                     continue;
                 }
                 let row = out_index * d;
-                for in_index in 0..d {
-                    block_gradient.w_o[row + in_index] += error * context[in_index];
-                    target[in_index] += block.w_o[row + in_index] * error;
-                }
+                // Two zips over pre-split rows, not one indexed loop: the
+                // gradient row and `target` are different arrays, so each
+                // element still sees the same single `+=` and the loop order
+                // (outer `out_index`) that fixes `target`'s sum is unchanged.
+                axpy_rowwise(&mut block_gradient.w_o[row..row + d], error, context);
+                axpy_rowwise(target, error, &block.w_o[row..row + d]);
             }
         }
 
         d_v.iter_mut().for_each(|value| *value = 0.0);
+        let value_columns = transposed(v, t_steps, d);
         for t in 0..t_steps {
             let upstream = &d_context[t * d..(t + 1) * d];
             let weights = &a[t * t_steps..(t + 1) * t_steps];
             let scores = &mut d_attention[t * t_steps..(t + 1) * t_steps];
+            dot_against_columns(upstream, &value_columns, t_steps, scores);
             for other in 0..t_steps {
-                let value = &v[other * d..(other + 1) * d];
-                scores[other] = upstream.iter().zip(value).map(|(g, x)| g * x).sum();
                 let weight = weights[other];
                 if weight == 0.0 {
                     continue;
                 }
-                for (accumulator, g) in d_v[other * d..(other + 1) * d].iter_mut().zip(upstream) {
-                    *accumulator += weight * *g;
-                }
+                axpy_rowwise(&mut d_v[other * d..(other + 1) * d], weight, upstream);
             }
             // Row softmax: `de = a * (da - sum_j a_j da_j)`.
             let shift: f32 = weights.iter().zip(scores.iter()).map(|(w, g)| w * g).sum();
@@ -1045,16 +1193,18 @@ pub fn attention_gradient(
         for t in 0..t_steps {
             let scores = &d_attention[t * t_steps..(t + 1) * t_steps];
             let query = &q[t * d..(t + 1) * d];
+            let d_q_row = &mut d_q[t * d..(t + 1) * d];
             for other in 0..t_steps {
                 let error = scores[other] * score_scale;
                 if error == 0.0 {
                     continue;
                 }
                 let key = &k[other * d..(other + 1) * d];
-                for index in 0..d {
-                    d_q[t * d + index] += error * key[index];
-                    d_k[other * d + index] += error * query[index];
-                }
+                // `d_q` and `d_k` are different arrays, so splitting the one
+                // index loop into two leaves every element's op sequence (and
+                // the `other` order it accumulates in) exactly as it was.
+                axpy_rowwise(d_q_row, error, key);
+                axpy_rowwise(&mut d_k[other * d..(other + 1) * d], error, query);
             }
         }
 
@@ -1104,10 +1254,10 @@ pub fn attention_gradient(
                         continue;
                     }
                     let row = out_index * d;
-                    for in_index in 0..d {
-                        matrix_gradient[row + in_index] += error * stream[in_index];
-                        target[in_index] += matrix[row + in_index] * error;
-                    }
+                    // Separate arrays, separate zips: same per-element ops and
+                    // the same accumulation order into `target`.
+                    axpy_rowwise(&mut matrix_gradient[row..row + d], error, stream);
+                    axpy_rowwise(target, error, &matrix[row..row + d]);
                 }
             }
         }
@@ -1118,6 +1268,7 @@ pub fn attention_gradient(
     // --- embedding -----------------------------------------------------------
     // `pos` is a constant, so it takes no gradient.
     let mut ds_attn = vec![0.0_f32; t_steps * hidden];
+    let embedding_columns = transposed(&params.w_e, hidden, d);
     for t in 0..t_steps {
         let upstream = &d_stream[t * d..(t + 1) * d];
         // Scatter back to the timestep the state actually came from, through
@@ -1126,14 +1277,16 @@ pub fn attention_gradient(
         // exactly once — checked in the forward, so this cannot silently
         // overwrite one timestep's credit with another's.
         let source = cache.presentation.as_ref().map_or(t, |order| order[t]);
+        dot_against_columns(
+            upstream,
+            &embedding_columns,
+            hidden,
+            &mut ds_attn[source * hidden..(source + 1) * hidden],
+        );
         for h in 0..hidden {
-            let embedding = &params.w_e[h * d..(h + 1) * d];
-            ds_attn[source * hidden + h] = embedding.iter().zip(upstream).map(|(w, g)| w * g).sum();
             let spike = spikes[source * hidden + h];
             if spike != 0.0 {
-                for (accumulator, g) in gradient.w_e[h * d..(h + 1) * d].iter_mut().zip(upstream) {
-                    *accumulator += *g * spike;
-                }
+                axpy_rowwise(&mut gradient.w_e[h * d..(h + 1) * d], spike, upstream);
             }
         }
     }
@@ -1445,6 +1598,128 @@ fn row_norms(values: &[f32], rows: usize, cols: usize) -> (f64, f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The expression `dot_against_columns` replaced, per column.
+    fn reference_dot(x: &[f32], columns: &[f32], n: usize, j: usize) -> f32 {
+        let column: Vec<f32> = (0..x.len()).map(|i| columns[i * n + j]).collect();
+        x.iter().zip(&column).map(|(a, b)| a * b).sum()
+    }
+
+    fn awkward_value(rng: &mut PortableRng) -> f32 {
+        match rng.next_u64() % 10 {
+            0 => 0.0,
+            1 => -0.0,
+            2 => f32::from_bits(1 + (rng.next_u64() % 0x7f_ffff) as u32),
+            3 => -f32::from_bits(1 + (rng.next_u64() % 0x7f_ffff) as u32),
+            4 => f32::MIN_POSITIVE * rng.uniform(-1.0, 1.0),
+            5 => rng.uniform(-1.0e6, 1.0e6),
+            _ => rng.uniform(-1.0, 1.0),
+        }
+    }
+
+    /// Output counts chosen to hit every NEON path: below one vector, exactly
+    /// one and several 4-blocks, exactly one and several 16-blocks, and each
+    /// 16-block + 4-block + scalar-tail combination.
+    const COLUMN_COUNTS: [usize; 15] = [1, 2, 3, 4, 5, 7, 8, 13, 16, 17, 20, 21, 33, 47, 64];
+
+    #[test]
+    fn column_dot_equals_the_zip_sum_bit_for_bit() {
+        let mut rng = PortableRng::new(0xD07);
+        for len in [0, 1, 3, 8, 32] {
+            for n in COLUMN_COUNTS {
+                for _ in 0..8 {
+                    let x: Vec<f32> = (0..len).map(|_| awkward_value(&mut rng)).collect();
+                    let columns: Vec<f32> = (0..len * n).map(|_| awkward_value(&mut rng)).collect();
+                    let mut out = vec![1.0_f32; n];
+                    dot_against_columns(&x, &columns, n, &mut out);
+                    let mut portable = vec![1.0_f32; n];
+                    dot_columns_scalar(&x, &columns, n, &mut portable, 0);
+                    for (j, got) in out.iter().enumerate() {
+                        let want = reference_dot(&x, &columns, n, j);
+                        assert_eq!(got.to_bits(), want.to_bits(), "len {len} n {n} column {j}");
+                        assert_eq!(portable[j].to_bits(), want.to_bits(), "portable {j}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn column_dot_with_no_columns_is_a_no_op() {
+        let mut empty: [f32; 0] = [];
+        dot_against_columns(&[1.0, 2.0], &[], 0, &mut empty);
+    }
+
+    #[test]
+    fn axpy_equals_the_scalar_expression_bit_for_bit() {
+        let mut rng = PortableRng::new(0xA9);
+        for len in [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 31, 32, 33, 100] {
+            for _ in 0..16 {
+                let scale = awkward_value(&mut rng);
+                let src: Vec<f32> = (0..len).map(|_| awkward_value(&mut rng)).collect();
+                let start: Vec<f32> = (0..len).map(|_| awkward_value(&mut rng)).collect();
+                let mut got = start.clone();
+                axpy_rowwise(&mut got, scale, &src);
+                for i in 0..len {
+                    let want = start[i] + scale * src[i];
+                    assert_eq!(got[i].to_bits(), want.to_bits(), "len {len} element {i}");
+                    // The call sites that wrote `src * scale` rely on this.
+                    let swapped = start[i] + src[i] * scale;
+                    assert_eq!(got[i].to_bits(), swapped.to_bits(), "swapped {i}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn axpy_keeps_negative_zero_and_does_not_fuse() {
+        // -0.0 + (-0.0 * 1.0) stays -0.0; a fused or reordered form would not
+        // change this, but 0.0 + (-0.0) must become +0.0.
+        let mut negative = [-0.0_f32; 5];
+        axpy_rowwise(&mut negative, -0.0, &[1.0; 5]);
+        assert!(negative.iter().all(|v| v.to_bits() == (-0.0_f32).to_bits()));
+        let mut positive = [0.0_f32; 5];
+        axpy_rowwise(&mut positive, -0.0, &[1.0; 5]);
+        assert!(positive.iter().all(|v| v.to_bits() == 0));
+        // A product that rounds: fused would keep the exact product and give a
+        // different sum than multiply-then-add.
+        // a * a = 1 + 2^-11 + 2^-24 exactly: the product rounds (ties to even) to
+        // 1 + 2^-11, and only a fused add keeps the 2^-24.
+        let a = 1.0_f32 + 1.0 / 4096.0;
+        let mut sum = [-1.0_f32; 4];
+        axpy_rowwise(&mut sum, a, &[a; 4]);
+        let separate = -1.0_f32 + a * a;
+        assert!(sum.iter().all(|v| v.to_bits() == separate.to_bits()));
+        assert_ne!(separate.to_bits(), a.mul_add(a, -1.0).to_bits());
+    }
+
+    #[test]
+    fn column_dot_starts_from_negative_zero() {
+        // Every product is -0.0, so the sum is -0.0 only if the accumulator
+        // starts at -0.0; a +0.0 start would give +0.0.
+        let x = [1.0_f32, -1.0, 2.0];
+        let columns = [-0.0_f32, -0.0, 0.0, 0.0, -0.0, -0.0];
+        let mut out = [1.0_f32; 2];
+        dot_against_columns(&x, &columns, 2, &mut out);
+        for (j, got) in out.iter().enumerate() {
+            let want = reference_dot(&x, &columns, 2, j);
+            assert_eq!(want.to_bits(), (-0.0_f32).to_bits());
+            assert_eq!(got.to_bits(), (-0.0_f32).to_bits(), "column {j}");
+        }
+        let mut empty: [f32; 0] = [];
+        dot_against_columns(&[], &[], 0, &mut empty);
+        let mut single = [1.0_f32];
+        dot_against_columns(&[], &[], 1, &mut single);
+        assert_eq!(single[0].to_bits(), (-0.0_f32).to_bits());
+    }
+
+    #[test]
+    fn transpose_round_trips() {
+        let src: Vec<f32> = (0..15).map(|i| i as f32).collect();
+        let once = transposed(&src, 3, 5);
+        assert_eq!(once[3 + 2], src[2 * 5 + 1]);
+        assert_eq!(transposed(&once, 5, 3), src);
+    }
 
     fn params(hidden: usize, n_classes: usize, d_model: usize, layers: usize) -> AttentionParams {
         // `deterministic` zeroes `w_o`, which would make every gradient above
