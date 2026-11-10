@@ -1569,53 +1569,188 @@ fn accumulate_batch_gradient(
     gradient: &mut ShdArmGradient,
 ) -> Result<(), String> {
     for chunk in batch.chunks(chunk_len) {
-        let computed =
-            ordered_sample_gradients(weights, weight_layout, train, chunk, surrogate_scale, tau_m);
+        let computed = ordered_sample_gradients(
+            weights,
+            weight_layout,
+            train,
+            chunk,
+            surrogate_scale,
+            tau_m,
+            clip_sample_grad_norm,
+        );
+        // Everything below is the per-sample bookkeeping, in batch order and
+        // serial: it is a handful of scalar updates. The expensive parts - the
+        // finite scan, the norm and the clip scale - already ran inside the
+        // parallel map, on each sample's own gradient, which they never read
+        // across. On the first failure the samples before it are still folded
+        // (as the one-at-a-time loop had already done) before the error leaves.
+        let mut accepted: Vec<ShdArmGradient> = Vec::with_capacity(computed.len());
+        let mut failure = None;
         for outcome in computed {
-            let (loss, mut sample_gradient) = outcome?;
-            diagnostics.loss_sum += f64::from(loss);
+            let sample = match outcome {
+                Ok(sample) => sample,
+                Err(error) => {
+                    failure = Some(error);
+                    break;
+                }
+            };
+            diagnostics.loss_sum += f64::from(sample.loss);
             diagnostics.samples += 1;
-            if !loss.is_finite() || !sample_gradient.all_finite() {
-                return Err(format!(
+            if !sample.finite {
+                failure = Some(format!(
                     "non-finite training value at optimizer step {global_step}"
                 ));
+                break;
             }
             // Per-sample clipping. Placed after the finite check and
             // before accumulation: scaling by `threshold / norm` cannot
             // rescue a gradient that already holds inf or NaN, so the
             // hard error stays as the last line of defence and this
             // bounds the growth that would otherwise reach it.
-            if let Some(threshold) = clip_sample_grad_norm {
-                match clip_by_global_norm(&mut sample_gradient, threshold) {
-                    ClipOutcome::Bound => diagnostics.clipped_samples += 1,
-                    ClipOutcome::Untouched => {}
-                    // Every entry is finite - checked above - but their
-                    // sum of squares overflowed. `threshold / inf` is
-                    // zero, so scaling here would silently delete the
-                    // sample from the batch and leave a cell that looks
-                    // trained. Refuse instead, and name the case.
-                    //
-                    // Deliberately not counted into a cell field: this
-                    // branch returns, so no cell is ever emitted and any
-                    // such field would be a constant zero masquerading
-                    // as evidence. The failure log is the record.
-                    ClipOutcome::NormOverflowed => {
-                        return Err(format!(
-                            "sample gradient norm overflowed with all entries finite \
-                             at optimizer step {global_step}; per-sample clipping \
-                             cannot scale it and will not drop it"
-                        ))
-                    }
+            match sample.clip {
+                Some(ClipOutcome::Bound) => diagnostics.clipped_samples += 1,
+                Some(ClipOutcome::Untouched) | None => {}
+                // Every entry is finite - checked above - but their
+                // sum of squares overflowed. `threshold / inf` is
+                // zero, so scaling here would silently delete the
+                // sample from the batch and leave a cell that looks
+                // trained. Refuse instead, and name the case.
+                //
+                // Deliberately not counted into a cell field: this
+                // branch returns, so no cell is ever emitted and any
+                // such field would be a constant zero masquerading
+                // as evidence. The failure log is the record.
+                Some(ClipOutcome::NormOverflowed) => {
+                    failure = Some(format!(
+                        "sample gradient norm overflowed with all entries finite \
+                         at optimizer step {global_step}; per-sample clipping \
+                         cannot scale it and will not drop it"
+                    ));
+                    break;
                 }
             }
-            gradient.add_assign(&sample_gradient);
+            accepted.push(sample.gradient);
+        }
+        fold_sample_gradients(gradient, &accepted);
+        if let Some(error) = failure {
+            return Err(error);
         }
     }
     Ok(())
 }
 
+/// Elements of one parameter vector folded by one parallel task. Only a work
+/// granule: each element's sum over the samples is the same whatever it is.
+const FOLD_RANGE: usize = 2048;
+
+/// Every parameter vector of a gradient, as the flat slices `add_assign` zips.
+fn gradient_slices(gradient: &ShdArmGradient) -> Vec<&[f32]> {
+    let mut slices: Vec<&[f32]> = vec![
+        &gradient.base.w_in,
+        &gradient.base.w_out,
+        &gradient.base.b_out,
+        &gradient.w_rec,
+    ];
+    if let Some(attn) = &gradient.attn {
+        slices.push(&attn.w_e);
+        for block in &attn.blocks {
+            slices.extend([&block.w_q[..], &block.w_k, &block.w_v, &block.w_o]);
+        }
+        slices.push(&attn.w_a);
+    }
+    slices
+}
+
+/// [`gradient_slices`], mutably. The same vectors in the same order.
+fn gradient_slices_mut(gradient: &mut ShdArmGradient) -> Vec<&mut [f32]> {
+    let mut slices: Vec<&mut [f32]> = vec![
+        &mut gradient.base.w_in,
+        &mut gradient.base.w_out,
+        &mut gradient.base.b_out,
+        &mut gradient.w_rec,
+    ];
+    if let Some(attn) = &mut gradient.attn {
+        slices.push(&mut attn.w_e);
+        for block in &mut attn.blocks {
+            slices.extend([
+                &mut block.w_q[..],
+                &mut block.w_k,
+                &mut block.w_v,
+                &mut block.w_o,
+            ]);
+        }
+        slices.push(&mut attn.w_a);
+    }
+    slices
+}
+
+/// `gradient += sample` for each sample in order - bit-identical to calling
+/// `gradient.add_assign(sample)` one sample at a time.
+///
+/// Every element of the result is `((g + s_0) + s_1) + ...`, one `f32` add per
+/// sample in batch order, and no element depends on any other. So the work is
+/// split across parameter *ranges* rather than across samples: each task owns a
+/// disjoint range of one vector and runs the whole sample sequence over it, which
+/// leaves each element's addition sequence exactly as it was while the
+/// otherwise serial fold uses every core. The inner loop is a plain elementwise
+/// add that the compiler vectorises without reordering anything.
+fn fold_sample_gradients(gradient: &mut ShdArmGradient, samples: &[ShdArmGradient]) {
+    fold_sample_gradients_in_ranges(gradient, samples, FOLD_RANGE);
+}
+
+/// [`fold_sample_gradients`] with the range length a parameter, so a test can
+/// pin that it is only a work granule.
+fn fold_sample_gradients_in_ranges(
+    gradient: &mut ShdArmGradient,
+    samples: &[ShdArmGradient],
+    range_len: usize,
+) {
+    assert!(range_len > 0, "a fold range must hold at least one element");
+    if samples.is_empty() {
+        return;
+    }
+    let sources: Vec<Vec<&[f32]>> = samples.iter().map(gradient_slices).collect();
+    for (index, target) in gradient_slices_mut(gradient).into_iter().enumerate() {
+        target
+            .par_chunks_mut(range_len)
+            .enumerate()
+            .for_each(|(range, chunk)| {
+                let from = range * range_len;
+                for source in &sources {
+                    // A sample missing this vector (an attention block on one
+                    // side only) adds nothing, as `add_assign`'s `if let` did;
+                    // `zip` stops at the shorter side, as its loops did.
+                    let Some(values) = source.get(index) else {
+                        continue;
+                    };
+                    let values = values.get(from..).unwrap_or(&[]);
+                    for (slot, delta) in chunk.iter_mut().zip(values) {
+                        *slot += *delta;
+                    }
+                }
+            });
+    }
+}
+
+/// One sample's loss and gradient, with the checks that read only that sample
+/// already made.
+struct SampleOutcome {
+    loss: f32,
+    gradient: ShdArmGradient,
+    /// `loss` and every gradient entry are finite.
+    finite: bool,
+    /// What per-sample clipping did; `None` when it is off or the sample is not
+    /// finite (clipping is never attempted on a non-finite gradient).
+    clip: Option<ClipOutcome>,
+}
+
 /// Compute independent sample gradients in parallel while preserving the
 /// caller's index order for the subsequent floating-point reduction.
+///
+/// The finite scan, the clip norm and the clip scale each read and write only
+/// the one sample's gradient, so they run here, on the worker that produced it,
+/// rather than serially after the barrier. The caller applies their verdicts in
+/// batch order.
 fn ordered_sample_gradients(
     weights: &ShdArmWeights,
     weight_layout: &ShdArmWeightLayout,
@@ -1623,18 +1758,30 @@ fn ordered_sample_gradients(
     indices: &[usize],
     surrogate_scale: f32,
     tau_m: f32,
-) -> Vec<Result<(f32, ShdArmGradient), String>> {
+    clip_sample_grad_norm: Option<f64>,
+) -> Vec<Result<SampleOutcome, String>> {
     indices
         .par_iter()
         .map_init(ShdArmWorkspace::default, |workspace, &index| {
-            shd_matched_loss_only_and_gradient_arm_tau_with_workspace(
+            let (loss, mut gradient) = shd_matched_loss_only_and_gradient_arm_tau_with_workspace(
                 weights,
                 weight_layout,
                 &train[index],
                 surrogate_scale,
                 tau_m,
                 workspace,
-            )
+            )?;
+            let finite = loss.is_finite() && gradient.all_finite();
+            let clip = match clip_sample_grad_norm {
+                Some(threshold) if finite => Some(clip_by_global_norm(&mut gradient, threshold)),
+                _ => None,
+            };
+            Ok(SampleOutcome {
+                loss,
+                gradient,
+                finite,
+                clip,
+            })
         })
         .collect()
 }
@@ -2178,11 +2325,11 @@ mod tests {
         (sample_index % 4) as u32
     }
 
-    fn result_bits(results: Vec<Result<(f32, ShdArmGradient), String>>) -> Vec<Vec<u32>> {
+    fn result_bits(results: Vec<Result<SampleOutcome, String>>) -> Vec<Vec<u32>> {
         results
             .into_iter()
             .map(|result| {
-                let (loss, gradient) = result.expect("sample gradient");
+                let SampleOutcome { loss, gradient, .. } = result.expect("sample gradient");
                 let mut bits = vec![loss.to_bits()];
                 bits.extend(
                     gradient
@@ -2356,6 +2503,7 @@ mod tests {
                             &indices,
                             1.0,
                             binn_learn::MATCHED_PHYSICAL_TAU_MS,
+                            None,
                         ))
                     })
             };
@@ -2464,6 +2612,233 @@ mod tests {
                 );
             }
         }
+    }
+
+    fn arm_weights(arm: MatchedArm) -> ShdArmWeights {
+        let base = ShdMatchedWeights::deterministic(40, 8, 4, 7);
+        let w_rec = if arm.recurrent {
+            (0..8 * 8)
+                .map(|i| (((i % 13) as f32) - 6.0) * 1.3e-2)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if arm.attention {
+            let config = AttentionConfig::new(32, 4).expect("attention config");
+            let attention =
+                AttentionParams::deterministic(8, 4, config, 11).expect("attention parameters");
+            ShdArmWeights::new_attentive(base, arm, w_rec, attention).expect("attention arm")
+        } else {
+            ShdArmWeights::new(base, arm, w_rec).expect("arm")
+        }
+    }
+
+    fn gradient_bits(gradient: &ShdArmGradient) -> Vec<u32> {
+        gradient_slices(gradient)
+            .into_iter()
+            .flatten()
+            .map(|value| value.to_bits())
+            .collect()
+    }
+
+    /// The reduction exactly as it stood before it was parallelised: one sample
+    /// at a time, finite check, clip, `add_assign`, in batch order.
+    fn serial_reduction(
+        weights: &ShdArmWeights,
+        layout: &ShdArmWeightLayout,
+        train: &[MatchedShdSample],
+        batch: &[usize],
+        clip: Option<f64>,
+    ) -> (f64, usize, usize, ShdArmGradient) {
+        let mut gradient = ShdArmGradient::zeros_like(weights);
+        let (mut loss_sum, mut samples, mut clipped) = (0.0_f64, 0, 0);
+        let mut workspace = ShdArmWorkspace::default();
+        for &index in batch {
+            let (loss, mut sample_gradient) =
+                shd_matched_loss_only_and_gradient_arm_tau_with_workspace(
+                    weights,
+                    layout,
+                    &train[index],
+                    1.0,
+                    binn_learn::MATCHED_PHYSICAL_TAU_MS,
+                    &mut workspace,
+                )
+                .expect("sample gradient");
+            loss_sum += f64::from(loss);
+            samples += 1;
+            assert!(loss.is_finite() && sample_gradient.all_finite());
+            if let Some(threshold) = clip {
+                if clip_by_global_norm(&mut sample_gradient, threshold) == ClipOutcome::Bound {
+                    clipped += 1;
+                }
+            }
+            gradient.add_assign(&sample_gradient);
+        }
+        (loss_sum, samples, clipped, gradient)
+    }
+
+    /// The parallel reduction against the serial one-sample-at-a-time loop it
+    /// replaced (not merely against itself at another chunk length), for every
+    /// arm, with and without per-sample clipping, across thread counts and
+    /// sub-chunk lengths.
+    #[test]
+    fn parallel_reduction_equals_the_serial_add_assign_loop_for_every_arm() {
+        let train: Vec<_> = (0..24).map(sample).collect();
+        let batch: Vec<_> = (0..train.len()).collect();
+        for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
+            let weights = arm_weights(arm);
+            let layout = ShdArmWeightLayout::prepare(&weights);
+            for clip in [None, Some(1.0e-3)] {
+                let (loss_sum, samples, clipped, expected) =
+                    serial_reduction(&weights, &layout, &train, &batch, clip);
+                assert!(
+                    gradient_bits(&expected)
+                        .iter()
+                        .any(|bits| *bits != 0 && *bits != 0x8000_0000),
+                    "{}: all-zero gradient, comparison is vacuous",
+                    arm.label()
+                );
+                if clip.is_some() {
+                    assert!(clipped > 0, "{}: clipping never bound", arm.label());
+                }
+                for threads in [1, 2, 3, 8] {
+                    for chunk_len in [1, 5, batch.len()] {
+                        let mut diagnostics = TrainDiagnostics::default();
+                        let mut gradient = ShdArmGradient::zeros_like(&weights);
+                        ThreadPoolBuilder::new()
+                            .num_threads(threads)
+                            .build()
+                            .expect("thread pool")
+                            .install(|| {
+                                accumulate_batch_gradient(
+                                    &weights,
+                                    &layout,
+                                    &train,
+                                    &batch,
+                                    chunk_len,
+                                    1.0,
+                                    binn_learn::MATCHED_PHYSICAL_TAU_MS,
+                                    clip,
+                                    0,
+                                    &mut diagnostics,
+                                    &mut gradient,
+                                )
+                            })
+                            .expect("batch gradient");
+                        let label = format!(
+                            "{} clip {clip:?} threads {threads} chunk {chunk_len}",
+                            arm.label()
+                        );
+                        assert_eq!(
+                            diagnostics.loss_sum.to_bits(),
+                            loss_sum.to_bits(),
+                            "{label}"
+                        );
+                        assert_eq!(diagnostics.samples, samples, "{label}");
+                        assert_eq!(diagnostics.clipped_samples, clipped, "{label}");
+                        assert_eq!(
+                            gradient_bits(&gradient),
+                            gradient_bits(&expected),
+                            "{label}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// The range-parallel fold against `add_assign`, on values chosen to break
+    /// a reordered or skipped addition: signed zeros, subnormals, infinities,
+    /// NaN, and magnitudes that absorb each other. Range lengths put the
+    /// boundaries on, before and after the vector lengths.
+    #[test]
+    fn range_parallel_fold_is_bit_identical_to_serial_add_assign() {
+        let mut rng = PortableRng::new(0xF01D);
+        for arm in [MatchedArm::FF_FIXED, MatchedArm::ALL_ATTENTION[0]] {
+            let weights = arm_weights(arm);
+            let awkward = |rng: &mut PortableRng| match rng.next_u64() % 12 {
+                0 => 0.0,
+                1 => -0.0,
+                2 => f32::from_bits(1 + (rng.next_u64() % 0x7f_ffff) as u32),
+                3 => 1.0e30,
+                4 => -1.0e30,
+                5 => f32::INFINITY,
+                6 => f32::NAN,
+                7 => 1.0e-30,
+                _ => rng.uniform(-1.0, 1.0),
+            };
+            let samples: Vec<ShdArmGradient> = (0..9)
+                .map(|_| {
+                    let mut gradient = ShdArmGradient::zeros_like(&weights);
+                    for slice in gradient_slices_mut(&mut gradient) {
+                        for value in slice {
+                            *value = awkward(&mut rng);
+                        }
+                    }
+                    gradient
+                })
+                .collect();
+            let mut start = ShdArmGradient::zeros_like(&weights);
+            for slice in gradient_slices_mut(&mut start) {
+                for value in slice {
+                    *value = awkward(&mut rng);
+                }
+            }
+            let mut expected = start.clone();
+            for sample in &samples {
+                expected.add_assign(sample);
+            }
+            for threads in [1, 2, 3, 7] {
+                for range_len in [1, 2, 3, 7, 64, 2048, 1 << 20] {
+                    let mut got = start.clone();
+                    ThreadPoolBuilder::new()
+                        .num_threads(threads)
+                        .build()
+                        .expect("thread pool")
+                        .install(|| fold_sample_gradients_in_ranges(&mut got, &samples, range_len));
+                    assert_eq!(
+                        gradient_bits(&got),
+                        gradient_bits(&expected),
+                        "{} threads {threads} range {range_len}",
+                        arm.label()
+                    );
+                }
+            }
+        }
+    }
+
+    /// A non-finite sample ends the reduction with the same error and the same
+    /// counters as before, and nothing from it reaches the gradient.
+    #[test]
+    fn a_non_finite_sample_stops_the_reduction_with_the_same_error() {
+        let train: Vec<_> = (0..6).map(sample).collect();
+        let batch: Vec<_> = (0..train.len()).collect();
+        let mut weights = arm_weights(MatchedArm::FF_FIXED);
+        weights.base.w_out[0] = f32::NAN;
+        let layout = ShdArmWeightLayout::prepare(&weights);
+        let mut diagnostics = TrainDiagnostics::default();
+        let mut gradient = ShdArmGradient::zeros_like(&weights);
+        let error = accumulate_batch_gradient(
+            &weights,
+            &layout,
+            &train,
+            &batch,
+            4,
+            1.0,
+            binn_learn::MATCHED_PHYSICAL_TAU_MS,
+            Some(1.0e-3),
+            17,
+            &mut diagnostics,
+            &mut gradient,
+        )
+        .expect_err("a NaN weight must not train");
+        assert_eq!(error, "non-finite training value at optimizer step 17");
+        assert_eq!(diagnostics.samples, 1);
+        assert_eq!(diagnostics.clipped_samples, 0);
+        assert_eq!(
+            gradient_bits(&gradient),
+            gradient_bits(&ShdArmGradient::zeros_like(&weights))
+        );
     }
 
     #[test]
