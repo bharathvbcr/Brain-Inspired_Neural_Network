@@ -733,10 +733,7 @@ pub fn forward_arm_tau(
             current[h] = alpha * previous_u[h] * (1.0 - previous_s[h]);
         }
         for &(channel, count) in frame {
-            let column = &w_in_t[channel * hidden..(channel + 1) * hidden];
-            for h in 0..hidden {
-                current[h] += column[h] * count;
-            }
+            axpy_into(&mut current, count, &w_in_t[channel * hidden..(channel + 1) * hidden]);
         }
         if arm.recurrent {
             active_previous.clear();
@@ -747,10 +744,7 @@ pub fn forward_arm_tau(
             }
             for &j in &active_previous {
                 let spike = previous_s[j];
-                let column = &w_rec_t[j * hidden..(j + 1) * hidden];
-                for h in 0..hidden {
-                    current[h] += column[h] * spike;
-                }
+                axpy_into(&mut current, spike, &w_rec_t[j * hidden..(j + 1) * hidden]);
             }
         }
         let mem_t = &mut membrane[t * hidden..(t + 1) * hidden];
@@ -778,10 +772,7 @@ pub fn forward_arm_tau(
     let inv_t = 1.0 / t_steps as f32;
     let mut rates = vec![0.0_f32; hidden];
     for t in 0..t_steps {
-        let spk_t = &spikes[t * hidden..(t + 1) * hidden];
-        for h in 0..hidden {
-            rates[h] += spk_t[h] * inv_t;
-        }
+        axpy_into(&mut rates, inv_t, &spikes[t * hidden..(t + 1) * hidden]);
     }
     let attention_cache = match &weights.attn {
         Some(params) => Some(attention_forward_presented(
@@ -929,14 +920,20 @@ fn run_loss_and_gradient_with_workspace(
     workspace.active_previous.clear();
     workspace.active_previous.reserve(hidden);
 
-    let membrane = &mut workspace.membrane;
-    let spikes = &mut workspace.spikes;
-    let thresholds = &mut workspace.thresholds;
-    let previous_spike_log = &mut workspace.previous_spike_log;
-    let previous_u = &mut workspace.previous_u;
-    let previous_s = &mut workspace.previous_s;
-    let adaptation = &mut workspace.adaptation;
-    let current = &mut workspace.current;
+    // Slices, not `&mut Vec<f32>`. Through a `&mut Vec` every `buf[h]` re-reads
+    // the Vec's pointer and length from the workspace, and LLVM cannot prove
+    // the element store leaves those header words alone - so the two hot
+    // loops below kept one bounds-checked element per iteration and were never
+    // vectorised (profile: ~90% of a base cell's CPU). A slice is the pointer
+    // and length in registers, and `zip` in `axpy_into` drops the checks.
+    let membrane = &mut workspace.membrane[..];
+    let spikes = &mut workspace.spikes[..];
+    let thresholds = &mut workspace.thresholds[..];
+    let previous_spike_log = &mut workspace.previous_spike_log[..];
+    let previous_u = &mut workspace.previous_u[..];
+    let previous_s = &mut workspace.previous_s[..];
+    let adaptation = &mut workspace.adaptation[..];
+    let current = &mut workspace.current[..];
     let active_previous = &mut workspace.active_previous;
 
     let w_in_t = &layout.w_in_t;
@@ -955,10 +952,7 @@ fn run_loss_and_gradient_with_workspace(
             current[h] = alpha * previous_u[h] * (1.0 - previous_s[h]);
         }
         for &(channel, count) in frame {
-            let column = &w_in_t[channel * hidden..(channel + 1) * hidden];
-            for h in 0..hidden {
-                current[h] += column[h] * count;
-            }
+            axpy_into(current, count, &w_in_t[channel * hidden..(channel + 1) * hidden]);
         }
         if arm.recurrent {
             // The drive must read the previous timestep's spikes, which is
@@ -974,10 +968,7 @@ fn run_loss_and_gradient_with_workspace(
             }
             for &j in active_previous.iter() {
                 let spike = prev_t[j];
-                let column = &w_rec_t[j * hidden..(j + 1) * hidden];
-                for h in 0..hidden {
-                    current[h] += column[h] * spike;
-                }
+                axpy_into(current, spike, &w_rec_t[j * hidden..(j + 1) * hidden]);
             }
         }
         let mem_t = &mut membrane[t * hidden..(t + 1) * hidden];
@@ -1006,12 +997,9 @@ fn run_loss_and_gradient_with_workspace(
 
     let inv_t = 1.0 / t_steps as f32;
     ArmWorkspace::reset_zeroed(&mut workspace.rates, hidden);
-    let rates = &mut workspace.rates;
+    let rates = &mut workspace.rates[..];
     for t in 0..t_steps {
-        let spk_t = &spikes[t * hidden..(t + 1) * hidden];
-        for h in 0..hidden {
-            rates[h] += spk_t[h] * inv_t;
-        }
+        axpy_into(rates, inv_t, &spikes[t * hidden..(t + 1) * hidden]);
     }
     let attention_cache = match &weights.attn {
         Some(params) => Some(attention_forward_presented(
@@ -1077,13 +1065,13 @@ fn run_loss_and_gradient_with_workspace(
         workspace.ds_combined.clear();
     }
 
-    let du_next = &mut workspace.du_next;
-    let da_next = &mut workspace.da_next;
-    let du = &mut workspace.du;
-    let da = &mut workspace.da;
-    let grad_w_in_t = &mut workspace.grad_w_in_t;
-    let ds_all = &mut workspace.ds_all;
-    let ds_combined = &mut workspace.ds_combined;
+    let mut du_next = &mut workspace.du_next[..];
+    let mut da_next = &mut workspace.da_next[..];
+    let mut du = &mut workspace.du[..];
+    let mut da = &mut workspace.da[..];
+    let grad_w_in_t = &mut workspace.grad_w_in_t[..];
+    let ds_all = &mut workspace.ds_all[..];
+    let ds_combined = &mut workspace.ds_combined[..];
 
     for t in (0..t_steps).rev() {
         let frame = &sample.frames[t];
@@ -1127,10 +1115,11 @@ fn run_loss_and_gradient_with_workspace(
             }
         }
         for &(channel, count) in frame {
-            let column = &mut grad_w_in_t[channel * hidden..(channel + 1) * hidden];
-            for h in 0..hidden {
-                column[h] += du[h] * count;
-            }
+            axpy_into(
+                &mut grad_w_in_t[channel * hidden..(channel + 1) * hidden],
+                count,
+                du,
+            );
         }
         if arm.recurrent {
             active_previous.clear();
@@ -1149,19 +1138,18 @@ fn run_loss_and_gradient_with_workspace(
                 }
             }
         }
-        du_next.copy_from_slice(du);
+        // `du` is rewritten in full at the top of the next iteration, so the
+        // copy `du_next = du` is a pointer swap: `du_next` now holds this
+        // step's values and `du` is scratch.
+        std::mem::swap(&mut du, &mut du_next);
         if arm.adaptive {
-            da_next.copy_from_slice(da);
+            std::mem::swap(&mut da, &mut da_next);
         }
     }
 
     // Fold back to `[hidden, n_inputs]` so `add_assign`, `l2_norm`, and Adam
     // see byte-for-byte what they saw before this optimisation.
-    for channel in 0..base.n_inputs {
-        for h in 0..hidden {
-            gradient.base.w_in[h * base.n_inputs + channel] = grad_w_in_t[channel * hidden + h];
-        }
-    }
+    transpose_blocked(grad_w_in_t, base.n_inputs, hidden, &mut gradient.base.w_in);
 
     if arm.recurrent {
         for h in 0..hidden {
@@ -1172,19 +1160,56 @@ fn run_loss_and_gradient_with_workspace(
     Ok((loss, prediction, gradient))
 }
 
+/// `dst[i] = dst[i] + src[i] * scale`: one multiply, then one add, per element.
+///
+/// Elementwise, so it has no reduction order to disturb, and written as a
+/// `zip` over two slices so LLVM sees `dst` and `src` as disjoint and emits
+/// `fmul.4s` + `fadd.4s` - never a fused `fmla`, which would round once instead
+/// of twice and move every recorded cell. `src[i] * scale` and `scale *
+/// src[i]` are the same IEEE product, so call sites may pass either spelling.
+/// `scalar_oracle_for_axpy_into` in the tests pins the equivalence.
+#[inline]
+fn axpy_into(dst: &mut [f32], scale: f32, src: &[f32]) {
+    for (target, &item) in dst.iter_mut().zip(src) {
+        *target += item * scale;
+    }
+}
+
 /// `[rows, cols]` row-major to `[cols, rows]` row-major.
 ///
 /// Used to pivot `w_in` for the input-drive loop. Pure data movement — no
 /// arithmetic, so it cannot perturb any float result.
 fn transpose_rows_to_columns(source: &[f32], rows: usize, cols: usize) -> Vec<f32> {
     let mut transposed = vec![0.0_f32; rows * cols];
-    for row in 0..rows {
-        let values = &source[row * cols..(row + 1) * cols];
-        for (col, &value) in values.iter().enumerate() {
-            transposed[col * rows + row] = value;
+    transpose_blocked(source, rows, cols, &mut transposed);
+    transposed
+}
+
+/// Side of the square tile [`transpose_blocked`] moves at a time: sixteen `f32`
+/// is one 64-byte line, so a tile reads and writes whole lines.
+const TRANSPOSE_TILE: usize = 16;
+
+/// `dst[col * rows + row] = src[row * cols + col]` for every cell.
+///
+/// Pure data movement, so it cannot perturb a float. The naive order strides a
+/// whole row on one side for every element - one cache line per element, 358k
+/// of them per sample at h512 - where a 16x16 tile touches each of its 32 lines
+/// sixteen times while they are still resident.
+fn transpose_blocked(src: &[f32], rows: usize, cols: usize, dst: &mut [f32]) {
+    assert_eq!(src.len(), rows * cols, "src must be [rows, cols]");
+    assert_eq!(dst.len(), rows * cols, "dst must be [cols, rows]");
+    for row0 in (0..rows).step_by(TRANSPOSE_TILE) {
+        let row1 = (row0 + TRANSPOSE_TILE).min(rows);
+        for col0 in (0..cols).step_by(TRANSPOSE_TILE) {
+            let col1 = (col0 + TRANSPOSE_TILE).min(cols);
+            for row in row0..row1 {
+                let values = &src[row * cols + col0..row * cols + col1];
+                for (offset, &value) in values.iter().enumerate() {
+                    dst[(col0 + offset) * rows + row] = value;
+                }
+            }
         }
     }
-    transposed
 }
 
 /// Adam over the base parameters plus the recurrent block.
@@ -2859,5 +2884,173 @@ mod tests {
             }
         }
         assert_eq!(runs_checked, 24);
+    }
+
+    /// Operands chosen so a wrong `axpy_into` cannot hide: signed zeros,
+    /// subnormals, the largest and smallest normals, infinities, NaN, and the
+    /// triple `(dst, src, scale)` below for which a fused multiply-add and a
+    /// rounded multiply followed by an add give different answers.
+    fn axpy_operands() -> Vec<f32> {
+        let x = 1.0_f32 + 2.0_f32.powi(-12);
+        // `x * x` is `1 + 2^-11 + 2^-24`, a tie that rounds to `1 + 2^-11`.
+        let rounded_square = x * x;
+        vec![
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            0.5,
+            3.0,
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::MIN_POSITIVE / 4.0,
+            -f32::MIN_POSITIVE / 8.0,
+            f32::from_bits(1),
+            f32::MAX,
+            -f32::MAX,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            f32::NAN,
+            x,
+            -rounded_square,
+            0.1,
+            -1.234_567_9e-7,
+        ]
+    }
+
+    fn axpy_scalar_oracle(dst: &mut [f32], scale: f32, src: &[f32]) {
+        for index in 0..dst.len() {
+            let product = src[index] * scale;
+            dst[index] += product;
+        }
+    }
+
+    fn same_bits_or_both_nan(left: f32, right: f32) -> bool {
+        (left.is_nan() && right.is_nan()) || left.to_bits() == right.to_bits()
+    }
+
+    /// `axpy_into` is the one kernel the two hot loops of every base cell now
+    /// share (input drive forward, `grad_w_in` backward). It must equal the
+    /// scalar `dst + src * scale` bit for bit at every length - below a
+    /// vector, exactly one, odd tails, several - and every operand class.
+    #[test]
+    fn scalar_oracle_for_axpy_into() {
+        let operands = axpy_operands();
+        for length in 0..=37 {
+            for &scale in &operands {
+                let src: Vec<f32> = (0..length)
+                    .map(|i| operands[(i * 7 + 3) % operands.len()])
+                    .collect();
+                let start: Vec<f32> = (0..length)
+                    .map(|i| operands[(i * 5 + 1) % operands.len()])
+                    .collect();
+                let mut got = start.clone();
+                let mut want = start.clone();
+                axpy_into(&mut got, scale, &src);
+                axpy_scalar_oracle(&mut want, scale, &src);
+                for index in 0..length {
+                    assert!(
+                        same_bits_or_both_nan(got[index], want[index]),
+                        "length {length} scale {scale:e} index {index}: got {:#010x} want {:#010x}",
+                        got[index].to_bits(),
+                        want[index].to_bits(),
+                    );
+                }
+            }
+        }
+    }
+
+    /// The failure this kernel must never have: a contraction into one fused
+    /// multiply-add. With `x = 1 + 2^-12` the exact `x * x` is `1 + 2^-11 +
+    /// 2^-24`; two roundings give exactly `0` after cancelling the rounded
+    /// square, one rounding gives `2^-24`. Run over every alignment so the
+    /// vector body and the scalar tail are both exercised.
+    #[test]
+    fn axpy_into_rounds_the_product_before_the_add() {
+        let x = 1.0_f32 + 2.0_f32.powi(-12);
+        let rounded_square = x * x;
+        // A fused multiply-add rounds once: the exact product (13 significant
+        // bits squared fits an f64) minus the rounded square is `2^-24`.
+        let fused = (f64::from(x) * f64::from(x) - f64::from(rounded_square)) as f32;
+        assert_eq!(fused, 2.0_f32.powi(-24));
+        assert_ne!(fused.to_bits(), 0.0_f32.to_bits());
+        for length in 1..=19 {
+            let mut dst = vec![-rounded_square; length];
+            axpy_into(&mut dst, x, &vec![x; length]);
+            for value in dst {
+                assert_eq!(value.to_bits(), 0.0_f32.to_bits());
+            }
+        }
+    }
+
+    /// The tiled transpose must equal the naive double loop at every shape that
+    /// splits a tile differently: smaller than a tile, exactly one, one over,
+    /// ragged on either axis, and degenerate. It moves bit patterns, so every
+    /// cell is compared by bits and the source holds distinct values, signed
+    /// zeros and NaN payloads - a dropped, duplicated or misplaced cell shows.
+    #[test]
+    fn blocked_transpose_matches_the_naive_loop() {
+        fn naive(src: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+            let mut dst = vec![0.0_f32; rows * cols];
+            for row in 0..rows {
+                for col in 0..cols {
+                    dst[col * rows + row] = src[row * cols + col];
+                }
+            }
+            dst
+        }
+        let shapes = [
+            (0, 0),
+            (0, 5),
+            (5, 0),
+            (1, 1),
+            (1, 17),
+            (17, 1),
+            (15, 16),
+            (16, 16),
+            (16, 17),
+            (17, 16),
+            (17, 17),
+            (31, 33),
+            (33, 31),
+            (48, 64),
+            (700, 24),
+            (140, 130),
+        ];
+        for (rows, cols) in shapes {
+            let src: Vec<f32> = (0..rows * cols)
+                .map(|index| match index % 5 {
+                    0 => f32::from_bits(0x7fc0_0000 | index as u32),
+                    1 => -0.0,
+                    _ => index as f32 + 0.25,
+                })
+                .collect();
+            let want = naive(&src, rows, cols);
+            let mut got = vec![f32::from_bits(0xdead_beef); rows * cols];
+            transpose_blocked(&src, rows, cols, &mut got);
+            let got_bits: Vec<u32> = got.iter().map(|v| v.to_bits()).collect();
+            let want_bits: Vec<u32> = want.iter().map(|v| v.to_bits()).collect();
+            assert_eq!(got_bits, want_bits, "shape {rows}x{cols}");
+            assert_eq!(
+                transpose_rows_to_columns(&src, rows, cols)
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                want_bits,
+                "shape {rows}x{cols} via transpose_rows_to_columns"
+            );
+        }
+    }
+
+    /// Scale is an operand, not a constant of the kernel: `-0.0` must flow
+    /// through the product (`-0.0 * 1.0 = -0.0`, and `-0.0 + -0.0 = -0.0`).
+    #[test]
+    fn axpy_into_preserves_negative_zero() {
+        let mut dst = vec![-0.0_f32; 9];
+        axpy_into(&mut dst, -0.0, &[1.0; 9]);
+        assert!(dst.iter().all(|v| v.to_bits() == (-0.0_f32).to_bits()));
+        let mut dst = vec![0.0_f32; 9];
+        axpy_into(&mut dst, -0.0, &[1.0; 9]);
+        assert!(dst.iter().all(|v| v.to_bits() == 0.0_f32.to_bits()));
     }
 }
