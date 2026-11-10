@@ -1687,6 +1687,7 @@ mod tests {
     #[test]
     fn column_dot_equals_the_zip_sum_bit_for_bit() {
         let mut rng = PortableRng::new(0xD07);
+        let mut compared = Vec::new();
         for len in [0, 1, 3, 8, 32] {
             for n in COLUMN_COUNTS {
                 for _ in 0..8 {
@@ -1700,10 +1701,13 @@ mod tests {
                         let want = reference_dot(&x, &columns, n, j);
                         assert_eq!(got.to_bits(), want.to_bits(), "len {len} n {n} column {j}");
                         assert_eq!(portable[j].to_bits(), want.to_bits(), "portable {j}");
+                        compared.push(j);
                     }
                 }
             }
         }
+        // 5 lengths x 8 draws x the sum of COLUMN_COUNTS columns: the loops ran.
+        assert_eq!(compared.len(), 5 * 8 * COLUMN_COUNTS.iter().sum::<usize>());
     }
 
     #[test]
@@ -1715,6 +1719,7 @@ mod tests {
     #[test]
     fn axpy_equals_the_scalar_expression_bit_for_bit() {
         let mut rng = PortableRng::new(0xA9);
+        let mut compared = Vec::new();
         for len in [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 31, 32, 33, 100] {
             for _ in 0..16 {
                 let scale = awkward_value(&mut rng);
@@ -1728,9 +1733,12 @@ mod tests {
                     // The call sites that wrote `src * scale` rely on this.
                     let swapped = start[i] + src[i] * scale;
                     assert_eq!(got[i].to_bits(), swapped.to_bits(), "swapped {i}");
+                    compared.push(i);
                 }
             }
         }
+        // 16 draws per length; the lengths sum to 0+1+2+3+4+5+7+8+15+16+17+31+32+33+100.
+        assert_eq!(compared.len(), 16 * 274);
     }
 
     #[test]
@@ -3487,6 +3495,7 @@ mod tests {
             1, 3, 4, 5, 8, 16, 17, 20, 31, 32, 33, 34, 36, 40, 47, 48, 52, 64, 65, 96,
         ];
         let starts = [0.0_f32, -0.0, 1.5, -3.25, f32::INFINITY];
+        let mut compared = Vec::new();
         for len in [0, 1, 2, 5, 37] {
             for n in counts {
                 for &start in &starts {
@@ -3518,11 +3527,14 @@ mod tests {
                                 same_f32(without[j], want),
                                 "no skip len {len} n {n} start {start} column {j}"
                             );
+                            compared.push(j);
                         }
                     }
                 }
             }
         }
+        // 5 lengths x 5 starts x 2 draws x the sum of `counts` columns.
+        assert_eq!(compared.len(), 5 * 5 * 2 * counts.iter().sum::<usize>());
     }
 
     #[test]
@@ -3554,15 +3566,18 @@ mod tests {
 
     #[test]
     fn tiled_transpose_matches_the_index_formula() {
+        let mut compared = Vec::new();
         for (rows, cols) in [(1, 1), (3, 5), (16, 16), (17, 33), (40, 40), (37, 32)] {
             let src: Vec<f32> = (0..rows * cols).map(|i| i as f32 + 0.5).collect();
             let got = transposed(&src, rows, cols);
             for r in 0..rows {
                 for c in 0..cols {
                     assert_eq!(got[c * rows + r], src[r * cols + c], "{rows}x{cols}");
+                    compared.push((r, c));
                 }
             }
         }
+        assert_eq!(compared.len(), 1 + 15 + 256 + 561 + 1600 + 1184);
     }
 
     fn bits(values: &[f32]) -> Vec<u32> {

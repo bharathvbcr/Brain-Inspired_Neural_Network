@@ -2685,6 +2685,7 @@ mod tests {
     fn parallel_reduction_equals_the_serial_add_assign_loop_for_every_arm() {
         let train: Vec<_> = (0..24).map(sample).collect();
         let batch: Vec<_> = (0..train.len()).collect();
+        let mut compared = Vec::new();
         for arm in MatchedArm::ALL.into_iter().chain(MatchedArm::ALL_ATTENTION) {
             let weights = arm_weights(arm);
             let layout = ShdArmWeightLayout::prepare(&weights);
@@ -2741,10 +2742,13 @@ mod tests {
                             gradient_bits(&expected),
                             "{label}"
                         );
+                        compared.push(label);
                     }
                 }
             }
         }
+        let arms = MatchedArm::ALL.len() + MatchedArm::ALL_ATTENTION.len();
+        assert_eq!(compared.len(), arms * 2 * 4 * 3);
     }
 
     /// The range-parallel fold against `add_assign`, on values chosen to break
