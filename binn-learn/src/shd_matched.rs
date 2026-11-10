@@ -263,8 +263,8 @@ impl MatchedGradient {
 /// with a non-short-circuiting OR gives LLVM a loop it vectorises; the answer
 /// is the same boolean for every input, NaN and infinities included.
 pub(crate) fn all_finite_slice(values: &[f32]) -> bool {
-    let mut blocks = values.chunks_exact(16);
-    for block in &mut blocks {
+    let (blocks, remainder) = values.as_chunks::<16>();
+    for block in blocks {
         let mut any_non_finite = false;
         for value in block {
             any_non_finite |= !value.is_finite();
@@ -273,7 +273,7 @@ pub(crate) fn all_finite_slice(values: &[f32]) -> bool {
             return false;
         }
     }
-    blocks.remainder().iter().all(|value| value.is_finite())
+    remainder.iter().all(|value| value.is_finite())
 }
 
 #[cfg(test)]
