@@ -27,7 +27,7 @@ ANCHOR = ("published-2ms", "adjacent-sum-5")
 def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR[1],
          attn_dim=None, attn_layers=None, temporal="intact", surrogate_scale=None,
          clip_grad_norm=None, n_train=8156, attn_readout=None, tau_m=None,
-         probe_epochs=None, probe_max_samples=None, val_speakers=None):
+         probe_epochs=None, probe_max_samples=None, val_speakers=None, numerics=None):
     """One planned cell.
 
     The keys added on 2026-09-03 -- `attn_readout`, `tau_m`, `probe_epochs`,
@@ -42,12 +42,21 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
     bucket", which is the mechanism that makes a spot interruption cheap and
     would here make a wave wrong.
 
+    `numerics` ("exact" or "blas") follows the same rule: None and "exact" are
+    both omitted from the id and the payload, so every archived plan entry and
+    command line is unchanged. "blas" is in the id (a blas cell and an exact
+    cell at the same spec are different measurements and must not collide in
+    the results bucket) and in the payload, where `run_cell.py` turns it into
+    `--numerics blas`. Fast waves land in `results/<wave>_blas/`.
+
     `probe_epochs` is deliberately NOT in the id: probing is asserted not to
     change the cell (`probing_does_not_change_the_cell` compares every measured
     field byte for byte), so a probed cell and an unprobed one at the same id
     are the same cell, and treating them as different would be claiming an
     effect the instrument is built to not have.
     """
+    if numerics not in (None, "exact", "blas"):
+        raise ValueError(f"numerics={numerics!r} is not exact or blas")
     parts = [wave, arm.replace("+", "-"), f"h{hidden}", f"e{epochs}", contract, geometry]
     if attn_dim is not None:
         parts.append(f"d{attn_dim}l{attn_layers}")
@@ -63,6 +72,8 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
         parts.append(f"ss{surrogate_scale}")
     if clip_grad_norm is not None:
         parts.append(f"clip{clip_grad_norm}")
+    if numerics == "blas":
+        parts.append("blas")
     parts.append(f"s{seed}")
     entry = {
         "id": "__".join(parts),
@@ -94,6 +105,8 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
             entry["probe_max_samples"] = probe_max_samples
     if val_speakers:
         entry["val_speakers"] = list(val_speakers)
+    if numerics == "blas":
+        entry["numerics"] = "blas"
     return entry
 
 

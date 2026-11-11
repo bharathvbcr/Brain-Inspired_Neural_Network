@@ -96,6 +96,16 @@ def train_command(binary: str, spec: dict, weights: Path, orders: Path,
                 "present; refusing to run it as an unsplit cell"
             )
         train += ["--train-speakers", str(sidecar), "--val-speakers", str(val_speakers)]
+    # Arithmetic mode. Appended last and only for blas: an absent key or
+    # "exact" adds nothing, so every plan written before the flag produces a
+    # byte-identical command line (and the binary's default is exact). Anything
+    # else is refused here rather than handed to the binary, which would exit 2
+    # after the fleet had already spent the init.
+    numerics = spec.get("numerics")
+    if numerics not in (None, "exact", "blas"):
+        raise SystemExit(f"{cell_id}: numerics={numerics!r} is not exact or blas")
+    if numerics == "blas":
+        train += ["--numerics", "blas"]
     return train
 
 

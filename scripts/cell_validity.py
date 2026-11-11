@@ -95,6 +95,72 @@ WARN_GRADIENT_NORM = 1e9
 MARGINAL_GRADIENT_NORM = F32_MAX / 1e5
 
 
+#: The arithmetic modes of `shd-instrument train-cell --numerics`. A cell
+#: written before the flag has no `numerics` key, and that means exact.
+NUMERICS_MODES = ("exact", "blas")
+#: Suffix that names a fast-numerics corpus directory (`results/<wave>_blas/`).
+BLAS_CORPUS_SUFFIX = "_blas"
+
+
+def cell_numerics(cell: dict):
+    """The mode a cell declares; absent is exact. Not validated, see below."""
+    return cell.get("numerics", "exact")
+
+
+def numerics_problems(cell: dict) -> list[str]:
+    """`numerics` must be absent, "exact" or "blas"; blas must name its platform.
+
+    A blas cell's bits depend on the Accelerate build of the OS that ran it, so
+    a blas record without `numerics_platform` cannot be reproduced or compared
+    and is not a measurement. An exact cell needs no platform: its bits are
+    pinned by the binary alone.
+    """
+    if "numerics" not in cell:
+        return []
+    mode = cell["numerics"]
+    if not isinstance(mode, str) or mode not in NUMERICS_MODES:
+        return [f"numerics={mode!r} is not one of {', '.join(NUMERICS_MODES)}"]
+    if mode == "blas":
+        platform = cell.get("numerics_platform")
+        if not isinstance(platform, str) or not platform.strip():
+            return ["numerics='blas' needs a non-empty numerics_platform"]
+    return []
+
+
+def expected_corpus_numerics(directory: str) -> str:
+    """The mode a corpus directory is named for: `*_blas` is blas, all else exact."""
+    return "blas" if directory.endswith(BLAS_CORPUS_SUFFIX) else "exact"
+
+
+def corpus_homogeneity_problems(directory: str, cells) -> list[str]:
+    """One numerics value per corpus directory, matching the directory's name.
+
+    ``cells`` is an iterable of ``(name, cell)`` for everything under one
+    corpus directory. Exact and blas cells legitimately differ in the last
+    bits, so a pooled corpus would mix two arithmetics under one verdict. Two
+    ways to fail, both reported: the cells disagree among themselves, or they
+    agree but not with what the directory is named for (an exact corpus that
+    holds a blas cell, or a ``*_blas`` directory that holds an exact one).
+    A cell with an invalid ``numerics`` is reported by `numerics_problems`
+    and counted here under its raw value, never silently as exact.
+    """
+    cells = list(cells)
+    by_mode: dict[str, list[str]] = {}
+    for name, cell in cells:
+        by_mode.setdefault(repr(cell_numerics(cell)), []).append(name)
+    problems: list[str] = []
+    if len(by_mode) > 1:
+        summary = ", ".join(f"{mode}: {len(names)}" for mode, names in sorted(by_mode.items()))
+        problems.append(f"{directory}: mixed numerics in one corpus ({summary})")
+    expected = repr(expected_corpus_numerics(directory))
+    for mode, names in sorted(by_mode.items()):
+        if mode != expected:
+            problems.append(
+                f"{directory}: {len(names)} cell(s) with numerics={mode} in a "
+                f"corpus whose name says {expected} (first: {sorted(names)[0]})")
+    return problems
+
+
 def _number(cell: dict, field: str, problems: list[str]):
     """Fetch a numeric field, or record why it could not be read.
 
@@ -205,6 +271,7 @@ def validity_problems(cell: dict, spec: dict | None = None) -> list[str]:
         if forward is not None and forward != 0:
             problems.append(f"non_finite_forward={forward}")
 
+    problems.extend(numerics_problems(cell))
     problems.extend(_temporal_problems(cell, spec))
     problems.extend(_plan_agreement_problems(cell, spec))
     problems.extend(_gradient_problems(cell))
@@ -356,6 +423,13 @@ def _plan_agreement_problems(cell: dict, spec: dict | None) -> list[str]:
     if spec is None:
         return []
     problems: list[str] = []
+    # Arithmetic mode: a plan that names one must get it. Absent on either side
+    # means exact, so no archived plan or cell is affected, and an exact plan
+    # entry still accepts a cell that predates the field.
+    if spec.get("numerics") is not None and spec["numerics"] != cell_numerics(cell):
+        problems.append(
+            f"numerics={cell_numerics(cell)!r} but the plan asked for {spec['numerics']!r}"
+        )
     for plan_key, cell_key in PLAN_PINNED_FIELDS.items():
         if spec.get(plan_key) is None:
             continue

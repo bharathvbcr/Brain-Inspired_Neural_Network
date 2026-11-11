@@ -22,6 +22,13 @@ is not evidence — the parity fixture has atypically sparse frames.
     python scripts/gate_f_rust.py --cell rust__fixed-t100__adjacent-sum-5__h128__e20__s5170001
     python scripts/gate_f_rust.py --cheapest 6
     python scripts/gate_f_rust.py --all            # 216 cells, days
+    python scripts/gate_f_rust.py --numerics blas --cell <blas-recorded cell>
+
+`--numerics exact` (the default) is byte-identical to the gate before the flag
+existed. `--numerics blas` passes `--numerics blas` to `train-cell` and is only
+meaningful for a cell recorded in that mode: a recorded cell whose `numerics`
+(absent means exact) differs from the requested mode is never compared; it is
+`NUMERICS_MISMATCH`, an unrunnable cell, exactly like a timeout.
 """
 
 from __future__ import annotations
@@ -199,6 +206,17 @@ def initialization_paths(spec: dict[str, object]) -> tuple[Path, Path]:
     return weights, orders
 
 
+#: The two arithmetic modes of `shd-instrument train-cell --numerics`. A cell
+#: written before the flag existed carries no `numerics` and is exact.
+NUMERICS_MODES = ("exact", "blas")
+DEFAULT_NUMERICS = "exact"
+
+
+def cell_numerics(cell: dict[str, object]) -> object:
+    """The mode a cell was recorded in; absent means exact, as for every old cell."""
+    return cell.get("numerics", DEFAULT_NUMERICS)
+
+
 def _unrunnable(cell_id: str, status: str, detail: str, started: float,
                 timeout_s: float | None = None) -> dict[str, object]:
     """A cell the gate could not judge.
@@ -252,8 +270,13 @@ def run_cell(command: list[str], timeout_s: float) -> subprocess.CompletedProces
 
 
 def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
-                 floor: float = TIMEOUT_FLOOR_S) -> dict[str, object]:
+                 floor: float = TIMEOUT_FLOOR_S,
+                 numerics: str = DEFAULT_NUMERICS) -> dict[str, object]:
     started = time.monotonic()
+    if numerics not in NUMERICS_MODES:
+        return _unrunnable(cell_id, "ERROR",
+                           f"unknown numerics mode {numerics!r}; expected one of "
+                           f"{', '.join(NUMERICS_MODES)}", started)
     recorded_path = RESULT_ROOT / "cells" / f"{cell_id}.json"
     if not recorded_path.is_file():
         return _unrunnable(cell_id, "ERROR",
@@ -270,6 +293,18 @@ def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
         recorded = json.loads(recorded_path.read_text())
     except json.JSONDecodeError as exc:
         return _unrunnable(cell_id, "ERROR", f"recorded cell is not readable json: {exc}", started)
+    # A cell recorded in one arithmetic mode is not evidence about the other:
+    # exact and blas legitimately differ in the last bits, so comparing across
+    # them would report a REGRESSION that is not one (or, worse, a pass). It is
+    # a cell the gate could not judge, not a verdict on the kernel.
+    if not isinstance(recorded, dict):
+        return _unrunnable(cell_id, "ERROR", "recorded cell is not a json object", started)
+    if cell_numerics(recorded) != numerics:
+        return _unrunnable(
+            cell_id, "NUMERICS_MISMATCH",
+            f"recorded with numerics={cell_numerics(recorded)!r} "
+            f"(absent means exact) but this run asked for {numerics!r}; "
+            "not compared", started)
     weights, orders = initialization_paths(spec)
     for path in (weights, orders):
         if not path.is_file():
@@ -299,6 +334,9 @@ def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
         # naming it here turns a mismatched artifact into an error instead
         # of a silently different cell.
         *(["--arm", str(spec["arm"])] if spec.get("arm", DEFAULT_ARM) != DEFAULT_ARM else []),
+        # Omitted for exact so the command line is byte-identical to the one
+        # this gate has always issued; the instrument's default is exact.
+        *(["--numerics", numerics] if numerics != DEFAULT_NUMERICS else []),
     ]
     try:
         completed = run_cell(command, timeout_s)
@@ -323,6 +361,16 @@ def regress_cell(cell_id: str, binary: Path, factor: float = TIMEOUT_FACTOR,
     except json.JSONDecodeError as exc:
         return _unrunnable(cell_id, "ERROR", f"the written cell is not readable json: {exc}",
                            started, timeout_s)
+
+    # The binary must have run the mode that was asked for. An older binary that
+    # ignores the flag, or one built without it, would otherwise be compared in
+    # the wrong arithmetic and could pass or fail for the wrong reason.
+    if not isinstance(observed, dict) or cell_numerics(observed) != numerics:
+        got = cell_numerics(observed) if isinstance(observed, dict) else None
+        return _unrunnable(
+            cell_id, "NUMERICS_MISMATCH",
+            f"asked the instrument for numerics={numerics!r} but the cell it "
+            f"wrote says {got!r}; not compared", started, timeout_s)
 
     mismatches: dict[str, object] = {}
     compared_fields: list[str] = []
@@ -379,7 +427,8 @@ RAN = ("BIT_IDENTICAL", "REGRESSION")
 
 
 def write_report(binary: Path, binary_sha: str, results: list[dict[str, object]],
-                 note: str | None = None) -> tuple[Path, int, int]:
+                 note: str | None = None,
+                 numerics: str = DEFAULT_NUMERICS) -> tuple[Path, int, int]:
     regressions = sum(r["status"] == "REGRESSION" for r in results)
     unrunnable = sum(r["status"] not in RAN for r in results)
     if regressions:
@@ -391,6 +440,7 @@ def write_report(binary: Path, binary_sha: str, results: list[dict[str, object]]
     payload = {
         "binary": str(binary),
         "binary_sha256": binary_sha,
+        "numerics": numerics,
         "cells": len(results),
         "compared": sum(r["status"] in RAN for r in results),
         "failures": regressions,
@@ -420,6 +470,10 @@ def main(argv=None) -> int:
     parser.add_argument("--cheapest", type=int, help="regress the N fastest recorded cells")
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--binary", type=Path, default=DEFAULT_BINARY)
+    parser.add_argument(
+        "--numerics", choices=NUMERICS_MODES, default=DEFAULT_NUMERICS,
+        help="arithmetic mode of the re-run; only cells recorded in this mode "
+             "can be compared (default exact)")
     parser.add_argument(
         "--timeout-factor", type=float, default=TIMEOUT_FACTOR,
         help=f"multiple of each cell's recorded wall clock (default {TIMEOUT_FACTOR:g})")
@@ -454,6 +508,7 @@ def main(argv=None) -> int:
     print(f"binary: {args.binary}")
     print(f"sha256: {binary_sha_before}")
     print(f"cells:  {len(cells)}")
+    print(f"numerics: {args.numerics}")
     print(f"budget: max({args.timeout_floor:.0f}s, {args.timeout_factor:g}x "
           f"each cell's recorded wall clock)\n")
     results: list[dict[str, object]] = []
@@ -461,7 +516,8 @@ def main(argv=None) -> int:
     try:
         for cell_id in cells:
             result = regress_cell(cell_id, args.binary,
-                                  args.timeout_factor, args.timeout_floor)
+                                  args.timeout_factor, args.timeout_floor,
+                                  args.numerics)
             results.append(result)
             marker = {"BIT_IDENTICAL": "  ok ", "REGRESSION": " FAIL"}.get(
                 result["status"], " ????")
@@ -486,7 +542,8 @@ def main(argv=None) -> int:
         # Record before raising: these results are unattributable, and a report
         # that says so is worth more than no report.
         write_report(args.binary, binary_sha_before, results,
-                     note="binary changed mid-run; results span two kernels")
+                     note="binary changed mid-run; results span two kernels",
+                     numerics=args.numerics)
         raise RuntimeError(
             "the binary changed while the gate was running:\n"
             f"  before {binary_sha_before}\n  after  {binary_sha_after}\n"
@@ -495,7 +552,7 @@ def main(argv=None) -> int:
         )
 
     report, regressions, unrunnable = write_report(
-        args.binary, binary_sha_before, results, note)
+        args.binary, binary_sha_before, results, note, args.numerics)
     compared = len(results) - unrunnable
     print(f"\n{compared - regressions}/{compared} bit-identical", end="")
     if unrunnable:

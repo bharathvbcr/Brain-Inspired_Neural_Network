@@ -51,6 +51,8 @@ TRUTH = {
 FAKE = r'''#!/usr/bin/env python3
 import json, os, subprocess, sys, time
 mode = os.environ["FAKE_MODE"]
+if os.environ.get("FAKE_ARGV"):
+    open(os.environ["FAKE_ARGV"], "w").write(json.dumps(sys.argv[1:]))
 out = sys.argv[sys.argv.index("--out") + 1]
 truth = json.loads(os.environ["FAKE_TRUTH"])
 if mode == "grandchild":
@@ -74,6 +76,14 @@ if mode == "mismatch":
     truth["accuracy"] = 0.5
 if mode == "trace_drift":
     truth["epoch_mean_loss"] = [2.9, 2.7]
+# What a real instrument does: the cell says which arithmetic produced it.
+# FAKE_EMIT_NUMERICS="" writes no key (a pre-flag binary); mode "ignore_flag"
+# is a binary that was asked for blas and wrote an exact cell.
+emit = os.environ.get("FAKE_EMIT_NUMERICS")
+if emit:
+    truth["numerics"] = emit
+    if emit == "blas":
+        truth["numerics_platform"] = "macOS 26.1 (25B78)"
 json.dump(truth, open(out, "w"))
 '''
 
@@ -94,16 +104,30 @@ class Harness:
         self.binary.write_text(FAKE)
         self.binary.chmod(0o755)
 
-    def run(self, mode: str, factor: float = 20.0, floor: float = 900.0) -> dict:
+    def run(self, mode: str, factor: float = 20.0, floor: float = 900.0,
+            numerics: str | None = None) -> dict:
         os.environ["FAKE_MODE"] = mode
         os.environ["FAKE_TRUTH"] = json.dumps(TRUTH)
-        return G.regress_cell(CELL, self.binary, factor, floor)
+        if numerics is None:
+            return G.regress_cell(CELL, self.binary, factor, floor)
+        return G.regress_cell(CELL, self.binary, factor, floor, numerics)
+
+    def record(self, extra: dict) -> None:
+        """Rewrite the recorded cell with extra keys (numerics, platform)."""
+        (self.dir / "cells" / f"{CELL}.json").write_text(json.dumps({**TRUTH, **extra}))
+
+    def capture_argv(self) -> Path:
+        path = self.dir / "argv.json"
+        os.environ["FAKE_ARGV"] = str(path)
+        return path
 
     @property
     def observation(self) -> Path:
         return self.dir / "gate-f-rust" / f"{CELL}.json"
 
     def close(self) -> None:
+        for key in ("FAKE_ARGV", "FAKE_EMIT_NUMERICS"):
+            os.environ.pop(key, None)
         G.RESULT_ROOT = self.saved
         shutil.rmtree(self.dir, ignore_errors=True)
 
@@ -381,6 +405,144 @@ def a_forever_budget_cannot_be_requested(h):
             assert exc.code == 2, exc.code
         else:
             raise AssertionError(f"{bad} was accepted; the gate would wait forever")
+
+
+# ------------------------------------------------------------------ numerics
+
+
+@harnessed
+def exact_mode_issues_the_command_line_the_gate_always_did(h):
+    """Byte-identical to the pre-flag gate: no `--numerics` token at all."""
+    argv_path = h.capture_argv()
+    for kwargs in ({}, {"numerics": "exact"}):
+        argv_path.unlink(missing_ok=True)
+        assert h.run("match", **kwargs)["status"] == "BIT_IDENTICAL"
+        argv = json.loads(argv_path.read_text())
+        expected = [
+            "train-cell",
+            "--train-events", str(G.EVENT_ROOT / "train.events"),
+            "--test-events", str(G.EVENT_ROOT / "test.events"),
+            "--contract", "fixed-t100",
+            "--geometry", "adjacent-sum-5",
+            "--weights", str(h.dir / "initialization" / "n140-h128-s5170001.weights"),
+            "--orders", str(h.dir / "initialization" / "n8156-e100-s5170001.orders"),
+            "--epochs", "20",
+            "--out", str(h.observation),
+        ]
+        assert argv == expected, argv
+
+
+@harnessed
+def blas_mode_passes_numerics_blas_to_train_cell(h):
+    argv_path = h.capture_argv()
+    h.record({"numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"})
+    os.environ["FAKE_EMIT_NUMERICS"] = "blas"
+    r = h.run("match", numerics="blas")
+    assert r["status"] == "BIT_IDENTICAL", r
+    argv = json.loads(argv_path.read_text())
+    assert argv.count("--numerics") == 1, argv
+    assert argv[argv.index("--numerics") + 1] == "blas", argv
+
+
+@harnessed
+def a_blas_run_over_an_exact_record_is_numerics_mismatch(h):
+    """The recorded cell has no `numerics`, i.e. exact; blas must not compare."""
+    argv_path = h.capture_argv()
+    r = h.run("match", numerics="blas")
+    assert r["status"] == "NUMERICS_MISMATCH", r
+    assert "mismatches" not in r, "an unjudged cell must carry no mismatch set"
+    assert r["status"] not in G.RAN, r
+    assert not argv_path.exists(), "the instrument must not even be started"
+
+
+@harnessed
+def an_exact_run_over_a_blas_record_is_numerics_mismatch(h):
+    h.record({"numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"})
+    r = h.run("match")
+    assert r["status"] == "NUMERICS_MISMATCH", r
+    assert r["status"] not in G.RAN, r
+
+
+@harnessed
+def an_explicit_exact_record_is_comparable_in_exact_mode(h):
+    h.record({"numerics": "exact"})
+    os.environ["FAKE_EMIT_NUMERICS"] = "exact"
+    r = h.run("match")
+    assert r["status"] == "BIT_IDENTICAL", r
+
+
+@harnessed
+def a_mismatch_is_never_a_regression_even_when_the_values_differ(h):
+    """A blas record against an exact re-run that disagrees on accuracy."""
+    h.record({"numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"})
+    r = h.run("mismatch")
+    assert r["status"] == "NUMERICS_MISMATCH", r
+
+
+@harnessed
+def a_binary_that_ignores_the_blas_flag_is_not_compared(h):
+    """Asked for blas, the instrument wrote an exact cell: not comparable."""
+    h.record({"numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"})
+    os.environ["FAKE_EMIT_NUMERICS"] = "exact"
+    r = h.run("match", numerics="blas")
+    assert r["status"] == "NUMERICS_MISMATCH", r
+    assert "wrote" in r["detail"], r
+
+
+@harnessed
+def an_unknown_numerics_mode_is_an_error(h):
+    r = h.run("match", numerics="fast")
+    assert r["status"] == "ERROR", r
+
+
+@harnessed
+def a_numerics_mismatch_is_not_counted_as_passed(h):
+    """Summary line and exit code say "could not run", never PASS."""
+    import contextlib
+    import io
+
+    os.environ["FAKE_MODE"] = "match"
+    os.environ["FAKE_TRUTH"] = json.dumps(TRUTH)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = G.main(["--cell", CELL, "--binary", str(h.binary), "--numerics", "blas"])
+    out = buf.getvalue()
+    assert code == G.EXIT_UNRUNNABLE, code
+    assert "0/0 bit-identical, 1 could not run -> FAIL" in out, out
+    assert "NUMERICS_MISMATCH" in out, out
+    report = json.loads((h.dir / "gate-f-rust" / "report.json").read_text())
+    assert report["status"] == "INCOMPLETE", report
+    assert report["compared"] == 0 and report["unrunnable"] == 1, report
+    assert report["numerics"] == "blas", report
+
+
+@harnessed
+def main_runs_blas_end_to_end_over_a_blas_record(h):
+    h.record({"numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"})
+    os.environ["FAKE_EMIT_NUMERICS"] = "blas"
+    os.environ["FAKE_MODE"] = "match"
+    os.environ["FAKE_TRUTH"] = json.dumps(TRUTH)
+    assert G.main(["--cell", CELL, "--binary", str(h.binary),
+                   "--numerics", "blas"]) == G.EXIT_PASS
+    # the same record under the default mode is unjudged, not a pass
+    assert G.main(["--cell", CELL, "--binary", str(h.binary)]) == G.EXIT_UNRUNNABLE
+
+
+@harnessed
+def the_numerics_flag_rejects_unknown_modes(h):
+    try:
+        G.main(["--cell", CELL, "--binary", str(h.binary), "--numerics", "fast"])
+    except SystemExit as exc:
+        assert exc.code == 2, exc.code
+    else:
+        raise AssertionError("--numerics fast was accepted")
+
+
+@harnessed
+def numerics_is_not_a_compared_field(h):
+    """Coupled to the frozen analysers through test_reproduction_check."""
+    assert "numerics" not in G.COMPARED_FIELDS
+    assert "numerics_platform" not in G.COMPARED_FIELDS
 
 
 CHECKS = [v for k, v in sorted(globals().items())
