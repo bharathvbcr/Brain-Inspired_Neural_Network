@@ -1,0 +1,101 @@
+{
+  "epochs": 2,
+  "fixtures": {
+    "attn-bin-shuffled": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-channels-700": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-d24l1": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-d30l4": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-d32l1": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-fixed-t100": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-hidden-shuffled": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-published-10ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-published-4ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-readout-no-position": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-readout-no-position-qk-norm": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "attn-readout-qk-norm": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-ff-alif-fixed-t100": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-h128-adjacent-sum-5-fixed-t100": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-h128-adjacent-sum-5-fixed-t250": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-h512-channels-700-fixed-t500": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-h512-channels-700-published-2ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-rec-alif-p2ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "base-rec-fixed-p2ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "ff-alif-attn-d32l4": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "oracle-ff-fixed-attn-d32l4-p2ms": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "rec-alif-attn-d32l4": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    },
+    "rec-fixed-attn-d32l4": {
+      "cell_sha256": null,
+      "weights_sha256": null
+    }
+  },
+  "numerics": "blas",
+  "numerics_platform": null,
+  "schema": "train-cell-fixtures-v1",
+  "seed": 5170001
+}

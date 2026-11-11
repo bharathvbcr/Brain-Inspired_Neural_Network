@@ -10,6 +10,17 @@ with a known-good binary. A later binary must reproduce every one byte-for-byte.
     python3 scripts/train_cell_fixtures.py --binary target/release/shd-instrument
     python3 scripts/train_cell_fixtures.py --binary ... --record     # (re)write the json
     python3 scripts/train_cell_fixtures.py --binary ... --only oracle --jobs 3
+    python3 scripts/train_cell_fixtures.py --binary ... --numerics blas --record
+    python3 scripts/train_cell_fixtures.py --binary ... --numerics blas
+
+`--numerics exact` (the default) is the matrix above, unchanged. `--numerics
+blas` runs the same 23 fixtures with `--numerics blas` passed to `train-cell`
+and reads/writes `train_cell_fixtures_blas.json`. Its expected hashes ship as
+null until a reference build records them: a null hash is `ERROR`, never `PASS`
+and never a comparison. The pinned oracle weights hash belongs to exact mode
+(blas legitimately differs in the last bits), so `--record` in blas mode checks
+instead that every fixture's cell says `numerics: blas` with a platform, and
+that every cell agrees on that platform, which is stored beside the hashes.
 
 `--events` defaults to `data/shd/events` under this checkout; a git worktree has
 no `data/` (it is not tracked), so pass the main checkout's directory there. A
@@ -50,6 +61,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_JSON = Path(__file__).resolve().with_suffix(".json")
+FIXTURE_JSON_BLAS = FIXTURE_JSON.with_name(FIXTURE_JSON.stem + "_blas.json")
+NUMERICS_MODES = ("exact", "blas")
+DEFAULT_NUMERICS = "exact"
 DEFAULT_EVENTS = ROOT / "data" / "shd" / "events"
 DEFAULT_OUT = Path(
     "/private/tmp/claude-501/-Users-bharath-Code-devtools-GitPulse/"
@@ -204,7 +218,13 @@ def init_command(fx: Fixture, binary: Path, work: Path) -> list[str]:
     return cmd
 
 
-def train_command(fx: Fixture, binary: Path, work: Path, events: Path) -> list[str]:
+def fixtures_path(numerics: str) -> Path:
+    """The recorded-hash file for a mode: exact and blas never share one."""
+    return FIXTURE_JSON_BLAS if numerics == "blas" else FIXTURE_JSON
+
+
+def train_command(fx: Fixture, binary: Path, work: Path, events: Path,
+                  numerics: str = DEFAULT_NUMERICS) -> list[str]:
     cmd = [
         str(binary), "train-cell",
         "--train-events", str(events / "train.events"),
@@ -225,14 +245,26 @@ def train_command(fx: Fixture, binary: Path, work: Path, events: Path) -> list[s
     if fx.temporal:
         # The instrument refuses a manipulated run without an explicit seed.
         cmd += ["--temporal", fx.temporal, "--temporal-seed", str(SEED)]
+    # Only for blas: the exact command line is what it always was.
+    if numerics == "blas":
+        cmd += ["--numerics", "blas"]
     return cmd
 
 
 def judge(name: str, observed: dict[str, str], recorded: dict[str, dict[str, str]]) -> dict:
     """Compare one observation with the recorded hashes."""
-    want = recorded.get(name)
-    if want is None:
+    if name not in recorded:
         return {"status": UNRECORDED, "detail": "no recorded hash for this fixture"}
+    want = recorded[name]
+    # A fixture that is listed but carries null hashes (the blas file before a
+    # reference build records it) has nothing to compare against. That is not a
+    # mismatch and above all not a pass: it could not be judged.
+    keys = ("weights_sha256", "cell_sha256")
+    if not isinstance(want, dict) or any(not isinstance(want.get(k), str) or not want[k]
+                                         for k in keys):
+        return {"status": ERROR,
+                "detail": "the recorded hashes for this fixture are null or missing; "
+                          "record them with a reference build (--record) before comparing"}
     bad = {
         key: {"recorded": want.get(key), "observed": observed.get(key)}
         for key in ("weights_sha256", "cell_sha256")
@@ -291,8 +323,14 @@ def run_bounded(command: list[str], timeout_s: float, log: Path) -> int:
             raise
 
 
+def numerics_of_cell(cell_json_text: str) -> tuple[object, object]:
+    """(`numerics`, `numerics_platform`) a cell declares; absent numerics is exact."""
+    cell = json.loads(cell_json_text)
+    return cell.get("numerics", "exact"), cell.get("numerics_platform")
+
+
 def run_fixture(fx: Fixture, binary: Path, out: Path, events: Path,
-                timeout_s: float) -> dict:
+                timeout_s: float, numerics: str = DEFAULT_NUMERICS) -> dict:
     started = time.monotonic()
     work = out / fx.name
     work.mkdir(parents=True, exist_ok=True)
@@ -301,13 +339,15 @@ def run_fixture(fx: Fixture, binary: Path, out: Path, events: Path,
     for leftover in ("init.weights", "orders.bin", "cell.json", "final.weights"):
         (work / leftover).unlink(missing_ok=True)
 
-    def result(status: str, detail: object, observed: dict | None = None) -> dict:
+    def result(status: str, detail: object, observed: dict | None = None,
+               platform: object = None) -> dict:
         return {"name": fx.name, "status": status, "detail": detail,
-                "observed": observed or {}, "secs": round(time.monotonic() - started, 1)}
+                "observed": observed or {}, "platform": platform,
+                "secs": round(time.monotonic() - started, 1)}
 
     deadline = started + timeout_s
     for label, command in (("init", init_command(fx, binary, work)),
-                           ("train-cell", train_command(fx, binary, work, events))):
+                           ("train-cell", train_command(fx, binary, work, events, numerics))):
         remaining = max(1.0, deadline - time.monotonic())
         try:
             code = run_bounded(command, remaining, work / f"{label}.log")
@@ -323,19 +363,34 @@ def run_fixture(fx: Fixture, binary: Path, out: Path, events: Path,
         if not path.is_file() or path.stat().st_size == 0:
             return result(ERROR, f"train-cell exited 0 without writing {needed}")
     try:
+        cell_text = (work / "cell.json").read_text()
         observed = {
             "weights_sha256": sha256_file(work / "final.weights"),
-            "cell_sha256": canonical_cell_sha256((work / "cell.json").read_text()),
+            "cell_sha256": canonical_cell_sha256(cell_text),
         }
+        got, platform = numerics_of_cell(cell_text)
     except (OSError, ValueError) as exc:
         return result(ERROR, f"could not hash the outputs: {exc}")
-    return result("RAN", "", observed)
+    # The binary must have run the arithmetic that was asked for. One that
+    # ignores or lacks the flag would otherwise be hashed (and recorded, or
+    # compared) as the wrong mode. Exact accepts an absent key: a binary from
+    # before the flag is exact by definition.
+    if got != numerics:
+        return result(ERROR, f"asked for numerics={numerics!r} but the cell says {got!r}")
+    if numerics == "blas" and not (isinstance(platform, str) and platform.strip()):
+        return result(ERROR, "a blas cell carries no numerics_platform")
+    return result("RAN", "", observed, platform)
 
 
-def load_recorded(path: Path) -> dict[str, dict[str, str]]:
+def load_recorded(path: Path, numerics: str = DEFAULT_NUMERICS) -> dict[str, dict[str, str]]:
     payload = json.loads(path.read_text())
     if payload.get("schema") != SCHEMA:
         raise SystemExit(f"{path}: schema is not {SCHEMA}")
+    # The exact file has no `numerics` key (it predates the flag): absent is
+    # exact. Hashes from one mode must never be compared against the other.
+    recorded_mode = payload.get("numerics", "exact")
+    if recorded_mode != numerics:
+        raise ValueError(f"{path} records numerics={recorded_mode!r}, not {numerics!r}")
     return payload["fixtures"]
 
 
@@ -345,7 +400,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--record", action="store_true", help="write the expected hashes")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help="scratch directory")
     parser.add_argument("--events", type=Path, default=DEFAULT_EVENTS)
-    parser.add_argument("--fixtures-json", type=Path, default=FIXTURE_JSON)
+    parser.add_argument("--numerics", choices=NUMERICS_MODES, default=DEFAULT_NUMERICS,
+                        help="arithmetic mode: exact (default) or blas")
+    parser.add_argument("--fixtures-json", type=Path, default=None,
+                        help="recorded hashes (default: train_cell_fixtures.json for exact, "
+                             "train_cell_fixtures_blas.json for blas)")
     parser.add_argument("--only", action="append", help="run just this fixture (repeatable)")
     parser.add_argument("--jobs", type=int, default=1, help="fixtures run concurrently")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_S,
@@ -357,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
         for fx in FIXTURES:
             print(fx.name)
         return 0
+    if args.fixtures_json is None:
+        args.fixtures_json = fixtures_path(args.numerics)
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
     if args.record and args.only:
@@ -369,15 +430,16 @@ def main(argv: list[str] | None = None) -> int:
     recorded: dict[str, dict[str, str]] = {}
     if not args.record:
         try:
-            recorded = load_recorded(args.fixtures_json)
-        except (OSError, json.JSONDecodeError, KeyError) as exc:
+            recorded = load_recorded(args.fixtures_json, args.numerics)
+        except (OSError, ValueError, KeyError) as exc:
             print(f"ERROR: cannot read {args.fixtures_json}: {exc}", file=sys.stderr)
             return 2
     args.out.mkdir(parents=True, exist_ok=True)
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         runs = list(pool.map(
-            lambda fx: run_fixture(fx, binary, args.out, args.events, args.timeout), fixtures))
+            lambda fx: run_fixture(fx, binary, args.out, args.events, args.timeout,
+                                 args.numerics), fixtures))
 
     rows = []
     for run in runs:
@@ -394,14 +456,27 @@ def main(argv: list[str] | None = None) -> int:
         if any(r["status"] != "RAN" for r in rows):
             print("FAIL: not recording; some fixtures did not run", file=sys.stderr)
             return 1
-        oracle = next((r for r in rows if r["name"] == ORACLE_NAME), None)
-        if oracle is None or oracle["observed"]["weights_sha256"] != ORACLE_WEIGHTS_SHA256:
-            got = oracle["observed"]["weights_sha256"] if oracle else None
-            print(f"FAIL: the oracle weights hash is {got}, not {ORACLE_WEIGHTS_SHA256}; "
-                  "this binary is not the reference, nothing recorded", file=sys.stderr)
-            return 1
+        extra: dict[str, object] = {}
+        if args.numerics == "exact":
+            oracle = next((r for r in rows if r["name"] == ORACLE_NAME), None)
+            if oracle is None or oracle["observed"]["weights_sha256"] != ORACLE_WEIGHTS_SHA256:
+                got = oracle["observed"]["weights_sha256"] if oracle else None
+                print(f"FAIL: the oracle weights hash is {got}, not {ORACLE_WEIGHTS_SHA256}; "
+                      "this binary is not the reference, nothing recorded", file=sys.stderr)
+                return 1
+        else:
+            # No pinned reference exists for blas, so the guard is consistency:
+            # one platform for the whole matrix, because the hashes are only
+            # meaningful on the OS build that produced them.
+            platforms = sorted({str(r["platform"]) for r in rows})
+            if len(platforms) != 1:
+                print(f"FAIL: fixtures ran on {len(platforms)} platforms "
+                      f"({', '.join(platforms)}); nothing recorded", file=sys.stderr)
+                return 1
+            extra = {"numerics": "blas", "numerics_platform": platforms[0]}
         payload = {
             "schema": SCHEMA,
+            **extra,
             "seed": SEED,
             "epochs": EPOCHS,
             "fixtures": {r["name"]: r["observed"] for r in rows},

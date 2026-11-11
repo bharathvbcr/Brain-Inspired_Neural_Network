@@ -44,6 +44,11 @@ if mode == "empty-cell":
 seed_text = "|".join(a for a in argv if not a.startswith("/"))
 payload = {{"arm": flag("--arm"), "accuracy": len(seed_text), "wall_secs": __import__("time").time(),
             "emitted_unix_s": 1, "emitted_utc": "now"}}
+if flag("--numerics") == "blas" and mode != "noblas":
+    payload["numerics"] = "blas"
+    payload["numerics_platform"] = "macOS 26.1 (25B78)" if mode != "noplatform" else ""
+elif mode == "noblas":
+    payload["numerics"] = "exact"
 open(flag("--out"), "w").write(json.dumps(payload))
 body = (seed_text if mode != "other" else seed_text + "x").encode()
 open(flag("--save-final-weights"), "wb").write(body)
@@ -275,6 +280,147 @@ class MainTests(unittest.TestCase):
         payload["fixtures"]["retired-fixture"] = {"weights_sha256": "x", "cell_sha256": "y"}
         self.json.write_text(json.dumps(payload))
         self.assertEqual(F.main(self.args), 1)
+
+
+class NumericsCommandTests(unittest.TestCase):
+    def fx(self) -> "F.Fixture":
+        return next(f for f in F.FIXTURES if f.name == F.ORACLE_NAME)
+
+    def test_exact_commands_never_carry_the_flag(self) -> None:
+        for fx in F.FIXTURES:
+            default = F.train_command(fx, Path("/b"), Path("/w"), Path("/e"))
+            explicit = F.train_command(fx, Path("/b"), Path("/w"), Path("/e"), "exact")
+            self.assertEqual(default, explicit, fx.name)
+            self.assertNotIn("--numerics", default, fx.name)
+
+    def test_blas_appends_exactly_the_flag_to_train_cell_only(self) -> None:
+        for fx in F.FIXTURES:
+            exact = F.train_command(fx, Path("/b"), Path("/w"), Path("/e"))
+            blas = F.train_command(fx, Path("/b"), Path("/w"), Path("/e"), "blas")
+            self.assertEqual(blas, [*exact, "--numerics", "blas"], fx.name)
+            self.assertNotIn("--numerics", F.init_command(fx, Path("/b"), Path("/w")), fx.name)
+
+    def test_each_mode_selects_its_own_hash_file(self) -> None:
+        self.assertEqual(F.fixtures_path("exact"), F.FIXTURE_JSON)
+        self.assertEqual(F.fixtures_path("blas"), F.FIXTURE_JSON_BLAS)
+        self.assertNotEqual(F.FIXTURE_JSON, F.FIXTURE_JSON_BLAS)
+        self.assertEqual(F.FIXTURE_JSON_BLAS.name, "train_cell_fixtures_blas.json")
+
+    def test_the_committed_blas_file_lists_every_fixture_with_null_hashes(self) -> None:
+        payload = json.loads(F.FIXTURE_JSON_BLAS.read_text())
+        self.assertEqual(payload["numerics"], "blas")
+        self.assertEqual(sorted(payload["fixtures"]), sorted(fx.name for fx in F.FIXTURES))
+        self.assertEqual(len(payload["fixtures"]), 23)
+        hashes = [h for entry in payload["fixtures"].values() for h in entry.values()]
+        self.assertEqual(len(hashes), 46)
+        self.assertEqual(hashes.count(None), 46, "no blas hash may be recorded before a reference build")
+
+    def test_the_exact_file_is_untouched_by_the_flag(self) -> None:
+        payload = json.loads(F.FIXTURE_JSON.read_text())
+        self.assertNotIn("numerics", payload)
+        self.assertEqual(sorted(payload["fixtures"]), sorted(fx.name for fx in F.FIXTURES))
+        for entry in payload["fixtures"].values():
+            self.assertEqual(sorted(entry), ["cell_sha256", "weights_sha256"])
+            self.assertTrue(all(isinstance(h, str) and len(h) == 64 for h in entry.values()))
+
+
+class NullHashTests(unittest.TestCase):
+    OBS = {"weights_sha256": "w", "cell_sha256": "c"}
+
+    def test_null_hashes_are_an_error_never_a_pass_or_a_comparison(self) -> None:
+        for entry in ({"weights_sha256": None, "cell_sha256": None},
+                      {"weights_sha256": "w", "cell_sha256": None},
+                      {"weights_sha256": None, "cell_sha256": "c"},
+                      {"weights_sha256": "", "cell_sha256": "c"},
+                      {}, None):
+            verdict = F.judge("a", self.OBS, {"a": entry})
+            self.assertEqual(verdict["status"], F.ERROR, entry)
+            self.assertIn("null or missing", verdict["detail"])
+
+    def test_a_null_entry_cannot_match_a_null_observation(self) -> None:
+        """None == None must not read as agreement."""
+        verdict = F.judge("a", {"weights_sha256": None, "cell_sha256": None},
+                          {"a": {"weights_sha256": None, "cell_sha256": None}})
+        self.assertEqual(verdict["status"], F.ERROR)
+
+    def test_a_null_entry_fails_the_exit_code(self) -> None:
+        self.assertEqual(F.verdict_exit_code([F.PASS, F.ERROR]), 1)
+
+
+class BlasMainTests(unittest.TestCase):
+    """End to end in blas mode with the fake instrument and a one-fixture matrix."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self.fake = Fake(self.root)
+        self.json = self.root / "fixtures_blas.json"
+        self._saved = F.FIXTURES
+        self.oracle = next(f for f in F.FIXTURES if f.name == F.ORACLE_NAME)
+        F.FIXTURES = (self.oracle,)
+        self.args = ["--binary", str(self.fake.binary), "--out", str(self.root / "out"),
+                     "--fixtures-json", str(self.json), "--events", str(self.root / "ev"),
+                     "--numerics", "blas"]
+
+    def tearDown(self) -> None:
+        F.FIXTURES = self._saved
+        self._tmp.cleanup()
+
+    def write_null_file(self) -> None:
+        self.json.write_text(json.dumps({
+            "schema": F.SCHEMA, "numerics": "blas", "numerics_platform": None,
+            "fixtures": {F.ORACLE_NAME: {"weights_sha256": None, "cell_sha256": None}}}))
+
+    def test_compare_against_null_hashes_is_an_error_exit_1(self) -> None:
+        self.write_null_file()
+        self.assertEqual(F.main(self.args), 1)
+
+    def test_blas_record_needs_no_oracle_pin_and_records_the_platform(self) -> None:
+        # The exact oracle pin does not apply to blas; this fake would miss it.
+        self.assertEqual(F.main([*self.args, "--record"]), 0)
+        payload = json.loads(self.json.read_text())
+        self.assertEqual(payload["numerics"], "blas")
+        self.assertEqual(payload["numerics_platform"], "macOS 26.1 (25B78)")
+        entry = payload["fixtures"][F.ORACLE_NAME]
+        self.assertTrue(all(isinstance(entry[k], str) and len(entry[k]) == 64 for k in entry))
+
+    def test_blas_record_then_compare_round_trips(self) -> None:
+        self.write_null_file()
+        self.assertEqual(F.main(self.args), 1)
+        self.assertEqual(F.main([*self.args, "--record"]), 0)
+        self.assertEqual(F.main(self.args), 0)
+        self.fake.set("other")
+        self.assertEqual(F.main(self.args), 1)
+
+    def test_the_exact_oracle_pin_still_guards_exact_record(self) -> None:
+        args = [a for a in self.args if a not in ("--numerics", "blas")]
+        self.assertEqual(F.main([*args, "--record"]), 1)
+        self.assertFalse(self.json.exists())
+
+    def test_a_binary_that_ignores_the_flag_is_an_error_not_a_record(self) -> None:
+        self.fake.set("noblas")
+        self.assertEqual(F.main([*self.args, "--record"]), 1)
+        self.assertFalse(self.json.exists())
+
+    def test_a_blas_cell_without_a_platform_is_an_error(self) -> None:
+        self.fake.set("noplatform")
+        result = F.run_fixture(self.oracle, self.fake.binary, self.root / "p",
+                               self.root / "ev", 30.0, "blas")
+        self.assertEqual(result["status"], F.ERROR)
+        self.assertIn("numerics_platform", result["detail"])
+
+    def test_hashes_do_not_cross_modes(self) -> None:
+        """A blas file refuses an exact run and an exact file refuses a blas run."""
+        self.assertEqual(F.main([*self.args, "--record"]), 0)
+        exact_args = [a for a in self.args if a not in ("--numerics", "blas")]
+        self.assertEqual(F.main(exact_args), 2)
+        exact_json = self.root / "exact.json"
+        exact_json.write_text(json.dumps({
+            "schema": F.SCHEMA,
+            "fixtures": {F.ORACLE_NAME: {"weights_sha256": "w", "cell_sha256": "c"}}}))
+        swapped = [*exact_args[:exact_args.index("--fixtures-json") + 1], str(exact_json),
+                   *exact_args[exact_args.index("--fixtures-json") + 2:], "--numerics", "blas"]
+        self.assertEqual(F.main(swapped), 2)
 
 
 if __name__ == "__main__":

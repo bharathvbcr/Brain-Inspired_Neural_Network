@@ -96,7 +96,26 @@ def train_command(binary: str, spec: dict, weights: Path, orders: Path,
                 "present; refusing to run it as an unsplit cell"
             )
         train += ["--train-speakers", str(sidecar), "--val-speakers", str(val_speakers)]
+    # Arithmetic mode. Appended last and only for blas: an absent key or
+    # "exact" adds nothing, so every plan written before the flag produces a
+    # byte-identical command line (and the binary's default is exact). Anything
+    # else is refused here rather than handed to the binary, which would exit 2
+    # after the fleet had already spent the init.
+    numerics = spec.get("numerics")
+    if numerics not in (None, "exact", "blas"):
+        raise SystemExit(f"{cell_id}: numerics={numerics!r} is not exact or blas")
+    if numerics == "blas":
+        train += ["--numerics", "blas"]
     return train
+
+
+def cell_env(spec: dict, base: dict, default_threads: str) -> dict:
+    """The child environment. A determinism cell's `threads` overrides --threads."""
+    threads = spec.get("threads")
+    if threads is not None and not (isinstance(threads, int) and threads >= 1):
+        raise SystemExit(f"{spec.get('id')}: threads={threads!r} is not a positive int")
+    return dict(base, BINN_CAMPAIGN_AUTHORIZED="1",
+                RAYON_NUM_THREADS=str(threads) if threads is not None else default_threads)
 
 
 def main() -> int:
@@ -144,7 +163,7 @@ def main() -> int:
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
     weights, orders = work / "w.bin", work / "o.bin"
-    env = dict(os.environ, BINN_CAMPAIGN_AUTHORIZED="1", RAYON_NUM_THREADS=args.threads)
+    env = cell_env(spec, os.environ, args.threads)
 
     subprocess.run(init_command(args.binary, spec, weights, orders),
                    check=True, env=env)

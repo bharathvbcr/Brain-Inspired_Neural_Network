@@ -2032,6 +2032,7 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
         """
         root = Path(__file__).resolve().parent.parent / "results"
         observed = collections.defaultdict(list)
+        cells_by_corpus = collections.defaultdict(list)
         for path in sorted(root.rglob("*.json")):
             try:
                 cell = json.loads(path.read_text())
@@ -2043,6 +2044,16 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
             rel = path.relative_to(root)
             valid = not self.gate.validity_problems(cell)
             observed[rel.parts[0]].append((str(rel), valid))
+            cells_by_corpus[rel.parts[0]].append((str(rel), cell))
+
+        # One arithmetic per corpus directory, and it is the one the directory
+        # is named for: an exact corpus never holds a blas cell, a `*_blas`
+        # corpus never an exact one. Archived corpora carry no `numerics` at
+        # all, which is exact, so this passes on all of them today.
+        mixed = [problem for corpus, held in sorted(cells_by_corpus.items())
+                 for problem in self.gate.corpus_homogeneity_problems(corpus, held)]
+        self.assertFalse(mixed, "corpus numerics are not homogeneous:\n  "
+                         + "\n  ".join(mixed))
 
         total = sum(len(rows) for rows in observed.values())
         self.assertGreater(total, 1000, "the corpus scan found almost nothing; "
@@ -2079,6 +2090,93 @@ class AccuracyAndNonFiniteGateTest(unittest.TestCase):
                    if len(now_invalid) > 20 else "")
             )
 
+
+
+class NumericsValidityTest(unittest.TestCase):
+    """`numerics` is exact or blas, blas names its platform, corpora do not mix.
+
+    Exact and blas cells agree only to rounding, so a corpus that pooled them
+    would score two arithmetics under one verdict. The scan in
+    `AccuracyAndNonFiniteGateTest.test_the_archived_corpus_is_unaffected` runs
+    the homogeneity rule over every archived corpus; these pin the rule itself.
+    """
+
+    def setUp(self):
+        import cell_validity
+
+        self.gate = cell_validity
+        self.cell = {
+            "schema": "shd-cal-cell-v1",
+            "mechanical_status": "COMPLETE",
+            "non_finite_events": 0,
+            "classes_predicted": 20,
+            "majority_prediction": 0.10,
+            "silent_fraction": 0.0,
+            "saturated_fraction": 0.0,
+            "accuracy": 0.83,
+            "temporal_condition": "intact",
+        }
+        self.platform = "macOS 26.1 (25B78)"
+
+    def blas(self, **extra):
+        return dict(self.cell, numerics="blas", numerics_platform=self.platform, **extra)
+
+    def test_absent_exact_and_a_platformed_blas_are_valid(self):
+        for cell in (self.cell, dict(self.cell, numerics="exact"), self.blas()):
+            self.assertEqual(self.gate.validity_problems(cell), [], cell)
+
+    def test_an_unknown_or_mistyped_numerics_is_invalid(self):
+        for bad in ("fast", "BLAS", "", None, 1, True, ["blas"]):
+            problems = self.gate.validity_problems(dict(self.cell, numerics=bad))
+            self.assertTrue(any("numerics" in p for p in problems), (bad, problems))
+
+    def test_blas_without_a_platform_is_invalid(self):
+        for platform in (None, "", "   ", 26, ["macOS"]):
+            cell = dict(self.cell, numerics="blas", numerics_platform=platform)
+            problems = self.gate.validity_problems(cell)
+            self.assertTrue(any("numerics_platform" in p for p in problems),
+                            (platform, problems))
+        absent = dict(self.cell, numerics="blas")
+        self.assertTrue(self.gate.validity_problems(absent))
+
+    def test_exact_does_not_need_a_platform(self):
+        self.assertEqual(self.gate.numerics_problems(dict(self.cell, numerics="exact")), [])
+
+    def test_a_homogeneous_exact_corpus_is_clean(self):
+        held = [("a.json", self.cell), ("b.json", dict(self.cell, numerics="exact"))]
+        self.assertEqual(self.gate.corpus_homogeneity_problems("shd_wave", held), [])
+
+    def test_a_homogeneous_blas_corpus_is_clean(self):
+        held = [("a.json", self.blas()), ("b.json", self.blas())]
+        self.assertEqual(self.gate.corpus_homogeneity_problems("shd_wave_blas", held), [])
+
+    def test_a_blas_cell_in_an_exact_corpus_is_reported(self):
+        held = [("a.json", self.cell), ("b.json", self.blas())]
+        problems = self.gate.corpus_homogeneity_problems("shd_wave", held)
+        self.assertTrue(any("mixed numerics" in p for p in problems), problems)
+        self.assertTrue(any("'blas'" in p and "b.json" in p for p in problems), problems)
+
+    def test_an_all_blas_cell_set_in_an_exact_named_corpus_is_reported(self):
+        """Homogeneous but under the wrong name: still not an exact corpus."""
+        problems = self.gate.corpus_homogeneity_problems("shd_wave", [("a.json", self.blas())])
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("name says 'exact'", problems[0])
+
+    def test_an_exact_cell_in_a_blas_named_corpus_is_reported(self):
+        held = [("a.json", self.blas()), ("b.json", self.cell)]
+        problems = self.gate.corpus_homogeneity_problems("shd_wave_blas", held)
+        self.assertTrue(any("mixed numerics" in p for p in problems), problems)
+        self.assertTrue(any("b.json" in p and "'exact'" in p for p in problems), problems)
+
+    def test_an_invalid_numerics_is_not_silently_counted_as_exact(self):
+        held = [("a.json", self.cell), ("b.json", dict(self.cell, numerics="fast"))]
+        problems = self.gate.corpus_homogeneity_problems("shd_wave", held)
+        self.assertTrue(any("'fast'" in p for p in problems), problems)
+
+    def test_corpus_naming_rule(self):
+        self.assertEqual(self.gate.expected_corpus_numerics("shd_attention_wave30_blas"), "blas")
+        self.assertEqual(self.gate.expected_corpus_numerics("shd_attention_wave29_local"), "exact")
+        self.assertEqual(self.gate.expected_corpus_numerics("blas_study"), "exact")
 
 
 class ClipDenominatorMirrorsTheBinary(unittest.TestCase):
@@ -3203,6 +3301,171 @@ class RunCellBuildsTheFlagsAWaveAsksFor(unittest.TestCase):
             self.assertEqual(train[train.index("--val-speakers") + 1], "6,7")
             self.assertTrue(
                 train[train.index("--train-speakers") + 1].endswith("train.speakers"))
+
+
+class NumericsPlanAndLauncherTest(unittest.TestCase):
+    """`numerics` in a plan entry reaches `train-cell`, and only when it is blas.
+
+    The dangerous direction is the quiet one: an exact wave whose command line
+    gained a token would no longer be the command its archived cells were run
+    with. So every entry of an archived plan is pinned to produce the same
+    command with the key absent and with `"numerics": "exact"`, and the same
+    entries are pinned to regenerate byte-identically from `plan_cells`.
+    """
+
+    PLAN = ROOT / "results" / "shd_attention_wave29_local" / "plan_w29.json"
+
+    @staticmethod
+    def _run_cell():
+        import importlib.util
+        module_spec = importlib.util.spec_from_file_location(
+            "run_cell_numerics", ROOT / "scripts/aws/run_cell.py")
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        return module
+
+    def _train(self, spec):
+        return self._run_cell().train_command(
+            "BIN", spec, Path("w"), Path("o"), Path("k"), "ev", spec["id"])
+
+    def _archived(self):
+        entries = json.loads(self.PLAN.read_text())
+        self.assertEqual(len(entries), 48, "the archived plan is not the one this pins")
+        return entries
+
+    def test_archived_plan_commands_are_unchanged_by_the_key(self):
+        run_cell = self._run_cell()
+        flagged = 0
+        for entry in self._archived():
+            absent = self._train(entry)
+            explicit = self._train({**entry, "numerics": "exact"})
+            flagged += "--numerics" in absent + explicit
+            if absent != explicit:
+                self.fail(f"{entry['id']}: exact adds tokens: {explicit}")
+            if run_cell.init_command("BIN", entry, Path("w"), Path("o")) != \
+                    run_cell.init_command("BIN", {**entry, "numerics": "exact"},
+                                          Path("w"), Path("o")):
+                self.fail(f"{entry['id']}: init changed by numerics=exact")
+        self.assertEqual(flagged, 0, "an exact command line gained --numerics")
+
+    def test_an_archived_command_line_is_pinned_literally(self):
+        entry = self._archived()[0]
+        self.assertEqual(self._train(entry), [
+            "BIN", "train-cell",
+            "--train-events", "ev/train.events", "--test-events", "ev/test.events",
+            "--contract", "published-2ms", "--geometry", "adjacent-sum-5",
+            "--weights", "w", "--orders", "o", "--epochs", "400", "--arm", "ff+fixed",
+            "--out", "k/cell.json", "--seed", "5290001"])
+
+    def test_blas_adds_exactly_the_flag_and_nothing_else(self):
+        for entry in self._archived():
+            base = self._train(entry)
+            blas = self._train({**entry, "numerics": "blas"})
+            self.assertEqual(blas[: len(base)], base, entry["id"])
+            self.assertEqual(blas[len(base):], ["--numerics", "blas"], entry["id"])
+
+    def test_blas_does_not_reach_init(self):
+        """The contract leaves `init` unchanged: weights are mode-independent."""
+        entry = self._archived()[0]
+        run_cell = self._run_cell()
+        self.assertEqual(
+            run_cell.init_command("BIN", {**entry, "numerics": "blas"}, Path("w"), Path("o")),
+            run_cell.init_command("BIN", entry, Path("w"), Path("o")))
+
+    def test_an_unknown_mode_is_refused_before_anything_runs(self):
+        entry = self._archived()[0]
+        for bad in ("fast", "BLAS", ""):
+            with self.assertRaises(SystemExit) as caught:
+                self._train({**entry, "numerics": bad})
+            self.assertIn("not exact or blas", str(caught.exception))
+
+    def test_the_archived_plan_regenerates_byte_identically(self):
+        generated = {c["id"]: c for c in plan_cells.wave29_the_asymmetry_has_its_own_bar()}
+        archived = self._archived()
+        self.assertEqual(sorted(generated), sorted(e["id"] for e in archived))
+        self.assertEqual([json.dumps(e, sort_keys=True) for e in archived],
+                         [json.dumps(generated[e["id"]], sort_keys=True) for e in archived])
+
+    def test_planned_exact_cells_carry_no_numerics_key_or_id_token(self):
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        for numerics in (None, "exact"):
+            same = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, numerics=numerics)
+            self.assertEqual(same, plain)
+        self.assertNotIn("numerics", plain)
+        self.assertNotIn("blas", plain["id"])
+
+    def test_a_planned_blas_cell_is_distinct_and_flagged(self):
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        blas = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, numerics="blas")
+        self.assertNotEqual(blas["id"], plain["id"])
+        self.assertTrue(blas["id"].endswith("__blas__s5"), blas["id"])
+        self.assertEqual(blas["numerics"], "blas")
+        self.assertEqual({k: v for k, v in blas.items() if k not in ("id", "numerics")},
+                         {k: v for k, v in plain.items() if k != "id"})
+        self.assertEqual(self._train(blas)[-2:], ["--numerics", "blas"])
+
+    def test_a_determinism_cell_name_parses_with_the_bridge_analysers_pattern(self):
+        # Copied from analyse_fast_numerics_bridge.py (numerics/bridge 01a0665),
+        # not imported across branches.
+        det_name = re.compile(r"__t(\d+)__r(\d+)\.json$")
+        for threads, rerun in ((1, 1), (16, 2)):
+            planned = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=threads, rerun=rerun)
+            found = det_name.search(planned["id"] + ".json")
+            self.assertIsNotNone(found, planned["id"])
+            self.assertEqual((int(found.group(1)), int(found.group(2))), (threads, rerun))
+            self.assertEqual((planned["threads"], planned["rerun"]), (threads, rerun))
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        self.assertIsNone(det_name.search(plain["id"] + ".json"))
+        self.assertNotIn("threads", plain)
+        self.assertNotIn("rerun", plain)
+
+    def test_a_determinism_cell_differs_from_its_plain_twin_only_by_suffix_and_keys(self):
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        det = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=16, rerun=2)
+        self.assertEqual(det["id"], plain["id"] + "__t16__r2")
+        self.assertEqual({k: v for k, v in det.items() if k not in ("id", "threads", "rerun")},
+                         {k: v for k, v in plain.items() if k != "id"})
+
+    def test_threads_and_rerun_go_together_and_are_validated(self):
+        for kwargs in ({"threads": 1}, {"rerun": 1}, {"threads": 0, "rerun": 1},
+                       {"threads": 1, "rerun": -1}, {"threads": "16", "rerun": 1}):
+            with self.assertRaises(ValueError, msg=str(kwargs)):
+                plan_cells.cell("wT", "ff+fixed", 128, 2, 5, **kwargs)
+
+    def test_rayon_threads_follow_the_cell_only_when_it_names_them(self):
+        run_cell = self._run_cell()
+        base = {"PATH": "/x"}
+        for entry in self._archived():
+            env = run_cell.cell_env(entry, base, "7")
+            self.assertEqual(env, {"PATH": "/x", "BINN_CAMPAIGN_AUTHORIZED": "1",
+                                   "RAYON_NUM_THREADS": "7"}, entry["id"])
+        det = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=1, rerun=1)
+        self.assertEqual(run_cell.cell_env(det, base, "7")["RAYON_NUM_THREADS"], "1")
+        with self.assertRaises(SystemExit):
+            run_cell.cell_env({"id": "x", "threads": 0}, base, "7")
+
+    def test_a_determinism_cell_adds_no_flag_to_its_command_line(self):
+        entry = self._archived()[0]
+        self.assertEqual(self._train({**entry, "threads": 1, "rerun": 1}), self._train(entry))
+
+    def test_planning_an_unknown_mode_is_refused(self):
+        with self.assertRaises(ValueError):
+            plan_cells.cell("wT", "ff+fixed", 128, 2, 5, numerics="fast")
+
+    def test_a_cell_must_have_run_the_mode_its_plan_asked_for(self):
+        import cell_validity
+        base = {"mechanical_status": "COMPLETE", "non_finite_events": 0,
+                "classes_predicted": 20, "majority_prediction": 0.1,
+                "silent_fraction": 0.1, "saturated_fraction": 0.0,
+                "accuracy": 0.83, "temporal_condition": "intact"}
+        blas_cell = {**base, "numerics": "blas", "numerics_platform": "macOS 26.1 (25B78)"}
+        self.assertEqual(cell_validity.validity_problems(blas_cell, {"numerics": "blas"}), [])
+        self.assertEqual(cell_validity.validity_problems(base, {"numerics": "exact"}), [])
+        self.assertEqual(cell_validity.validity_problems(base, {}), [])
+        for cell_, wanted in ((base, "blas"), (blas_cell, "exact")):
+            problems = cell_validity.validity_problems(cell_, {"numerics": wanted})
+            self.assertTrue(any("plan asked for" in p and "numerics" in p for p in problems),
+                            (wanted, problems))
 
 
 if __name__ == "__main__":
