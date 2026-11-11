@@ -377,7 +377,9 @@ class Refusals(unittest.TestCase):
     def test_an_unknown_numerics_value(self):
         built = Built()
         built.blas[("rate", "intact", 5170004)]["numerics"] = "fma"
-        self.assertIn("mixed numerics", self.invalid(built))
+        # cell_validity refuses an unregistered mode before the corpus check
+        # runs; either refusal is an INVALID, never a verdict.
+        self.assertIn("numerics='fma' is not one of exact, blas", self.invalid(built))
 
     def test_mixed_platforms_within_the_blas_corpus(self):
         built = Built()

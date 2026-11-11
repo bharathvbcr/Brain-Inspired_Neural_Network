@@ -2,100 +2,100 @@
   "epochs": 2,
   "fixtures": {
     "attn-bin-shuffled": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "e905780886d5a000d84df221f6bd05c6852ba5e55d8260e3b524f71c29a6889a",
+      "weights_sha256": "608376b4e5c86b9792c7c263d4b063c3035aeca7b2124a91a3ad898bda564345"
     },
     "attn-channels-700": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "d8cfc9c2d4624942fb9b3c3b07acf8e1adb6054dafa31f930666545addb90878",
+      "weights_sha256": "ac54482a1a912e3c97cb895e0c94b89f6d532306684bb57c81d86d0674c12209"
     },
     "attn-d24l1": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "ae7da1c6d3b84deae6b92b97d6f76fcd7e1ff5039093c76e50637d6a5cba00c9",
+      "weights_sha256": "c859261652de660a0a8ba1e5e1f9b34fb1bba396955e77b6a56cc90986c7077f"
     },
     "attn-d30l4": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "13d13bb071f4729fb0f5fc7fa405d528136b34473959d8dbab6c53bbe2510545",
+      "weights_sha256": "220a31b31bfc41d501892427440e2976f9ac7d8875de5c84c21ea9381d2d5585"
     },
     "attn-d32l1": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "e458737f8c0a0b4e39cd1fc42e960917a7a2186aeb139b476e1d64cf3f4dea17",
+      "weights_sha256": "a5ca4ec53fc072140d85b14d9f1b572478bbfcde7aa3f0a135e2cff2b2d243a2"
     },
     "attn-fixed-t100": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "bba1f47bdadad26fe7498ce874ed3b76e598940d279f3009003ca41aedb39701",
+      "weights_sha256": "d3418663be1331b9fbf90dfa77157372dffdf286a538a5ca9de834a63455f975"
     },
     "attn-hidden-shuffled": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "fe11ea38eecddd4d7f37b620ed21e6e07dc30bbd34a0c74fcadbbf9b0c02b038",
+      "weights_sha256": "ae09304215a418f6a4eb44a81372d9949b8b880d7607d2c87e18ef4afd065389"
     },
     "attn-published-10ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "65f5600398994281581ec83a159343413601b8ebfb29b023f1a9d6481800de50",
+      "weights_sha256": "a619686389b75e04d0b36741269b87f9526b6d4b17a910b631127828b81082d4"
     },
     "attn-published-4ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "7b170d5811a0d6a3c3e87a3122be9d6e28a9ffaaae4896c0ea3b447398912865",
+      "weights_sha256": "2b841fa731e516e19c30610ece9e9d797af75866d145b13e651dcfe80f1cf617"
     },
     "attn-readout-no-position": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "e078703435ce560a590e0469ff634fc9ded10ff0ec7e54243ef5b2ef0570b708",
+      "weights_sha256": "1961c7f9321a0579d3ea3d9a1288a8680da1a4e32e490984c605b513c61a96da"
     },
     "attn-readout-no-position-qk-norm": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "0cb1c917f2404f91bc45e5379b13b6db5e57d426f773f3e42173ef725e29fe4b",
+      "weights_sha256": "a34abff259e6fb58220471e0eb305aa161f7b73159cd315325f3f5f7fc55cbe9"
     },
     "attn-readout-qk-norm": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "31e7747e54b9539bc7ccfe9f94327eeeb6d2274525034d8b7fb3c4a37903c857",
+      "weights_sha256": "fa81018324fbbb49c3b119f01b40b84334d52e52bf0ac631863782ce411a8d96"
     },
     "base-ff-alif-fixed-t100": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "92bffa6335e45e70606a0c1f0e9348775024988dbe3f6596b893444cfa2e61ca",
+      "weights_sha256": "97febee89c272b496cb788d38561aa3696a7050a070c5860f2a38389abd4ad62"
     },
     "base-h128-adjacent-sum-5-fixed-t100": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "6a92a0f6c52b423555bc29f866c2b981ec4e662500d1b283e6d9af951a3d5907",
+      "weights_sha256": "7ef5a346b706aeb0b7cce9db24cce2c8792743360d6613f76f090acb52d5a26d"
     },
     "base-h128-adjacent-sum-5-fixed-t250": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "b60fa82d66bf7e1b5ed9820ab7b3ac666cc575f558096bb680fd4df8059c36ea",
+      "weights_sha256": "04b535543db55eded1d238374ba0fd364b2bf98a094eb32bb3813091f2a2eff4"
     },
     "base-h512-channels-700-fixed-t500": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "10ef1b1302493d4112aba4245d1c2bbbdf3dc06173154b9693c6639e192404a9",
+      "weights_sha256": "536951df7cf9285eb2cd27a5927d57cc6cd1891a9891d3417a402a4ba1fde4db"
     },
     "base-h512-channels-700-published-2ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "059a75e21474519c8213a78eaf271b92713751200588febc596ae87e77cf8e06",
+      "weights_sha256": "21a242a70c182da15b8fab338b2e4573c7cd4b8a92b015d8ed7bebf95944abc1"
     },
     "base-rec-alif-p2ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "18611139d82528d12758dea1c5889764d13b6791c60987b4f286e2ac16b9cd53",
+      "weights_sha256": "2102d858f31edf9459fbe696953a345c1bb8c70264ef9329952450e6f21fda41"
     },
     "base-rec-fixed-p2ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "b7fb2e798917d3a485a5e906787dfcb3f3bfb1ac838ecbe5d2806c77c34be0d2",
+      "weights_sha256": "f00f2954f1cbefcb1eea6513db05e0a1c85cdf94cb58652ec7f6c5af3833115e"
     },
     "ff-alif-attn-d32l4": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "b035c7a4fa7e549e39a3ffe6291143fdbec2ef100514a3dcc3e6d8b85804ce44",
+      "weights_sha256": "83ade3f0ae0e37d62e8c4a7907e34c504645e73e17331e8cca22b1275bae1fb1"
     },
     "oracle-ff-fixed-attn-d32l4-p2ms": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "4156de3ff45205c23fe5e87a5d93f15d3ac4c9e2a2828525709617a9b6a51cb2",
+      "weights_sha256": "b7ab4a5b91e3f59a4f8aa57881a0e3c7107700d78ac44dafd665adec71a88ccb"
     },
     "rec-alif-attn-d32l4": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "4a21cf30e8c7ba9ad0c1475f2237958a9e08859752df1f16fd7038bdd039e610",
+      "weights_sha256": "a0ae7f5afa7f93f2946238a1d799af0a883fa65edf16647a55ebd4f42906374f"
     },
     "rec-fixed-attn-d32l4": {
-      "cell_sha256": null,
-      "weights_sha256": null
+      "cell_sha256": "fecb8ce5fc4a13bd21550f5031cfdf3273cd8783e991922b268ad6772e071df8",
+      "weights_sha256": "761617c93b4d79a71fea7e1fb9d97d96552cf20e73f3ad3e2ce20c95c7db5553"
     }
   },
   "numerics": "blas",
-  "numerics_platform": null,
+  "numerics_platform": "macOS 27.2 (26B123)",
   "schema": "train-cell-fixtures-v1",
   "seed": 5170001
 }

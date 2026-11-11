@@ -306,14 +306,30 @@ class NumericsCommandTests(unittest.TestCase):
         self.assertNotEqual(F.FIXTURE_JSON, F.FIXTURE_JSON_BLAS)
         self.assertEqual(F.FIXTURE_JSON_BLAS.name, "train_cell_fixtures_blas.json")
 
-    def test_the_committed_blas_file_lists_every_fixture_with_null_hashes(self) -> None:
+    def test_the_committed_blas_file_records_every_fixture_on_one_platform(self) -> None:
+        # Recorded 2026-11-11 with an `accelerate` build of numerics/integrate
+        # and reproduced 23/23 on a second run. Every hash is filled, and the
+        # platform it was recorded on is named, because Accelerate's kernels
+        # may change with the OS.
         payload = json.loads(F.FIXTURE_JSON_BLAS.read_text())
         self.assertEqual(payload["numerics"], "blas")
+        self.assertRegex(payload["numerics_platform"], r"^macOS \d+(\.\d+)* \([0-9A-Za-z]+\)$")
         self.assertEqual(sorted(payload["fixtures"]), sorted(fx.name for fx in F.FIXTURES))
         self.assertEqual(len(payload["fixtures"]), 23)
         hashes = [h for entry in payload["fixtures"].values() for h in entry.values()]
         self.assertEqual(len(hashes), 46)
-        self.assertEqual(hashes.count(None), 46, "no blas hash may be recorded before a reference build")
+        self.assertEqual(sum(isinstance(h, str) and len(h) == 64 for h in hashes), 46)
+
+    def test_base_arms_train_the_same_weights_in_both_modes(self) -> None:
+        # A base arm has no attention read-out, so it never reaches BLAS: its
+        # final weights must be identical in exact and blas mode. Every
+        # attention fixture must differ, or the blas path did not run.
+        exact = json.loads(F.FIXTURE_JSON.read_text())["fixtures"]
+        blas = json.loads(F.FIXTURE_JSON_BLAS.read_text())["fixtures"]
+        same = sorted(n for n in exact if exact[n]["weights_sha256"] == blas[n]["weights_sha256"])
+        base = sorted(fx.name for fx in F.FIXTURES if fx.name.startswith("base-"))
+        self.assertEqual(len(base), 7)
+        self.assertEqual(same, base)
 
     def test_the_exact_file_is_untouched_by_the_flag(self) -> None:
         payload = json.loads(F.FIXTURE_JSON.read_text())
