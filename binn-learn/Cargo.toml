@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 description = "BINN L5 learning: three-factor plasticity; labeled BPTT baseline only"
 
+[features]
+default = []
+# Link Apple's Accelerate framework and enable `--numerics blas` (cblas_sgemm
+# for the attention read-out). macOS only; a system framework, not a crate.
+# Off by default: without it `Numerics::Blas` is refused, never emulated.
+accelerate = []
+
 [dependencies]
 binn-core = { workspace = true }
 binn-engine = { workspace = true }

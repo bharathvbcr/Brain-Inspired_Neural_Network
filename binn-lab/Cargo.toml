@@ -22,6 +22,9 @@ enable-c2 = []
 enable-c3 = []
 enable-r1 = []
 enable-r2 = []
+# `shd-instrument train-cell --numerics blas`: Accelerate cblas_sgemm for the
+# attention read-out. macOS only; off by default.
+accelerate = ["binn-learn/accelerate"]
 
 [dependencies]
 binn-data = { workspace = true }

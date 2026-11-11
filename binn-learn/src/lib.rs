@@ -19,6 +19,7 @@ pub mod matched_mech_baseline;
 pub mod matched_rl_baseline;
 pub mod modulators;
 pub mod multi_area_learn;
+pub mod numerics;
 pub mod pruning;
 pub mod scan_training;
 pub mod shared_bptt;
@@ -79,6 +80,7 @@ pub use matched_rl_baseline::{
     MATCHED_RL_RPE_LABEL,
 };
 pub use modulators::Modulators;
+pub use numerics::{Numerics, BLAS_UNAVAILABLE};
 pub use pruning::{prune, PruneReport, PruningStrategy};
 pub use scan_training::{forward_scan_training, ScanTrainingTrace};
 pub use shared_bptt::{
