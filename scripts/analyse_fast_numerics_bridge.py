@@ -11,7 +11,7 @@ records. It never reads a test split, a checkpoint or a log.
 
 # Corpora (each directory holds exactly its registered cells, and nothing else)
 
-  exact_dir  48 cells, the SAME-PLATFORM exact control: the Apple-silicon Mac that
+  exact_dir  96 cells, the SAME-PLATFORM exact control: the Apple-silicon Mac that
              produced blas_dir, built from the same source, `numerics` absent or
              "exact". NOT the fleet record: that ran on aarch64-unknown-linux-gnu,
              whose libm differs from Apple's (FINDING_2026-08-19_LIBM_PORTABILITY_
@@ -19,14 +19,16 @@ records. It never reads a test split, a checkpoint or a log.
              platform only. A fleet directory passed here fails closed: it holds
              thousands of unregistered cells and, if reduced to the anchor, fails
              HF-0b.
-  blas_dir   48 cells, `numerics` == "blas" and one `numerics_platform`.
+  blas_dir   96 cells, `numerics` == "blas" and one `numerics_platform`.
   det_dir    8 cells, blas attention intact, seeds 5170001-2 x threads {1, 16} x
              reruns {1, 2}. Neither the thread count nor the rerun index is in a
              cell, so both come from the file name: `<anything>__t<threads>__r<rerun>.json`.
 
-Each corpus is the 12 seeds 5170001-5170012 x {rate, attention d32/L4} x {intact,
+Each corpus is the 24 seeds 5170001-5170024 x {rate, attention d32/L4} x {intact,
 bin-shuffled} at h128, published-2ms, adjacent-sum-5, e100: the W25 e100 anchor's
-arms. Cells are keyed by their own fields, never by file name (except the two
+arms. The fleet record holds the first 12 seeds; the other 12 (option B of the
+registration's section 0.2) exist only on the Mac, which the same-platform exact
+control makes usable. Cells are keyed by their own fields, never by file name (except the two
 tokens above). A duplicate key, an unregistered cell, a hidden-shuffled cell, a
 numerics value other than the corpus's, or a cell failing
 `cell_validity.validity_problems` makes the corpus INVALID: nothing is computed.
@@ -36,7 +38,7 @@ numerics value other than the corpus's, or a cell failing
   HF-0a  every witness of seed 5170001 (and of 5170002) is bit-identical: the four
          determinism cells plus the main-wave blas attention-intact cell. "Bit-
          identical" is every cell field except the clock fields.
-  HF-0b  all 24 blas rate cells equal the exact rate cells field for field, except
+  HF-0b  all 48 blas rate cells equal the exact rate cells field for field, except
          `numerics` and `numerics_platform` (the contract: base arms never touch BLAS).
   HF-1   |mean(blas) - mean(exact)| <= 0.03 on the intact attention and rate arms.
   HF-2   TOST at alpha = 0.05: the 90% paired percentile bootstrap interval of the
@@ -65,7 +67,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cell_validity import validity_problems  # noqa: E402
 
-SEEDS = tuple(range(5170001, 5170013))
+SEEDS = tuple(range(5170001, 5170025))
+#: The fleet record's seeds. The platform-move line compares the Mac-exact corpus
+#: with that record over these seeds only, so the two means cover the same seeds.
+FLEET_SEEDS = tuple(range(5170001, 5170013))
 DET_SEEDS = (5170001, 5170002)
 DET_THREADS = (1, 16)
 DET_RERUNS = (1, 2)
@@ -322,9 +327,10 @@ def hf1_hf2(exact: dict, blas: dict) -> tuple[dict, dict]:
     ci_g, ci_d = paired_intervals(dg, dd)
     ok_g, ok_d = equivalent(ci_g, DELTA_G), equivalent(ci_d, DELTA_DID)
     fleet_move = {
-        "G": mean(per_seed[s][0][0] for s in SEEDS) - FLEET["G"],
-        "DiD": mean(per_seed[s][0][1] for s in SEEDS) - FLEET["DiD"],
-        **{f"{k} {c}": levels[f"{k} {c}"]["exact"] - FLEET[f"{k}_{'intact' if c == 'intact' else 'shuffled'}"]
+        "G": mean(per_seed[s][0][0] for s in FLEET_SEEDS) - FLEET["G"],
+        "DiD": mean(per_seed[s][0][1] for s in FLEET_SEEDS) - FLEET["DiD"],
+        **{f"{k} {c}": mean(acc(exact, k, c, s) for s in FLEET_SEEDS)
+           - FLEET[f"{k}_{'intact' if c == 'intact' else 'shuffled'}"]
            for k in KINDS for c in CONDITIONS},
     }
     h2 = {

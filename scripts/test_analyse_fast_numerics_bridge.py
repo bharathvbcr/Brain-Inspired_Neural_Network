@@ -139,10 +139,12 @@ class RegisteredConstants(unittest.TestCase):
     def test_bars_and_design_are_the_registered_ones(self):
         self.assertEqual((an.LEVEL_BAR, an.DELTA_G, an.DELTA_DID, an.ALPHA, an.RESAMPLES),
                          (0.03, 0.015, 0.02, 0.05, 10_000))
-        self.assertEqual((len(an.SEEDS), an.SEEDS[0], an.SEEDS[-1]), (12, 5170001, 5170012))
+        self.assertEqual((len(an.SEEDS), an.SEEDS[0], an.SEEDS[-1]), (24, 5170001, 5170024))
+        self.assertEqual((len(an.FLEET_SEEDS), an.FLEET_SEEDS[0], an.FLEET_SEEDS[-1]),
+                         (12, 5170001, 5170012))
         self.assertEqual((an.DET_SEEDS, an.DET_THREADS, an.DET_RERUNS),
                          ((5170001, 5170002), (1, 16), (1, 2)))
-        self.assertEqual(len(an.registered_keys()), 48)
+        self.assertEqual(len(an.registered_keys()), 96)
 
     def test_fleet_pins_reproduce_the_published_gain_and_did(self):
         f = an.FLEET
@@ -217,6 +219,27 @@ class EquivalenceBoundaries(unittest.TestCase):
         ci_g, ci_d = self.interval_for(0.017, 0.017)
         self.assertEqual([an.equivalent(ci_g, an.DELTA_G), an.equivalent(ci_d, an.DELTA_DID)],
                          [False, True])
+
+
+class PlatformMove(unittest.TestCase):
+    def test_the_platform_move_reads_only_the_fleet_record_s_seeds(self):
+        # The fleet record holds seeds 5170001-5170012. Seeds registered beyond them
+        # must not move the descriptive line, or it would subtract a 12-seed fleet
+        # mean from a mean over different seeds. Both modes move together, so every
+        # verdict still passes.
+        fleet_seeds = range(5170001, 5170013)
+        built = Built()
+        extra = [s for s in an.SEEDS if s not in fleet_seeds]
+        for seed in extra:
+            for corpus in (built.exact, built.blas):
+                corpus[("attn", "intact", seed)]["accuracy"] += 0.05
+        code, _, data = run(built)
+        move = data["HF-2"]["platform_move_vs_fleet"]["exact_minus_fleet"]
+        mac_attn = sum(acc_of("attn", "intact", s) for s in fleet_seeds) / 12
+        mac_rate = sum(acc_of("rate", "intact", s) for s in fleet_seeds) / 12
+        self.assertEqual((code, len(extra)), (0, 12))
+        self.assertAlmostEqual(move["attn intact"], mac_attn - an.FLEET["attn_intact"], delta=1e-12)
+        self.assertAlmostEqual(move["G"], mac_attn - mac_rate - an.FLEET["G"], delta=1e-12)
 
 
 class Verdicts(unittest.TestCase):
@@ -314,7 +337,7 @@ class DeterminismAndRateIdentity(unittest.TestCase):
             built.exact[("rate", "intact", seed)]["accuracy"] += 0.0003
         code, _, data = run(built)
         self.assertEqual((code, data["HF-0"]["b"]["pass"], len(data["HF-0"]["b"]["failing"])),
-                         (3, False, 12))
+                         (3, False, 24))
 
     def test_hf0_failure_is_read_even_when_later_cells_are_missing(self):
         built = Built()
@@ -409,7 +432,7 @@ class Refusals(unittest.TestCase):
 
     def test_an_unregistered_seed(self):
         built = Built()
-        built.exact[("rate", "intact", 5170004)]["seed"] = 5170013
+        built.exact[("rate", "intact", 5170004)]["seed"] = 5170025
         self.assertIn("not a registered seed", self.invalid(built))
 
     def test_a_hidden_shuffled_cell(self):
