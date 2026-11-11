@@ -96,6 +96,7 @@
 // surrounding modules do for the same reason.
 #![allow(clippy::needless_range_loop)]
 
+use crate::numerics::{blas, Numerics};
 use crate::shd_matched::PortableRng;
 
 /// Slowest positional frequency: one cycle across the whole utterance.
@@ -325,6 +326,12 @@ pub struct AttentionParams {
     pub blocks: Vec<AttentionBlock>,
     /// `[n_classes, d_model]`, row-major.
     pub w_a: Vec<f32>,
+    /// Which arithmetic the forward and backward use. Not a parameter: it is
+    /// never saved, never part of [`Self::iter_all`], and defaults to
+    /// [`Numerics::Exact`], the registered kernel. A run opts in by setting it
+    /// after the weights are loaded, so the mode travels with the weights that
+    /// are being computed on rather than in a process global.
+    pub numerics: Numerics,
 }
 
 /// Glorot half-width for a `fan_in -> fan_out` block.
@@ -379,6 +386,7 @@ impl AttentionParams {
             w_e,
             blocks,
             w_a,
+            numerics: Numerics::Exact,
         })
     }
 
@@ -899,6 +907,8 @@ pub fn attention_forward_presented(
             seen[source] = true;
         }
     }
+    params.numerics.require_available()?;
+    let use_blas = params.numerics == Numerics::Blas;
     let d = params.config.d_model;
     let layers = params.blocks.len();
     let variant = params.config.variant;
@@ -990,17 +1000,30 @@ pub fn attention_forward_presented(
         let mut q = vec![0.0_f32; t_steps * d];
         let mut k = vec![0.0_f32; t_steps * d];
         let mut v = vec![0.0_f32; t_steps * d];
-        let (w_q_columns, w_k_columns, w_v_columns, w_o_columns) = (
-            transposed(&block.w_q, d, d),
-            transposed(&block.w_k, d, d),
-            transposed(&block.w_v, d, d),
-            transposed(&block.w_o, d, d),
-        );
-        for t in 0..t_steps {
-            let stream = &input[t * d..(t + 1) * d];
-            dot_against_columns(stream, &w_q_columns, d, &mut q[t * d..(t + 1) * d]);
-            dot_against_columns(stream, &w_k_columns, d, &mut k[t * d..(t + 1) * d]);
-            dot_against_columns(stream, &w_v_columns, d, &mut v[t * d..(t + 1) * d]);
+        if use_blas {
+            // `out = X W^T` with `W` row-major `[out, in]`: pass `W` transposed
+            // rather than building a transposed copy.
+            blas::sgemm(
+                false, true, t_steps, d, d, input, d, &block.w_q, d, &mut q, d,
+            );
+            blas::sgemm(
+                false, true, t_steps, d, d, input, d, &block.w_k, d, &mut k, d,
+            );
+            blas::sgemm(
+                false, true, t_steps, d, d, input, d, &block.w_v, d, &mut v, d,
+            );
+        } else {
+            let (w_q_columns, w_k_columns, w_v_columns) = (
+                transposed(&block.w_q, d, d),
+                transposed(&block.w_k, d, d),
+                transposed(&block.w_v, d, d),
+            );
+            for t in 0..t_steps {
+                let stream = &input[t * d..(t + 1) * d];
+                dot_against_columns(stream, &w_q_columns, d, &mut q[t * d..(t + 1) * d]);
+                dot_against_columns(stream, &w_k_columns, d, &mut k[t * d..(t + 1) * d]);
+                dot_against_columns(stream, &w_v_columns, d, &mut v[t * d..(t + 1) * d]);
+            }
         }
         // Normalise in place, keeping the divisor: the cache then holds exactly
         // what the score consumed, and the backward has the one extra number it
@@ -1017,11 +1040,21 @@ pub fn attention_forward_presented(
 
         let mut a = vec![0.0_f32; t_steps * t_steps];
         let mut c = vec![0.0_f32; t_steps * d];
-        let key_columns = transposed(&k, t_steps, d);
+        let key_columns = if use_blas {
+            // scores = Q K^T, all rows at once; the softmax below is unchanged.
+            blas::sgemm(
+                false, true, t_steps, t_steps, d, &q, d, &k, d, &mut a, t_steps,
+            );
+            Vec::new()
+        } else {
+            transposed(&k, t_steps, d)
+        };
         for t in 0..t_steps {
             let query = &q[t * d..(t + 1) * d];
             let scores = &mut a[t * t_steps..(t + 1) * t_steps];
-            dot_against_columns(query, &key_columns, t_steps, scores);
+            if !use_blas {
+                dot_against_columns(query, &key_columns, t_steps, scores);
+            }
             let mut maximum = f32::NEG_INFINITY;
             for score in scores.iter_mut() {
                 *score *= score_scale;
@@ -1041,15 +1074,43 @@ pub fn attention_forward_presented(
             // `context = sum_other a[t][other] * v[other]` from `+0.0`, no
             // skipping: one register-blocked pass over `v` instead of `t_steps`
             // separate `d`-long axpys, with each element's sum unchanged.
-            dot_columns::<false>(scores, &v, d, &mut c[t * d..(t + 1) * d], 0.0);
+            if !use_blas {
+                dot_columns::<false>(scores, &v, d, &mut c[t * d..(t + 1) * d], 0.0);
+            }
+        }
+        if use_blas {
+            blas::sgemm(
+                false, false, t_steps, d, t_steps, &a, t_steps, &v, d, &mut c, d,
+            );
         }
 
         let mut next = input.clone();
-        let mut projected = vec![0.0_f32; d];
-        for t in 0..t_steps {
-            dot_against_columns(&c[t * d..(t + 1) * d], &w_o_columns, d, &mut projected);
-            for (value, delta) in next[t * d..(t + 1) * d].iter_mut().zip(&projected) {
+        if use_blas {
+            let mut projected = vec![0.0_f32; t_steps * d];
+            blas::sgemm(
+                false,
+                true,
+                t_steps,
+                d,
+                d,
+                &c,
+                d,
+                &block.w_o,
+                d,
+                &mut projected,
+                d,
+            );
+            for (value, delta) in next.iter_mut().zip(&projected) {
                 *value += *delta;
+            }
+        } else {
+            let w_o_columns = transposed(&block.w_o, d, d);
+            let mut projected = vec![0.0_f32; d];
+            for t in 0..t_steps {
+                dot_against_columns(&c[t * d..(t + 1) * d], &w_o_columns, d, &mut projected);
+                for (value, delta) in next[t * d..(t + 1) * d].iter_mut().zip(&projected) {
+                    *value += *delta;
+                }
             }
         }
 
@@ -1124,6 +1185,8 @@ pub fn attention_gradient(
     spikes: &[f32],
     d_logits: &[f32],
 ) -> Result<(AttentionGradient, Vec<f32>), String> {
+    params.numerics.require_available()?;
+    let use_blas = params.numerics == Numerics::Blas;
     let hidden = params.hidden;
     let d = params.config.d_model;
     let t_steps = cache.t_steps;
@@ -1216,12 +1279,32 @@ pub fn attention_gradient(
             }
         }
 
-        let value_columns = transposed(v, t_steps, d);
+        let value_columns = if use_blas {
+            // d_attention = dC V^T
+            blas::sgemm(
+                false,
+                true,
+                t_steps,
+                t_steps,
+                d,
+                &d_context,
+                d,
+                v,
+                d,
+                &mut d_attention,
+                t_steps,
+            );
+            Vec::new()
+        } else {
+            transposed(v, t_steps, d)
+        };
         for t in 0..t_steps {
             let upstream = &d_context[t * d..(t + 1) * d];
             let weights = &a[t * t_steps..(t + 1) * t_steps];
             let scores = &mut d_attention[t * t_steps..(t + 1) * t_steps];
-            dot_against_columns(upstream, &value_columns, t_steps, scores);
+            if !use_blas {
+                dot_against_columns(upstream, &value_columns, t_steps, scores);
+            }
             // Row softmax: `de = a * (da - sum_j a_j da_j)`.
             let shift: f32 = weights.iter().zip(scores.iter()).map(|(w, g)| w * g).sum();
             for (score, weight) in scores.iter_mut().zip(weights) {
@@ -1237,37 +1320,73 @@ pub fn attention_gradient(
         // `dot_columns::<true>` reproduces exactly that sequence while holding
         // the `d` outputs in registers across the whole contracted index; the
         // transposed copy only makes the contracted index the row index.
-        transpose_into(a, t_steps, t_steps, &mut square_scratch);
-        for other in 0..t_steps {
-            dot_columns::<true>(
-                &square_scratch[other * t_steps..(other + 1) * t_steps],
-                &d_context,
-                d,
-                &mut d_v[other * d..(other + 1) * d],
-                0.0,
+        if use_blas {
+            // d_v = A^T dC ; d_q = dE K ; d_k = dE^T Q, with dE = d_attention * score_scale.
+            blas::sgemm(
+                true, false, t_steps, d, t_steps, a, t_steps, &d_context, d, &mut d_v, d,
             );
-        }
-        for score in d_attention.iter_mut() {
-            *score *= score_scale;
-        }
-        transpose_into(&d_attention, t_steps, t_steps, &mut square_scratch);
-        for t in 0..t_steps {
-            dot_columns::<true>(
-                &d_attention[t * t_steps..(t + 1) * t_steps],
+            for score in d_attention.iter_mut() {
+                *score *= score_scale;
+            }
+            blas::sgemm(
+                false,
+                false,
+                t_steps,
+                d,
+                t_steps,
+                &d_attention,
+                t_steps,
                 k,
                 d,
-                &mut d_q[t * d..(t + 1) * d],
-                0.0,
+                &mut d_q,
+                d,
             );
-        }
-        for other in 0..t_steps {
-            dot_columns::<true>(
-                &square_scratch[other * t_steps..(other + 1) * t_steps],
+            blas::sgemm(
+                true,
+                false,
+                t_steps,
+                d,
+                t_steps,
+                &d_attention,
+                t_steps,
                 q,
                 d,
-                &mut d_k[other * d..(other + 1) * d],
-                0.0,
+                &mut d_k,
+                d,
             );
+        } else {
+            transpose_into(a, t_steps, t_steps, &mut square_scratch);
+            for other in 0..t_steps {
+                dot_columns::<true>(
+                    &square_scratch[other * t_steps..(other + 1) * t_steps],
+                    &d_context,
+                    d,
+                    &mut d_v[other * d..(other + 1) * d],
+                    0.0,
+                );
+            }
+            for score in d_attention.iter_mut() {
+                *score *= score_scale;
+            }
+            transpose_into(&d_attention, t_steps, t_steps, &mut square_scratch);
+            for t in 0..t_steps {
+                dot_columns::<true>(
+                    &d_attention[t * t_steps..(t + 1) * t_steps],
+                    k,
+                    d,
+                    &mut d_q[t * d..(t + 1) * d],
+                    0.0,
+                );
+            }
+            for other in 0..t_steps {
+                dot_columns::<true>(
+                    &square_scratch[other * t_steps..(other + 1) * t_steps],
+                    q,
+                    d,
+                    &mut d_k[other * d..(other + 1) * d],
+                    0.0,
+                );
+            }
         }
 
         // Back through the normalisation, if there was one. `q` and `k` above
@@ -1330,7 +1449,32 @@ pub fn attention_gradient(
     // --- embedding -----------------------------------------------------------
     // `pos` is a constant, so it takes no gradient.
     let mut ds_attn = vec![0.0_f32; t_steps * hidden];
-    let embedding_columns = transposed(&params.w_e, hidden, d);
+    let embedding_columns = if use_blas {
+        Vec::new()
+    } else {
+        transposed(&params.w_e, hidden, d)
+    };
+    // `d_stream W_e^T` for every timestep at once; the scatter below only
+    // places each row at the source timestep it came from.
+    let embedded = if use_blas {
+        let mut out = vec![0.0_f32; t_steps * hidden];
+        blas::sgemm(
+            false,
+            true,
+            t_steps,
+            hidden,
+            d,
+            &d_stream,
+            d,
+            &params.w_e,
+            d,
+            &mut out,
+            hidden,
+        );
+        out
+    } else {
+        Vec::new()
+    };
     for t in 0..t_steps {
         let upstream = &d_stream[t * d..(t + 1) * d];
         // Scatter back to the timestep the state actually came from, through
@@ -1339,12 +1483,17 @@ pub fn attention_gradient(
         // exactly once — checked in the forward, so this cannot silently
         // overwrite one timestep's credit with another's.
         let source = cache.presentation.as_ref().map_or(t, |order| order[t]);
-        dot_against_columns(
-            upstream,
-            &embedding_columns,
-            hidden,
-            &mut ds_attn[source * hidden..(source + 1) * hidden],
-        );
+        if use_blas {
+            ds_attn[source * hidden..(source + 1) * hidden]
+                .copy_from_slice(&embedded[t * hidden..(t + 1) * hidden]);
+        } else {
+            dot_against_columns(
+                upstream,
+                &embedding_columns,
+                hidden,
+                &mut ds_attn[source * hidden..(source + 1) * hidden],
+            );
+        }
         for h in 0..hidden {
             let spike = spikes[source * hidden + h];
             if spike != 0.0 {
@@ -3690,5 +3839,236 @@ mod tests {
             skipped_rows > 0,
             "no attention weight underflowed to zero, so the skip path was never exercised"
         );
+    }
+
+    // --- `--numerics blas` ---------------------------------------------------
+
+    fn with_numerics(mut params: AttentionParams, numerics: Numerics) -> AttentionParams {
+        params.numerics = numerics;
+        params
+    }
+
+    /// Without Accelerate the mode is refused by both passes with the contract
+    /// message. It must not run the exact kernel under a blas label.
+    #[cfg(not(all(feature = "accelerate", target_os = "macos")))]
+    #[test]
+    fn blas_is_refused_by_the_forward_and_the_gradient_without_the_feature() {
+        let (t_steps, hidden, n_classes) = (6_usize, 5_usize, 4_usize);
+        let exact = params(hidden, n_classes, 8, 1);
+        let blas = with_numerics(exact.clone(), Numerics::Blas);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits = vec![0.1_f32, -0.2, 0.3, 0.4];
+        let expected = "--numerics blas needs a build with the accelerate feature on macOS";
+
+        assert_eq!(
+            attention_forward(&blas, &spikes, t_steps).err().as_deref(),
+            Some(expected)
+        );
+        // The gradient refuses on its own, not only because no cache exists.
+        let cache = attention_forward(&exact, &spikes, t_steps).unwrap();
+        assert_eq!(
+            attention_gradient(&blas, &cache, &spikes, &d_logits)
+                .err()
+                .as_deref(),
+            Some(expected)
+        );
+        // And the exact path on the same parameters is untouched.
+        let (gradient, _) = attention_gradient(&exact, &cache, &spikes, &d_logits).unwrap();
+        assert!(gradient.iter_all().any(|value| *value != 0.0));
+    }
+
+    /// The default mode is `Exact`, and the field is not a parameter: it is not
+    /// part of the canonical order that save/load and the optimiser walk.
+    #[test]
+    fn the_numerics_mode_defaults_to_exact_and_is_not_a_parameter() {
+        let exact = params(5, 4, 8, 2);
+        assert_eq!(exact.numerics, Numerics::Exact);
+        let blas = with_numerics(exact.clone(), Numerics::Blas);
+        assert_eq!(
+            exact.iter_all().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            blas.iter_all().map(|v| v.to_bits()).collect::<Vec<_>>()
+        );
+        assert_eq!(exact.parameter_count(), blas.parameter_count());
+    }
+
+    /// Largest absolute difference, and the largest magnitude of the reference.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    fn spread(got: &[f32], want: &[f32]) -> (f32, f32) {
+        assert_eq!(got.len(), want.len());
+        let mut worst = 0.0_f32;
+        let mut scale = 0.0_f32;
+        for (g, w) in got.iter().zip(want) {
+            worst = worst.max((g - w).abs());
+            scale = scale.max(w.abs());
+        }
+        (worst, scale)
+    }
+
+    /// blas against the exact kernel, forward and backward, every read-out
+    /// variant, with and without a presentation order.
+    ///
+    /// Tolerance: both are f32 evaluations of the same function, and each is
+    /// within roughly `gamma_k` of the real-number value per matmul (`k <= 32`
+    /// here, `u = 2^-24`, about 2e-6 relative per product) through at most six
+    /// chained products per layer, two layers: a few 1e-5 of the tensor's
+    /// largest entry is the honest worst case. The bound used, 1e-4 of the
+    /// largest magnitude (floored at 1), is a few times that, and an O(1)
+    /// mistake — a transposed operand, a wrong leading dimension, a missed
+    /// `score_scale` — is four orders of magnitude outside it.
+    ///
+    /// Bit-identity is deliberately **not** asserted: Accelerate sums in its
+    /// own blocked order, so a blas cell belongs to a different corpus. What is
+    /// asserted instead is that the blas path actually ran — at least one bit
+    /// differs somewhere — because a mode that silently fell back to the exact
+    /// kernel would pass every tolerance check.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn blas_agrees_with_the_exact_kernel_within_tolerance_without_being_identical() {
+        let (t_steps, hidden, n_classes, d_model) = (41_usize, 12_usize, 5_usize, 32_usize);
+        let variants = [
+            ReadoutVariant::DEFAULT,
+            ReadoutVariant {
+                no_position: false,
+                qk_norm: true,
+            },
+        ];
+        let order = presentation(t_steps);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits: Vec<f32> = (0..n_classes).map(|c| (c as f32 - 1.7) * 0.29).collect();
+        let mut differing_tensors = 0usize;
+        let mut compared = 0usize;
+
+        for variant in variants {
+            for presented in [None, Some(order.as_slice())] {
+                let label = format!(
+                    "qk_norm {} presented {}",
+                    variant.qk_norm,
+                    presented.is_some()
+                );
+                let exact = variant_params(hidden, n_classes, d_model, 2, variant);
+                let blas = with_numerics(exact.clone(), Numerics::Blas);
+                let want =
+                    attention_forward_presented(&exact, &spikes, t_steps, presented).unwrap();
+                let got = attention_forward_presented(&blas, &spikes, t_steps, presented).unwrap();
+
+                let mut forward: Vec<(&str, &[f32], &[f32])> =
+                    vec![("pooled", &got.pooled, &want.pooled)];
+                for layer in 0..2 {
+                    forward.push(("q", &got.q[layer], &want.q[layer]));
+                    forward.push(("k", &got.k[layer], &want.k[layer]));
+                    forward.push(("v", &got.v[layer], &want.v[layer]));
+                    forward.push(("a", &got.a[layer], &want.a[layer]));
+                    forward.push(("c", &got.c[layer], &want.c[layer]));
+                    forward.push(("z", &got.z[layer + 1], &want.z[layer + 1]));
+                }
+                let (grad, ds) = attention_gradient(&blas, &got, &spikes, &d_logits).unwrap();
+                let (want_grad, want_ds) =
+                    attention_gradient(&exact, &want, &spikes, &d_logits).unwrap();
+                let mut backward: Vec<(&str, &[f32], &[f32])> = vec![
+                    ("ds_attn", &ds, &want_ds),
+                    ("w_e", &grad.w_e, &want_grad.w_e),
+                    ("w_a", &grad.w_a, &want_grad.w_a),
+                ];
+                for layer in 0..2 {
+                    backward.push(("w_q", &grad.blocks[layer].w_q, &want_grad.blocks[layer].w_q));
+                    backward.push(("w_k", &grad.blocks[layer].w_k, &want_grad.blocks[layer].w_k));
+                    backward.push(("w_v", &grad.blocks[layer].w_v, &want_grad.blocks[layer].w_v));
+                    backward.push(("w_o", &grad.blocks[layer].w_o, &want_grad.blocks[layer].w_o));
+                }
+
+                for (name, g, w) in forward.into_iter().chain(backward) {
+                    let (worst, scale) = spread(g, w);
+                    assert!(
+                        worst <= 1e-4 * scale.max(1.0),
+                        "{label} {name}: max difference {worst:e} against largest magnitude {scale:e}"
+                    );
+                    assert!(
+                        scale > 0.0,
+                        "{label} {name}: an all-zero tensor proves nothing"
+                    );
+                    compared += 1;
+                    if g.iter().zip(w).any(|(x, y)| x.to_bits() != y.to_bits()) {
+                        differing_tensors += 1;
+                    }
+                }
+            }
+        }
+        // 2 variants x 2 presentations; per case 13 forward tensors (pooled and
+        // six per layer) and 11 backward (three, then four per layer).
+        assert_eq!(compared, 4 * (1 + 2 * 6 + 3 + 2 * 4), "tensor count");
+        assert!(
+            differing_tensors > 0,
+            "blas matched the exact kernel bit for bit everywhere: the blas path did not run"
+        );
+    }
+
+    /// The blas gradient is the gradient of the blas forward, checked the same
+    /// way the exact one is: central differences, with the exact path's
+    /// tolerances, over a stride through every parameter and the spike input.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn the_blas_gradient_matches_finite_difference() {
+        let (t_steps, hidden, n_classes, d_model) = (9_usize, 6_usize, 4_usize, 4_usize);
+        let params = with_numerics(params(hidden, n_classes, d_model, 2), Numerics::Blas);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits = vec![0.31_f32, -0.72, 0.14, 0.27];
+        let cache = attention_forward(&params, &spikes, t_steps).unwrap();
+        let (gradient, ds_attn) = attention_gradient(&params, &cache, &spikes, &d_logits).unwrap();
+        let analytic: Vec<f32> = gradient.iter_all().copied().collect();
+        assert_eq!(analytic.len(), params.parameter_count());
+
+        let mut checked = 0usize;
+        for index in (0..analytic.len()).step_by(7) {
+            let numerical = central_difference(
+                &params,
+                &spikes,
+                t_steps,
+                &d_logits,
+                |p| p.iter_all_mut().nth(index).unwrap(),
+                1e-3,
+            );
+            assert_close(
+                &format!("blas parameter {index}"),
+                analytic[index],
+                numerical,
+            );
+            checked += 1;
+        }
+        for &index in &[0_usize, 17, 31, 44] {
+            let mut plus = spikes.clone();
+            plus[index] += 1e-3;
+            let mut minus = spikes.clone();
+            minus[index] -= 1e-3;
+            let numerical = (objective(&params, &plus, t_steps, &d_logits)
+                - objective(&params, &minus, t_steps, &d_logits))
+                / 2e-3;
+            assert_close(&format!("blas ds_attn[{index}]"), ds_attn[index], numerical);
+            checked += 1;
+        }
+        assert!(checked > 20, "only {checked} derivatives were checked");
+    }
+
+    /// Run to run, the blas path is bitwise reproducible on one thread. (Across
+    /// thread counts it is pinned in `shd_instrument`, which owns the pools.)
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn blas_is_bitwise_reproducible_run_to_run() {
+        let (t_steps, hidden, n_classes) = (37_usize, 9_usize, 5_usize);
+        let blas = with_numerics(params(hidden, n_classes, 32, 3), Numerics::Blas);
+        let spikes = spike_train(t_steps, hidden);
+        let d_logits = vec![0.4_f32, -0.1, 0.2, -0.3, 0.05];
+        let run = || {
+            let cache = attention_forward(&blas, &spikes, t_steps).unwrap();
+            let (gradient, ds) = attention_gradient(&blas, &cache, &spikes, &d_logits).unwrap();
+            let mut all = bits(&cache.pooled);
+            all.extend(bits(&ds));
+            all.extend(gradient.iter_all().map(|v| v.to_bits()));
+            all
+        };
+        let first = run();
+        assert!(first.iter().any(|b| *b != 0));
+        for _ in 0..5 {
+            assert_eq!(first, run());
+        }
     }
 }

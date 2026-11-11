@@ -28,6 +28,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
+use crate::numerics::Numerics;
 use crate::shd_attention::{
     attention_forward_presented, attention_gradient, attention_logits, AttentionCache,
     AttentionConfig, AttentionGradient, AttentionParams, ReadoutVariant,
@@ -274,6 +275,22 @@ impl ArmWeights {
     /// arms. Reported into the cell record so a config change cannot be silent.
     pub fn attention_config(&self) -> Option<AttentionConfig> {
         self.attn.as_ref().map(|params| params.config)
+    }
+
+    /// Select the read-out's arithmetic. Returns whether it took effect: the
+    /// four base arms have no attention block, so there is nothing to select
+    /// and they compute exactly as they always did, in either mode.
+    ///
+    /// Refuses `Blas` in a build without Accelerate before touching anything.
+    pub fn set_numerics(&mut self, numerics: Numerics) -> Result<bool, String> {
+        numerics.require_available()?;
+        match self.attn.as_mut() {
+            Some(params) => {
+                params.numerics = numerics;
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     pub fn enforce_zero_diagonal(&mut self) {
