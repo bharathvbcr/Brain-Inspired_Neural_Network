@@ -109,6 +109,15 @@ def train_command(binary: str, spec: dict, weights: Path, orders: Path,
     return train
 
 
+def cell_env(spec: dict, base: dict, default_threads: str) -> dict:
+    """The child environment. A determinism cell's `threads` overrides --threads."""
+    threads = spec.get("threads")
+    if threads is not None and not (isinstance(threads, int) and threads >= 1):
+        raise SystemExit(f"{spec.get('id')}: threads={threads!r} is not a positive int")
+    return dict(base, BINN_CAMPAIGN_AUTHORIZED="1",
+                RAYON_NUM_THREADS=str(threads) if threads is not None else default_threads)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cell_id")
@@ -154,7 +163,7 @@ def main() -> int:
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
     weights, orders = work / "w.bin", work / "o.bin"
-    env = dict(os.environ, BINN_CAMPAIGN_AUTHORIZED="1", RAYON_NUM_THREADS=args.threads)
+    env = cell_env(spec, os.environ, args.threads)
 
     subprocess.run(init_command(args.binary, spec, weights, orders),
                    check=True, env=env)

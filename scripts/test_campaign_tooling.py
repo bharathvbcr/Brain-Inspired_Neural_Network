@@ -3404,6 +3404,50 @@ class NumericsPlanAndLauncherTest(unittest.TestCase):
                          {k: v for k, v in plain.items() if k != "id"})
         self.assertEqual(self._train(blas)[-2:], ["--numerics", "blas"])
 
+    def test_a_determinism_cell_name_parses_with_the_bridge_analysers_pattern(self):
+        # Copied from analyse_fast_numerics_bridge.py (numerics/bridge 01a0665),
+        # not imported across branches.
+        det_name = re.compile(r"__t(\d+)__r(\d+)\.json$")
+        for threads, rerun in ((1, 1), (16, 2)):
+            planned = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=threads, rerun=rerun)
+            found = det_name.search(planned["id"] + ".json")
+            self.assertIsNotNone(found, planned["id"])
+            self.assertEqual((int(found.group(1)), int(found.group(2))), (threads, rerun))
+            self.assertEqual((planned["threads"], planned["rerun"]), (threads, rerun))
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        self.assertIsNone(det_name.search(plain["id"] + ".json"))
+        self.assertNotIn("threads", plain)
+        self.assertNotIn("rerun", plain)
+
+    def test_a_determinism_cell_differs_from_its_plain_twin_only_by_suffix_and_keys(self):
+        plain = plan_cells.cell("wT", "ff+fixed", 128, 2, 5)
+        det = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=16, rerun=2)
+        self.assertEqual(det["id"], plain["id"] + "__t16__r2")
+        self.assertEqual({k: v for k, v in det.items() if k not in ("id", "threads", "rerun")},
+                         {k: v for k, v in plain.items() if k != "id"})
+
+    def test_threads_and_rerun_go_together_and_are_validated(self):
+        for kwargs in ({"threads": 1}, {"rerun": 1}, {"threads": 0, "rerun": 1},
+                       {"threads": 1, "rerun": -1}, {"threads": "16", "rerun": 1}):
+            with self.assertRaises(ValueError, msg=str(kwargs)):
+                plan_cells.cell("wT", "ff+fixed", 128, 2, 5, **kwargs)
+
+    def test_rayon_threads_follow_the_cell_only_when_it_names_them(self):
+        run_cell = self._run_cell()
+        base = {"PATH": "/x"}
+        for entry in self._archived():
+            env = run_cell.cell_env(entry, base, "7")
+            self.assertEqual(env, {"PATH": "/x", "BINN_CAMPAIGN_AUTHORIZED": "1",
+                                   "RAYON_NUM_THREADS": "7"}, entry["id"])
+        det = plan_cells.cell("wT", "ff+fixed", 128, 2, 5, threads=1, rerun=1)
+        self.assertEqual(run_cell.cell_env(det, base, "7")["RAYON_NUM_THREADS"], "1")
+        with self.assertRaises(SystemExit):
+            run_cell.cell_env({"id": "x", "threads": 0}, base, "7")
+
+    def test_a_determinism_cell_adds_no_flag_to_its_command_line(self):
+        entry = self._archived()[0]
+        self.assertEqual(self._train({**entry, "threads": 1, "rerun": 1}), self._train(entry))
+
     def test_planning_an_unknown_mode_is_refused(self):
         with self.assertRaises(ValueError):
             plan_cells.cell("wT", "ff+fixed", 128, 2, 5, numerics="fast")

@@ -27,7 +27,8 @@ ANCHOR = ("published-2ms", "adjacent-sum-5")
 def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR[1],
          attn_dim=None, attn_layers=None, temporal="intact", surrogate_scale=None,
          clip_grad_norm=None, n_train=8156, attn_readout=None, tau_m=None,
-         probe_epochs=None, probe_max_samples=None, val_speakers=None, numerics=None):
+         probe_epochs=None, probe_max_samples=None, val_speakers=None, numerics=None,
+         threads=None, rerun=None):
     """One planned cell.
 
     The keys added on 2026-09-03 -- `attn_readout`, `tau_m`, `probe_epochs`,
@@ -49,6 +50,14 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
     the results bucket) and in the payload, where `run_cell.py` turns it into
     `--numerics blas`. Fast waves land in `results/<wave>_blas/`.
 
+    `threads` and `rerun` (both or neither) mark a determinism cell: the same
+    spec run again at a given RAYON_NUM_THREADS. Neither is in the cell JSON, so
+    the file name is the only witness, and the id ends `__t<threads>__r<rerun>`
+    -- the spelling `analyse_fast_numerics_bridge.py` parses with
+    `__t(\\d+)__r(\\d+)\\.json$`. Omitted when unset: ids and command lines of
+    every other cell are unchanged. `run_cell.py` sets RAYON_NUM_THREADS from
+    `threads`.
+
     `probe_epochs` is deliberately NOT in the id: probing is asserted not to
     change the cell (`probing_does_not_change_the_cell` compares every measured
     field byte for byte), so a probed cell and an unprobed one at the same id
@@ -57,6 +66,11 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
     """
     if numerics not in (None, "exact", "blas"):
         raise ValueError(f"numerics={numerics!r} is not exact or blas")
+    if (threads is None) != (rerun is None):
+        raise ValueError("threads and rerun go together: a determinism cell names both")
+    if threads is not None and not (isinstance(threads, int) and threads >= 1
+                                    and isinstance(rerun, int) and rerun >= 0):
+        raise ValueError(f"threads={threads!r} must be an int >= 1 and rerun={rerun!r} an int >= 0")
     parts = [wave, arm.replace("+", "-"), f"h{hidden}", f"e{epochs}", contract, geometry]
     if attn_dim is not None:
         parts.append(f"d{attn_dim}l{attn_layers}")
@@ -75,6 +89,9 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
     if numerics == "blas":
         parts.append("blas")
     parts.append(f"s{seed}")
+    if threads is not None:
+        parts.append(f"t{threads}")
+        parts.append(f"r{rerun}")
     entry = {
         "id": "__".join(parts),
         "wave": wave,
@@ -107,6 +124,9 @@ def cell(wave, arm, hidden, epochs, seed, *, contract=ANCHOR[0], geometry=ANCHOR
         entry["val_speakers"] = list(val_speakers)
     if numerics == "blas":
         entry["numerics"] = "blas"
+    if threads is not None:
+        entry["threads"] = threads
+        entry["rerun"] = rerun
     return entry
 
 
