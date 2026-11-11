@@ -17,6 +17,7 @@ use binn_lab::gradient_clip::{clip_by_global_norm, ClipOutcome};
 use binn_lab::timestamp::{iso8601_utc, unix_seconds};
 use binn_learn::shd_attention::{AttentionConfig, AttentionParams, AttentionProbe, ReadoutVariant};
 use binn_learn::shd_matched_arms::ArmAdam;
+use binn_learn::Numerics;
 use binn_learn::{apply_temporal, TemporalAudit, TemporalCondition};
 use binn_learn::{
     load_epoch_orders, one_cycle_lr, shd_matched_forward_arm_tau,
@@ -111,6 +112,11 @@ fn print_help() {
            --clip-sample-grad-norm F  global-norm clipping of each sample gradient,\n\
                                before accumulation (default: off)\n\
            --surrogate-scale F multiplies the surrogate gain (default 1.0 = unchanged)\n\
+           --numerics exact|blas  arithmetic of the attention read-out's matrix\n\
+                               products (default exact, the registered kernel).\n\
+                               blas needs a build with the accelerate feature on\n\
+                               macOS and is a different corpus: its cells are\n\
+                               never paired against exact ones\n\
            --tau-m MS          membrane time constant (default 10.05, the calibrated\n\
                                value; anything else is a different substrate and\n\
                                its cells are not comparable to the corpus)\n\
@@ -623,7 +629,43 @@ const TRAIN_CELL_FLAGS: &[&str] = &[
     "--train-speakers",
     "--val-speakers",
     "--tau-m",
+    "--numerics",
 ];
+
+/// `--numerics exact|blas`. Absent means `exact`; present without a value is an
+/// error rather than `exact`, because a launcher that asked for `blas` and lost
+/// its value to a truncated command line must not get an exact cell back.
+fn parse_numerics_flag(args: &[String]) -> Result<Numerics, String> {
+    let value = if args.iter().any(|arg| arg == "--numerics") {
+        Some(required(args, "--numerics")?)
+    } else {
+        None
+    };
+    Numerics::from_flag(value.as_deref())
+}
+
+/// The `numerics` fields of a cell record: `,"numerics":"exact"` always, and in
+/// blas mode also the OS that supplied the arithmetic, because Accelerate ships
+/// with macOS and the same binary can produce different bits after an update.
+fn numerics_fields(numerics: Numerics) -> Result<String, String> {
+    match numerics {
+        Numerics::Exact => Ok(",\"numerics\":\"exact\"".to_string()),
+        Numerics::Blas => Ok(format!(
+            ",\"numerics\":\"blas\",\"numerics_platform\":\"{}\"",
+            numerics_platform()?
+        )),
+    }
+}
+
+#[cfg(all(feature = "accelerate", target_os = "macos"))]
+fn numerics_platform() -> Result<String, String> {
+    binn_learn::numerics::platform_label()
+}
+
+#[cfg(not(all(feature = "accelerate", target_os = "macos")))]
+fn numerics_platform() -> Result<String, String> {
+    Err(binn_learn::BLAS_UNAVAILABLE.to_string())
+}
 
 /// Refuse a flag this subcommand does not understand.
 ///
@@ -667,6 +709,12 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     // Deliberately optional. Omitting it emits byte-identical output to before
     // this flag existed, so Gate F still regresses every recorded cell.
     let provenance_seed = optional_usize(args, "--seed")?;
+    // Which arithmetic the attention read-out uses. Absent means `exact`, the
+    // registered kernel, and a cell whose only difference is the appended
+    // `numerics` field. Resolved first so that an unknown value, or `blas` in a
+    // build without Accelerate, fails before a single event is read.
+    let numerics = parse_numerics_flag(args)?;
+    let numerics_fields = numerics_fields(numerics)?;
     let train_events = required_path(args, "--train-events")?;
     let test_events = required_path(args, "--test-events")?;
     let contract = parse_contract(&required(args, "--contract")?)?;
@@ -857,6 +905,10 @@ fn train_cell(args: &[String]) -> Result<(), String> {
     let validation = validation;
 
     let mut weights = ShdArmWeights::load(&weights_path)?;
+    // A base arm has no attention block and so nothing for `blas` to change:
+    // its cell is byte-identical in both modes, and the record says which mode
+    // was asked for either way.
+    weights.set_numerics(numerics)?;
     if let Some(arm) = optional_arm(args)? {
         if arm != weights.arm {
             return Err(format!(
@@ -1168,7 +1220,7 @@ fn train_cell(args: &[String]) -> Result<(), String> {
          \"mean_firing_rate\":{:.9},\"silent_fraction\":{:.9},\"saturated_fraction\":{:.9},\
          \"mean_loss\":{},\"mean_gradient_norm\":{},\"mean_update_rms\":{},\
          \"non_finite_events\":{},\"non_finite_forward\":{},\"surrogate_scale\":{:.9},\"clip_grad_norm\":{},\"clipped_steps\":{},\"unclippable_steps\":{},\"clip_sample_grad_norm\":{},\"clipped_samples\":{},\"temporal_condition\":\"{}\",\"temporal_audit\":{{\"samples\":{},\"counts_preserved\":{},\"relocated_fraction\":{:.9},\"mean_bin_displacement\":{:.9},\"occupied_bins_before\":{:.9},\"occupied_bins_after\":{:.9},\"max_bin_displacement\":{:.9},\"mean_steps\":{:.9},\"count_before\":{:.1},\"count_after\":{:.1},\"hidden_permutation_relocated\":{:.9}}},\"epoch_mean_loss\":{},\"epoch_mean_gradient_norm\":{},\"epoch_max_gradient_norm\":{},\"epoch_max_gradient_step\":{},\"tail_loss_improvement\":{},\"mechanical_status\":\"COMPLETE\",\
-         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\",\"tau_m\":{:.9}{}{}{}}}\n",
+         \"scientific_status\":\"{}\",\"wall_secs\":{:.6},\"emitted_unix_s\":{},\"emitted_utc\":\"{}\",\"tau_m\":{:.9}{}{}{}{}}}\n",
         weights.arm.label(),
         contract.id(),
         geometry.id(),
@@ -1233,6 +1285,10 @@ fn train_cell(args: &[String]) -> Result<(), String> {
         attention_fields,
         provenance_fields,
         validation_fields,
+        // Appended after everything else and emitted unconditionally, so a
+        // reader can tell an exact cell from one that predates the flag only by
+        // the field being absent, and absent means exact.
+        numerics_fields,
     );
     atomic_write(&out, result.as_bytes())
 }
@@ -3416,5 +3472,273 @@ mod tests {
             }
         }
         depth
+    }
+
+    // --- `--numerics` --------------------------------------------------------
+
+    #[test]
+    fn numerics_defaults_to_exact_and_refuses_what_it_does_not_know() {
+        assert_eq!(parse_numerics_flag(&[]), Ok(Numerics::Exact));
+        assert_eq!(
+            parse_numerics_flag(&owned(&["--epochs", "2", "--numerics", "exact"])),
+            Ok(Numerics::Exact)
+        );
+        for bad in ["fast", "BLAS", "", "accelerate"] {
+            let error = parse_numerics_flag(&owned(&["--numerics", bad])).expect_err(bad);
+            assert!(error.contains("must be exact or blas"), "{bad:?}: {error}");
+        }
+        // A launcher whose command line lost the value must not get an exact
+        // cell back by default.
+        let error = parse_numerics_flag(&owned(&["--epochs", "2", "--numerics"]))
+            .expect_err("a flag with no value");
+        assert_eq!(error, "--numerics requires a value");
+    }
+
+    #[test]
+    fn the_numerics_fields_of_an_exact_cell_are_one_appended_label() {
+        assert_eq!(
+            numerics_fields(Numerics::Exact).unwrap(),
+            ",\"numerics\":\"exact\""
+        );
+    }
+
+    /// `train-cell` reads the mode before it reads anything else, so a build
+    /// that cannot honour `blas` refuses at once with the contract message and
+    /// does not touch an event file.
+    #[cfg(not(all(feature = "accelerate", target_os = "macos")))]
+    #[test]
+    fn blas_without_the_feature_is_refused_before_anything_is_read() {
+        let error = train_cell(&owned(&["--numerics", "blas"])).expect_err("must refuse");
+        assert_eq!(
+            error,
+            "--numerics blas needs a build with the accelerate feature on macOS"
+        );
+        assert_eq!(
+            numerics_fields(Numerics::Blas).unwrap_err(),
+            "--numerics blas needs a build with the accelerate feature on macOS"
+        );
+    }
+
+    /// A tiny end-to-end cell: `init` then `train-cell`, returning the cell
+    /// text, the final-weights bytes and the numerics-flag arguments used.
+    fn tiny_cell(directory: &Path, name: &str, arm: &str, numerics: &[&str]) -> (String, Vec<u8>) {
+        fs::create_dir_all(directory).unwrap();
+        let train = directory.join("train.bin");
+        let test = directory.join("test.bin");
+        write_event_cache(&train, 24);
+        write_event_cache(&test, 12);
+        let weights = directory.join(format!("{name}.w"));
+        let orders = directory.join(format!("{name}.o"));
+        let mut init_args = owned(&[
+            "--n-inputs",
+            "140",
+            "--hidden",
+            "8",
+            "--classes",
+            "4",
+            "--seed",
+            "5170001",
+            "--epochs",
+            "2",
+            "--n-train",
+            "24",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--arm",
+            arm,
+        ]);
+        if arm.ends_with("+attn") {
+            init_args.extend(owned(&["--attn-dim", "8", "--attn-layers", "2"]));
+        }
+        init(&init_args).unwrap();
+        let out = directory.join(format!("{name}.json"));
+        let final_weights = directory.join(format!("{name}.final"));
+        let mut args = owned(&[
+            "--train-events",
+            train.to_str().unwrap(),
+            "--test-events",
+            test.to_str().unwrap(),
+            "--contract",
+            "published-2ms",
+            "--geometry",
+            "adjacent-sum-5",
+            "--epochs",
+            "2",
+            "--weights",
+            weights.to_str().unwrap(),
+            "--orders",
+            orders.to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+            "--arm",
+            arm,
+            "--save-final-weights",
+            final_weights.to_str().unwrap(),
+        ]);
+        args.extend(owned(numerics));
+        train_cell(&args).unwrap();
+        (
+            fs::read_to_string(&out).unwrap(),
+            fs::read(&final_weights).unwrap(),
+        )
+    }
+
+    /// An exact cell is the cell that was there before, plus one appended
+    /// field: omitting the flag and spelling it out are the same cell.
+    #[test]
+    fn an_exact_cell_ends_in_the_numerics_label_and_is_the_same_with_or_without_the_flag() {
+        let directory = std::env::temp_dir().join("shd-instrument-numerics-exact");
+        let _ = fs::remove_dir_all(&directory);
+        let (omitted, omitted_weights) = tiny_cell(&directory, "a", "ff+fixed+attn", &[]);
+        let (spelled, spelled_weights) =
+            tiny_cell(&directory, "b", "ff+fixed+attn", &["--numerics", "exact"]);
+        assert!(
+            omitted.trim_end().ends_with(",\"numerics\":\"exact\"}"),
+            "{omitted}"
+        );
+        assert_eq!(omitted.matches("\"numerics\"").count(), 1);
+        assert!(!omitted.contains("numerics_platform"), "{omitted}");
+        assert_eq!(without_timings(&omitted), without_timings(&spelled));
+        assert_eq!(omitted_weights, spelled_weights);
+        assert!(!omitted_weights.is_empty());
+    }
+
+    /// Base arms never touch BLAS, so `--numerics blas` changes nothing about
+    /// them but the recorded label: final weights are byte-identical and so is
+    /// every measured field of the cell.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn a_base_arm_is_byte_identical_in_both_modes() {
+        let directory = std::env::temp_dir().join("shd-instrument-numerics-base");
+        let _ = fs::remove_dir_all(&directory);
+        for arm in ["ff+fixed", "ff+alif", "rec+fixed", "rec+alif"] {
+            let (exact, exact_weights) = tiny_cell(&directory, &format!("{arm}-e"), arm, &[]);
+            let (blas, blas_weights) = tiny_cell(
+                &directory,
+                &format!("{arm}-b"),
+                arm,
+                &["--numerics", "blas"],
+            );
+            assert_eq!(exact_weights, blas_weights, "{arm}: final weights differ");
+            assert!(!exact_weights.is_empty());
+            let exact_body = without_timings(&exact);
+            let exact_body = exact_body.trim_end();
+            let blas_body = without_timings(&blas);
+            let blas_body = blas_body.trim_end();
+            let exact_stem = exact_body
+                .strip_suffix(",\"numerics\":\"exact\"}")
+                .unwrap_or_else(|| panic!("{arm}: {exact_body}"));
+            let blas_stem = blas_body.split(",\"numerics\":\"blas\"").next().unwrap();
+            assert_eq!(exact_stem, blas_stem, "{arm}: measured fields differ");
+            assert!(
+                blas.contains(",\"numerics\":\"blas\",\"numerics_platform\":\"macOS "),
+                "{blas}"
+            );
+        }
+    }
+
+    /// The attention arm in blas mode: a different corpus, so it is *not*
+    /// required to match exact — but it must run, say so and where, and train to
+    /// a finite result.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn an_attention_cell_in_blas_mode_records_its_mode_and_platform() {
+        let directory = std::env::temp_dir().join("shd-instrument-numerics-attn");
+        let _ = fs::remove_dir_all(&directory);
+        let (exact, exact_weights) = tiny_cell(&directory, "e", "ff+fixed+attn", &[]);
+        let (blas, blas_weights) =
+            tiny_cell(&directory, "b", "ff+fixed+attn", &["--numerics", "blas"]);
+        let platform = binn_learn::numerics::platform_label().unwrap();
+        assert!(
+            blas.trim_end().ends_with(&format!(
+                ",\"numerics\":\"blas\",\"numerics_platform\":\"{platform}\"}}"
+            )),
+            "{blas}"
+        );
+        assert!(blas.contains("\"non_finite_events\":0"), "{blas}");
+        assert!(exact.contains("\"non_finite_events\":0"), "{exact}");
+        assert_eq!(exact_weights.len(), blas_weights.len());
+        assert_ne!(
+            exact_weights, blas_weights,
+            "blas reproduced the exact weights bit for bit: the blas path did not run"
+        );
+    }
+
+    /// Thread-count and run-to-run determinism of the blas path, for every
+    /// attention arm. `BLASSetThreading` is per thread, so a rayon worker that
+    /// missed its pin would run a multithreaded GEMM whose partitioning depends
+    /// on the machine's load; 1, 3 and 8 workers must give the same bits.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn blas_is_bit_identical_across_thread_counts_and_runs() {
+        let train: Vec<_> = (0..24).map(sample).collect();
+        let indices: Vec<_> = (0..train.len()).collect();
+        for arm in MatchedArm::ALL_ATTENTION {
+            let exact = arm_weights(arm);
+            let mut blas = exact.clone();
+            assert_eq!(
+                blas.set_numerics(Numerics::Blas),
+                Ok(true),
+                "{}",
+                arm.label()
+            );
+            let run = |weights: &ShdArmWeights, threads: usize| {
+                let weight_layout = ShdArmWeightLayout::prepare(weights);
+                ThreadPoolBuilder::new()
+                    .num_threads(threads)
+                    .build()
+                    .expect("thread pool")
+                    .install(|| {
+                        result_bits(ordered_sample_gradients(
+                            weights,
+                            &weight_layout,
+                            &train,
+                            &indices,
+                            1.0,
+                            binn_learn::MATCHED_PHYSICAL_TAU_MS,
+                            None,
+                        ))
+                    })
+            };
+            let serial = run(&blas, 1);
+            assert!(
+                serial
+                    .iter()
+                    .any(|bits| bits.iter().any(|v| *v != 0 && *v != 0x8000_0000)),
+                "{}: all-zero gradient",
+                arm.label()
+            );
+            for threads in [1, 3, 8, 3, 8] {
+                assert_eq!(
+                    serial,
+                    run(&blas, threads),
+                    "{} differs at {threads} threads",
+                    arm.label()
+                );
+            }
+            assert_ne!(
+                serial,
+                run(&exact, 1),
+                "{}: blas matched exact bit for bit; the blas path did not run",
+                arm.label()
+            );
+        }
+    }
+
+    /// Selecting blas on a base arm reports that nothing was selected.
+    #[test]
+    fn a_base_arm_has_no_attention_to_select_numerics_for() {
+        for arm in MatchedArm::ALL {
+            let mut weights = arm_weights(arm);
+            assert!(weights.attn.is_none());
+            assert_eq!(
+                weights.set_numerics(Numerics::Exact),
+                Ok(false),
+                "{}",
+                arm.label()
+            );
+        }
     }
 }
