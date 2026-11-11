@@ -3912,7 +3912,7 @@ mod tests {
     /// here, `u = 2^-24`, about 2e-6 relative per product) through at most six
     /// chained products per layer, two layers: a few 1e-5 of the tensor's
     /// largest entry is the honest worst case. The bound used, 1e-4 of the
-    /// largest magnitude (floored at 1), is a few times that, and an O(1)
+    /// largest magnitude of that tensor, is a few times that, and an O(1)
     /// mistake — a transposed operand, a wrong leading dimension, a missed
     /// `score_scale` — is four orders of magnitude outside it.
     ///
@@ -3979,7 +3979,7 @@ mod tests {
                 for (name, g, w) in forward.into_iter().chain(backward) {
                     let (worst, scale) = spread(g, w);
                     assert!(
-                        worst <= 1e-4 * scale.max(1.0),
+                        worst <= 1e-4 * scale,
                         "{label} {name}: max difference {worst:e} against largest magnitude {scale:e}"
                     );
                     assert!(

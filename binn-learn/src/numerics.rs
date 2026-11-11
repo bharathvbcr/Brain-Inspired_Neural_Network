@@ -139,6 +139,9 @@ pub mod blas {
         // Returns 0 on success, -1 when the option is unsupported.
         // `enum BLAS_THREADING : unsigned int`, thread_api.h:14.
         fn BLASSetThreading(threading: u32) -> c_int;
+        // thread_api.h:45: `enum BLAS_THREADING BLASGetThreading()`, this thread's setting.
+        #[cfg(test)]
+        fn BLASGetThreading() -> u32;
     }
 
     // libSystem; <sys/sysctl.h>:810 in the same SDK:
@@ -199,6 +202,13 @@ pub mod blas {
             );
             pinned.set(true);
         });
+    }
+
+    /// This thread's current BLAS threading model (0 multi, 1 single).
+    #[cfg(all(test, feature = "accelerate", target_os = "macos"))]
+    pub(super) fn current_threading() -> u32 {
+        // SAFETY: no arguments and no pointers; it only reads this thread's setting.
+        unsafe { BLASGetThreading() }
     }
 
     /// A string-valued sysctl, e.g. `kern.osversion`.
@@ -476,6 +486,27 @@ mod tests {
             worst_ratio > 0.0,
             "every element was exact; the bound was never exercised"
         );
+    }
+
+    /// The pin is per thread, so a worker that never made the call would run
+    /// Accelerate's own threading. A fresh thread starts multi-threaded, and
+    /// is single-threaded after its first `sgemm` and not before.
+    #[cfg(all(feature = "accelerate", target_os = "macos"))]
+    #[test]
+    fn the_first_sgemm_on_a_thread_pins_that_thread_to_one_blas_thread() {
+        let (before, after_empty, after) = std::thread::spawn(|| {
+            let before = blas::current_threading();
+            // An empty product returns before the pin: it must not count.
+            blas::sgemm(false, false, 0, 0, 0, &[], 1, &[], 1, &mut [], 1);
+            let after_empty = blas::current_threading();
+            let a = [1.0_f32, 2.0, 3.0, 4.0];
+            let mut c = [0.0_f32; 4];
+            blas::sgemm(false, false, 2, 2, 2, &a, 2, &a, 2, &mut c, 2);
+            (before, after_empty, blas::current_threading())
+        })
+        .join()
+        .expect("worker");
+        assert_eq!((before, after_empty, after), (0, 0, 1));
     }
 
     #[cfg(all(feature = "accelerate", target_os = "macos"))]
