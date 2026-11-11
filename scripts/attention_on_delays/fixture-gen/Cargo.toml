@@ -1,0 +1,17 @@
+[package]
+name = "attention-parity-fixture"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Writes the Rust-side fixture for the PyTorch attention read-out parity test (attention on the delay substrate, prereg §3)"
+
+# Standalone: not a member of any surrounding workspace, so it builds against
+# BINN's binn-learn exactly as BINN's own workspace resolves it.
+[workspace]
+
+[dependencies]
+# In the study tree this crate sits at
+# binn-wsp-study/readout/attention_on_delays/fixture-gen. Once it lands in BINN
+# at scripts/attention_on_delays/fixture-gen, the path becomes
+# "../../../binn-learn".
+binn-learn = { path = "../../../binn-learn" }
