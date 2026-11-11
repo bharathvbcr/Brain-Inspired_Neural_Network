@@ -5,7 +5,11 @@ Run as a subprocess with the run copy as the working directory, so the copy's ow
 SHA-256 digests of the output, loss, gradients and state, the length T_h of the tensor the
 read-out reads, and, when the read-out is attached, facts about its parameters.
 
-usage: forward_probe.py <attention_readout 0|1> <batch> <seed>
+The batch's input length `t_in` stands for the padded length of a real batch: `pad_sequence_collate`
+pads each batch to its longest sample, so T_h is T_in + 24 at max_delay 25 and T_in at max_delay 1
+(amendment 2026-11-11).
+
+usage: forward_probe.py <attention_readout 0|1> <batch> <seed> [t_in, default 100]
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ def digest(tensors) -> str:
 
 def main(argv: list[str]) -> int:
     attention, batch, seed = argv[0] == "1", int(argv[1]), int(argv[2])
+    t_in = int(argv[3]) if len(argv) > 3 else 100
     from config import Config
     from snn_delays import SnnDelays
     from utils import set_seed
@@ -47,7 +52,6 @@ def main(argv: list[str]) -> int:
     hook = last_dropout.register_forward_hook(lambda _m, _i, out: captured.__setitem__("s", out))
 
     generator = torch.Generator().manual_seed(seed)
-    t_in = 100
     x = (torch.rand(t_in, batch, Config.n_inputs, generator=generator) < 0.05).float()
     labels = torch.randint(0, Config.n_outputs, (batch,), generator=generator)
     y = F.one_hot(labels, Config.n_outputs).float()
@@ -66,6 +70,7 @@ def main(argv: list[str]) -> int:
     reference_params += [p for opt in optimizers[1:] for g in opt.param_groups for p in g["params"]]
     result = {
         "max_delay": int(Config.max_delay),
+        "t_in": t_in,
         "t_h": int(captured["s"].shape[0]),
         "t_out": int(output.shape[0]),
         "readout_input_sha": digest([captured["s"]]),
