@@ -1344,6 +1344,35 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         self.assertEqual(self._generator_stems(source),
                          {f"p{i}" for i in range(1, 8)} | {"o1"})
 
+    @staticmethod
+    def _top_level(source, fn):
+        """`fn`'s body with every nested `{..}` collapsed to a NUL marker, leaving
+        only the statements at the body's own depth: a loop inside `if false
+        { .. }`, a match arm or a closure is nested, so no loop header survives
+        at this depth. None when `fn` is not found or its braces do not close.
+        Comments and literals are blanked first (`_RUST_TOKENS`), so a
+        `format!("{stem}")` does not unbalance the count."""
+        masked = _RUST_TOKENS.sub(
+            lambda m: '""' if m.group(0)[0] in "\"'" else " ", source)
+        start = re.search(rf"\bfn {fn}\(.*?\{{", masked, re.S)
+        if not start:
+            return None
+        out, depth = [], 1
+        for ch in masked[start.end():]:
+            if ch == "{":
+                depth += 1
+                if depth == 2:
+                    out.append("{\0")
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    return "".join(out)
+                if depth == 1:
+                    out.append("}")
+            elif depth == 1:
+                out.append(ch)
+        return None
+
     def _table_stems(self, source):
         """Every stem in every table `all_figures()` chains, parsed strictly.
 
@@ -1366,9 +1395,13 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
           row count must equal N, so a row the row pattern cannot parse (a
           height written `H * 2`, a new name shape) fails here instead of
           dropping its stem from the set.
-        * `generate_all` must contain `for (..) in all_figures()`, else the
-          chained tables are not what is written and reading them proves
-          nothing.
+        * `all_figures()`'s body is exactly `NAME.into_iter()(.chain(NAME))*`,
+          so no adapter (`.filter`, `.skip`, `.take`) drops a declared row.
+        * `generate_all` runs `for (..) in all_figures() { .. }` as a statement
+          of its own body (`_top_level`), not nested in a conditional, match
+          arm or closure, and with nothing between `all_figures()` and the
+          loop's brace (so no `.skip(1)`). Otherwise the chained tables are not
+          what is written and reading them proves nothing.
 
         Failures go through `self.fail`, not `assert`, which `python -O`
         removes. Rows are `("stem", draw_fn, H),` or `..., H_CONST),`, with
@@ -1379,13 +1412,21 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         body = re.search(r"fn all_figures\(\)[^{]*\{(.*?)\n\}", source, re.S)
         if not body:
             self.fail("all_figures() was not found in paper_figures.rs")
-        tables = re.findall(r"\b([A-Z][A-Z0-9_]*)\s*(?:\.|\))", body.group(1))
-        if not tables:
-            self.fail(f"all_figures() names no table: {body.group(1)!r}")
-        generate = re.search(r"fn generate_all\(.*?\n\}", source, re.S)
-        if not (generate and re.search(r"\bfor\s*\(.*?\)\s*in\s+all_figures\(\)",
-                                       generate.group(0))):
-            self.fail("generate_all no longer iterates all_figures()")
+        name = r"[A-Z][A-Z0-9_]*"
+        if not re.fullmatch(
+                rf"\s*{name}\s*\.\s*into_iter\(\)"
+                rf"(?:\s*\.\s*chain\(\s*{name}\s*\))*\s*", body.group(1)):
+            self.fail(f"all_figures() body must be exactly "
+                      f"`NAME.into_iter()(.chain(NAME))*`, so that no adapter "
+                      f"drops a row the tables declare: {body.group(1)!r}")
+        tables = re.findall(rf"\b({name})\s*(?:\.|\))", body.group(1))
+        generate = self._top_level(source, "generate_all")
+        if generate is None:
+            self.fail("generate_all was not found in paper_figures.rs")
+        if not re.search(r"(?:^|[;{}])\s*for\s*\([^()]*\)\s+in\s+all_figures\(\)"
+                         r"\s*\{\0\}", generate):
+            self.fail("generate_all no longer runs `for (..) in all_figures() "
+                      "{ .. }` as a statement of its own body")
         row = re.compile(r'\(\s*"(\w+)"\s*,\s*draw_\w+\s*,\s*H(?:_\w+)?\s*,?\s*\)')
         stems, counts = set(), {}
         for name in tables:
@@ -1439,6 +1480,55 @@ class TheSkeletonsFigureMapIsCurrentTest(unittest.TestCase):
         and the extractor reports 8 rows for a table of 7."""
         self.assertEqual(self._table_stems(self.CHAR_LITERAL_FIXTURE),
                          {f"p{i}" for i in range(1, 8)} | {"o1"})
+
+    def _mutant(self, old, new):
+        """The fixture with `old` replaced by `new`; `old` must be present, so
+        a fixture edit cannot turn a mutation into a no-op that passes."""
+        self.assertIn(old, self.CHAR_LITERAL_FIXTURE)
+        return self.CHAR_LITERAL_FIXTURE.replace(old, new)
+
+    def test_the_generate_all_and_all_figures_guards_reject_each_mutation(self):
+        """Each of these used to pass: the guard checked only that the text
+        `for (..) in all_figures()` appeared somewhere in `generate_all`."""
+        loop = ("    for (stem, draw, h) in all_figures() {\n"
+                "        write_pair_sized(out_dir, stem, draw, h)?;\n"
+                "    }\n")
+        chain = "PAPER_FIGURES.into_iter().chain(OTHER_FIGURES)"
+        mutants = {
+            "M3 .skip(1) drops the first figure": (
+                "in all_figures() {", "in all_figures().skip(1) {"),
+            "M4 .filter inside all_figures()": (
+                chain, chain + ".filter(|(s, _, _)| *s != \"p1\")"),
+            "M4b .take inside all_figures()": (chain, chain + ".take(3)"),
+            "M4c concat body": (chain, "[PAPER_FIGURES, OTHER_FIGURES].concat()"),
+            "M5 loop under if false": (
+                loop, "    if false {\n" + loop + "    }\n"),
+            "M5b loop under a match arm": (
+                loop, "    match 1 {\n        _ => {\n" + loop + "        }\n    }\n"),
+            "M5c loop in a closure": (
+                loop, "    let f = || {\n" + loop + "    };\n"),
+            "loop over a different iterator": (
+                "in all_figures() {", "in other_figures() {"),
+        }
+        for name, (old, new) in mutants.items():
+            with self.subTest(mutation=name):
+                with self.assertRaises(AssertionError):
+                    self._table_stems(self._mutant(old, new))
+
+    def test_the_guards_accept_the_real_shapes(self):
+        """The mutation test is only evidence if the unmutated fixture, a
+        reformatted chain and a body with other statements pass the same
+        guards."""
+        self._table_stems(self.CHAR_LITERAL_FIXTURE)
+        chain = "PAPER_FIGURES.into_iter().chain(OTHER_FIGURES)"
+        self._table_stems(self._mutant(
+            chain, "PAPER_FIGURES\n        .into_iter()\n        .chain(OTHER_FIGURES)"))
+        self._table_stems(self._mutant(
+            "    for (stem, draw, h) in all_figures() {\n"
+            "        write_pair_sized(out_dir, stem, draw, h)?;\n    }\n",
+            "    std::fs::create_dir_all(out_dir)?;\n"
+            "    for (stem, draw, h) in all_figures() {\n"
+            "        write_pair_sized(out_dir, format!(\"{stem}\"), draw, h)?;\n    }\n"))
 
     def test_the_stripper_keeps_code_strings_and_lifetimes(self):
         stripped = strip_rust_comments(
