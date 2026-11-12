@@ -1,0 +1,8 @@
+1 r4 wall=24.92109 user=140.00 instructions=2794334713654 cycles=580096032634 weights=oracle load 177.48 202.96 163.04
+2 blas wall=18.927447 user=60.15 instructions=1051833654034 cycles=259876872151 weights=MISMATCH load 144.52 193.24 160.70
+3 blas wall=17.211519 user=59.84 instructions=1052641735015 cycles=261151268368 weights=MISMATCH load 140.78 189.15 159.98
+4 r4 wall=33.902175 user=138.78 instructions=2793802215754 cycles=584236778683 weights=oracle load 134.75 185.44 159.16
+5 r4 wall=45.2496 user=143.25 instructions=2795104860216 cycles=607929693317 weights=oracle load 141.86 181.48 158.77
+6 blas wall=25.655489 user=59.72 instructions=1053521288929 cycles=260907242210 weights=MISMATCH load 121.35 170.70 155.98
+7 blas wall=48.300488 user=59.77 instructions=1054180267398 cycles=265593856468 weights=MISMATCH load 120.28 165.99 154.80
+8 r4 wall=61.716286 user=138.41 instructions=2798100457038 cycles=607700097750 weights=oracle load 119.46 158.78 152.77

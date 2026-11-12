@@ -1,0 +1,4 @@
+1 blas wall=46.216923 user=58.87 instructions=1053310939621 cycles=258982312884 weights=MISMATCH load 163.59 161.99 154.33
+2 r4 wall=50.603295 user=139.00 instructions=2796300919524 cycles=595526551390 weights=oracle load 181.28 167.07 156.64
+3 r4 wall=51.796542 user=137.67 instructions=2796209620141 cycles=596153207489 weights=oracle load 162.65 164.89 156.47
+4 blas wall=25.171801 user=59.13 instructions=1052960885746 cycles=256442437601 weights=MISMATCH load 175.87 167.10 157.75

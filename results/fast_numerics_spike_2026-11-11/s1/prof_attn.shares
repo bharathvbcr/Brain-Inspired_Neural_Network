@@ -1,0 +1,18 @@
+total 633676 idle 96302 busy 537374
+  158504 all= 25.0%  busy= 29.5%  _RINvNtCscbXP5VrWpPQ_10binn_learn13shd_attention11dot_columnsKb0_EB4_
+  120217 all= 19.0%  busy= 22.4%  _RINvNtCscbXP5VrWpPQ_10binn_learn13shd_attention11dot_columnsKb1_EB4_
+   90722 all= 14.3%  busy= 16.9%  _RNvNtCscbXP5VrWpPQ_10binn_learn13shd_attention18attention_gradient
+   72387 all= 11.4%  busy=  __psynch_cvwait
+   55641 all=  8.8%  busy= 10.4%  _RNvNtCscbXP5VrWpPQ_10binn_learn13shd_attention14transpose_into
+   38429 all=  6.1%  busy=  7.2%  expf
+   31419 all=  5.0%  busy=  5.8%  _RNvNtCscbXP5VrWpPQ_10binn_learn13shd_attention27attention_forward_presented
+   23915 all=  3.8%  busy=  swtch_pri
+   12281 all=  1.9%  busy=  2.3%  _RNvNtCscbXP5VrWpPQ_10binn_learn16shd_matched_arms36run_loss_and_gradient_with_workspace
+    8699 all=  1.4%  busy=  1.6%  DYLD-STUB$$expf
+    7519 all=  1.2%  busy=  1.4%  madvise
+    3025 all=  0.5%  busy=  0.6%  __ulock_wait2
+    1672 all=  0.3%  busy=  0.3%  __sincosf_stret
+    1020 all=  0.2%  busy=  0.2%  __ulock_wake
+matmul-like (dot_columns*, transposes, separately-symbolised axpy): all=52.8% busy=62.3%
+Amdahl ceiling (infinitely fast, of busy): 2.65x ; of all samples: 2.12x
+dot_columns only: busy=51.9% ceiling 2.08x

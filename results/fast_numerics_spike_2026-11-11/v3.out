@@ -1,0 +1,8 @@
+1 r4 threads=3 real=56.20 user=135.51 cycles=573669414730 sha=9c364bd9441d1406 load 79.23 125.30 146.28
+2 blas threads=3 real=27.36 user=56.67 cycles=246805339954 sha=b7ab4a5b91e3f59a load 118.02 128.21 146.03
+3 blas threads=3 real=34.19 user=57.09 cycles=249454626021 sha=b7ab4a5b91e3f59a load 80.44 118.04 141.72
+4 r4 threads=3 real=64.25 user=134.40 cycles=589053605641 sha=9c364bd9441d1406 load 81.67 113.87 139.23
+5 r4 threads=3 real=59.28 user=133.66 cycles=577556274030 sha=9c364bd9441d1406 load 64.28 102.67 133.16
+6 blas threads=3 real=34.77 user=58.43 cycles=259809071005 sha=b7ab4a5b91e3f59a load 55.67 93.85 127.98
+7 blas threads=3 real=35.13 user=58.57 cycles=259860652692 sha=b7ab4a5b91e3f59a load 61.46 91.00 125.56
+8 r4 threads=3 real=63.36 user=134.98 cycles=585020785843 sha=9c364bd9441d1406 load 70.08 89.34 123.52
