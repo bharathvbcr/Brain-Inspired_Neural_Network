@@ -65,10 +65,7 @@ FIXTURE_JSON_BLAS = FIXTURE_JSON.with_name(FIXTURE_JSON.stem + "_blas.json")
 NUMERICS_MODES = ("exact", "blas")
 DEFAULT_NUMERICS = "exact"
 DEFAULT_EVENTS = ROOT / "data" / "shd" / "events"
-DEFAULT_OUT = Path(
-    "/private/tmp/claude-501/-Users-bharath-Code-devtools-GitPulse/"
-    "84f5d03c-7572-437b-a627-46a617edb850/scratchpad/fixtures"
-)
+DEFAULT_OUT = ROOT / "target" / "train_cell_fixtures"
 SCHEMA = "train-cell-fixtures-v1"
 SEED = 5170001
 EPOCHS = 2

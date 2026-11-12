@@ -1,0 +1,38 @@
+## fmt
+FMT_OK
+## gc6
+GC6 PASS: no undocumented unsafe
+gc6 exit 0
+## gc_checks
+=== GC1 ===
+GC1 PASS: no banned production-path symbols (comments excluded, scanner calibrated)
+=== GC2 ===
+GC2 PASS: no banned ML framework dependencies (matcher calibrated: 5/5 caught, 0 false)
+=== GC3 ===
+GC3 PASS: determinism fingerprints executed (>=1 test each) for 8 entries covering every crate except: binn-hybrid-learn
+=== GC4 ===
+GC4 PASS: no Encoder/Decoder train/fit methods (2 files read)
+=== GC5 ===
+GC5 PASS: simd, timing-wheel, engine-step, k-WTA, and plasticity benches are real and compile
+=== GC6 ===
+GC6 PASS: no undocumented unsafe
+=== GC7 ===
+GC7 PASS: result emission rejects missing activity_sparsity (>=1 test executed)
+All GC1–GC7 checks executed and passed.
+gc_checks exit 0
+## clippy
+    Checking binn-data v0.1.0 (/Users/bharath/Code/research/BINN.wt-kernel/binn-data)
+    Checking binn-areas v0.1.0 (/Users/bharath/Code/research/BINN.wt-kernel/binn-areas)
+    Checking binn-lab v0.1.0 (/Users/bharath/Code/research/BINN.wt-kernel/binn-lab)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.79s
+## build
+   Compiling binn-learn v0.1.0 (/Users/bharath/Code/research/BINN.wt-kernel/binn-learn)
+   Compiling binn-lab v0.1.0 (/Users/bharath/Code/research/BINN.wt-kernel/binn-lab)
+    Finished `release` profile [optimized] target(s) in 16.05s
+## oracle
+train-cell pid 3778
+wall 76 s
+9c364bd9441d1406cd97aa15078a83c1042b93180963f6bf159652528df512d3  /private/tmp/claude-501/-Users-bharath-Code-devtools-GitPulse/84f5d03c-7572-437b-a627-46a617edb850/scratchpad/prof/new3/final.weights
+## pins
+pins exit 1
+ALLDONE

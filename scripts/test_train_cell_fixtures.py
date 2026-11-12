@@ -68,6 +68,12 @@ class Fake:
 
 
 class CommandTests(unittest.TestCase):
+    def test_default_scratch_directory_is_inside_this_checkout(self) -> None:
+        # The default once named another agent session's scratchpad, which
+        # exists on one machine only and was shared with a running replay.
+        out = F.DEFAULT_OUT.resolve()
+        self.assertTrue(out.is_relative_to(F.ROOT / "target"), out)
+
     def test_names_are_unique_and_the_oracle_is_present(self) -> None:
         names = [fx.name for fx in F.FIXTURES]
         self.assertEqual(len(names), len(set(names)))
