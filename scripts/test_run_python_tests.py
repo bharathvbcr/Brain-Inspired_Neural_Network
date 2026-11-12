@@ -82,6 +82,21 @@ ZERO_TESTS = "import unittest\nclass T(unittest.TestCase): pass\nunittest.main()
 # it lands after the real one and becomes the "last summary".
 FAKE_SUMMARY_ALL_SKIPPED = ALL_SKIPPED.replace(
     "unittest.main()\n", "print('Ran 3 tests in 0.010s')\nunittest.main()\n")
+# A real zero-test run that still exits 0: `unittest.main(exit=False)` prints
+# "NO TESTS RAN" and returns. Python 3.12's own exit 5 is what hid this case.
+ZERO_TESTS_EXIT_ZERO = ZERO_TESTS.replace("unittest.main()\n", "unittest.main(exit=False)\n")
+# Every test skipped, then an atexit hook writes a clean-looking summary AFTER
+# unittest's own, so it is the last text in the file whatever the buffering.
+ATEXIT_SUMMARY_ALL_SKIPPED = (
+    "import atexit\n"
+    "atexit.register(lambda: print('Ran 3 tests in 0.010s\\n\\nOK', flush=True))\n" + ALL_SKIPPED)
+# A printed summary-shaped line, block-buffered without PYTHONUNBUFFERED: it
+# flushes at exit, after unittest's real summary, and would be reported as it.
+PRINTED_SUMMARY_PASSING = PASSING.replace(
+    "unittest.main()\n", "print('Ran 5 tests in 0.010s\\n\\nOK')\nunittest.main()\n")
+# `FAILED` and then a stray `OK` line: only the FAILED branch of the verdict
+# scan rejects it; without that branch the `OK` after it would be the verdict.
+FAILED_THEN_STRAY_OK = FAILED_EXIT_ZERO + "print('OK')\n"
 # A real failure whose output merely CONTAINS the words of a missing import.
 H5PY_THEN_FAIL_QUOTING_IMPORT_ERROR = (
     "import h5py\n"
@@ -363,12 +378,83 @@ class RunnerTest(RunnerBase):
         self.assertNotIn("executed and passed", r.stdout)
 
     def test_system_zero_tests_is_not_a_pass(self):
+        """Characterization: Python 3.12 exits 5 on "Ran 0 tests", so this passes
+        against any runner that fails a nonzero exit. The discriminating case is
+        `test_system_zero_tests_at_exit_zero_is_not_a_pass`."""
         t = self.add("test_zero.py", ZERO_TESTS)
         r = self.run_gate("", "")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertIn(f"[FAIL] {t}", r.stdout)
         self.assertNotIn("[ ok ]", r.stdout)
         self.assertIn("passed: 0   failed: 1", r.stdout)
+
+    def test_a_run_with_skips_never_says_executed_and_passed(self):
+        t = self.add("test_part.py", PARTIAL_SKIP)
+        self.add("test_plain.py", PASSING)
+        r = self.run_gate("", "")
+        # Exit status stays 0 (record_checks.sh reads only that); the wording
+        # must say plainly that something did not run.
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertNotIn("executed and passed", r.stdout)
+        self.assertIn(f"but 1 file(s) had skipped tests: {t}", r.stdout)
+
+    def test_a_run_with_no_skips_still_says_executed_and_passed(self):
+        self.add("test_plain.py", PASSING)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("All discovered python tests executed and passed.", r.stdout)
+        self.assertNotIn("had skipped tests", r.stdout)
+
+    def test_the_last_n_of_n_line_must_be_complete(self):
+        t = self.add("test_hand.py", "print('2/2 passed')\nprint('1/3 passed')\n")
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+
+    def test_a_later_complete_n_of_n_line_after_a_short_one_is_judged_by_the_last(self):
+        t = self.add("test_hand.py", "print('1/3 passed')\nprint('3/3 passed')\n")
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (3/3 passed)", r.stdout)
+
+    def test_system_zero_tests_at_exit_zero_is_not_a_pass(self):
+        # Discriminating: exits 0 on every interpreter, so only the runner's own
+        # "no proof any test ran" rule can reject it.
+        t = self.add("test_zero0.py", ZERO_TESTS_EXIT_ZERO)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+
+    def test_a_summary_written_after_unittests_own_cannot_turn_all_skipped_into_a_pass(self):
+        t = self.add("test_atexit.py", ATEXIT_SUMMARY_ALL_SKIPPED)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+
+    def test_the_same_holds_in_the_venv(self):
+        t = self.add("test_atexit.py", "import h5py\n" + ATEXIT_SUMMARY_ALL_SKIPPED)
+        r = self.run_gate(t, self.fake_venv("venv"))
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
+
+    def test_the_reported_summary_is_unittests_own_not_a_printed_one(self):
+        # Through the fake venv, whose wrapper has no -I, so PYTHONUNBUFFERED set
+        # by bounded() reaches the child. Buffered, the printed "Ran 5 tests"
+        # would flush last and be reported.
+        t = self.add("test_needs.py", "import h5py\n" + PRINTED_SUMMARY_PASSING)
+        r = self.run_gate(t, self.fake_venv("venv"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn(f"[ ok ] {t}  (Ran 2 tests; in venv)", r.stdout)
+
+    def test_a_failed_verdict_is_not_rescued_by_a_later_ok_line(self):
+        t = self.add("test_failedok.py", FAILED_THEN_STRAY_OK)
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn(f"[FAIL] {t}", r.stdout)
+        self.assertNotIn("[ ok ]", r.stdout)
 
     def test_system_exit_zero_with_no_output_is_not_a_pass(self):
         t = self.add("test_silent.py", "pass\n")
@@ -474,33 +560,54 @@ class RecordChecksTest(RunnerBase):
         self.assertNotIn(str(self.tmp / "old"), r.stdout.split("\n")[0])
 
 
+def _is_main_guard(test) -> bool:
+    """`__name__ == "__main__"`, in either operand order."""
+    import ast
+
+    if not (isinstance(test, ast.Compare) and len(test.ops) == 1
+            and isinstance(test.ops[0], ast.Eq) and len(test.comparators) == 1):
+        return False
+    operands = (test.left, test.comparators[0])
+    return (any(isinstance(o, ast.Name) and o.id == "__name__" for o in operands)
+            and any(isinstance(o, ast.Constant) and o.value == "__main__" for o in operands))
+
+
+def _find_main_guard(node):
+    """The first main guard in `node` or the statements it runs inline.
+
+    Descends into `if`/`try`/`with`/loop blocks, which execute at import, but not
+    into `def` or `class` bodies, which do not.
+    """
+    import ast
+
+    if isinstance(node, ast.If) and _is_main_guard(node.test):
+        return node
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return None
+    for field in ("body", "orelse", "finalbody", "handlers"):
+        for child in getattr(node, field, None) or []:
+            hit = _find_main_guard(child)
+            if hit is not None:
+                return hit
+    return None
+
+
 def first_dead_statement(source: str, filename: str = "<test>"):
     """The first top-level statement that follows a module-level main guard.
 
     Returns `(guard_line, dead_line)` or None. The gate runs each file as a
     script, and `unittest.main()` (or a hand-rolled runner's `sys.exit`) ends
     the process, so anything after the guard is collected by `-m unittest
-    discover` but never run by the gate.
+    discover` but never run by the gate. The guard may be written either way
+    round and may sit inside a `try:` (or other inline block).
     """
     import ast
 
     body = ast.parse(source, filename).body
     for index, node in enumerate(body):
-        if not isinstance(node, ast.If):
-            continue
-        test = node.test
-        if (
-            isinstance(test, ast.Compare)
-            and isinstance(test.left, ast.Name)
-            and test.left.id == "__name__"
-            and len(test.ops) == 1
-            and isinstance(test.ops[0], ast.Eq)
-            and len(test.comparators) == 1
-            and isinstance(test.comparators[0], ast.Constant)
-            and test.comparators[0].value == "__main__"
-            and index + 1 < len(body)
-        ):
-            return node.lineno, body[index + 1].lineno
+        guard = _find_main_guard(node)
+        if guard is not None and index + 1 < len(body):
+            return guard.lineno, body[index + 1].lineno
     return None
 
 
@@ -531,6 +638,29 @@ class MainGuardIsLastTests(unittest.TestCase):
         self.assertIsNone(first_dead_statement("class T: pass\n"))
         # A guard written the other way round, or an unrelated `if`, is not one.
         self.assertIsNone(first_dead_statement('if x == "__main__":\n    pass\nx = 1\n'))
+
+    def test_the_detector_flags_a_reversed_operand_guard(self):
+        self.assertEqual(
+            first_dead_statement('if "__main__" == __name__:\n    pass\nclass T: pass\n'), (1, 3))
+
+    def test_the_detector_flags_a_guard_nested_in_try(self):
+        nested = (
+            "try:\n"
+            '    if __name__ == "__main__":\n'
+            "        pass\n"
+            "except Exception:\n"
+            "    raise\n"
+            "class T: pass\n"
+        )
+        self.assertEqual(first_dead_statement(nested), (2, 6))
+        in_else = 'if True:\n    pass\nelse:\n    if "__main__" == __name__:\n        pass\nx = 1\n'
+        self.assertEqual(first_dead_statement(in_else), (4, 6))
+
+    def test_a_guard_that_ends_its_block_is_not_dead_code(self):
+        # Anything after the guard inside the same nested block is still ahead of
+        # nothing runnable only if it is at the end of the whole module.
+        self.assertIsNone(first_dead_statement(
+            'try:\n    if __name__ == "__main__":\n        pass\nexcept Exception:\n    raise\n'))
 
 
 if __name__ == "__main__":

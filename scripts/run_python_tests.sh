@@ -183,27 +183,38 @@ missing_dep() {
 # `unittest.main(exit=False)`) or no verdict at all is not a pass.
 evidence() {
   local summary n skipped
+  # EVERY unittest summary in the output must be a pass, not only the last: a
+  # test cannot be made to look like it ran by an `atexit` hook or a re-wrapped
+  # stdout writing `Ran 3 tests ... OK` after the real, all-skipped summary.
+  # The reported line is the last one, with the most skips any summary showed.
   summary="$(awk '
-    /^Ran [0-9]+ tests? in / { n = $2; k = ""; want = 1; next }
+    function settle() {
+      if (n == "") return
+      if (k == "" || k == "failed" || n + 0 == 0 || k + 0 >= n + 0) bad = 1
+      if (k != "" && k != "failed" && k + 0 > maxk) maxk = k + 0
+      n_last = n
+    }
+    /^Ran [0-9]+ tests? in / { settle(); n = $2; k = ""; want = 1; seen = 1; next }
     want && /^OK( |$)/ {
       k = 0
       if (match($0, /skipped=[0-9]+/)) k = substr($0, RSTART + 8, RLENGTH - 8)
       want = 0
     }
     want && /^FAILED( |$)/ { k = "failed"; want = 0 }
-    END { if (n != "") print n, (k == "" ? "none" : k) }' "$1")"
+    END { settle(); if (seen) print (bad ? "bad" : n_last), maxk + 0 }' "$1")"
   if [ -n "$summary" ]; then
     n="${summary% *}"
     skipped="${summary#* }"
-    case "$skipped" in failed|none) return 1 ;; esac
-    [ "$n" -gt 0 ] || return 1
-    [ "$skipped" -lt "$n" ] || return 1
+    [ "$n" != bad ] || return 1
     echo "Ran $n test$([ "$n" -eq 1 ] || echo s)$([ "${skipped:-0}" -eq 0 ] || echo ", $skipped skipped")"
     return 0
   fi
-  # A hand-rolled runner's "N/N passed" (BSD sed has no ERE backreference).
-  n="$(awk -F'[/ ]' '$1 ~ /^[0-9]+$/ && $1 == $2 && $3 == "passed" && NF == 3 { n = $1 } END { if (n != "") print n }' "$1")"
-  if [ -n "$n" ] && [ "$n" -gt 0 ]; then
+  # A hand-rolled runner's "N/N passed". The LAST `X/Y passed` line is the
+  # summary, and it must be complete (X == Y > 0): an earlier `2/2 passed` does
+  # not excuse a later `1/3 passed`.
+  n="$(awk -F'[/ ]' '$1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 == "passed" && NF == 3 { x = $1; y = $2; seen = 1 }
+    END { if (seen && x == y && x > 0) print x }' "$1")"
+  if [ -n "$n" ]; then
     echo "$n/$n passed"
     return 0
   fi
@@ -223,6 +234,7 @@ EOF
 
 passed=0
 with_skips=0   # files that passed with some (not all) tests skipped
+skipped_files=()
 failed=()
 unrunnable=()
 needs_env=()   # tests that failed on an optional dep under the system python
@@ -252,7 +264,7 @@ judge_run() {
   local file="$1" outfile="$2" where="$3" proof
   if proof="$(evidence "$outfile")"; then
     passed=$((passed + 1))
-    case "$proof" in *" skipped") with_skips=$((with_skips + 1)) ;; esac
+    case "$proof" in *" skipped") with_skips=$((with_skips + 1)); skipped_files+=("$file") ;; esac
     printf '  [ ok ] %s  (%s%s)\n' "$file" "$proof" "${where:+; $where}"
     return 0
   fi
@@ -357,5 +369,11 @@ if [ "${#unrunnable[@]}" -ne 0 ]; then
   echo "environment (.venv-shd-cal or .venv-shd, see VENV_PYTHONS) and none had the dependency:"
   for entry in "${unrunnable[@]}"; do echo "  - $entry"; done
   exit 3
+fi
+if [ "$with_skips" -ne 0 ]; then
+  # Exit status stays 0 (record_checks.sh consumes it, and the spikingjelly skip
+  # is permanent on some machines), but the verdict must not read as a full pass.
+  echo "Every discovered python test ran without failing, but $with_skips file(s) had skipped tests: ${skipped_files[*]}"
+  exit 0
 fi
 echo "All discovered python tests executed and passed."
