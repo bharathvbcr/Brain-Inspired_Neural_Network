@@ -59,7 +59,9 @@
 #
 # # Exit status
 #
-#   0  every test ran and passed
+#   0  nothing failed; every test ran and passed, or some files had skipped
+#      tests (the last line then names them and never says "executed and
+#      passed")
 #   1  a test failed, or a pin is stale/missing
 #   3  nothing failed, but some pinned tests COULD NOT RUN (no venv with the
 #      dependency). Not a pass, and not a failure: `record_checks.sh` reports it

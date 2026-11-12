@@ -395,6 +395,11 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
             )
             probe = ReferenceKernelInvariantTests("test_the_kernel_construction_is_not_guarded_by_model_type")
             probe.pinned = lambda relative: broken
+            # A real spikingjelly already imported (or cached by an earlier
+            # test) would satisfy the import and hide the fake: set every
+            # spikingjelly module aside for the probe, and put them back.
+            cached = {name: sys.modules.pop(name) for name in list(sys.modules)
+                      if name == "spikingjelly" or name.startswith("spikingjelly.")}
             sys.path.insert(0, tmp)
             try:
                 with self.assertRaises(ModuleNotFoundError):
@@ -403,7 +408,38 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
                 self.fail(f"skipped on an installed package's missing submodule: {skip}")
             finally:
                 sys.path.remove(tmp)
-                sys.modules.pop("spikingjelly", None)
+                for name in [n for n in sys.modules
+                             if n == "spikingjelly" or n.startswith("spikingjelly.")]:
+                    del sys.modules[name]
+                sys.modules.update(cached)
+
+    def test_the_submodule_probe_holds_with_a_real_spikingjelly_already_imported(self) -> None:
+        """The probe above must not depend on test order: with a complete
+        spikingjelly cached first, it still sees only its broken fake, and the
+        cached modules are restored afterwards."""
+        import types
+        complete = types.ModuleType("spikingjelly")
+        complete.__path__ = []
+        sub = types.ModuleType("spikingjelly.activation_based")
+        sub.neuron = object()
+        complete.activation_based = sub
+        before = {n: m for n, m in sys.modules.items()
+                  if n == "spikingjelly" or n.startswith("spikingjelly.")}
+        sys.modules["spikingjelly"] = complete
+        sys.modules["spikingjelly.activation_based"] = sub
+        try:
+            result = unittest.TestResult()
+            ReferenceKernelInvariantTests(
+                "test_an_installed_reference_dependency_missing_a_submodule_is_a_failure"
+            ).run(result)
+            self.assertEqual((result.failures, result.errors, result.skipped), ([], [], []))
+            self.assertIs(sys.modules.get("spikingjelly"), complete)
+            self.assertIs(sys.modules.get("spikingjelly.activation_based"), sub)
+        finally:
+            for name in [n for n in sys.modules
+                         if n == "spikingjelly" or n.startswith("spikingjelly.")]:
+                del sys.modules[name]
+            sys.modules.update(before)
 
     def test_the_temporal_kernel_survives_every_model_type(self) -> None:
         """No documented mode removes the kernel."""
