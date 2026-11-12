@@ -91,9 +91,12 @@ kernel. Why was not measured here.
 * `profile_train_cell.sh`: the profiling invocation.
 * `abba3/`, `abba4/`: `N.tag.json` (cell), `.time` (`/usr/bin/time -l`),
   `.load` (`uptime` before the run), `weights.sha256`.
-* `round3.log`: the verification log of the kernel branch at the time. It ends
-  `pins exit 1`: the attention pin tests failed in that run. `round3b.log` is a
-  later run of the checks, which ended `pins exit 0`. `round3.log` is retained
+* `round3.out`: the verification log of the kernel branch at the time. It ends
+  `pins exit 1`: the attention pin tests failed in that run. `round3b.out` is a
+  later run of the checks, which ended `pins exit 0`. `round3.out` is retained
   as written and is not evidence that the pins pass.
-* `round3b.log`: the later verification log (see above).
+* `round3b.out`: the later verification log (see above).
+* Both were written as `round3.log` / `round3b.log` in the run's scratch
+  directory and committed later, byte for byte, under `.out` because the
+  repository ignores `*.log`.
 * `derive_tables.py`: recomputes the tables above.
