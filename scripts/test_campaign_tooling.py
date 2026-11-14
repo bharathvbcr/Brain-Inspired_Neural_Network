@@ -1874,6 +1874,22 @@ CORPUS_BASELINE = {
     #: so no archived verdict moved (the v1-v4 entries are unchanged).
     "train_cell_kernel_2026-11-10":
         (19, 19, "c3c0531ac406d676"),
+    #: Landed 2026-11-11 in 85f100d with the fast-numerics bridge prereg: the
+    #: spike record, not campaign cells. Of its 119 cells, 37 are invalid
+    #: (`classes_predicted`; 4 also `majority_prediction`). No cell carries a
+    #: `numerics` key, because the spike binaries predate the field, so the scan
+    #: reads all 119 as exact. By their run scripts, 21 are blas (s2/aa_* x6,
+    #: abba1 x4, abba2 x2, o_blas1, v1 x4, v3 x4) and 20 fma or fma-split
+    #: (s1/aa x8 and the 12 `var` cells of abba_attn_fma, abba_base_fma and
+    #: abba_attn_split). The `r4` cells in those abba_* directories are exact,
+    #: so neither file names nor directory names give the mode. This row pins
+    #: the state as it stands, pending the owner's decision (ft-ef3b7a9d).
+    #: Labelling in place is not just a re-record: `fma` is not an allowed
+    #: numerics value, so a cell labelled fma becomes invalid, and a mixed
+    #: corpus fails the one-mode-per-corpus check. A new key, so no archived
+    #: verdict moved.
+    "fast_numerics_spike_2026-11-11":
+        (119, 82, "c8df2daf172b6481"),
 }
 
 
