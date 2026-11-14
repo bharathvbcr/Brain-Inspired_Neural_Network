@@ -10,8 +10,8 @@ description = "Writes the Rust-side fixture for the PyTorch attention read-out p
 [workspace]
 
 [dependencies]
-# In the study tree this crate sits at
-# binn-wsp-study/readout/attention_on_delays/fixture-gen. Once it lands in BINN
-# at scripts/attention_on_delays/fixture-gen, the path becomes
-# "../../../binn-learn".
+# This crate sits at scripts/attention_on_delays/fixture-gen, three levels
+# below the BINN root. It was written in the study tree at
+# binn-wsp-study/readout/attention_on_delays/fixture-gen, where the path
+# differed.
 binn-learn = { path = "../../../binn-learn" }

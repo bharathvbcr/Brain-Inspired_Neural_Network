@@ -1874,6 +1874,16 @@ CORPUS_BASELINE = {
     #: so no archived verdict moved (the v1-v4 entries are unchanged).
     "train_cell_kernel_2026-11-10":
         (19, 19, "c3c0531ac406d676"),
+    #: Landed 2026-11-11 in 85f100d with the fast-numerics bridge prereg: the
+    #: spike record, not campaign cells. Of its 119 cells, 37 are invalid
+    #: (`classes_predicted`; 4 also `majority_prediction`). 15 blas-path and 24
+    #: fma-path cells carry no `numerics` key, because the spike binaries
+    #: predate the field, so the scan reads them as exact. This row pins that
+    #: state as it stands, pending the owner's labelling (ft-ef3b7a9d), and must
+    #: be re-recorded when they are labelled. A new key, so no archived verdict
+    #: moved.
+    "fast_numerics_spike_2026-11-11":
+        (119, 82, "c8df2daf172b6481"),
 }
 
 
