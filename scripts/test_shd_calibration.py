@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 import re
@@ -294,6 +295,34 @@ class ReferenceCheckoutLockTests(unittest.TestCase):
     # load-bearing, and it costs nothing.
 
 
+def _is_spikingjelly(name: str) -> bool:
+    return name == "spikingjelly" or name.startswith("spikingjelly.")
+
+
+@contextlib.contextmanager
+def only_this_spikingjelly(tmp: str):
+    """`tmp` is the only place `spikingjelly` can come from inside the block.
+
+    A real spikingjelly already imported (or cached by an earlier test) would
+    satisfy an import and hide a fake, so every spikingjelly module is set aside
+    first. On exit whatever the block imported is dropped and the set-aside
+    modules are put back, even when the block itself removed `tmp` from
+    sys.path.
+    """
+    cached = {name: sys.modules.pop(name) for name in list(sys.modules)
+              if _is_spikingjelly(name)}
+    sys.path.insert(0, tmp)
+    try:
+        yield
+    finally:
+        # Modules first, and the path entry only if the block left it there.
+        for name in [n for n in sys.modules if _is_spikingjelly(n)]:
+            del sys.modules[name]
+        sys.modules.update(cached)
+        if tmp in sys.path:
+            sys.path.remove(tmp)
+
+
 class ReferenceKernelInvariantTests(unittest.TestCase):
     """The two structural claims the ablation series rests on and no run can test.
 
@@ -395,23 +424,54 @@ class ReferenceKernelInvariantTests(unittest.TestCase):
             )
             probe = ReferenceKernelInvariantTests("test_the_kernel_construction_is_not_guarded_by_model_type")
             probe.pinned = lambda relative: broken
-            # A real spikingjelly already imported (or cached by an earlier
-            # test) would satisfy the import and hide the fake: set every
-            # spikingjelly module aside for the probe, and put them back.
-            cached = {name: sys.modules.pop(name) for name in list(sys.modules)
-                      if name == "spikingjelly" or name.startswith("spikingjelly.")}
-            sys.path.insert(0, tmp)
-            try:
-                with self.assertRaises(ModuleNotFoundError):
-                    probe.config_with()
-            except unittest.SkipTest as skip:
-                self.fail(f"skipped on an installed package's missing submodule: {skip}")
-            finally:
-                sys.path.remove(tmp)
-                for name in [n for n in sys.modules
-                             if n == "spikingjelly" or n.startswith("spikingjelly.")]:
-                    del sys.modules[name]
-                sys.modules.update(cached)
+            with only_this_spikingjelly(tmp):
+                try:
+                    with self.assertRaises(ModuleNotFoundError):
+                        probe.config_with()
+                except unittest.SkipTest as skip:
+                    self.fail(f"skipped on an installed package's missing submodule: {skip}")
+
+    def test_the_probe_restores_modules_even_if_the_config_removed_its_path_entry(self) -> None:
+        """A pinned config is arbitrary code: one that edits sys.path must not
+        stop the cached spikingjelly from being put back."""
+        import types
+        cached = types.ModuleType("spikingjelly")
+        cached.__path__ = []
+        before = {n: m for n, m in sys.modules.items() if _is_spikingjelly(n)}
+        sys.modules["spikingjelly"] = cached
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                with only_this_spikingjelly(tmp):
+                    exec(compile(f"import sys\nsys.path[:] = [p for p in sys.path if p != {tmp!r}]\n",
+                                 "pinned_config", "exec"), {})
+                    self.assertNotIn(tmp, sys.path)
+            self.assertIs(sys.modules.get("spikingjelly"), cached)
+        finally:
+            for name in [n for n in sys.modules if _is_spikingjelly(n)]:
+                del sys.modules[name]
+            sys.modules.update(before)
+
+    def test_the_probe_drops_what_it_imported_when_nothing_was_cached(self) -> None:
+        """With no spikingjelly cached there is nothing to restore, so the only
+        thing keeping a fake one from leaking into later tests is the delete."""
+        before = {n: m for n, m in sys.modules.items() if _is_spikingjelly(n)}
+        for name in before:
+            del sys.modules[name]
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "spikingjelly").mkdir()
+                (Path(tmp) / "spikingjelly" / "__init__.py").write_text("")
+                (Path(tmp) / "spikingjelly" / "sub.py").write_text("")
+                with only_this_spikingjelly(tmp):
+                    import spikingjelly.sub  # noqa: F401
+                    self.assertIn("spikingjelly.sub", sys.modules)
+            self.assertNotIn("spikingjelly", sys.modules)
+            self.assertEqual([n for n in sys.modules if _is_spikingjelly(n)], [])
+            self.assertNotIn(tmp, sys.path)
+        finally:
+            for name in [n for n in sys.modules if _is_spikingjelly(n)]:
+                del sys.modules[name]
+            sys.modules.update(before)
 
     def test_the_submodule_probe_holds_with_a_real_spikingjelly_already_imported(self) -> None:
         """The probe above must not depend on test order: with a complete
