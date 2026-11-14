@@ -59,13 +59,13 @@
 #
 # # Exit status
 #
-#   0  nothing failed; every test ran and passed, or some files had skipped
-#      tests (the last line then names them and never says "executed and
-#      passed")
-#   1  a test failed, or a pin is stale/missing
-#   3  nothing failed, but some pinned tests COULD NOT RUN (no venv with the
-#      dependency). Not a pass, and not a failure: `record_checks.sh` reports it
-#      separately and does not fail the gate on it.
+#   0  nothing failed; every discovered test ran and passed, with none skipped
+#   1  a test failed, or a pin is stale/missing. Wins over 3.
+#   3  nothing failed, but something COULD NOT RUN: a pinned test had no venv
+#      with its dependency, or some files had skipped tests (every skip in this
+#      repo is a could-not-run: no spikingjelly, no reference cache). Not a pass,
+#      and not a failure: `record_checks.sh` reports it separately and does not
+#      fail the gate on it. A run with both kinds is 3.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -373,9 +373,9 @@ if [ "${#unrunnable[@]}" -ne 0 ]; then
   exit 3
 fi
 if [ "$with_skips" -ne 0 ]; then
-  # Exit status stays 0 (record_checks.sh consumes it, and the spikingjelly skip
-  # is permanent on some machines), but the verdict must not read as a full pass.
+  # A skip is a could-not-run, so it exits 3 like one; the verdict must not read
+  # as a full pass either.
   echo "Every discovered python test ran without failing, but $with_skips file(s) had skipped tests: ${skipped_files[*]}"
-  exit 0
+  exit 3
 fi
 echo "All discovered python tests executed and passed."

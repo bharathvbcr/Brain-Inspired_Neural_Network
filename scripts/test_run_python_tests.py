@@ -331,14 +331,14 @@ class RunnerTest(RunnerBase):
     def test_venv_partial_skip_is_reported_not_hidden(self):
         t = self.add("test_needs.py", H5PY_THEN_PARTIAL_SKIP)
         r = self.run_gate(t, self.fake_venv("venv"))
-        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped; in venv)", r.stdout)
         self.assertIn("files with skipped tests: 1", r.stdout)
 
     def test_system_partial_skip_is_reported_not_hidden(self):
         t = self.add("test_part.py", PARTIAL_SKIP)
         r = self.run_gate("", "")
-        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(r.returncode, 3, r.stdout)
         self.assertIn(f"[ ok ] {t}  (Ran 2 tests, 1 skipped)", r.stdout)
         self.assertIn("files with skipped tests: 1", r.stdout)
 
@@ -392,11 +392,26 @@ class RunnerTest(RunnerBase):
         t = self.add("test_part.py", PARTIAL_SKIP)
         self.add("test_plain.py", PASSING)
         r = self.run_gate("", "")
-        # Exit status stays 0 (record_checks.sh reads only that); the wording
-        # must say plainly that something did not run.
-        self.assertEqual(r.returncode, 0, r.stdout)
+        # Nothing failed, but a skip is a could-not-run: exit 3, the same status
+        # as a test that could not run at all, never 0. The wording says plainly
+        # that something did not run.
+        self.assertEqual(r.returncode, 3, r.stdout)
         self.assertNotIn("executed and passed", r.stdout)
         self.assertIn(f"but 1 file(s) had skipped tests: {t}", r.stdout)
+
+    def test_a_failure_still_beats_a_skip(self):
+        self.add("test_part.py", PARTIAL_SKIP)
+        self.add("test_bad.py", "import sys\nsys.exit(1)\n")
+        r = self.run_gate("", "")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("FAILED: scripts/test_bad.py", r.stdout)
+
+    def test_could_not_run_plus_skipped_is_3(self):
+        t = self.add("test_needs.py", H5PY_THEN_PARTIAL_SKIP)
+        self.add("test_part.py", PARTIAL_SKIP)
+        r = self.run_gate(t, "")
+        self.assertEqual(r.returncode, 3, r.stdout)
+        self.assertIn("COULD NOT RUN", r.stdout)
 
     def test_a_run_with_no_skips_still_says_executed_and_passed(self):
         self.add("test_plain.py", PASSING)
@@ -536,6 +551,17 @@ class RecordChecksTest(RunnerBase):
         r = self.run_checks()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("COULD NOT RUN", r.stdout.split("Record checks that ran")[-1])
+        self.assertNotIn("All record checks executed and passed", r.stdout)
+
+    def test_skipped_tests_are_reported_with_the_could_not_run_paragraph(self):
+        self.build(3)
+        (self.root / "scripts" / "run_python_tests.sh").write_text(
+            "echo 'Every discovered python test ran without failing, but 1 file(s) had skipped tests: x'\nexit 3\n"
+        )
+        r = self.run_checks()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        closing = r.stdout.split("Record checks that ran")[-1]
+        self.assertIn("COULD NOT RUN or were skipped", closing)
         self.assertNotIn("All record checks executed and passed", r.stdout)
 
     def test_clean_run_says_passed(self):
