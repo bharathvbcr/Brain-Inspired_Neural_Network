@@ -56,9 +56,10 @@ run() {
 # Was: one named test file of six. Discovery instead, so a wave that adds an
 # analyser and a test for it is covered the day it lands rather than whenever
 # someone remembers to extend this line.
-# Exit 3 from it means "nothing failed, but pinned tests could not run": not a
-# pass, not a failure. It is kept apart from both so the closing line cannot say
-# "passed" for tests that never ran.
+# Exit 3 from it means "nothing failed, but pinned tests could not run or some
+# tests were skipped" (every skip here is a could-not-run): not a pass, not a
+# failure. It is kept apart from both so the closing line cannot say "passed" for
+# tests that never ran.
 echo "=== every discovered python test ==="
 rc=0
 bash scripts/run_python_tests.sh || rc=$?
@@ -135,9 +136,11 @@ if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
 if [[ "$partial" -ne 0 ]]; then
-  echo "Record checks that ran all passed, BUT some python tests COULD NOT RUN (listed"
-  echo "above under COULD NOT RUN) and are not counted as passed. Provision .venv-shd-cal"
-  echo "or .venv-shd with requirements-shd-calibration.txt to run them."
+  echo "Record checks that ran all passed, BUT some python tests COULD NOT RUN or were skipped"
+  echo "(listed above) and are not counted as passed. Each skip names its reason. Pinned"
+  echo "tests that COULD NOT RUN need .venv-shd-cal or .venv-shd with"
+  echo "requirements-shd-calibration.txt; other skips need what their reason names (the"
+  echo "spikingjelly reference, the reference cache, a paper build, archived cells)."
   exit 0
 fi
 echo "All record checks executed and passed."
