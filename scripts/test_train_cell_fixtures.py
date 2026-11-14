@@ -46,7 +46,8 @@ payload = {{"arm": flag("--arm"), "accuracy": len(seed_text), "wall_secs": __imp
             "emitted_unix_s": 1, "emitted_utc": "now"}}
 if flag("--numerics") == "blas" and mode != "noblas":
     payload["numerics"] = "blas"
-    payload["numerics_platform"] = "macOS 26.1 (25B78)" if mode != "noplatform" else ""
+    payload["numerics_platform"] = ("macOS 99.0 (99Z99)" if mode == "otherplatform"
+                                       else "macOS 26.1 (25B78)" if mode != "noplatform" else "")
 elif mode == "noblas":
     payload["numerics"] = "exact"
 open(flag("--out"), "w").write(json.dumps(payload))
@@ -443,6 +444,66 @@ class BlasMainTests(unittest.TestCase):
         swapped = [*exact_args[:exact_args.index("--fixtures-json") + 1], str(exact_json),
                    *exact_args[exact_args.index("--fixtures-json") + 2:], "--numerics", "blas"]
         self.assertEqual(F.main(swapped), 2)
+
+    def _compare(self, mode: str) -> tuple[int, str]:
+        """Record under the default fake, then compare with the fake in `mode`."""
+        import contextlib
+        import io
+        self.assertEqual(F.main([*self.args, "--record"]), 0)
+        self.fake.set(mode)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = F.main(self.args)
+        return code, buf.getvalue()
+
+    def test_platform_mismatch_is_not_comparable_never_a_hash_verdict(self) -> None:
+        # The fake's hashes match the recording; only the platform differs.
+        code, out = self._compare("otherplatform")
+        self.assertEqual(code, 1)
+        self.assertIn("[NOT_COMPARABLE", out)
+        self.assertIn("macOS 26.1 (25B78)", out)
+        self.assertIn("macOS 99.0 (99Z99)", out)
+        self.assertNotIn("[MISMATCH", out)
+        self.assertNotIn("[PASS", out)
+
+    def test_platform_mismatch_outranks_a_hash_difference(self) -> None:
+        judged = F.judge("n", {"weights_sha256": "x", "cell_sha256": "y"},
+                         {"n": {"weights_sha256": "a", "cell_sha256": "b"}}, ("A", "B"))
+        self.assertEqual(judged["status"], F.NOT_COMPARABLE)
+
+    def test_same_platform_still_passes_or_mismatches_on_hashes(self) -> None:
+        code, out = self._compare("ok")
+        self.assertEqual(code, 0)
+        self.assertIn("[PASS", out)
+        code, out = self._compare("other")
+        self.assertEqual(code, 1)
+        self.assertIn("[MISMATCH", out)
+        self.assertNotIn("NOT_COMPARABLE", out)
+
+    def test_a_recorded_file_without_a_platform_is_an_error(self) -> None:
+        self.assertEqual(F.main([*self.args, "--record"]), 0)
+        payload = json.loads(self.json.read_text())
+        del payload["numerics_platform"]
+        self.json.write_text(json.dumps(payload))
+        self.assertEqual(F.main(self.args), 1)
+        entry = {"n": {"weights_sha256": "a", "cell_sha256": "b"}}
+        self.assertEqual(F.judge("n", {}, entry, (None, "B"))["status"], F.ERROR)
+
+    def test_exact_mode_ignores_platform(self) -> None:
+        exact = {"weights_sha256": "a", "cell_sha256": "b"}
+        self.assertEqual(F.judge("n", exact, {"n": exact})["status"], F.PASS)
+        # An exact run records and compares with no platform, whatever the cell says.
+        saved = F.ORACLE_WEIGHTS_SHA256
+        args = [a for a in self.args if a not in ("--numerics", "blas")]
+        try:
+            probe = F.run_fixture(self.oracle, self.fake.binary, self.root / "p",
+                                  self.root / "ev", 30.0)
+            F.ORACLE_WEIGHTS_SHA256 = probe["observed"]["weights_sha256"]
+            self.assertEqual(F.main([*args, "--record"]), 0)
+            self.assertNotIn("numerics_platform", json.loads(self.json.read_text()))
+            self.assertEqual(F.main(args), 0)
+        finally:
+            F.ORACLE_WEIGHTS_SHA256 = saved
 
 
 if __name__ == "__main__":

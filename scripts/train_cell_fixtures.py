@@ -89,6 +89,10 @@ MISMATCH = "MISMATCH"
 ERROR = "ERROR"
 TIMEOUT = "TIMEOUT"
 UNRECORDED = "UNRECORDED"
+#: blas only: the recorded hashes come from another OS build than this run's, so
+#: the comparison itself is meaningless. Not a MISMATCH (nothing was compared)
+#: and never a PASS.
+NOT_COMPARABLE = "NOT_COMPARABLE"
 
 
 @dataclass(frozen=True)
@@ -248,8 +252,15 @@ def train_command(fx: Fixture, binary: Path, work: Path, events: Path,
     return cmd
 
 
-def judge(name: str, observed: dict[str, str], recorded: dict[str, dict[str, str]]) -> dict:
-    """Compare one observation with the recorded hashes."""
+def judge(name: str, observed: dict[str, str], recorded: dict[str, dict[str, str]],
+          platforms: tuple[object, object] | None = None) -> dict:
+    """Compare one observation with the recorded hashes.
+
+    `platforms` is (recorded, observed) `numerics_platform`, given only in blas
+    mode (exact hashes are platform-independent and carry no platform). A
+    differing platform is `NOT_COMPARABLE`, decided before any hash is looked
+    at; a recorded platform that is missing cannot be compared and is `ERROR`.
+    """
     if name not in recorded:
         return {"status": UNRECORDED, "detail": "no recorded hash for this fixture"}
     want = recorded[name]
@@ -262,6 +273,17 @@ def judge(name: str, observed: dict[str, str], recorded: dict[str, dict[str, str
         return {"status": ERROR,
                 "detail": "the recorded hashes for this fixture are null or missing; "
                           "record them with a reference build (--record) before comparing"}
+    if platforms is not None:
+        rec_platform, obs_platform = platforms
+        if not (isinstance(rec_platform, str) and rec_platform.strip()):
+            return {"status": ERROR,
+                    "detail": "the recorded blas file names no numerics_platform, so the "
+                              "hashes cannot be tied to this platform; re-record it"}
+        if rec_platform != obs_platform:
+            return {"status": NOT_COMPARABLE,
+                    "detail": f"platform differs: recorded {rec_platform!r}, observed "
+                              f"{obs_platform!r}; blas hashes are only meaningful on the "
+                              "OS build that recorded them (hashes not compared)"}
     bad = {
         key: {"recorded": want.get(key), "observed": observed.get(key)}
         for key in ("weights_sha256", "cell_sha256")
@@ -391,6 +413,11 @@ def load_recorded(path: Path, numerics: str = DEFAULT_NUMERICS) -> dict[str, dic
     return payload["fixtures"]
 
 
+def load_recorded_platform(path: Path) -> object:
+    """The `numerics_platform` a blas fixture file was recorded on (None if absent)."""
+    return json.loads(path.read_text()).get("numerics_platform")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--binary", required=True, type=Path, help="shd-instrument binary")
@@ -425,9 +452,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     fixtures = select(FIXTURES, args.only)
     recorded: dict[str, dict[str, str]] = {}
+    recorded_platform: object = None
     if not args.record:
         try:
             recorded = load_recorded(args.fixtures_json, args.numerics)
+            if args.numerics == "blas":
+                recorded_platform = load_recorded_platform(args.fixtures_json)
         except (OSError, ValueError, KeyError) as exc:
             print(f"ERROR: cannot read {args.fixtures_json}: {exc}", file=sys.stderr)
             return 2
@@ -442,7 +472,8 @@ def main(argv: list[str] | None = None) -> int:
     for run in runs:
         if run["status"] == "RAN":
             verdict = {"status": "RAN", "detail": {}} if args.record else judge(
-                run["name"], run["observed"], recorded)
+                run["name"], run["observed"], recorded,
+                (recorded_platform, run["platform"]) if args.numerics == "blas" else None)
             run = {**run, **verdict}
         rows.append(run)
         print(f"[{run['status']:<10}] {run['name']:<42} {run['secs']:>7.1f}s", flush=True)
