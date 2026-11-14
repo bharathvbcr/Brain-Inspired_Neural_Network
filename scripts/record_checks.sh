@@ -137,8 +137,10 @@ if [[ "$fail" -ne 0 ]]; then
 fi
 if [[ "$partial" -ne 0 ]]; then
   echo "Record checks that ran all passed, BUT some python tests COULD NOT RUN or were skipped"
-  echo "(listed above) and are not counted as passed. Provision .venv-shd-cal or .venv-shd"
-  echo "with requirements-shd-calibration.txt to run them."
+  echo "(listed above) and are not counted as passed. Each skip names its reason. Pinned"
+  echo "tests that COULD NOT RUN need .venv-shd-cal or .venv-shd with"
+  echo "requirements-shd-calibration.txt; other skips need what their reason names (the"
+  echo "spikingjelly reference, the reference cache, a paper build, archived cells)."
   exit 0
 fi
 echo "All record checks executed and passed."
