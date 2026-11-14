@@ -36,8 +36,10 @@ What is hashed, per fixture:
 
 Outcomes are distinct on purpose. A fixture that could not run (non-zero exit,
 timeout, missing output, unreadable json) is `ERROR`/`TIMEOUT`, never `PASS`,
-and a fixture with no recorded hash is `UNRECORDED`, never `PASS`. Exit status
-is 0 only when every selected fixture is `PASS`.
+and a fixture with no recorded hash is `UNRECORDED`, never `PASS`. In blas mode,
+a cell produced on a platform other than the recorded `numerics_platform` is
+`NOT_COMPARABLE` (its hashes are not compared), never `PASS` or `MISMATCH`.
+Exit status is 0 only when every selected fixture is `PASS`.
 
 The oracle fixture's weights hash is also pinned in this file
 (`ORACLE_WEIGHTS_SHA256`, from the 2026-11-09 kernel round): `--record` refuses

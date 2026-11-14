@@ -457,7 +457,9 @@ class BlasMainTests(unittest.TestCase):
         return code, buf.getvalue()
 
     def test_platform_mismatch_is_not_comparable_never_a_hash_verdict(self) -> None:
-        # The fake's hashes match the recording; only the platform differs.
+        # The weights hash matches the recording; the platform differs, and
+        # since numerics_platform is part of the hashed cell, so does
+        # cell_sha256. Before NOT_COMPARABLE this read as a MISMATCH.
         code, out = self._compare("otherplatform")
         self.assertEqual(code, 1)
         self.assertIn("[NOT_COMPARABLE", out)
