@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"
+     role="img" aria-label="BINN — K=4 dendritic compartments, k-WTA sparsity, and discrete somatic spike">
+  <title>BINN — dendritic k-WTA &amp; spike emission</title>
+  <defs>
+    <filter id="csglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="csclip"><rect x="6" y="6" width="116" height="116" rx="26"/></clipPath>
+  </defs>
+  <rect x="6" y="6" width="116" height="116" rx="26" fill="#11070D"/>
+  <g clip-path="url(#csclip)">
+    <!-- Muted dendritic branches (N - k neurons silenced by k-WTA lateral inhibition). -->
+    <path d="M24 51 H39 C49 51 54 57 66 64" fill="none" stroke="#EC4899" stroke-opacity="0.24" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M24 99 H39 C51 99 54 79 66 64" fill="none" stroke="#EC4899" stroke-opacity="0.24" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="24" cy="51" r="3.6" fill="#11070D" stroke="#EC4899" stroke-opacity="0.32" stroke-width="1.6"/>
+    <circle cx="24" cy="99" r="3.6" fill="#11070D" stroke="#EC4899" stroke-opacity="0.32" stroke-width="1.6"/>
+
+    <!-- Active dendritic branches (K=4 compartments, 2 winners active under k/N sparsity)
+         with staggered propagating spike beads (Δt for local STDP eligibility). -->
+    <circle cx="24" cy="29" r="3.2" fill="#1B0A14" stroke="#EC4899" stroke-opacity="0.72" stroke-width="1.5"/>
+    <circle cx="24" cy="77" r="3.2" fill="#1B0A14" stroke="#FB7185" stroke-opacity="0.72" stroke-width="1.5"/>
+    <g filter="url(#csglow)">
+      <path d="M27.2 29 H40 C50 29 54 49 66 64" fill="none" stroke="#EC4899" stroke-width="3.4" stroke-linecap="round"/>
+      <path d="M27.2 77 H40 C49 77 54 71 66 64" fill="none" stroke="#FB7185" stroke-width="3.4" stroke-linecap="round"/>
+      <circle cx="35" cy="29" r="4.1" fill="#FFF0F7"/>
+      <circle cx="44" cy="77" r="4.1" fill="#FFF0F7"/>
+    </g>
+
+    <!-- Soma comparator (v >= θ(t)) and discrete action-potential spike emission. -->
+    <circle cx="66" cy="64" r="13.5" fill="#1B0A14" stroke="#EC4899" stroke-opacity="0.55" stroke-width="1.8"/>
+    <g filter="url(#csglow)">
+      <circle cx="66" cy="64" r="7.4" fill="#EC4899"/>
+      <circle cx="66" cy="64" r="3.4" fill="#FFF0F7"/>
+      <path d="M79.5 64 H85 L90.5 38 L96.5 78 L101.5 64 H107.5" fill="none" stroke="#FFF0F7" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <rect x="6.5" y="6.5" width="115" height="115" rx="25.5" fill="none" stroke="#3D162C" stroke-width="1"/>
+</svg>

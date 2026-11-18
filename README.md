@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/png/logo-dark@900.png">
+    <img src="assets/png/logo@900.png" alt="BINN" width="360">
+  </picture>
+</p>
+
 # BINN
 
 <p align="left">
